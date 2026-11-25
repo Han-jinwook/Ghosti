@@ -4001,6 +4001,8 @@ export async function processUnifiedMonsterChatQuery(params: {
 
       // Case D: Read-Only 조회 도구 1~4개 1턴 병렬 즉시 실행 (승인 게이트 없이 바로 스캔·브리핑)
       if (agentIntent.immediateReadTools.length > 0) {
+        // 느려짐/점검 질문 시 20초 과거 캐시 대신 방금 시점의 실시간 CPU·메모리·상위 점유 앱을 새로 실측합니다.
+        cachedPcContext = null;
         const [readRes, livePcCtx] = await Promise.all([
           runAgentCareReadTools(agentIntent.immediateReadTools),
           fetchRealtimePcContextForLlm().catch(() => null),
@@ -4009,28 +4011,105 @@ export async function processUnifiedMonsterChatQuery(params: {
           const isWebReloadSlowQuery =
             /(새로고침|로딩|웹\s*페이지|브라우저|크롬|귀신같이)/i.test(clean) &&
             /(느려|느린|길어|오래|버벅|안\s*열|먹통|멈)/i.test(clean);
-          const cpuPct = livePcCtx?.osInspectData?.spoolerAndSecurity?.cpuLoadPercent;
-          const ramPct = livePcCtx?.specData?.ramUsedPercent;
-          const ramGb = livePcCtx?.specData?.ramTotalGb;
+          const spoolSec = livePcCtx?.osInspectData?.spoolerAndSecurity || {};
+          const cpuPct = spoolSec?.cpuLoadPercent;
+          const cpuModel = String(livePcCtx?.specData?.cpuModel || '').trim();
+          const cpuCores = livePcCtx?.specData?.cpuLogicalCores;
+          const ramPct =
+            livePcCtx?.specData?.ramUsedPercent ?? spoolSec?.ramUsedPercent;
+          const ramGb =
+            livePcCtx?.specData?.ramTotalGb ?? spoolSec?.ramTotalGb;
+          const ramFreeGb = spoolSec?.ramFreeGb;
+          const browserBn = spoolSec?.browserMemoryBottleneck || null;
+          const runningGuiApps: Array<{ name?: string; count?: number; memoryMb?: number }> = Array.isArray(
+            spoolSec?.runningGuiApps
+          )
+            ? spoolSec.runningGuiApps
+            : [];
+          const highMemRats = (readRes.context.items || [])
+            .filter((it) => it.ratKind === 'HIGH_MEM_PROCESS' && (it.sizeMb || 0) >= 80)
+            .sort((a, b) => (b.sizeMb || 0) - (a.sizeMb || 0));
+
           const extraTopLines: string[] = [];
+          const cpuCoreLabel = cpuModel
+            ? ` (${cpuModel.replace(/\(R\)|\(TM\)|CPU/gi, '').replace(/\s+/g, ' ').trim()}${cpuCores ? ` · ${cpuCores}코어` : ''})`
+            : '';
           if (cpuPct != null || ramPct !== undefined) {
             extraTopLines.push(
-              `• **실시간 PC 부하**: ${cpuPct != null ? `CPU ${cpuPct}%` : 'CPU 정상'}${ramPct !== undefined ? ` · 메모리 ${ramPct}%${ramGb ? ` (총 ${ramGb}GB)` : ''}` : ''}`
+              `• **실시간 PC 상태**: ${cpuPct != null ? `CPU 부하 **${cpuPct}%**` : 'CPU 정상'}${cpuCoreLabel}` +
+                `${ramPct !== undefined ? ` · 메모리 **${ramPct}%** 사용 중${ramGb ? ` (총 ${ramGb}GB${ramFreeGb !== undefined ? ` · 여유 ${ramFreeGb}GB` : ''})` : ''}` : ''}`
             );
           }
-          if (isWebReloadSlowQuery) {
-            extraTopLines.push(
-              `• **새로고침·로딩 지연 핵심 점검**: 열려 있는 브라우저 탭이 많거나 메모리가 80% 이상 차 있으면 새로고침이 느려집니다. 안 쓰는 탭을 닫고 아래 **빨간색(100% 안전)** 백그라운드 항목을 정리한 뒤, 데스크톱이라면 **고성능 전원 전환**을 함께 적용해 보세요!`
+
+          // 실제 메모리·CPU를 가장 많이 차지 중인 상위 앱 실측 목록 구성 (브라우저 + GUI 앱 + 고메모리 프로세스)
+          const topHogParts: string[] = [];
+          const seenAppKeys = new Set<string>();
+          if (browserBn?.browserName && Number(browserBn.browserMemoryGb || 0) >= 0.4) {
+            seenAppKeys.add(String(browserBn.browserName).toLowerCase());
+            seenAppKeys.add('chrome');
+            seenAppKeys.add('msedge');
+            seenAppKeys.add('whale');
+            topHogParts.push(
+              `**${browserBn.browserName}** ${browserBn.browserMemoryGb}GB (${browserBn.processCount ?? '?'}개 프로세스${browserBn.browserSharePercent ? ` · 전체 RAM의 ${browserBn.browserSharePercent}%` : ''})`
             );
           }
+          for (const g of runningGuiApps) {
+            const nm = String(g?.name || '').trim();
+            const mb = Number(g?.memoryMb || 0);
+            if (!nm || mb < 120 || seenAppKeys.has(nm.toLowerCase())) continue;
+            seenAppKeys.add(nm.toLowerCase());
+            const memLabel = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
+            topHogParts.push(`${nm} ${memLabel}${g.count && g.count > 1 ? ` (${g.count}개)` : ''}`);
+            if (topHogParts.length >= 4) break;
+          }
+          for (const hm of highMemRats) {
+            const cleanNm = hm.name.replace(/^\[메모리\s*과점유\]\s*/i, '').trim();
+            const keyLow = cleanNm.split(/\s+/)[0].toLowerCase();
+            if (!cleanNm || seenAppKeys.has(keyLow)) continue;
+            seenAppKeys.add(keyLow);
+            const mb = Number(hm.sizeMb || 0);
+            const memLabel = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
+            topHogParts.push(`${cleanNm} ${memLabel}`);
+            if (topHogParts.length >= 4) break;
+          }
+          if (topHogParts.length > 0) {
+            extraTopLines.push(`• **현재 가장 많이 점유 중인 앱**: ${topHogParts.join(', ')}`);
+          }
+
+          // 진짜 체감되는 우선순위 처방 정직 안내
+          const actionOrder: string[] = [];
+          if (browserBn?.detected) {
+            actionOrder.push(
+              `① **${browserBn.browserName}(${browserBn.browserMemoryGb}GB · ${browserBn.processCount}개)**에서 안 쓰는 탭을 닫고 브라우저를 한 번 재시작`
+            );
+          } else if (isWebReloadSlowQuery) {
+            actionOrder.push('① 열려 있는 브라우저 탭 중 안 쓰는 탭을 닫고 창을 한 번 재시작');
+          }
+          if (readRes.context.isDesktop && !readRes.context.isHighPerformance) {
+            actionOrder.push('② 아래 **[⚡ 고성능 전원 전환]** 버튼 클릭');
+          }
+          actionOrder.push(
+            `${actionOrder.length + 1 === 2 ? '②' : '③'} 아래 목록에서 **빨간색(100% 안전)** 백그라운드 항목만 골라 정리`
+          );
+          if (isWebReloadSlowQuery || browserBn?.detected || (typeof cpuCores === 'number' && cpuCores <= 4)) {
+            extraTopLines.push(`• **체감 속도 회복 우선순위**: ${actionOrder.join(' ➔ ')}`);
+          }
+
           const finalBriefing =
             extraTopLines.length > 0
               ? `${extraTopLines.join('\n')}\n\n${readRes.briefingKo}`
               : readRes.briefingKo;
-          speak('내 피씨 정밀 스캔을 완료했습니다. 아래 목록에서 원하는 항목만 골라 정리하실 수 있어요.');
+          const enrichedCard: MonsterAgentCareCardPayload = {
+            ...readRes.card,
+            summaryLines:
+              extraTopLines.length > 0
+                ? [...extraTopLines.map((l) => l.replace(/^•\s*/, '').replace(/\*\*/g, '')), ...readRes.card.summaryLines]
+                : readRes.card.summaryLines,
+          };
+          speak('실시간 피씨 부하와 주요 점유 앱을 실측해 왔습니다. 우선순위대로 정리하시면 속도가 훨씬 빨라져요.');
           return reply(sourceTab, finalBriefing, {
             cardKind: 'AGENT_CARE_BATCH_CARD',
-            agentCareCardPayload: readRes.card,
+            agentCareCardPayload: enrichedCard,
             followUpSuggestions: readRes.followUpSuggestions,
           });
         }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useSaySeeStore, type DesktopTab, type MobileTab } from './store/useSaySeeStore';
 import type { FamilyRoomId, LoungeType } from './types/saysee';
 import { playAppEnterGiggleSound } from './services/babyGhostSound';
@@ -10,27 +10,8 @@ import {
 } from './services/deviceIntegrationService';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
-import { GhostiShowroomLanding, OFFICIAL_LAUNCH_LIVE } from './components/GhostiShowroomLanding';
-import { MobileAppView } from './components/MobileAppView';
-import { OnboardingModal } from './components/OnboardingModal';
-import { PhotoDetailModal } from './components/PhotoDetailModal';
-import {
-  LocalDocPreviewModal,
-  MobileMasterPcIntroModal,
-  PricingModal,
-  VideoScenePreviewModal,
-} from './components/PricingModal';
-import {
-  FaceMemberRegistryModal,
-  PassportDoorplateStyleModal,
-} from './components/FaceMemberRegistryModal';
+import { OFFICIAL_LAUNCH_LIVE } from './components/showroom/showroomDataAndUtils';
 import { startPassportPhotoActivityWatcher } from './services/passportRegistrationFlow';
-import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
-import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
-import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
-import { MobileShareInviteBridgeOverlay } from './domains/free_photo_share/MobileShareInviteBridgeOverlay';
-import { MobileQrPairBridgeOverlay } from './domains/paid_device_sync/MobileQrPairBridgeOverlay';
-import { MobileWorkInviteBridgeOverlay } from './domains/paid_work_share/MobileWorkInviteBridgeOverlay';
 import {
   parseWorkInviteInput,
   saveActiveWorkRoomInviteMeta,
@@ -40,9 +21,67 @@ import {
   readNativeMobileClipboardText,
 } from './services/ghostiMobileCareBridge';
 import { GhostSecretaryFirstModal } from './components/GhostSecretaryFirstGuard';
-import { GhostPhotoOcrTeleportModal } from './components/GhostPhotoOcrTeleportModal';
 import { useDashboardNavStore } from './domains/shared/dashboardNavState';
 import { resolveViewportLayout, storeSharedRefs } from './store/slices/storeSharedRefs';
+
+// [F5 초기 번들 경량화]: 현재 화면에서 즉시 보이지 않는 쇼룸 대문·모바일 앱·대형 모달을 비동기 청크로 분리해 구형 CPU 파싱 시간을 대폭 단축합니다.
+const GhostiShowroomLanding = lazy(() =>
+  import('./components/GhostiShowroomLanding').then((m) => ({ default: m.GhostiShowroomLanding }))
+);
+const MobileAppView = lazy(() =>
+  import('./components/MobileAppView').then((m) => ({ default: m.MobileAppView }))
+);
+const OnboardingModal = lazy(() =>
+  import('./components/OnboardingModal').then((m) => ({ default: m.OnboardingModal }))
+);
+const PhotoDetailModal = lazy(() =>
+  import('./components/PhotoDetailModal').then((m) => ({ default: m.PhotoDetailModal }))
+);
+const PricingModal = lazy(() =>
+  import('./components/PricingModal').then((m) => ({ default: m.PricingModal }))
+);
+const MobileMasterPcIntroModal = lazy(() =>
+  import('./components/PricingModal').then((m) => ({ default: m.MobileMasterPcIntroModal }))
+);
+const LocalDocPreviewModal = lazy(() =>
+  import('./components/PricingModal').then((m) => ({ default: m.LocalDocPreviewModal }))
+);
+const VideoScenePreviewModal = lazy(() =>
+  import('./components/PricingModal').then((m) => ({ default: m.VideoScenePreviewModal }))
+);
+const FaceMemberRegistryModal = lazy(() =>
+  import('./components/FaceMemberRegistryModal').then((m) => ({ default: m.FaceMemberRegistryModal }))
+);
+const PassportDoorplateStyleModal = lazy(() =>
+  import('./components/FaceMemberRegistryModal').then((m) => ({ default: m.PassportDoorplateStyleModal }))
+);
+const SetupFloatingOverlayGuide = lazy(() =>
+  import('./components/SetupMonsterModal').then((m) => ({ default: m.SetupFloatingOverlayGuide }))
+);
+const GhostCastAndLiveGlobalOverlay = lazy(() =>
+  import('./components/GhostCastAndLiveSystem').then((m) => ({ default: m.GhostCastAndLiveGlobalOverlay }))
+);
+const FreePhotoShareOverlays = lazy(() =>
+  import('./domains/free_photo_share/FreePhotoShareOverlays').then((m) => ({ default: m.FreePhotoShareOverlays }))
+);
+const MobileShareInviteBridgeOverlay = lazy(() =>
+  import('./domains/free_photo_share/MobileShareInviteBridgeOverlay').then((m) => ({
+    default: m.MobileShareInviteBridgeOverlay,
+  }))
+);
+const MobileQrPairBridgeOverlay = lazy(() =>
+  import('./domains/paid_device_sync/MobileQrPairBridgeOverlay').then((m) => ({
+    default: m.MobileQrPairBridgeOverlay,
+  }))
+);
+const MobileWorkInviteBridgeOverlay = lazy(() =>
+  import('./domains/paid_work_share/MobileWorkInviteBridgeOverlay').then((m) => ({
+    default: m.MobileWorkInviteBridgeOverlay,
+  }))
+);
+const GhostPhotoOcrTeleportModal = lazy(() =>
+  import('./components/GhostPhotoOcrTeleportModal').then((m) => ({ default: m.GhostPhotoOcrTeleportModal }))
+);
 
 export const App: React.FC = () => {
   const {
@@ -1358,14 +1397,16 @@ export const App: React.FC = () => {
 
   return (
     <GhostiHubRootProvider>
-      {/* [프로필 내 본인 여권 단독 보관함 — D-35] 쇼룸·워크스페이스·모바일 전 화면 어디서든 프로필 [🛂 여권] 클릭 시 즉시 오픈 */}
-      <PassportDoorplateStyleModal />
-      {/* [모바일 웹 전용 PC QR 기기 연결 브릿지] 쇼룸·워크스페이스 무관 최상단 노출 (앱 열기·스토어 이동·계정 선택) */}
-      <MobileQrPairBridgeOverlay />
-      {/* [모바일 웹 전용 사진 공유방 초대 브릿지] 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
-      <MobileShareInviteBridgeOverlay />
-      {/* [모바일 웹 전용 업무 공유방(S:) 초대 브릿지] 업무방 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
-      <MobileWorkInviteBridgeOverlay />
+      <Suspense fallback={null}>
+        {/* [프로필 내 본인 여권 단독 보관함 — D-35] 쇼룸·워크스페이스·모바일 전 화면 어디서든 프로필 [🛂 여권] 클릭 시 즉시 오픈 */}
+        <PassportDoorplateStyleModal />
+        {/* [모바일 웹 전용 PC QR 기기 연결 브릿지] 쇼룸·워크스페이스 무관 최상단 노출 (앱 열기·스토어 이동·계정 선택) */}
+        <MobileQrPairBridgeOverlay />
+        {/* [모바일 웹 전용 사진 공유방 초대 브릿지] 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
+        <MobileShareInviteBridgeOverlay />
+        {/* [모바일 웹 전용 업무 공유방(S:) 초대 브릿지] 업무방 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
+        <MobileWorkInviteBridgeOverlay />
+      </Suspense>
 
       {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 — iOS 상단 상태바(topSafeAreaShieldView) 차폐 영역 아래에 배치하여 상단 잘림 원천 차단 */}
       {(ptrPullDist > 0 || isPtrRefreshing) && (
@@ -1399,46 +1440,55 @@ export const App: React.FC = () => {
 
       {/* 공식 쇼룸 & 하이브리드 온보딩 대문 vs 내부 개발 워크스페이스 분기 */}
       {viewMode === 'showroom' ? (
-        <GhostiShowroomLanding
-          onEnterWorkspace={handleEnterWorkspace}
-          isDevAuthorized={isDevAuthorized}
-        />
+        <Suspense fallback={<div className="min-h-screen bg-[#F8F7F4]" />}>
+          <GhostiShowroomLanding
+            onEnterWorkspace={handleEnterWorkspace}
+            isDevAuthorized={isDevAuthorized}
+          />
+        </Suspense>
       ) : (
         <>
-          {layout === 'desktop' ? <DesktopDashboard /> : <MobileAppView />}
+          {layout === 'desktop' ? (
+            <DesktopDashboard />
+          ) : (
+            <Suspense fallback={<div className="min-h-screen bg-[#F8F7F4]" />}>
+              <MobileAppView />
+            </Suspense>
+          )}
 
-          {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (온보딩 대문 페이지와 중복이므로 팝업 주석 처리) */}
-          {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (인포데스크 온보딩 3탭 가이드 모달) */}
-          <OnboardingModal />
+          <Suspense fallback={null}>
+            {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (인포데스크 온보딩 3탭 가이드 모달) */}
+            <OnboardingModal />
 
-          {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
-          <PhotoDetailModal />
+            {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
+            <PhotoDetailModal />
 
-          {/* [스펙 4] 카페 런칭용 심플 과금 퍼널 & 스토어 클린 모드 데스크톱 기기 연동 모달 */}
-          <PricingModal />
+            {/* [스펙 4] 카페 런칭용 심플 과금 퍼널 & 스토어 클린 모드 데스크톱 기기 연동 모달 */}
+            <PricingModal />
 
-          {/* [안전장치 2] /?master=pc 모바일 접속 시 결제/요금 안내 없는 순수 'PC 데스크톱 엔진 기능 소개 화면' 이중 방어 모달 */}
-          <MobileMasterPcIntroModal />
+            {/* [안전장치 2] /?master=pc 모바일 접속 시 결제/요금 안내 없는 순수 'PC 데스크톱 엔진 기능 소개 화면' 이중 방어 모달 */}
+            <MobileMasterPcIntroModal />
 
-          {/* [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달 */}
-          <LocalDocPreviewModal />
+            {/* [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달 */}
+            <LocalDocPreviewModal />
 
-          {/* [체험판 타겟 ②] 동영상 장면 검색 상세 & 원본 MP4 재생 모달 */}
-          <VideoScenePreviewModal />
+            {/* [체험판 타겟 ②] 동영상 장면 검색 상세 & 원본 MP4 재생 모달 */}
+            <VideoScenePreviewModal />
 
-          {/* [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 대표 멤버 등록 & 초대 레이더 시드 모달 */}
-          <FaceMemberRegistryModal />
+            {/* [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 대표 멤버 등록 & 초대 레이더 시드 모달 */}
+            <FaceMemberRegistryModal />
 
-          {/* [🛠️ 구 설정몬스터 팝업 비활성화 — 1. 👻 귀신비서 채팅 원클릭 칩으로 100% 일원화] 타사 앱 최상단 손가락 화살표 가이드(👆)만 유지 */}
-          <SetupFloatingOverlayGuide />
+            {/* [🛠️ 구 설정몬스터 팝업 비활성화 — 1. 👻 귀신비서 채팅 원클릭 칩으로 100% 일원화] 타사 앱 최상단 손가락 화살표 가이드(👆)만 유지 */}
+            <SetupFloatingOverlayGuide />
 
-          {/* [고스트 캐스트 & 라이브 3대 핵심 무기] ① PC/노트북 모니터 풀스크린 클린 뷰어 + 무선 리모컨, ② 방 전용 프라이빗 라이브 생중계 & 라이브 포토 싱크, ③ 원격 모니터링 셔터(선별/즉시 공유 선택) */}
-          <GhostCastAndLiveGlobalOverlay />
+            {/* [고스트 캐스트 & 라이브 3대 핵심 무기] ① PC/노트북 모니터 풀스크린 클린 뷰어 + 무선 리모컨, ② 방 전용 프라이빗 라이브 생중계 & 라이브 포토 싱크, ③ 원격 모니터링 셔터(선별/즉시 공유 선택) */}
+            <GhostCastAndLiveGlobalOverlay />
 
-          {/* PC·모바일 공통 공유방 오버레이 (카톡 1초 합류 Auth-Wall & 공유방 사진 골라 올리기 모달) 및 사진 OCR 모달 */}
-          <FreePhotoShareOverlays />
+            {/* PC·모바일 공통 공유방 오버레이 (카톡 1초 합류 Auth-Wall & 공유방 사진 골라 올리기 모달) 및 사진 OCR 모달 */}
+            <FreePhotoShareOverlays />
+            <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
+          </Suspense>
           <GhostSecretaryFirstModal />
-          <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
 
           {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
           {lastUndoBatch && (

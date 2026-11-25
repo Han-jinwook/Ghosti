@@ -388,6 +388,13 @@ export const createSearchSlice: StateCreator<
       }, 120);
     }
     const stateNow = get();
+    if (
+      (searchSpace === 'vault' || searchSpace === 'video') &&
+      !isSharedPhotoLounge(stateNow.activeLoungeType) &&
+      (stateNow.localDocuments.length === 0 || stateNow.videoSceneItems.length === 0)
+    ) {
+      void get().ensureLocalDocsAndVideosLoaded();
+    }
     const { hasExecutedUserSearch, photos, videoSceneItems, localDocuments, activeLoungeType } =
       stateNow;
     const sharedMode = isSharedPhotoLounge(activeLoungeType);
@@ -743,16 +750,28 @@ export const createSearchSlice: StateCreator<
       telemetry,
       searchSpace,
       hasUserSelectedSearchTab,
-      localDocuments,
-      videoSceneItems,
       faceClusters,
       alumniSchoolName,
       alumniGradYear,
       analogScannedPhotos,
       analogYearProposals,
     } = get();
+    let localDocuments = get().localDocuments;
+    let videoSceneItems = get().videoSceneItems;
 
     const sharedModeEarly = isSharedPhotoLounge(activeLoungeType);
+
+    // [F5 부팅 시 26.8MB /__docs/list 지연 로딩 보완]: 1. 귀신비서에서 바로 검색창으로 검색 시 문서·동영상 인덱스를 즉시 1회 적재
+    if (
+      !sharedModeEarly &&
+      zCoreBridge.isConnected &&
+      (localDocuments.length === 0 || videoSceneItems.length === 0)
+    ) {
+      await get().ensureLocalDocsAndVideosLoaded();
+      if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
+      localDocuments = get().localDocuments;
+      videoSceneItems = get().videoSceneItems;
+    }
 
     // [0) 무설정 채팅·검색 직결 드라이브 스캔] (내 기기/업무 라운지 전용 · 공유방에서는 내 로컬 드라이브 스캔 완전 차단)
     if (

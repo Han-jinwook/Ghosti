@@ -189,6 +189,7 @@ export interface AssistantOnboardingSlice {
   mobileGalleryPermissionDenied: boolean;
   mobileGalleryLimitedAccess: boolean;
   initApp: (force?: boolean) => Promise<void>;
+  ensureLocalDocsAndVideosLoaded: () => Promise<void>;
   syncMobileNativeGalleryAuto: (options?: {
     promptPermission?: boolean;
     maxTargetCount?: number;
@@ -469,6 +470,9 @@ export const createAssistantOnboardingSlice: StateCreator<
           ? 'share'
           : 'sync',
     });
+    if (mobileTab === 'search' && get().localDocuments.length === 0) {
+      void get().ensureLocalDocsAndVideosLoaded();
+    }
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       document.documentElement.scrollTop = 0;
@@ -489,11 +493,57 @@ export const createAssistantOnboardingSlice: StateCreator<
           ? 'share'
           : 'settings',
     });
+    if (desktopTab === 'dashboard' && get().localDocuments.length === 0) {
+      void get().ensureLocalDocsAndVideosLoaded();
+    }
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
     }
+  },
+
+  ensureLocalDocsAndVideosLoaded: async () => {
+    if (!zCoreBridge.isConnected || !hasActiveGhostiLoginSession()) return;
+    const stInit = get();
+    if (stInit.localDocuments.length > 0 && stInit.videoSceneItems.length > 0) return;
+    const existingProm = (window as any).__GHOSTI_PENDING_DOCS_VIDEOS_HYDRATE__ as Promise<void> | undefined;
+    if (existingProm) {
+      await existingProm;
+      return;
+    }
+    const p = (async () => {
+      try {
+        const [docs, videos] = await Promise.all([
+          get().localDocuments.length > 0 ? Promise.resolve(get().localDocuments) : fetchIndexedDocuments(),
+          get().videoSceneItems.length > 0 ? Promise.resolve(get().videoSceneItems) : fetchIndexedVideos(),
+        ]);
+        const cur = get();
+        const sharedNow = isSharedPhotoLounge(cur.activeLoungeType);
+        set({
+          localDocuments: docs.length > cur.localDocuments.length ? docs : cur.localDocuments,
+          matchedLocalDocs:
+            sharedNow || cur.hasExecutedUserSearch
+              ? cur.matchedLocalDocs
+              : docs.length > cur.matchedLocalDocs.length
+              ? docs
+              : cur.matchedLocalDocs,
+          videoSceneItems: videos.length > cur.videoSceneItems.length ? videos : cur.videoSceneItems,
+          matchedVideoScenes:
+            sharedNow || cur.hasExecutedUserSearch
+              ? cur.matchedVideoScenes
+              : videos.length > cur.matchedVideoScenes.length
+              ? videos
+              : cur.matchedVideoScenes,
+        });
+      } catch {
+        /* ignore */
+      } finally {
+        delete (window as any).__GHOSTI_PENDING_DOCS_VIDEOS_HYDRATE__;
+      }
+    })();
+    (window as any).__GHOSTI_PENDING_DOCS_VIDEOS_HYDRATE__ = p;
+    await p;
   },
 
 
@@ -576,8 +626,17 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     const rawTelemetryPromise = isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry();
     const rawHostSharedPromise = isStandaloneSearchWin ? Promise.resolve([] as PhotoItem[]) : fetchSharedFamilyHostPhotos();
-    const rawDocsPromise = fetchIndexedDocuments();
-    const rawVideosPromise = fetchIndexedVideos();
+    // [F5 26.8MB /__docs/list 메인스레드 프리징 원천 제거]:
+    // 1. 귀신비서(desktopTab='trash') 첫 화면 새로고침 시에는 26.8MB 문서 전체 JSON 및 동영상 목록을
+    // 미리 내려받아 파싱하지 않고, 2. 귀신검색 진입 또는 검색 실행 시점에 즉시 지연 로딩합니다.
+    const curTabState = get();
+    const needsDocsAndVideosAtBoot =
+      isStandaloneSearchWin ||
+      Boolean(urlQueryEarly) ||
+      curTabState.desktopTab === 'dashboard' ||
+      curTabState.mobileTab === 'search';
+    const rawDocsPromise = needsDocsAndVideosAtBoot ? fetchIndexedDocuments() : Promise.resolve(curTabState.localDocuments);
+    const rawVideosPromise = needsDocsAndVideosAtBoot ? fetchIndexedVideos() : Promise.resolve(curTabState.videoSceneItems);
     const rawFacesPromise = fetchAutonomousFaceClusters();
 
     // [F5 새로고침 장시간 로딩 원천 차단]: 문서·동영상·얼굴 인덱스 응답이 지연되더라도
