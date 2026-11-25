@@ -1111,9 +1111,9 @@ export async function handleAuthedWorkAndDeviceAction({
       const resolvedLockReason = ownerGate.ok
         ? null
         : ownerGate.response?.body?.reason || 'WORK_SUBSCRIPTION_REQUIRED';
-      // 체험·유료 구독을 한 번도 시작하지 않은 빈 방장 껍데기 방(WORK_SUBSCRIPTION_REQUIRED)은 반환에서 제외해
-      // 내보내진 팀원 모바일·웹에서 '업무 공유방 연결 일시 중지(이용 기간 종료)'로 오표시되는 현상을 원천 차단
-      if (isHost && !ownerGate.ok && resolvedLockReason !== 'WORK_TRIAL_EXPIRED') {
+      // 활성 이용권(체험·유료)이 없는 본인 방장 방(WORK_SUBSCRIPTION_REQUIRED · WORK_TRIAL_EXPIRED)은 소속 공유방 목록에서 제외해
+      // 내보내진 팀원이나 공유방이 없는 유저의 모바일 앱·웹에서 '업무 공유방 연결 일시 중지'로 오표시되는 현상을 원천 차단
+      if (isHost && !ownerGate.ok) {
         continue;
       }
       const sortedMembers = sortAndMapWorkMembers(membersByRoomId.get(rId) || [], masterEmail);

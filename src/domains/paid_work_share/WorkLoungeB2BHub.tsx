@@ -244,9 +244,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
   }, [mobileTab]);
 
-  const [kickedFromRoomTitle, setKickedFromRoomTitle] = useState<string | null>(() =>
-    readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined)
-  );
+  const [kickedFromRoomTitle, setKickedFromRoomTitle] = useState<string | null>(() => {
+    if (readActiveWorkRoomInviteMeta().hasWorkInvite) {
+      clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
+      return null;
+    }
+    return readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
+  });
+  const isAcceptingInviteRef = useRef<boolean>(false);
   const memberMutationEpochRef = useRef<number>(0);
   const recentlyKickedEmailsRef = useRef<Map<string, number>>(new Map());
 
@@ -403,9 +408,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
   // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 및 새 계정 캐시 선복원 (C9 계정 격리)
   useEffect(() => {
     acceptedInviteTokenRef.current = '';
-    setKickedFromRoomTitle(readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined));
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) {
+      clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
+      setKickedFromRoomTitle(null);
       setJoinedInvitedRoom(null);
       setActiveWorkRoomId(inv.roomId);
       const cachedMems = merlinAuth?.email
@@ -414,6 +420,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       setServerMembers(cachedMems);
       return;
     }
+    setKickedFromRoomTitle(readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined));
     const cachedHostMeta = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined);
     const cachedJoinedMeta = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
     if (cachedJoinedMeta && !cachedJoinedMeta.isHost && !cachedHostMeta) {
@@ -1158,103 +1165,111 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
     acceptedInviteTokenRef.current = inviteMeta.inviteToken;
+    isAcceptingInviteRef.current = true;
+    clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
+    setKickedFromRoomTitle(null);
     let cancelled = false;
     void acceptWorkRoomInvite({
       inviteToken: inviteMeta.inviteToken,
       nickname: actorNickname,
-    }).then((accepted) => {
-      if (cancelled) return;
-      if (!accepted.ok) {
-        acceptedInviteTokenRef.current = '';
-        if (accepted.reason === 'WORK_SEAT_LIMIT_EXCEEDED') {
-          showToast(
-            accepted.message ||
-              '이 업무 공유방의 이용권 정원이 모두 찼습니다. 방장님께 이용권 업그레이드를 요청해 주세요.'
-          );
-        } else if (accepted.reason === 'INVALID_OR_EXPIRED_INVITE') {
-          clearActiveWorkRoomInviteMeta();
-          showToast(
-            '만료되었거나 방장이 새로 발급한 초대 링크입니다. 방장님께 최신 초대 링크를 요청해 주세요.'
-          );
-        } else if (
-          accepted.reason === 'WORK_TRIAL_EXPIRED' ||
-          accepted.reason === 'WORK_SUBSCRIPTION_REQUIRED'
-        ) {
-          setRemoteRoomLockReason(accepted.reason);
-        }
-        return;
-      }
-      setKickedFromRoomTitle(null);
-      const targetRoomId = accepted.roomId || activeWorkRoomId;
-      if (accepted.roomId && accepted.roomId !== activeWorkRoomId) {
-        setActiveWorkRoomId(accepted.roomId);
-      }
-      const nextRole = accepted.role || 'editor';
-      setMyRoomRole(nextRole);
-      if (accepted.seatLimit) setRoomSeatLimit(accepted.seatLimit);
-      setRemoteRoomLockReason(null);
-
-      if (targetRoomId && nextRole !== 'host') {
-        const joinedSummary: JoinedWorkRoomSummary = {
-          roomId: targetRoomId,
-          roomTitle: accepted.roomTitle || inviteMeta.roomTitle,
-          hostEmail: '',
-          hostNickname: accepted.hostNickname || inviteMeta.hostNickname,
-          isHost: false,
-          role: nextRole,
-          ownerUnlocked: true,
-          seatLimit: accepted.seatLimit || 5,
-          lockReason: null,
-        };
-        setJoinedInvitedRoom(joinedSummary);
-        saveCachedJoinedWorkRoomMeta(joinedSummary, merlinAuth?.email || undefined);
-      }
-      // 정식 DB 멤버(ghosti_lounge_members) 편입이 완료되는 즉시 일회성 초대 쿼리·sessionStorage 잔상을 소거
-      // (이후 추방되더라도 옛 초대 배너·가짜 방장 카드가 남거나 F5로 재진입하는 현상 원천 차단)
-      clearActiveWorkRoomInviteMeta();
-
-      if (Array.isArray(accepted.members) && accepted.members.length > 0 && targetRoomId) {
-        const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(accepted.members));
-        setServerMembers(sorted);
-        saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
-      } else if (targetRoomId) {
-        void fetchWorkRoomAuthedState(targetRoomId, '', {
-          skipBlockingTunnelFetch: true,
-        }).then((fresh) => {
-          if (!cancelled && fresh.ok && Array.isArray(fresh.members)) {
-            const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(fresh.members));
-            setServerMembers(sorted);
-            saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
-          }
-        });
-      }
-
-      if (accepted.deletedTombstones && Object.keys(accepted.deletedTombstones).length > 0) {
-        mergeAndPersistTombstones(accepted.deletedTombstones);
-      }
-      if (accepted.hostTunnel?.masterServerName) {
-        setMasterWorkPcName(accepted.hostTunnel.masterServerName);
-      }
-      if (Array.isArray(accepted.hostTunnel?.backupServers)) {
-        setBackupServers(accepted.hostTunnel.backupServers);
-      }
-      if (accepted.hostTunnel?.tunnelUrl && (!isZCoreConnected || nextRole !== 'host')) {
-        void fetchWorkFilesFromHostTunnel(
-          accepted.hostTunnel.tunnelUrl,
-          accepted.hostTunnel.accessKey
-        ).then((fromTunnel) => {
-          if (!cancelled && fromTunnel.ok && targetRoomId) {
-            setRemoteDocs(fromTunnel.docs);
-            mergeAndPersistTombstones(fromTunnel.deletedTombstones);
-            void cacheWorkRoomPreviewLocally(
-              targetRoomId,
-              fromTunnel.docs,
-              merlinAuth?.email || undefined
+    })
+      .then((accepted) => {
+        if (cancelled) return;
+        if (!accepted.ok) {
+          acceptedInviteTokenRef.current = '';
+          if (accepted.reason === 'WORK_SEAT_LIMIT_EXCEEDED') {
+            showToast(
+              accepted.message ||
+                '이 업무 공유방의 이용권 정원이 모두 찼습니다. 방장님께 이용권 업그레이드를 요청해 주세요.'
             );
+          } else if (accepted.reason === 'INVALID_OR_EXPIRED_INVITE') {
+            clearActiveWorkRoomInviteMeta();
+            showToast(
+              '만료되었거나 방장이 새로 발급한 초대 링크입니다. 방장님께 최신 초대 링크를 요청해 주세요.'
+            );
+          } else if (
+            accepted.reason === 'WORK_TRIAL_EXPIRED' ||
+            accepted.reason === 'WORK_SUBSCRIPTION_REQUIRED'
+          ) {
+            setRemoteRoomLockReason(accepted.reason);
           }
-        });
-      }
-    });
+          return;
+        }
+        clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
+        setKickedFromRoomTitle(null);
+        const targetRoomId = accepted.roomId || activeWorkRoomId;
+        if (accepted.roomId && accepted.roomId !== activeWorkRoomId) {
+          setActiveWorkRoomId(accepted.roomId);
+        }
+        const nextRole = accepted.role || 'editor';
+        setMyRoomRole(nextRole);
+        if (accepted.seatLimit) setRoomSeatLimit(accepted.seatLimit);
+        setRemoteRoomLockReason(null);
+
+        if (targetRoomId && nextRole !== 'host') {
+          const joinedSummary: JoinedWorkRoomSummary = {
+            roomId: targetRoomId,
+            roomTitle: accepted.roomTitle || inviteMeta.roomTitle,
+            hostEmail: '',
+            hostNickname: accepted.hostNickname || inviteMeta.hostNickname,
+            isHost: false,
+            role: nextRole,
+            ownerUnlocked: true,
+            seatLimit: accepted.seatLimit || 5,
+            lockReason: null,
+          };
+          setJoinedInvitedRoom(joinedSummary);
+          saveCachedJoinedWorkRoomMeta(joinedSummary, merlinAuth?.email || undefined);
+        }
+        // 정식 DB 멤버(ghosti_lounge_members) 편입이 완료되는 즉시 일회성 초대 쿼리·sessionStorage 잔상을 소거
+        // (이후 추방되더라도 옛 초대 배너·가짜 방장 카드가 남거나 F5로 재진입하는 현상 원천 차단)
+        clearActiveWorkRoomInviteMeta();
+
+        if (Array.isArray(accepted.members) && accepted.members.length > 0 && targetRoomId) {
+          const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(accepted.members));
+          setServerMembers(sorted);
+          saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
+        } else if (targetRoomId) {
+          void fetchWorkRoomAuthedState(targetRoomId, '', {
+            skipBlockingTunnelFetch: true,
+          }).then((fresh) => {
+            if (!cancelled && fresh.ok && Array.isArray(fresh.members)) {
+              const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(fresh.members));
+              setServerMembers(sorted);
+              saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
+            }
+          });
+        }
+
+        if (accepted.deletedTombstones && Object.keys(accepted.deletedTombstones).length > 0) {
+          mergeAndPersistTombstones(accepted.deletedTombstones);
+        }
+        if (accepted.hostTunnel?.masterServerName) {
+          setMasterWorkPcName(accepted.hostTunnel.masterServerName);
+        }
+        if (Array.isArray(accepted.hostTunnel?.backupServers)) {
+          setBackupServers(accepted.hostTunnel.backupServers);
+        }
+        if (accepted.hostTunnel?.tunnelUrl && (!isZCoreConnected || nextRole !== 'host')) {
+          void fetchWorkFilesFromHostTunnel(
+            accepted.hostTunnel.tunnelUrl,
+            accepted.hostTunnel.accessKey
+          ).then((fromTunnel) => {
+            if (!cancelled && fromTunnel.ok && targetRoomId) {
+              setRemoteDocs(fromTunnel.docs);
+              mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+              void cacheWorkRoomPreviewLocally(
+                targetRoomId,
+                fromTunnel.docs,
+                merlinAuth?.email || undefined
+              );
+            }
+          });
+        }
+      })
+      .finally(() => {
+        isAcceptingInviteRef.current = false;
+      });
     return () => {
       cancelled = true;
     };
@@ -1295,10 +1310,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
       if (activeWorkRoomId && hasAuthenticatedHubAccountSession()) {
         // 초대 링크로 방금 들어와 acceptWorkRoomInvite가 진행 중인 첫 순간에는 그 응답을 기다림
         if (
-          inviteMeta.hasWorkInvite &&
-          inviteMeta.inviteToken &&
-          acceptedInviteTokenRef.current === inviteMeta.inviteToken &&
-          !joinedInvitedRoom
+          isAcceptingInviteRef.current ||
+          (inviteMeta.hasWorkInvite && inviteMeta.inviteToken && !joinedInvitedRoom)
         ) {
           return;
         }
@@ -1313,7 +1326,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
             authed.reason === 'WORK_SUBSCRIPTION_REQUIRED'
           ) {
             setRemoteRoomLockReason(authed.reason);
-          } else if (authed.reason === 'NOT_A_WORK_ROOM_MEMBER') {
+          } else if (
+            authed.reason === 'NOT_A_WORK_ROOM_MEMBER' &&
+            !isAcceptingInviteRef.current &&
+            !inviteMeta.hasWorkInvite
+          ) {
             performKickedOrRemovedCleanup(
               activeWorkRoomId,
               joinedInvitedRoom?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
@@ -1542,10 +1559,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
           const myRow = sorted.find((m) => m.email.toLowerCase() === cleanMyEmail);
           if (
             !myRow &&
-            (myRoomRole !== 'host' ||
-              Boolean(joinedInvitedRoom) ||
-              inviteMeta.hasWorkInvite ||
-              !isOwnWorkUnlocked)
+            !isAcceptingInviteRef.current &&
+            !inviteMeta.hasWorkInvite &&
+            (myRoomRole !== 'host' || Boolean(joinedInvitedRoom) || !isOwnWorkUnlocked)
           ) {
             // 방장이 나를 내보낸 경우 즉시 초대 세션·업무방 화면·S: 마운트·로컬 캐시 일괄 해제!
             performKickedOrRemovedCleanup(
@@ -1555,6 +1571,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
             return;
           }
           if (myRow) {
+            clearPendingKickedWorkRoomNotice(cleanMyEmail);
+            setKickedFromRoomTitle(null);
             const nextRole: 'host' | 'editor' | 'viewer' =
               myRow.role === 'master' ? 'host' : myRow.role;
             setMyRoomRole(nextRole);
