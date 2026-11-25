@@ -2053,10 +2053,13 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
 
             matched_services: List[str] = []
             svc_re = re.compile(
-                r"(Cache|PCAppStore|TUCTL|yoondisk|Yondisk|CloudTask|StorageService|natservice|natsvc|wizverapmsvc|nosstarter|veraport|crossex|anysign|delfino|magicline|i3g|unicrs|pennyroyal)",
+                r"^(CacheCloud|CacheService|CacheConsole|PCAppStore|PcAppStoreSRV|TUCTL|Yondisk|yoondisk|CloudTask|StorageServiceManager|natservice|natsvc|wizverapmsvc|nosstarter|veraport|crossex|anysign|delfino|magicline|i3g|unicrs|pennyroyal)",
                 re.IGNORECASE,
             )
-            svc_safe_re = re.compile(r"(Merlin|SensTalk|SenseTalk|NPlace|Tailscale|Spooler|WinDefend|mpssvc|wscsvc)", re.IGNORECASE)
+            svc_safe_re = re.compile(
+                r"(Merlin|SensTalk|SenseTalk|NPlace|Tailscale|Spooler|WinDefend|mpssvc|wscsvc|Dnscache|FontCache|BranchCache|PeerDist|TokenBroker|WebClient)",
+                re.IGNORECASE,
+            )
             try:
                 r_sc = subprocess.run(
                     ["sc", "query", "state=", "all"],

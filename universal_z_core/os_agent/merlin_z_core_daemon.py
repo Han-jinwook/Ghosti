@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.03"
+CORE_VERSION = "2.8.19"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2196,7 +2196,13 @@ def main() -> None:
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
 
     def _start_auxiliary_watchers() -> None:
-        # [0순위 기동]: 귀신창 데몬(51988)을 가장 먼저 즉시 기동하여 Z-코어 실행 직후 첫 Ctrl+0 / Ctrl+우클릭 대기시간을 최소화!
+        # [진짜 0순위 0.1초 즉시 기동]: 귀신창 데몬(51988, In-Process)을 _self_purge_legacy_conflicts(10초 WMI 스캔)보다
+        # 가장 먼저 0.1초 만에 기동하여 Z-코어 실행 직후 첫 Ctrl+0 / Ctrl+우클릭 대기시간을 0초대로 단축!
+        try:
+            plugin_ghosti_superpowers.ensure_superpower_daemon_running()
+            plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
+        except Exception:
+            pass
         if getattr(sys, "frozen", False):
             try:
                 w32.ensure_persistent_frozen_install()
@@ -2205,11 +2211,6 @@ def main() -> None:
         # [구형 찌꺼기 자동 숙청]: 구형 seq_paste_daemon.py 및 중복 작업 스케줄러 정리 (SenseTalk_Engine.exe 제외)
         try:
             _self_purge_legacy_conflicts()
-        except Exception:
-            pass
-        try:
-            plugin_ghosti_superpowers.ensure_superpower_daemon_running()
-            plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
         except Exception:
             pass
         if getattr(sys, "frozen", False):

@@ -169,6 +169,7 @@ export interface MonsterCleanupPreviewPayload {
   approvedTypedText?: string;
   createdRestoreId?: string;
   executionError?: string;
+  undone?: boolean;
 }
 
 export interface MonsterShortcutPreviewPayload {
@@ -308,6 +309,7 @@ export interface MonsterBootCarePreviewPayload {
   createdRestoreId?: string;
   executionSummaryKo?: string;
   executionError?: string;
+  undone?: boolean;
 }
 
 export interface MonsterDefenderGuardPayload {
@@ -1103,6 +1105,8 @@ export async function executeRestorePointRollback(
     message?: string;
     error?: string;
     restoredCount?: number;
+    restoredFiles?: string[];
+    restoredPhotoNames?: string[];
     userRollbackTypedText?: string;
   }>(
     '/__zcore/restore-rollback',
@@ -1113,6 +1117,23 @@ export async function executeRestorePointRollback(
   if (d?.ok) {
     const resolvedId = d.restoreId || restoreId;
     const count = Number(d.restoredCount ?? 0);
+    // 사진 정리 복원 기록(PHOTO_RECYCLE)을 되돌린 경우 왼쪽 사진 정리 화면에도 즉시 복원 상태 반영
+    const photoNamesToSync = Array.from(
+      new Set([...(d.restoredPhotoNames || []), ...(d.restoredFiles || [])].filter(Boolean))
+    );
+    if (photoNamesToSync.length > 0) {
+      try {
+        useSaySeeStore
+          .getState()
+          .syncPhotosAfterExternalRestore(
+            photoNamesToSync,
+            undefined,
+            `[${resolvedId}] 정리했던 항목을 원래 위치로 복원했습니다.`
+          );
+      } catch {
+        /* ignore store sync error */
+      }
+    }
     appendLocalHealthCheckRecord({
       category: '↩️ 복원 기록',
       title: `[${resolvedId}] 자연어 타이핑 원복 완료 ("${userTypedText}")`,
@@ -3502,7 +3523,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       };
       return reply(
         sourceTab,
-        ` **멋대로 지우지 않고 정리 대상 목록부터 먼저 보여드릴게요!**\n아래 점검 내역을 확인하신 뒤 **[응, 안전하게 정리해줘]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요.`,
+        ` **멋대로 지우지 않고 정리 대상 목록부터 먼저 보여드릴게요!**\n아래 점검 내역을 확인하신 뒤 **[✅ 응, 안전 정리해줘]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요.`,
         {
           cardKind: 'BOOT_CARE_PREVIEW_GATE',
           bootCarePreviewPayload: previewBoot,
@@ -3537,7 +3558,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       };
       return reply(
         sourceTab,
-        ` **임의 이동 없이 정리할 파일 ${scannedItems.length}건(${formatBytes(totalBytes)}) 목록을 먼저 찾았어요!**\n아래 목록을 확인하신 뒤 **[응, 안전 정리해줘]** 버튼을 눌러 주세요.`,
+        ` **임의 이동 없이 정리할 파일 ${scannedItems.length}건(${formatBytes(totalBytes)}) 목록을 먼저 찾았어요!**\n아래 목록을 확인하신 뒤 **[✅ 응, 안전 정리해줘]** 버튼을 눌러 주세요.`,
         {
           cardKind: 'CLEANUP_PREVIEW_GATE',
           cleanupPreview: preview,
@@ -4470,7 +4491,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     };
     return reply(
       sourceTab,
-      ` **묵은 윈도우 임시 쓰레기 파일 ${items.length}건(${formatBytes(totalBytes)})**을 찾았어요!\n열려 있는 프로그램이나 최근 24시간 파일은 빼고 안전한 항목만 골랐습니다. 아래 목록을 보시고 **[응, 안전 정리해줘]**를 눌러 주세요.`,
+      ` **묵은 윈도우 임시 쓰레기 파일 ${items.length}건(${formatBytes(totalBytes)})**을 찾았어요!\n열려 있는 프로그램이나 최근 24시간 파일은 빼고 안전한 항목만 골랐습니다. 아래 목록을 보시고 **[✅ 응, 안전 정리해줘]** 버튼을 눌러 주세요.`,
       {
         cardKind: 'CLEANUP_PREVIEW_GATE',
         cleanupPreview: previewTmp,
@@ -4538,7 +4559,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       };
       const introKo = wantsScheduleReboot
         ? `⏰ **새벽 4시 자동 다시 시작(재부팅) 예약 미리보기**입니다.\n바로 예약하지 않고 먼저 확인창을 띄워 드렸어요. 아래 버튼을 누르시거나 **"응 진행해"**라고 입력하시면 등록됩니다.`
-        : ` **미사용 웹 보안 모듈 및 불필요 자동실행 점검 결과**입니다. (사내 문서보안 DRM·백신은 절대 건드리지 않습니다)\n아래 대상 목록을 확인하신 뒤 **[응, 안전하게 정리해줘]** 버튼을 눌러 주세요!`;
+        : ` **미사용 웹 보안 모듈 및 불필요 자동실행 점검 결과**입니다. (사내 문서보안 DRM·백신은 절대 건드리지 않습니다)\n아래 대상 목록을 확인하신 뒤 **[✅ 응, 안전 정리해줘]** 버튼을 눌러 주세요!`;
       return reply(sourceTab, introKo, {
         cardKind: 'BOOT_CARE_PREVIEW_GATE',
         bootCarePreviewPayload: previewBoot,
@@ -4762,7 +4783,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     };
     const previewIntro =
       `${llmIntro} **마음대로 끄지 않고 누가 속도를 잡아먹고 있는지 먼저 점검했어요!**\n` +
-      `아래 점검 카드를 확인하신 뒤 **[응, 안전하게 정리해줘]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요.`;
+      `아래 점검 카드를 확인하신 뒤 **[✅ 응, 안전 정리해줘]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요.`;
     speak('속도를 늦추는 항목을 먼저 점검했습니다. 확인 후 정리 버튼을 눌러 주세요.');
     return reply(sourceTab, previewIntro, {
       cardKind: 'BOOT_CARE_PREVIEW_GATE',

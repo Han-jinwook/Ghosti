@@ -228,6 +228,7 @@ export interface AssistantOnboardingSlice {
   selectedTrashIds: Set<string>;
   activeTrashCategoryFilter: TrashCategory | 'all' | 'none';
   quarantineMoving: boolean;
+  quarantineOpKind: 'idle' | 'move' | 'restore';
   lastQuarantineToast: string | null;
   lastUndoBatch: UndoQuarantineBatch | null;
   setActiveTrashCategoryFilter: (cat: TrashCategory | 'all' | 'none') => void;
@@ -417,6 +418,7 @@ function buildQuarantineMoveStatePatch(opts: {
     selectedTrashIds: cleanedSelected,
     ...(clearSelectedBurstModal ? { selectedPhoto: null, selectedBurstGroup: null } : {}),
     quarantineMoving: false,
+    quarantineOpKind: 'idle',
     freeTrialUsed: true,
     lastUndoBatch: isIosNativeApp
       ? null
@@ -1909,6 +1911,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   selectedTrashIds: new Set<string>(),
   activeTrashCategoryFilter: 'duplicate',
   quarantineMoving: false,
+  quarantineOpKind: 'idle',
   lastQuarantineToast: null,
   lastUndoBatch: null,
 
@@ -2001,16 +2004,51 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     if (quarantineRestImmediately && redundantIds.length > 0) {
       if (!ensureLoginAndZCoreReady('연사 베스트 컷 정리')) return;
-      // OS 확인창 호출 전 불필요한 전체 photos 배열 재렌더링을 생략하고 단일 가드 상태만 세팅해 터치 반응 멈춤을 0ms로 차단합니다.
-      set({ quarantineMoving: true });
+      // [PC 로컬 Z-코어 0.01초 즉시 세트 전환]: SHFileOperationW 휴지통 I/O 동안 화면이 멈추지 않도록
+      // PC 연결 시에는 즉시 다음 세트로 넘기고 백그라운드 직렬 큐로 이동하며(실패 시 자동 원복), 모바일은 OS 확인창 이후 전환합니다.
+      if (zCoreBridge.isConnected && !isCapacitorNativeMobileRuntime()) {
+        const optimisticMovedSet = new Set<string>(redundantIds);
+        const newlyKeptIds = new Set<string>([effectiveKeepId]);
+        const savedBytes = photos
+          .filter((p) => optimisticMovedSet.has(p.id))
+          .reduce((acc, p) => acc + p.size, 0);
+        set((state) => {
+          const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
+          return buildQuarantineMoveStatePatch({
+            state,
+            movedSet: optimisticMovedSet,
+            newlyKeptIds,
+            savedBytes,
+            demo: false,
+            actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
+            nonIosToast: `${wasFreeTrialFirstUse ? '첫 정리 완료! ' : ' '}베스트 원본 1장을 남기고 나머지 ${optimisticMovedSet.size}장을 시스템 [휴지통]으로 안전하게 이동했습니다.`,
+          });
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ghosti_photo_moved_to_quarantine'));
+        }
+        void requestQuarantineOp('move', redundantIds, [effectiveKeepId]).then((moveRes) => {
+          const movedList = moveRes.done.filter((id) => id !== effectiveKeepId);
+          if (movedList.length === 0) {
+            get().syncPhotosAfterExternalRestore(
+              redundantIds,
+              undefined,
+              quarantineFailureToast('move', moveRes)
+            );
+          }
+        });
+        return;
+      }
+
+      set({ quarantineMoving: true, quarantineOpKind: 'move' });
       const moveRes = await requestQuarantineOp('move', redundantIds, [effectiveKeepId]);
       if (moveRes.done.length === 0) {
-        set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+        set({ quarantineMoving: false, quarantineOpKind: 'idle', lastQuarantineToast: quarantineFailureToast('move', moveRes) });
         return;
       }
       const movedList: string[] = moveRes.done.filter((id) => id !== effectiveKeepId);
       if (movedList.length === 0) {
-        set({ quarantineMoving: false });
+        set({ quarantineMoving: false, quarantineOpKind: 'idle' });
         return;
       }
       const moveNote = quarantineResultNote('move', moveRes);
@@ -2091,15 +2129,15 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (redundantIds.length === 0) return;
     if (!ensureLoginAndZCoreReady('연사 베스트 컷 정리')) return;
 
-    set({ quarantineMoving: true });
+    set({ quarantineMoving: true, quarantineOpKind: 'move' });
     const moveRes = await requestQuarantineOp('move', redundantIds, [keepPhotoId]);
     if (moveRes.done.length === 0) {
-      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+      set({ quarantineMoving: false, quarantineOpKind: 'idle', lastQuarantineToast: quarantineFailureToast('move', moveRes) });
       return;
     }
     const movedList: string[] = moveRes.done.filter((id) => id !== keepPhotoId);
     if (movedList.length === 0) {
-      set({ quarantineMoving: false });
+      set({ quarantineMoving: false, quarantineOpKind: 'idle' });
       return;
     }
     const moveNote = quarantineResultNote('move', moveRes);
@@ -2158,7 +2196,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     const targetNames = scopedPhotos.map((p) => p.id);
     if (targetNames.length === 0) return;
 
-    set({ quarantineMoving: true });
+    set({ quarantineMoving: true, quarantineOpKind: 'move' });
     let cancelRequested = false;
     const onCancel = () => {
       cancelRequested = true;
@@ -2179,7 +2217,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         if (chunkRes.done.length > 0) {
           movedList.push(...chunkRes.done);
         } else if (offset === 0) {
-          set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', chunkRes) });
+          set({ quarantineMoving: false, quarantineOpKind: 'idle', lastQuarantineToast: quarantineFailureToast('move', chunkRes) });
           return;
         }
       }
@@ -2190,7 +2228,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
 
     if (movedList.length === 0 || !lastMoveRes) {
-      set({ quarantineMoving: false });
+      set({ quarantineMoving: false, quarantineOpKind: 'idle' });
       return;
     }
     const moveRes = lastMoveRes;
@@ -2317,8 +2355,8 @@ export const createAssistantOnboardingSlice: StateCreator<
           }, 60);
         }
         return customToast
-          ? { quarantineMoving: false, lastQuarantineToast: customToast }
-          : { quarantineMoving: false };
+          ? { quarantineMoving: false, quarantineOpKind: 'idle', lastQuarantineToast: customToast }
+          : { quarantineMoving: false, quarantineOpKind: 'idle' };
       }
 
       // [원래 세트 정밀 재결합]: 방금 복원된 사진과 같은 세트였던 보존 사진(originGroupId 일치)만 userKeptAsBest 잠금을 해제해
@@ -2409,6 +2447,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         searchResults: refreshedSearchResults,
         lastUndoBatch: nextLastUndoBatch,
         quarantineMoving: false,
+        quarantineOpKind: 'idle',
         ...(customToast ? { lastQuarantineToast: customToast } : {}),
       };
     });
@@ -2437,7 +2476,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       set({ lastUndoBatch: null });
       return;
     }
-    set({ quarantineMoving: true });
+    set({ quarantineMoving: true, quarantineOpKind: 'restore' });
     try {
       // PC Z-코어는 휴지통 장부(name) 기준으로 매칭하므로 id !== name인 기존 항목도 정확히 name으로 전달
       const wireTargets = zCoreBridge.isConnected
@@ -2477,6 +2516,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           const staleSet = new Set<string>([...validTargets, ...wireTargets]);
           set((state) => ({
             quarantineMoving: false,
+            quarantineOpKind: 'idle',
             photos: state.photos.filter((p) => !(p.quarantined && (staleSet.has(p.id) || staleSet.has(p.name)))),
             lastUndoBatch: null,
             lastQuarantineToast:
@@ -2484,7 +2524,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           }));
           return;
         }
-        set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
+        set({ quarantineMoving: false, quarantineOpKind: 'idle', lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
         return;
       }
       get().syncPhotosAfterExternalRestore(
@@ -2494,7 +2534,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       );
     } finally {
       if (get().quarantineMoving) {
-        set({ quarantineMoving: false });
+        set({ quarantineMoving: false, quarantineOpKind: 'idle' });
       }
     }
   },

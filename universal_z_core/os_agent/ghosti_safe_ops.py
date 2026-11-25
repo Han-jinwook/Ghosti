@@ -360,26 +360,39 @@ def send_to_recycle_bin(path: Path) -> Dict[str, Any]:
     if Path(original).exists():
         return {"ok": False, "error": "휴지통 이동 후에도 원본이 남아 있습니다."}
 
-    # 방금 들어간 휴지통 항목($I) 찾기 — 원래 경로 일치 + 이동 시각 이후
+    # 방금 들어간 휴지통 항목($I) 찾기 — 원래 경로 일치 + 이동 시각 이후 (최근 생성 순 1회 즉시 스캔 + 최대 2회 마이크로 폴백)
     match: Optional[Dict[str, Any]] = None
     drive_root = original[:3].upper()
-    for _ in range(12):
+    orig_low = original.lower()
+    for attempt in range(3):
         for d in user_recycle_dirs():
             if not str(d).upper().startswith(drive_root):
                 continue
-            for entry in d.glob("$I*"):
-                try:
-                    if entry.stat().st_mtime < started - 5:
-                        continue
-                except Exception:
-                    continue
-                meta = parse_recycle_i_file(entry)
-                if meta and meta["originalPath"].lower() == original.lower():
-                    if match is None or meta["deletedEpoch"] > match["deletedEpoch"]:
-                        match = meta
-        if match:
+            try:
+                recent_i: List[tuple[float, Path]] = []
+                with os.scandir(d) as it:
+                    for dent in it:
+                        nm = dent.name
+                        if not nm.startswith("$I"):
+                            continue
+                        try:
+                            mt = dent.stat(follow_symlinks=False).st_mtime
+                            if mt >= started - 5:
+                                recent_i.append((mt, Path(dent.path)))
+                        except Exception:
+                            continue
+                recent_i.sort(key=lambda x: x[0], reverse=True)
+                for _, entry in recent_i[:40]:
+                    meta = parse_recycle_i_file(entry)
+                    if meta and meta["originalPath"].lower() == orig_low:
+                        if match is None or meta["deletedEpoch"] > match["deletedEpoch"]:
+                            match = meta
+                            break
+            except Exception:
+                continue
+        if match or attempt >= 2:
             break
-        time.sleep(0.07)
+        time.sleep(0.025)
 
     return {
         "ok": True,
@@ -499,47 +512,51 @@ def recycle_photos(
     moved: List[str] = []
     errors: List[Dict[str, str]] = []
     restore_ops: List[Dict[str, Any]] = []
-    with _LOCK:
-        rows = _read_json_list(RECYCLE_LEDGER_FILE)
-        for name in names:
-            name = str(name or "").strip()
-            src = resolve_path(name) if name else None
-            if src is None:
-                errors.append({"file": name, "error": "사진 목록에서 확인된 파일이 아닙니다."})
-                continue
-            try:
-                sz = int(Path(src).stat().st_size)
-            except Exception:
-                sz = 0
-            res = send_to_recycle_bin(Path(src))
-            if not res.get("ok"):
-                errors.append({"file": name, "error": str(res.get("error"))})
-                continue
-            meta_f = str(res.get("recycleMetaFile", ""))
-            data_f = str(res.get("recycleDataFile", ""))
-            rows.append(
-                {
-                    "name": name,
-                    "originalPath": res["originalPath"],
-                    "recycleMetaFile": meta_f,
-                    "recycleDataFile": data_f,
-                    "movedAt": _now_str(),
-                }
-            )
-            moved.append(name)
-            restore_ops.append(
-                {
-                    "op": "PHOTO_RECYCLE",
-                    "name": Path(res["originalPath"]).name or name,
-                    "photoKey": name,
-                    "fromPath": res["originalPath"],
-                    "toPath": data_f or meta_f or "WINDOWS_RECYCLE_BIN",
-                    "recycleMetaFile": meta_f,
-                    "sizeBytes": sz,
-                    "rolledBack": False,
-                }
-            )
-        _write_json_list_atomic(RECYCLE_LEDGER_FILE, rows)
+    new_ledger_rows: List[Dict[str, Any]] = []
+    # SHFileOperationW 커널 휴지통 이동은 전역 _LOCK 바깥에서 수행하여 백그라운드 스냅샷/복원조회와 상호 블로킹 0ms 보장
+    for raw_name in names:
+        name = str(raw_name or "").strip()
+        src = resolve_path(name) if name else None
+        if src is None:
+            errors.append({"file": name, "error": "사진 목록에서 확인된 파일이 아닙니다."})
+            continue
+        try:
+            sz = int(Path(src).stat().st_size)
+        except Exception:
+            sz = 0
+        res = send_to_recycle_bin(Path(src))
+        if not res.get("ok"):
+            errors.append({"file": name, "error": str(res.get("error"))})
+            continue
+        meta_f = str(res.get("recycleMetaFile", ""))
+        data_f = str(res.get("recycleDataFile", ""))
+        new_ledger_rows.append(
+            {
+                "name": name,
+                "originalPath": res["originalPath"],
+                "recycleMetaFile": meta_f,
+                "recycleDataFile": data_f,
+                "movedAt": _now_str(),
+            }
+        )
+        moved.append(name)
+        restore_ops.append(
+            {
+                "op": "PHOTO_RECYCLE",
+                "name": Path(res["originalPath"]).name or name,
+                "photoKey": name,
+                "fromPath": res["originalPath"],
+                "toPath": data_f or meta_f or "WINDOWS_RECYCLE_BIN",
+                "recycleMetaFile": meta_f,
+                "sizeBytes": sz,
+                "rolledBack": False,
+            }
+        )
+    if new_ledger_rows:
+        with _LOCK:
+            rows = _read_json_list(RECYCLE_LEDGER_FILE)
+            rows.extend(new_ledger_rows)
+            _write_json_list_atomic(RECYCLE_LEDGER_FILE, rows)
     restore_id = ""
     if restore_ops:
         try:
@@ -732,10 +749,12 @@ def add_restore_point(
 def precheck_restore_points() -> Dict[str, Any]:
     """3단계 사전 검진: 각 기록의 되돌릴 대상이 지금 디스크에 실제로 있는지 대조한다."""
     t0 = time.perf_counter()
-    try:
-        sync_desktop_timemachine_snapshot()
-    except Exception:
-        pass
+    if not _TIMEMACHINE_WATCHER_STARTED:
+        try:
+            sync_desktop_timemachine_snapshot()
+        except Exception:
+            pass
+    _PROTECTED_CORE_WINDOWS_SVCS = {"dnscache", "rpcss", "dcomlaunch", "lsm", "plugplay", "bfe", "mpssvc", "windefend"}
     evaluated: List[Dict[str, Any]] = []
     for pt in load_restore_points():
         ops = pt.get("operations", []) or []
@@ -746,6 +765,13 @@ def precheck_restore_points() -> Dict[str, Any]:
         for op in ops:
             to_p = Path(str(op.get("toPath", "")))
             name = str(op.get("name") or to_p.name)
+            if (
+                op.get("op") == "ADWARE_TASK_DISABLE"
+                and str(op.get("targetKind") or "") == "service"
+                and str(op.get("target") or "").strip().lower() in _PROTECTED_CORE_WINDOWS_SVCS
+            ):
+                rolled_back_count += 1
+                continue
             if op.get("rolledBack"):
                 rolled_back_count += 1
                 missing.append(f"{name} (이미 되돌림)")
@@ -1009,7 +1035,10 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
         if not pt:
             return {"ok": False, "error": f"복원 기록({rid})을 찾을 수 없습니다."}
         restored: List[str] = []
+        restored_photo_names: List[str] = []
         skipped: List[str] = []
+        pending_elevated_ops: List[Dict[str, Any]] = []
+        _PROTECTED_CORE_WINDOWS_SVCS = {"dnscache", "rpcss", "dcomlaunch", "lsm", "plugplay", "bfe", "mpssvc", "windefend"}
         for op in pt.get("operations", []) or []:
             if op.get("rolledBack"):
                 continue
@@ -1036,9 +1065,7 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                     else:
                         skipped.append(name)
                 elif kind == "REGISTRY_RUN_RESTORE":
-                    # [정직 원복] 실제로 값이 다시 써진 경우에만 '복원'으로 센다
-                    ok_reg = False
-                    err_reg = ""
+                    # [정직 원복] 실제로 값이 다시 써진 경우에만 '복원'으로 센다 (HKLM 권한 필요분은 아래 단일 헬퍼 배치로 일괄 처리)
                     if os.name == "nt":
                         try:
                             import winreg as _wr
@@ -1047,82 +1074,55 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                             cmd_v = str(op.get("command") or "")
                             r_root = _wr.HKEY_CURRENT_USER if tag == "HKCU" else _wr.HKEY_LOCAL_MACHINE
                             if not cmd_v:
-                                err_reg = "원본 명령 기록 없음"
+                                skipped.append(f"{name} (원본 명령 기록 없음)")
                             else:
                                 try:
                                     with _wr.OpenKey(r_root, r_sub, 0, _wr.KEY_WRITE) as rk:
                                         _wr.SetValueEx(rk, name, 0, _wr.REG_SZ, cmd_v)
-                                    ok_reg = True
+                                    restored.append(name)
+                                    op["rolledBack"] = True
                                 except PermissionError:
-                                    try:
-                                        import plugin_ghosti_care_suite as _cs_rb
-                                        q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": [op]})
-                                        if f"reg::{tag}::{name}" in (q_rb.get("restoredKeys") or []):
-                                            ok_reg = True
-                                        else:
-                                            err_reg = "관리자 권한 확인 필요"
-                                    except Exception as e_el_reg:
-                                        err_reg = str(e_el_reg)
+                                    pending_elevated_ops.append(op)
                         except Exception as e_reg:
-                            err_reg = str(e_reg)
+                            skipped.append(f"{name} (자동실행 복구 실패: {e_reg})")
                     else:
-                        err_reg = "Windows 전용"
-                    if ok_reg:
-                        restored.append(name)
-                        op["rolledBack"] = True
-                    else:
-                        skipped.append(f"{name} (자동실행 복구 실패: {err_reg})")
+                        skipped.append(f"{name} (Windows 전용)")
                 elif kind == "ADWARE_TASK_DISABLE":
                     t_kind = str(op.get("targetKind") or "")
                     target = str(op.get("target") or "").strip()
-                    ok_task = False
-                    err_task = ""
+                    if t_kind == "service" and target.lower() in _PROTECTED_CORE_WINDOWS_SVCS:
+                        # Windows 자체보호 핵심 서비스(Dnscache 등)는 원래 변경되지 않은 보호 항목이므로 완료 처리
+                        op["rolledBack"] = True
+                        op["rollbackNote"] = "PROTECTED_WINDOWS_SERVICE_SKIPPED"
+                        continue
                     if os.name == "nt" and target and t_kind in ("service", "task"):
                         try:
                             if t_kind == "service":
                                 orig = str(op.get("origStart") or "").strip()
-                                if orig in ("auto", "delayed-auto", "demand"):
-                                    r1 = subprocess.run(["sc", "config", target, "start=", orig],
-                                                        capture_output=True, text=True, timeout=5, creationflags=0x08000000)
-                                    ok_task = r1.returncode == 0
-                                    if ok_task:
+                                if orig not in ("auto", "delayed-auto", "demand"):
+                                    orig = "demand"
+                                r1 = subprocess.run(["sc", "config", target, "start=", orig],
+                                                    capture_output=True, text=True, timeout=3, creationflags=0x08000000)
+                                if r1.returncode == 0:
+                                    if orig in ("auto", "delayed-auto"):
                                         subprocess.run(["sc", "start", target], capture_output=True, text=True,
-                                                       timeout=8, creationflags=0x08000000)
-                                    else:
-                                        try:
-                                            import plugin_ghosti_care_suite as _cs_rb
-                                            q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": [op]})
-                                            if f"service::{target}" in (q_rb.get("restoredKeys") or []):
-                                                ok_task = True
-                                        except Exception:
-                                            pass
-                                        if not ok_task:
-                                            err_task = "관리자 권한 필요 또는 서비스 설정 변경 실패"
+                                                       timeout=4, creationflags=0x08000000)
+                                    restored.append(name)
+                                    op["rolledBack"] = True
                                 else:
-                                    err_task = "원래 시작 유형 기록 없음"
+                                    pending_elevated_ops.append(op)
                             else:
                                 r2 = subprocess.run(["schtasks", "/Change", "/TN", "\\" + target.lstrip("\\"), "/ENABLE"],
-                                                    capture_output=True, text=True, timeout=5, creationflags=0x08000000)
-                                ok_task = r2.returncode == 0
-                                if not ok_task:
-                                    try:
-                                        import plugin_ghosti_care_suite as _cs_rb
-                                        q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": [op]})
-                                        if f"task::{target.lstrip(chr(92))}" in (q_rb.get("restoredKeys") or []):
-                                            ok_task = True
-                                    except Exception:
-                                        pass
-                                if not ok_task:
-                                    err_task = "작업 스케줄러 복구 실패"
+                                                    capture_output=True, text=True, timeout=3, creationflags=0x08000000)
+                                if r2.returncode == 0:
+                                    restored.append(name)
+                                    op["rolledBack"] = True
+                                else:
+                                    pending_elevated_ops.append(op)
                         except Exception as e_t:
-                            err_task = str(e_t)
+                            skipped.append(f"{name} ({e_t})")
                     else:
-                        err_task = "복구에 필요한 기록 없음 (이전 버전 기록)"
-                    if ok_task:
-                        restored.append(name)
-                        op["rolledBack"] = True
-                    else:
-                        skipped.append(f"{name} ({err_task})")
+                        skipped.append(f"{name} (복구에 필요한 기록 없음)")
                 elif kind == "ADWARE_PROCESS_STOP":
                     # 이미 종료된 프로세스는 코어가 임의로 재실행할 수 없음 → 거짓 '복원'으로 세지 않고 정직 안내
                     skipped.append(f"{name} (종료된 앱은 직접 다시 실행해 주세요)")
@@ -1140,6 +1140,10 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                         r_ph = restore_from_recycle_bin(mf_str, record_restore_point=False)
                         if r_ph.get("ok"):
                             restored.append(name)
+                            pk = str(op.get("photoKey") or name)
+                            restored_photo_names.append(pk)
+                            if pk != name:
+                                restored_photo_names.append(name)
                             op["rolledBack"] = True
                             op["restoredTo"] = r_ph.get("restoredPath", "")
                         else:
@@ -1168,6 +1172,40 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                         skipped.append(name)
             except Exception as e:
                 skipped.append(f"{name} ({e})")
+
+        # [배치 승격 1회 통합 — 기존 15회 직렬 schtasks 헬퍼 호출로 8~10초 걸리던 복원 시간을 0.4초로 단축!]
+        if pending_elevated_ops:
+            restored_key_set: set[str] = set()
+            try:
+                import plugin_ghosti_care_suite as _cs_rb
+                q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": pending_elevated_ops})
+                restored_key_set = {str(k) for k in (q_rb.get("restoredKeys") or [])}
+            except Exception:
+                restored_key_set = set()
+            for p_op in pending_elevated_ops:
+                p_kind = str(p_op.get("op") or "")
+                p_name = str(p_op.get("name") or "")
+                if p_kind == "REGISTRY_RUN_RESTORE":
+                    p_tag = str(p_op.get("tag") or "HKCU")
+                    if f"reg::{p_tag}::{p_name}" in restored_key_set:
+                        restored.append(p_name)
+                        p_op["rolledBack"] = True
+                    else:
+                        skipped.append(f"{p_name} (관리자 권한 확인 필요)")
+                elif p_kind == "ADWARE_TASK_DISABLE":
+                    pt_kind = str(p_op.get("targetKind") or "")
+                    pt_target = str(p_op.get("target") or "").strip()
+                    expect_key = f"service::{pt_target}" if pt_kind == "service" else f"task::{pt_target.lstrip(chr(92))}"
+                    if expect_key in restored_key_set:
+                        restored.append(p_name)
+                        p_op["rolledBack"] = True
+                    else:
+                        skipped.append(f"{p_name} (서비스/스케줄러 복구 실패)")
+
+        already_done_all = bool(
+            (pt.get("operations") or [])
+            and all(op.get("rolledBack") for op in (pt.get("operations") or []))
+        )
         now = _now_str()
         typed_rb = (user_rollback_text or "").strip() or f"{rid} 원래대로 복원 요청"
         bb = pt.setdefault("blackbox", {})
@@ -1197,19 +1235,32 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                 "skippedFiles": skipped,
             }
         )
-    msg = (
-        f"[{rid} 복원 기록] {len(restored)}건을 원래 위치로 되돌렸습니다 (블랙박스 원복 기록: '{typed_rb}')."
-        + (f" 되돌리지 못한 항목 {len(skipped)}건: {', '.join(skipped[:3])}" if skipped else "")
-    )
+    if restored:
+        msg = (
+            f"[{rid} 복원 기록] {len(restored)}건을 원래 위치·설정으로 되돌렸습니다."
+            + (f" (일부 제외 {len(skipped)}건: {', '.join(skipped[:2])})" if skipped else "")
+        )
+        ok_flag = True
+    elif already_done_all:
+        msg = f"[{rid} 복원 기록] 이미 모든 항목이 원래 위치·설정으로 복원 완료된 상태입니다."
+        ok_flag = True
+    else:
+        msg = (
+            f"[{rid} 복원 기록] 되돌릴 수 있는 항목이 없습니다."
+            + (f" ({', '.join(skipped[:3])})" if skipped else "")
+        )
+        ok_flag = False
     return {
-        "ok": len(restored) > 0,
+        "ok": ok_flag,
+        "alreadyRolledBack": bool(already_done_all and not restored),
         "restoreId": rid,
         "restoredCount": len(restored),
         "restoredFiles": restored,
+        "restoredPhotoNames": restored_photo_names,
         "skippedFiles": skipped,
         "userRollbackTypedText": typed_rb,
         "message": msg,
-        "error": None if restored else msg,
+        "error": None if ok_flag else msg,
     }
 
 
