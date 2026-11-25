@@ -2177,12 +2177,26 @@ ${payload.summaryText}`, {
         return reply(sourceTab, twoLineText, {
           cardKind: 'WEEKLY_CARE_BRIEFING',
           proactiveCareBriefing: briefing,
-          followUpSuggestions: [            '응 지금 손봐줘',
+          followUpSuggestions: [
+            '응 지금 손봐줘',
             '매주 수요일 점심마다 알아서 손봐줘',
             '정기 검진 요일 금요일 오후 4시로 귀신같이 바꿔줘',
           ],
         });
       }
+      const curSched = loadWeeklyCareSchedule();
+      const curLabel = formatScheduleLabelKo(curSched);
+      return reply(
+        sourceTab,
+        `현재 **주간 정기 점검** 예약은 **${curLabel}**로 설정되어 있어요!\n지금 바로 PC 상태를 점검해 보시거나 원하시는 요일·시간으로 바꿀 수 있어요.`,
+        {
+          followUpSuggestions: [
+            '내 PC 속도랑 메모리 지금 점검해줘',
+            '금요일 오후 4시로 정기 점검 바꿔줘',
+            '정기 점검 알림 꺼줘',
+          ],
+        }
+      );
     }
 
     if (careCmd.action === 'DISABLE_SCHEDULE') {

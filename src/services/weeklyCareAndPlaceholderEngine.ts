@@ -226,9 +226,9 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
   const clean = (rawQuery || '').trim();
   if (!clean) return { matched: false };
 
-  // 1) 지금 즉시 정기 건강검진 / 손 없는 날 점검 실행 요청
+  // 1) 지금 즉시 정기 건강검진 / 정기 점검 / 손 없는 날 점검 실행 요청
   if (
-    /(?:지금|당장|오늘|바로)?\s*(?:정기\s*(?:건강)?\s*검진|수요\s*손\s*없는\s*날|손\s*없는\s*날\s*검진|종합\s*건강\s*검진).*?(?:해\s*(?:줘|주세요)|실행|시작|진단|봐\s*(?:줘|주세요)|손봐\s*(?:줘|주세요))/i.test(
+    /(?:지금|당장|오늘|바로)?\s*(?:정기\s*(?:건강)?\s*(?:검진|점검)|수요\s*손\s*없는\s*날|손\s*없는\s*날\s*(?:검진|점검)|종합\s*건강\s*(?:검진|점검)).*?(?:해\s*(?:줘|주세요)|실행|시작|진단|봐\s*(?:줘|주세요)|손봐\s*(?:줘|주세요)|확인|알려\s*(?:줘|주세요))/i.test(
       clean
     )
   ) {
@@ -236,13 +236,13 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
   }
 
   const hasCareKeyword =
-    /(?:정기\s*(?:건강)?\s*검진|정기\s*청소|정기\s*손보기|자동\s*손보기|수요\s*손\s*없는\s*날|손\s*없는\s*날|매주.*?손봐|매주.*?검진|검진\s*요일|검진\s*시간|예약\s*일시|예약\s*주기)/i.test(
+    /(?:정기\s*(?:건강)?\s*(?:검진|점검)|정기\s*청소|정기\s*손보기|자동\s*손보기|수요\s*손\s*없는\s*날|손\s*없는\s*날|매주.*?손봐|매주.*?(?:검진|점검)|(?:검진|점검)\s*요일|(?:검진|점검)\s*시간|예약\s*일시|예약\s*주기)/i.test(
       clean
     );
 
   if (!hasCareKeyword) return { matched: false };
 
-  // 2) 정기 검진 끄기/해제
+  // 2) 정기 검진/점검 끄기/해제
   if (/(?:꺼\s*(?:줘|주세요)|끄기|해제|중지|그만|안\s*할래|안\s*할게|하지\s*마|취소)/i.test(clean)) {
     return { matched: true, action: 'DISABLE_SCHEDULE' };
   }
@@ -289,7 +289,7 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
     }
   }
 
-  if (dayMatch || /(?:바꿔|변경|설정|예약|맞춰|해\s*줘|켜\s*줘)/.test(clean)) {
+  if (dayMatch || /(?:바꿔|변경|설정|예약|맞춰|켜\s*줘)/.test(clean)) {
     return {
       matched: true,
       action: 'UPDATE_SCHEDULE',
@@ -297,6 +297,11 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
       hour: targetHour,
       minute: targetMinute,
     };
+  }
+
+  // 4) '정기 점검', '정기 검진'처럼 단독 입력 시 외부 AI로 빠지지 않고 즉시 현재 기기 정기 점검 브리핑 실행
+  if (/^(?:주간\s*)?(?:정기\s*(?:건강)?\s*(?:검진|점검)|정기\s*청소|정기\s*손보기|수요\s*손\s*없는\s*날|손\s*없는\s*날)(?:\s*(?:해\s*줘|해\s*주세요|부탁|좀|알려\s*줘|보여\s*줘|확인))?[.!~?]*$/i.test(clean)) {
+    return { matched: true, action: 'RUN_NOW_CHECKUP' };
   }
 
   return { matched: false };
