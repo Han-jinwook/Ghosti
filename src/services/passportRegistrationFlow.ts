@@ -84,12 +84,9 @@ export function notifyPassportFaceScanFinished(): void {
 export const PASSPORT_MIN_FACE_PHOTOS_FOR_ASK = 3;
 /** '가족으로 보이는 얼굴' 최소 등장 사진 수 (본인과 동일하게 3장 이상) */
 export const FAMILY_MIN_PHOTOS = 3;
-/** 한 화면에 보여줄 최대 인원 / 사진 수 (부모님·자녀·조부모 대가족 전원 표시) */
+/** 한 화면에 순차 표시할 최대 후보 인원 수 (등록 인물 총량 자체는 무제한 — 등록·제외 시 남은 인원이 자동 순차 노출) */
 export const MAX_PASSPORT_CANDIDATE_FACES = 12;
 const MAX_FACES = MAX_PASSPORT_CANDIDATE_FACES;
-const MAX_CUTS_PER_PERSON = 12;
-/** 내 프로필 ➔ 여권 등 확정·합치기 완료 사진 보관 상한 (선글라스·모자 합치기 컷이 연도순 잘림으로 누락되지 않도록 충분히 보존) */
-const MAX_CONFIRMED_CUTS_PER_PERSON = 36;
 
 export interface PassportRegState {
   /** 유저가 '이게 나'라고 고른 얼굴 묶음 */
@@ -212,8 +209,8 @@ export function countFacePhotos(clusters: FaceMemberCluster[]): number {
   return set.size || fallback;
 }
 
-/** 얼굴 묶음의 시기별 사진 (없으면 대표 사진 1장, 동명 파일 복사본 중복 제거) */
-export function clusterCuts(c: FaceMemberCluster, limit = MAX_CUTS_PER_PERSON): YearlyFaceBestCut[] {
+/** 얼굴 묶음의 시기별 사진 (없으면 대표 사진 1장, 동명 파일 복사본 중복 제거 — 기획서 원안대로 임의 장수 잘라내기 없이 전량 보존) */
+export function clusterCuts(c: FaceMemberCluster): YearlyFaceBestCut[] {
   const cuts = Array.isArray(c.yearlyBestCuts) && c.yearlyBestCuts.length > 0
     ? c.yearlyBestCuts
     : [
@@ -237,8 +234,7 @@ export function clusterCuts(c: FaceMemberCluster, limit = MAX_CUTS_PER_PERSON): 
       seen.add(baseKey);
       return true;
     })
-    .sort((a, b) => b.year - a.year)
-    .slice(0, limit);
+    .sort((a, b) => b.year - a.year);
 }
 
 function clusterDismissSignature(c: Pick<FaceMemberCluster, 'representativePhoto' | 'boundingBox'>): string {
@@ -278,7 +274,7 @@ export function confirmedCutsFor(c: FaceMemberCluster, st: PassportRegState): Ye
       .map((k) => k.split('::')[1])
       .filter(Boolean)
   );
-  const fromCluster = clusterCuts(c, MAX_CONFIRMED_CUTS_PER_PERSON).filter((cut) => {
+  const fromCluster = clusterCuts(c).filter((cut) => {
     const k = cutKey(c.clusterId, cut);
     return confirmed.has(k) && !rejected.has(k);
   });
@@ -293,7 +289,7 @@ export function confirmedCutsFor(c: FaceMemberCluster, st: PassportRegState): Ye
     seen.add(pName);
     merged.push(snap);
   }
-  return merged.sort((a, b) => b.year - a.year).slice(0, MAX_CONFIRMED_CUTS_PER_PERSON);
+  return merged.sort((a, b) => b.year - a.year);
 }
 
 export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster | null {
@@ -428,7 +424,7 @@ export function registeredMergeTargets(st = loadPassportRegState()): PassportMer
     });
   }
 
-  for (const c of rankFaceClusters(liveClusters(), 30)) {
+  for (const c of rankFaceClusters(liveClusters(), Number.MAX_SAFE_INTEGER)) {
     if (seenIds.has(c.clusterId) || dismissed.has(c.clusterId)) continue;
     const regName = (c.registeredName || '').trim();
     if (!regName) continue;
@@ -451,7 +447,7 @@ export function familyCandidates(st = loadPassportRegState()): FaceMemberCluster
   const selfId = self?.clusterId || freshSt.selfClusterId;
   const dismissed = new Set(freshSt.dismissedClusterIds);
   const dismissedSigs = new Set(freshSt.dismissedSignatures || []);
-  return rankFaceClusters(liveClusters(), 30)
+  return rankFaceClusters(liveClusters(), Number.MAX_SAFE_INTEGER)
     .filter((c) => {
       if (c.clusterId === selfId || dismissed.has(c.clusterId)) return false;
       const sig = clusterDismissSignature(c);
@@ -474,7 +470,7 @@ export interface PassportPendingSummary {
 export function summarizePassportPending(st = loadPassportRegState()): PassportPendingSummary {
   const clusters = liveClusters();
   // 본인·가족 공통 단일 기준: 동일 인물이 3장 이상 등장한 얼굴 묶음이 최소 1명 이상일 때
-  const qualifiedClusters = rankFaceClusters(clusters, 30, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
+  const qualifiedClusters = rankFaceClusters(clusters, Number.MAX_SAFE_INTEGER, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
   const enoughFaces = qualifiedClusters.length > 0;
   const self = findSelfCluster(st);
   const needsSelfPick = !self && enoughFaces;
@@ -750,7 +746,7 @@ function mergeClusterIntoTarget(
         ? c
         : {
             ...c,
-            yearlyBestCuts: mergedYearlyCuts.slice(0, MAX_CONFIRMED_CUTS_PER_PERSON),
+            yearlyBestCuts: mergedYearlyCuts,
             matchedPhotoFiles: mergedMatchedFiles,
             matchedPhotoCount: Math.max(c.matchedPhotoCount || 0, mergedMatchedFiles.length),
           }
@@ -1052,9 +1048,7 @@ export async function submitPassportRegistration(
           seenSelfPhotos.add(ac.representativePhoto);
           mergedSelfCuts.push(ac);
         }
-        nextConfirmedSelfCuts = mergedSelfCuts
-          .sort((a, b) => b.year - a.year)
-          .slice(0, MAX_CONFIRMED_CUTS_PER_PERSON);
+        nextConfirmedSelfCuts = mergedSelfCuts.sort((a, b) => b.year - a.year);
       }
 
       st = {
@@ -1137,7 +1131,7 @@ export async function submitPassportRegistration(
       st = {
         ...st,
         selfClusterId: p.clusterId,
-        confirmedSelfCuts: mergedSelfCuts.sort((a, b) => b.year - a.year).slice(0, MAX_CONFIRMED_CUTS_PER_PERSON),
+        confirmedSelfCuts: mergedSelfCuts.sort((a, b) => b.year - a.year),
       };
       registered += p.acceptedCuts.length || (safeRealName ? 1 : 0);
     } else if (p.acceptedCuts.length > 0) {

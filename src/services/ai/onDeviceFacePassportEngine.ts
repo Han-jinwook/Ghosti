@@ -10,10 +10,12 @@ import type { WorkerDetectedFace } from './facePassportWorker';
 
 export type PassportStyleSlotTag = NonNullable<YearlyFaceBestCut['conditionTag']>;
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v12';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v13';
 const MAX_SCAN_PHOTOS = 260;
-const MAX_CLUSTERS = 18;
-const MAX_CUTS_PER_CLUSTER = 6;
+/** 인물별 시기 바구니(성인 10년 / 미성년 5년) 1개당 5대 스타일 슬롯 최대 선별 장수 (전 생애 누적 장수·인물 수는 무제한) */
+const MAX_CUTS_PER_TIMELINE_BUCKET = 5;
+/** 1~2장 행인만 너무 많이 쌓여 캐시가 비대해지는 것을 막기 위한 미달(1~2장) 보조 클러스터 상한 (3장 이상 인물은 제한 없이 전원 보존) */
+const MAX_SUB_THRESHOLD_FALLBACK_CLUSTERS = 12;
 /** OpenCV SFace 공식 5점 정렬(ArcFace 112x112) 기준 초기 고순도 시드 결합 임계치 */
 const SIMILARITY_THRESHOLD = 0.44;
 /** 동일인 다각도·연도별 서브클러스터 1차 순수 벡터 재병합 임계치 */
@@ -148,7 +150,7 @@ export function saveCachedOnDeviceFaceClusters(
       fingerprint: fingerprint ?? prev.fingerprint,
       updatedAt: Date.now(),
       latestCorpusYear,
-      clusters: clusters.slice(0, MAX_CLUSTERS),
+      clusters,
     };
     localStorage.setItem(ONDEVICE_FACE_CACHE_KEY, JSON.stringify(payload));
   } catch {
@@ -803,7 +805,13 @@ function clusterExtractedFaces(
   }
 
   working.sort((a, b) => b.members.length - a.members.length);
-  const topWorking = working.slice(0, MAX_CLUSTERS);
+  // [기획서 정공법 — 등록 인물 수 무제한]: 동일 인물이 3장 이상 등장한 클러스터는 인원 제한 없이 전원 보존하고,
+  // 1~2장 미만 보조 묶음만 캐시 비대화 방지를 위해 소수 보존한다.
+  const qualifiedWorking = working.filter((w) => w.photoKeys.size >= 3 || w.members.length >= 3);
+  const subThresholdWorking = working
+    .filter((w) => w.photoKeys.size < 3 && w.members.length < 3)
+    .slice(0, MAX_SUB_THRESHOLD_FALLBACK_CLUSTERS);
+  const topWorking = [...qualifiedWorking, ...subThresholdWorking];
   const usedClusterIds = new Set<string>();
 
   let latestCorpusYear = new Date().getFullYear();
@@ -824,53 +832,75 @@ function clusterExtractedFaces(
     );
     const rep = uniqueSamples[0];
 
-    // [다년도 × 5대 스타일 슬롯(정면·측면·야외·선글라스·야간) 분산 선별]:
-    // 1차: 서로 다른 촬영 연도별 대표 1장씩 우선 배분
-    // 2차: 아직 비어 있는 스타일 슬롯(예: 같은 해라도 '선글라스·역광', '측면·미소' 등) 우선 보충
-    // 3차: 남은 슬롯에 연도당 최대 2장까지 채움 (시각적 동일 복제본 dot > 0.86 배제)
-    const cutsByYear = new Map<number, ExtractedFaceSample[]>();
-    const filledSlots = new Set<PassportStyleSlotTag>();
-    const selectedCutSamples: ExtractedFaceSample[] = [];
-    const canAddSample = (u: ExtractedFaceSample, maxPerYear: number) => {
-      if (selectedCutSamples.includes(u)) return false;
-      if ((cutsByYear.get(u.year)?.length || 0) >= maxPerYear) return false;
-      if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) return false;
-      return true;
-    };
-    const pushCutSample = (u: ExtractedFaceSample) => {
-      const arr = cutsByYear.get(u.year) || [];
-      arr.push(u);
-      cutsByYear.set(u.year, arr);
-      filledSlots.add(u.styleSlot);
-      selectedCutSamples.push(u);
-    };
+    // [인물별 고유 타임라인 바구니(성인 10년 / 미성년 5년) 먼저 확정]
+    const sampleYears = uniqueSamples.map((u) => u.year).filter((y) => y >= 1980);
+    const anchorYear = sampleYears.length > 0 ? Math.max(...sampleYears) : latestCorpusYear;
+    const avgFaceRatio =
+      uniqueSamples.reduce((acc, u) => acc + Math.max(0.04, (u.boundingBox[2] - u.boundingBox[0]) / 1000), 0) /
+      Math.max(1, uniqueSamples.length);
+    const isLikelyMinor = idx >= 2 && avgFaceRatio < 0.14;
+    const spanYears: 10 | 5 = isLikelyMinor ? 5 : 10;
 
+    // [기획서 제3장 정공법 — 인물별 시기 바구니(10년/5년) × 5대 스타일 슬롯(정면·측면·야외·선글라스·야간) 분산 선별]:
+    // 전 생애를 임의 6장으로 자르지 않고, 각 시기 바구니마다 서로 다른 스타일 슬롯을 우선 배분하여 바구니당 최대 5장씩 선별한다.
+    // 세월이 쌓여 여러 시기 바구니가 존재하면 바구니별로 자동 누적된다.
+    const samplesByBucket = new Map<number, ExtractedFaceSample[]>();
     for (const u of uniqueSamples) {
-      if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
-      if (cutsByYear.has(u.year)) continue;
-      if (!canAddSample(u, 1)) continue;
-      pushCutSample(u);
-    }
-    if (selectedCutSamples.length < MAX_CUTS_PER_CLUSTER) {
-      for (const u of uniqueSamples) {
-        if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
-        if (filledSlots.has(u.styleSlot)) continue;
-        if (!canAddSample(u, 2)) continue;
-        pushCutSample(u);
-      }
-    }
-    if (selectedCutSamples.length < MAX_CUTS_PER_CLUSTER) {
-      for (const u of uniqueSamples) {
-        if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
-        if (!canAddSample(u, 2)) continue;
-        pushCutSample(u);
-      }
+      const bucketIdx = Math.max(0, Math.floor((anchorYear - u.year) / spanYears));
+      const arr = samplesByBucket.get(bucketIdx) || [];
+      arr.push(u);
+      samplesByBucket.set(bucketIdx, arr);
     }
 
-    const yearlyBestCuts: YearlyFaceBestCut[] = Array.from(cutsByYear.entries())
-      .sort((a, b) => b[0] - a[0])
-      .flatMap(([, arr]) => arr)
-      .slice(0, MAX_CUTS_PER_CLUSTER)
+    const selectedCutSamples: ExtractedFaceSample[] = [];
+    const sortedBucketIndices = Array.from(samplesByBucket.keys()).sort((a, b) => a - b);
+    for (const bIdx of sortedBucketIndices) {
+      const bucketSamples = samplesByBucket.get(bIdx) || [];
+      const bucketSelected: ExtractedFaceSample[] = [];
+      const filledSlots = new Set<PassportStyleSlotTag>();
+      const yearsInBucket = new Set<number>();
+
+      const canPickInBucket = (u: ExtractedFaceSample) => {
+        if (bucketSelected.includes(u)) return false;
+        if (bucketSelected.length >= MAX_CUTS_PER_TIMELINE_BUCKET) return false;
+        if (bucketSelected.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) return false;
+        return true;
+      };
+      const pushInBucket = (u: ExtractedFaceSample) => {
+        bucketSelected.push(u);
+        filledSlots.add(u.styleSlot);
+        yearsInBucket.add(u.year);
+      };
+
+      // 1차: 바구니 안에서 아직 채워지지 않은 5대 스타일 슬롯별 베스트 1장씩 우선 선별
+      for (const u of bucketSamples) {
+        if (bucketSelected.length >= MAX_CUTS_PER_TIMELINE_BUCKET) break;
+        if (filledSlots.has(u.styleSlot)) continue;
+        if (!canPickInBucket(u)) continue;
+        pushInBucket(u);
+      }
+      // 2차: 남은 슬롯은 바구니 안의 다른 연도 사진으로 보충
+      if (bucketSelected.length < MAX_CUTS_PER_TIMELINE_BUCKET) {
+        for (const u of bucketSamples) {
+          if (bucketSelected.length >= MAX_CUTS_PER_TIMELINE_BUCKET) break;
+          if (yearsInBucket.has(u.year)) continue;
+          if (!canPickInBucket(u)) continue;
+          pushInBucket(u);
+        }
+      }
+      // 3차: 그래도 여유가 있으면 서로 다른 컷(dot <= 0.86)으로 바구니 최대 5장까지 보충
+      if (bucketSelected.length < MAX_CUTS_PER_TIMELINE_BUCKET) {
+        for (const u of bucketSamples) {
+          if (bucketSelected.length >= MAX_CUTS_PER_TIMELINE_BUCKET) break;
+          if (!canPickInBucket(u)) continue;
+          pushInBucket(u);
+        }
+      }
+      selectedCutSamples.push(...bucketSelected);
+    }
+
+    const yearlyBestCuts: YearlyFaceBestCut[] = selectedCutSamples
+      .sort((a, b) => b.year - a.year || b.frontalScore - a.frontalScore)
       .map((u) => ({
         year: u.year,
         representativePhoto: u.photo.name,
@@ -884,14 +914,6 @@ function clusterExtractedFaces(
         conditionShortKo: u.styleShortKo,
       }));
 
-    // 인물별 고유 타임라인 바구니 (단체사진 내 상대 얼굴 크기 비율이 작고 연도 폭이 짧은 자녀는 5년 주기, 일반 성인은 10년 주기)
-    const sampleYears = uniqueSamples.map((u) => u.year).filter((y) => y >= 1980);
-    const anchorYear = sampleYears.length > 0 ? Math.max(...sampleYears) : latestCorpusYear;
-    const avgFaceRatio =
-      uniqueSamples.reduce((acc, u) => acc + Math.max(0.04, (u.boundingBox[2] - u.boundingBox[0]) / 1000), 0) /
-      Math.max(1, uniqueSamples.length);
-    const isLikelyMinor = idx >= 2 && avgFaceRatio < 0.14;
-    const spanYears: 10 | 5 = isLikelyMinor ? 5 : 10;
     const timelineBucket: PersonTimelineBucketInfo = {
       anchorCreationYear: anchorYear,
       bucketSpanYears: spanYears,
