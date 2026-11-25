@@ -521,6 +521,23 @@ def main() -> None:
         )
         return
 
+    # [문패 미해제 퇴근 0% 강제 관문]:
+    # 엔진/공용 브릿지 작업 후 문패를 내리지 않고 감시병을 켜려 하면,
+    # 1) 미커밋 엔진 파일 잔존 시 즉시 Exit 1 차단!
+    # 2) 커밋·푸시 완료 상태면 0.01초 만에 문패 자동 철거!
+    try:
+        import zcore_board
+
+        allowed_watch, board_msg = zcore_board.enforce_doorplate_before_watch(active_role)
+        if board_msg:
+            print(board_msg, flush=True)
+        if not allowed_watch:
+            sys.exit(1)
+    except SystemExit:
+        raise
+    except Exception:
+        pass
+
     interval_sec = 25
     skip_next = False
     for i, arg in enumerate(sys.argv[1:], start=1):
@@ -573,6 +590,21 @@ def main() -> None:
         step_sleep = (interval_sec / sub_steps) if is_primary_watcher else interval_sec
         for _ in range(sub_steps):
             time.sleep(step_sleep)
+            try:
+                import zcore_board
+
+                my_turn_entry = zcore_board.check_queue_turn_ready(active_role)
+                if my_turn_entry:
+                    print("\n" + "🪧" * 24)
+                    print(
+                        f"🔔 [엔진 작업 문패 공석 감지 — 대기 1순위 [{active_role}귀신] 차례 도착!]\n"
+                        f"   • 대기해 둔 작업: {my_turn_entry.get('task')}\n"
+                        f"👉 앞사람 작업과 커밋이 완료되어 문패가 비었습니다! 지금 즉시 `git pull --rebase` 후 `python zcore_board.py claim --role {active_role} ...`로 문패를 걸고 작업을 진행하세요!"
+                    )
+                    print("🪧" * 24, flush=True)
+                    return
+            except Exception:
+                pass
             current_inbox = scan_post_office_files(role=active_role)
             new_or_changed_inbox = [
                 fname

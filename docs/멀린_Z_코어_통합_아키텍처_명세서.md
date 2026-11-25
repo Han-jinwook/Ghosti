@@ -91,6 +91,14 @@
 2. **2단계 (선 보고 후 승인 시 착수):** 원 코어 내장 플러그인 vs 사내 파워 코어 분류 및 모바일 스토어 심사 패스 리스크를 멀린님께 먼저 보고하고 승인을 받아 작업합니다.
 3. **3단계 (완료 후 신규 답변 문서 생성):** 기존 `(읽음)` 문서를 재수정하지 않고 `[상대앱]_Ghosti_답변_[원제목요약]_[YYYYMMDD_HHMM].md` 형태로 새 답변 문서를 생성합니다.
 
+### 4. 1~4귀신 · 귀신Key 공용 엔진 작업 문패 장부 (`zcore_board.py` & `z_core_watcher.py` 0초 검거 관문 — 2026-11-25 확정)
+1. **도입 배경(Why)**: 단일 본진(`D:\Ghosti`)에서 4개 귀신 창이 동시에 `universal_z_core/**` 또는 공용 브릿지(`zCoreBridge.ts`, `GhostiHubInfraBridge.tsx`)를 수정·리베이스할 때 발생하는 파일 덮어쓰기 및 Git 충돌을 원천 차단합니다 (`.zcore_deploy.lock`이 최종 배포만 직렬화하던 한계를 넘어 **소스 수정~커밋 전 구간** 직렬화).
+2. **작동 규격 (`universal_z_core/.zcore_work_board.json`, OS `msvcrt.locking` 원자적 잠금)**:
+   - `python zcore_board.py claim --role <1|2|3|4|key> --conv <ConversationID> --task "<작업명>"`: 공석 시 즉시 문패 게시(`Exit 0`), 타 창 작업 중이면 순번 대기열(`queue`)에 자동 등록 후 진입 보류(`Exit 2`).
+   - `python zcore_board.py release --role <1|2|3|4|key>`: 공용/엔진 경로의 미커밋 잔여물 `0건` 검증 후 문패 하강 및 대기 1순위(`conversationId`) 바톤터치(`send_message`) 안내 출력.
+3. **문패 미해제 퇴근 `0%` 강제 장치 (`z_core_watcher.py --watch` 연동)**:
+   - 문패를 건 채 미커밋 상태로 감시병 기동 시 즉시 `Exit 1`로 퇴근을 차단하고, 커밋 완료 후 `release`만 누락한 경우 기동 즉시 `0.01초` 자동 하강하며, 대기 1순위 창의 감시병은 문패가 비는 순간 에이전트를 자동 기상시킵니다 (비정상 창 종료 시 빌드 프로세스·미커밋 유무 대조 후 90초 내 자동 회수).
+
 ---
 
 # [통합 안내] 본 문서는 '썬드리머 스튜디오 마스터 연동 가이드'로 전면 승격 및 개정되었습니다.

@@ -473,3 +473,16 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
 - **09:00 ~ 15:00 (알바 근무시간)** 동안 `Merlin Z-Core` 원격 설치·교체 배포는 **오직 3호컴(달나라) · 4호컴(해나라)에만** 수행하며, 다른 PC(1·2·5·6호기 등)에는 임의 설치·교체하지 않습니다.
 - 이미 설치된 PC에서 업데이트 재시작 시 "엔진 다운받으세요" 팝업이 반복 뜨지 않도록, 최초 1회 설치 이후에는 100% 백그라운드 무소음 자동 업데이트(`Silent Self-Update`) 및 재시작 유예 보호를 유지합니다.
+
+---
+
+### 🪧 [1~4귀신 · 귀신Key 공용 엔진·브릿지 ‘작업 문패 장부(`zcore_board.py`)’ 의무 수칙 — 동시 수정 꼬임 & 미해제 퇴근 `0%` 원천 차단 (2026-11-25 멀린님 제정)]
+
+1. **문패 게시 필수 대상**: `universal_z_core/**` 내 모든 데몬·플러그인·빌드 및 전 창 공용 브릿지(`src/services/zCoreBridge.ts`, `src/components/GhostiHubInfraBridge.tsx`, `public/z_core_version.json`)를 수정·리베이스·패키징하기 **직전**에는 예외 없이 문패부터 확인·게시합니다.
+2. **작업 착수 ➔ 완료 ➔ 바톤터치 3단계 절대 절차**:
+   - **① 착수 전 문패 걸기 (`claim`)**: `python zcore_board.py claim --role <1|2|3|4|key> --conv <내_ConversationID> --task "<짧은작업명>"`
+     - `Exit 0` (`문패 게시 완료`): 최신 `git pull --rebase` 확인 후 즉시 작업 착수.
+     - `Exit 2` (`문패 사용중 — 대기열 자동 등록`): **절대 공용/엔진 파일을 건드리지 말고**, 감시병(`python z_core_watcher.py --watch --role N`)을 켠 채 즉시 턴을 종료해 대기합니다 (앞사람이 문패를 내리는 순간 `send_message` 및 감시병 자동 기상으로 즉시 깨워줌).
+   - **② 완료 즉시 문패 내리기 (`release` — 미해제 퇴근 절대 엄금!)**: 코드 수정 + `git commit & push` (+ 필요 시 `deploy_z_core_cluster.py`)가 끝난 **그 즉시** `python zcore_board.py release --role <1|2|3|4|key>`로 문패를 내립니다 (미커밋 파일 잔존 시 해제 거부됨).
+   - **③ 대기 1순위 즉시 호출**: `release` 출력에 대기 1순위(`conversationId`)가 표시되면 같은 턴에서 즉시 `send_message`를 호출해 다음 주자를 깨워줍니다.
+3. **감시병(`z_core_watcher.py --watch`) 0초 자동 검거 장치**: 문패를 내리지 않고 미커밋 상태로 감시병을 켜면 `Exit 1`로 즉시 차단되며, 커밋 완료 후 `release`만 누락한 경우에는 감시병이 기동 즉시 0.01초 만에 문패를 자동 철거합니다.
