@@ -1515,14 +1515,14 @@ export async function writeTextToLocalOsClipboard(
   }
 
   // 모바일(안드로이드·아이폰 네이티브 래퍼 우선 ➔ 모바일 웹 폴백)
-  // iOS/안드로이드는 백그라운드(hidden) 상태에서 OS 클립보드 쓰기를 무음 무시하므로,
-  // 포그라운드(visible)일 때만 주입하고 백그라운드 수신분은 pendingOsInjectClip에 보관해 복귀 즉시 100% 주입합니다.
-  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-    return false;
-  }
+  // 네이티브 앱 런타임은 Swift(UIApplication.applicationState == .active)·Android(Activity 활성)에서
+  // 직접 정확히 검증하므로 WKWebView의 지연된 document.visibilityState로 조기 차단하지 않습니다.
   if (isCapacitorNativeMobileRuntime()) {
     const nat = await writeNativeMobileClipboardText(clean);
     if (nat.supported) return Boolean(nat.ok);
+  }
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+    return false;
   }
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
@@ -1748,7 +1748,7 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
     return { items: loadCachedSyncedClips(normEmail), newlyDeliveredExternal: null };
   }
   loadDeliveredEnvelopesOnce(normEmail);
-  const ident = getThisDeviceIdentity();
+  const ident = getThisDeviceIdentity(normEmail);
   const res = await callGhostiServerBridge<{
     canonicalUserId?: string;
     items?: Array<{
@@ -2817,8 +2817,8 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   }) => void;
 }): () => void {
   let disposed = false;
-  const ident = getThisDeviceIdentity();
   const normEmail = (opts.email || '').trim().toLowerCase();
+  const ident = getThisDeviceIdentity(normEmail);
 
   let localBus: BroadcastChannel | null = null;
   let osClipTicker: { stop: () => void } | null = null;
@@ -3291,8 +3291,19 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
 
   let mobileResumeRetryTimer: number | null = null;
   let mobileResumeCaptureRunning = false;
-  const finishMobileForegroundSync = async (pushedLocalNow: boolean, alsoSyncRemoteAfter: boolean) => {
-    if (!alsoSyncRemoteAfter || disposed || document.visibilityState !== 'visible') return;
+  const isMobileRuntimeVisibleOrNativeActive = (bypassVisibilityGuard: boolean): boolean => {
+    if (bypassVisibilityGuard || isCapacitorNativeMobileRuntime()) return true;
+    return typeof document === 'undefined' || document.visibilityState === 'visible';
+  };
+
+  const finishMobileForegroundSync = async (
+    pushedLocalNow: boolean,
+    alsoSyncRemoteAfter: boolean,
+    bypassVisibilityGuard = false
+  ) => {
+    if (!alsoSyncRemoteAfter || disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) {
+      return;
+    }
     if (!pushedLocalNow && pendingOsInjectClip) {
       const pending = pendingOsInjectClip;
       const isNewerThanLocal =
@@ -3313,7 +3324,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     await syncRemoteMailboxToUi(!pushedLocalNow);
   };
 
-  const triggerMobileForegroundCapture = (alsoSyncRemoteAfter = false, initialDelayMs = 160) => {
+  const triggerMobileForegroundCapture = (
+    alsoSyncRemoteAfter = false,
+    initialDelayMs = 160,
+    bypassVisibilityGuard = false
+  ) => {
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (mobileResumeCaptureTimer !== null) {
       window.clearTimeout(mobileResumeCaptureTimer);
@@ -3325,7 +3340,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     // 1단계: 안드로이드 onWindowFocusChanged(40ms) · iOS sceneDidBecomeActive 직후 로컬 복사본을 먼저 읽어 PC로 전송한 뒤 원격 우체통 수신
     mobileResumeCaptureTimer = window.setTimeout(async () => {
       mobileResumeCaptureTimer = null;
-      if (disposed || document.visibilityState !== 'visible') return;
+      if (disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) return;
       mobileResumeCaptureRunning = true;
       try {
         await flushPendingNativeMobileClips();
@@ -3335,7 +3350,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         if (firstResult === 'EMPTY') {
           mobileResumeRetryTimer = window.setTimeout(async () => {
             mobileResumeRetryTimer = null;
-            if (disposed || document.visibilityState !== 'visible') {
+            if (disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) {
               mobileResumeCaptureRunning = false;
               return;
             }
@@ -3348,9 +3363,13 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
               mobileResumeRetryTimer = window.setTimeout(async () => {
                 mobileResumeRetryTimer = null;
                 try {
-                  if (disposed || document.visibilityState !== 'visible') return;
+                  if (disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) return;
                   const thirdResult = await inspectAndPushLocalOsClipboard(false, false);
-                  await finishMobileForegroundSync(thirdResult === 'PUSHED', alsoSyncRemoteAfter);
+                  await finishMobileForegroundSync(
+                    thirdResult === 'PUSHED',
+                    alsoSyncRemoteAfter,
+                    bypassVisibilityGuard
+                  );
                 } finally {
                   mobileResumeCaptureRunning = false;
                 }
@@ -3358,14 +3377,22 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
               return;
             }
             try {
-              await finishMobileForegroundSync(secondResult === 'PUSHED', alsoSyncRemoteAfter);
+              await finishMobileForegroundSync(
+                secondResult === 'PUSHED',
+                alsoSyncRemoteAfter,
+                bypassVisibilityGuard
+              );
             } finally {
               mobileResumeCaptureRunning = false;
             }
           }, 380);
           return;
         }
-        await finishMobileForegroundSync(firstResult === 'PUSHED', alsoSyncRemoteAfter);
+        await finishMobileForegroundSync(
+          firstResult === 'PUSHED',
+          alsoSyncRemoteAfter,
+          bypassVisibilityGuard
+        );
         mobileResumeCaptureRunning = false;
       } catch {
         mobileResumeCaptureRunning = false;
@@ -3596,39 +3623,86 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         }
       };
 
-      let workerStarted = false;
+      // [무중단 이중 안전망]:
+      // 1) Blob URL은 반드시 워커가 첫 틱(onmessage)을 정상 수신한 뒤에만 revoke하여 비동기 스크립트 로드 전 파기 결함을 원천 차단합니다.
+      // 2) 보조 setInterval(900ms)도 항상 함께 가동하여, 워커가 정상 작동 중일 때는 0비용 스킵하고
+      //    브라우저 정책/확장프로그램 등으로 워커가 응답하지 않을 때만 즉시 자동 인계합니다.
+      let lastWorkerHeartbeatMs = 0;
+      let workerInstance: Worker | null = null;
+      let pendingBlobUrlToRevoke: string | null = null;
+
       if (typeof Worker !== 'undefined' && typeof Blob !== 'undefined' && typeof URL !== 'undefined') {
         try {
-          const workerCode = 'setInterval(function(){ postMessage(1); }, 800);';
+          const workerCode = 'postMessage(0); setInterval(function(){ postMessage(1); }, 800);';
           const blob = new Blob([workerCode], { type: 'application/javascript' });
           const blobUrl = URL.createObjectURL(blob);
+          pendingBlobUrlToRevoke = blobUrl;
           const w = new Worker(blobUrl);
-          URL.revokeObjectURL(blobUrl);
-          w.onmessage = onPcWorkerTick;
-          activeClipboardWorker = w;
-          osClipTicker = {
-            stop: () => {
+          w.onmessage = (ev) => {
+            lastWorkerHeartbeatMs = Date.now();
+            if (pendingBlobUrlToRevoke) {
+              const urlToFree = pendingBlobUrlToRevoke;
+              pendingBlobUrlToRevoke = null;
               try {
-                w.terminate();
+                URL.revokeObjectURL(urlToFree);
               } catch {
                 /* ignore */
               }
-              if (activeClipboardWorker === w) {
-                activeClipboardWorker = null;
-              }
-            },
+            }
+            if (ev.data === 1) {
+              onPcWorkerTick();
+            }
           };
-          workerStarted = true;
+          w.onerror = () => {
+            lastWorkerHeartbeatMs = 0;
+            if (pendingBlobUrlToRevoke) {
+              const urlToFree = pendingBlobUrlToRevoke;
+              pendingBlobUrlToRevoke = null;
+              try {
+                URL.revokeObjectURL(urlToFree);
+              } catch {
+                /* ignore */
+              }
+            }
+          };
+          workerInstance = w;
+          activeClipboardWorker = w;
         } catch {
-          workerStarted = false;
+          workerInstance = null;
         }
       }
-      if (!workerStarted) {
-        const fallbackTimerId = window.setInterval(onPcWorkerTick, 800);
-        osClipTicker = {
-          stop: () => window.clearInterval(fallbackTimerId),
-        };
-      }
+
+      const backupTimerId = window.setInterval(() => {
+        if (lastWorkerHeartbeatMs > 0 && Date.now() - lastWorkerHeartbeatMs < 1800) {
+          return;
+        }
+        onPcWorkerTick();
+      }, 900);
+
+      osClipTicker = {
+        stop: () => {
+          window.clearInterval(backupTimerId);
+          if (pendingBlobUrlToRevoke) {
+            try {
+              URL.revokeObjectURL(pendingBlobUrlToRevoke);
+            } catch {
+              /* ignore */
+            }
+            pendingBlobUrlToRevoke = null;
+          }
+          if (workerInstance) {
+            try {
+              workerInstance.terminate();
+            } catch {
+              /* ignore */
+            }
+            if (activeClipboardWorker === workerInstance) {
+              activeClipboardWorker = null;
+            }
+            workerInstance = null;
+          }
+        },
+      };
     } else {
       // 모바일: onWake 즉시 덮어쓰기 레이스 제거 (복귀 직후에는 triggerMobileForegroundCapture가 로컬 복사 ➔ 원격 수신 순서를 단독 보장)
       const mobileTimerId = window.setInterval(() => {
@@ -3747,7 +3821,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       void setupRealtimeChannel(true);
     }
     if (ident.deviceKind === 'mobile') {
-      triggerMobileForegroundCapture(true, detail?.hasWindowFocus ? 40 : 160);
+      triggerMobileForegroundCapture(true, detail?.hasWindowFocus ? 40 : 140, true);
     } else {
       void inspectAndPushLocalOsClipboard(false, false);
       void syncRemoteMailboxToUi(true);
