@@ -1063,9 +1063,7 @@ def build_ui2_search_window(
             if matched:
                 matched.sort(key=lambda x: x[0], reverse=True)
 
-        has_rich = any(m[1].get("kind") in ("image", "doc", "video") for m in matched[:5]) or (
-            flt_now in ("image", "video") and len(pool) > 0 and bool(q)
-        )
+        has_rich = any(m[1].get("kind") in ("image", "doc", "video") for m in matched[:5])
         auto_stage, _auto_slim_h = resolve_ghost_search_auto_stage(
             mode=st_state["mode"],
             has_query=bool(q),
@@ -1149,8 +1147,10 @@ def build_ui2_search_window(
                 fg="#5EEAD4",
             )
         else:
-            candidates = pool[:max_cnt]
-            trial_lbl.config(text=f"🔍 '{q[:6]}' 일치 없음(최근목록)", fg="#FDE047")
+            # [무관한 파일 오노출 원천 차단]: 검색어(q)와 일치하는 파일이 0건일 때 최근 파일 목록(pool[:max_cnt])을
+            # 검색 결과처럼 억지로 띄우지 않고, 깔끔한 '일치 결과 없음' 빈 상태를 표시합니다.
+            candidates = []
+            trial_lbl.config(text=f"🔍 '{q[:10]}' 일치하는 파일 없음", fg="#FBBF24")
 
         # 🔌 [외장/USB 드라이브 생애 1회 질문 · 인덱싱 중 탈착 금지 · 완료 안내 배너]:
         ext_banner = get_external_drive_banner() if callable(get_external_drive_banner) else None
@@ -1262,13 +1262,23 @@ def build_ui2_search_window(
         st_state["sel_idx"] = min(st_state["sel_idx"], max(0, len(candidates) - 1))
 
         if not candidates:
+            empty_msg = (
+                "⚡ 내 컴퓨터 최근 파일을 불러오는 중..."
+                if not local_files_ready
+                else (
+                    f"🔍 '{q[:20]}'와(과) 일치하는 파일이 없습니다.\n다른 검색어나 상단 탭(전체 · 문서 · 사진 · 영상)을 확인해 보세요."
+                    if q
+                    else "표시할 항목이 없습니다."
+                )
+            )
             tk.Label(
                 body_frame,
-                text="⚡ 내 컴퓨터 최근 파일을 불러오는 중..." if not local_files_ready else "표시할 항목이 없습니다.",
+                text=empty_msg,
                 fg="#5EEAD4" if not local_files_ready else "#94A3B8",
                 bg="#0B1120",
                 font=("Malgun Gothic", 9),
-            ).pack(pady=20)
+                justify="center",
+            ).pack(pady=28)
             return
 
         list_parent = body_frame
