@@ -698,8 +698,8 @@ def build_ui2_search_window(
             margin_px=16,
             custom_height=st_state.get("custom_h"),
         )
-        opened_at[0] = time.time()
-        was_mouse_down[0] = True
+        if activate:
+            was_mouse_down[0] = True
         apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=activate)
         if activate:
             try:

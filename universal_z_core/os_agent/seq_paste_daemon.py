@@ -4132,6 +4132,7 @@ def _extract_word_chips_from_text(text: str) -> list[str]:
 _CLICKED_SUPERPOWER_QUEUE: queue.Queue = queue.Queue()
 _CURRENT_OPEN_UI_MODE: str = ""
 _CURRENT_OPEN_WIN_HWND: int = 0
+_LAST_UI_OPENED_TS: float = 0.0
 
 
 def _is_ui_window_actually_open() -> bool:
@@ -4271,6 +4272,16 @@ def _toast_worker() -> None:
             except Exception:
                 pass
             current_win[0] = None
+        # 혹시라도 잔존한 고아 Toplevel 창이 화면에 남아 멈추는 현상 원천 차단
+        try:
+            for _child_w in list(root.winfo_children()):
+                if isinstance(_child_w, tk.Toplevel):
+                    try:
+                        _child_w.destroy()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         active_mode[0] = ""
         _CURRENT_OPEN_UI_MODE = ""
         _CURRENT_OPEN_WIN_HWND = 0
@@ -4316,6 +4327,7 @@ def _toast_worker() -> None:
     def _apply_win_topmost(win: tk.Toplevel, x: int, y: int, rw: int, rh: int, activate: bool = False) -> None:
         global _CURRENT_OPEN_WIN_HWND
         win.geometry(f"{rw}x{rh}{x:+d}{y:+d}")
+        actual_rect = (x, y, x + rw, y + rh)
         try:
             win.attributes("-topmost", True)
             win.deiconify()
@@ -4327,28 +4339,33 @@ def _toast_worker() -> None:
                 ex_st = u32.GetWindowLongW(hwnd_t, GWL_EXSTYLE)
                 SWP_FRAMECHANGED = 0x0020
                 if activate:
+                    # [AttachThreadInput·win.update() 영구 배제]:
+                    # Ctrl+우클릭 중 타 앱 스레드에 AttachThreadInput을 붙이거나 win.update()를 재귀 호출하면
+                    # Win32 입력 큐 교착 및 Tkinter 재진입으로 창이 멈추고 닫히지 않는 버그가 발생합니다.
+                    # 순수 비차단 Topmost + AllowSetForegroundWindow + SetForegroundWindow만 안전하게 수행합니다.
                     u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (ex_st & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
                     u32.ShowWindow(hwnd_t, 5)  # SW_SHOW
                     u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_FRAMECHANGED | SWP_SHOWWINDOW)
+                    try:
+                        u32.AllowSetForegroundWindow(os.getpid())
+                    except Exception:
+                        pass
                     u32.BringWindowToTop(hwnd_t)
-                    # [Windows Foreground Lock 100% 돌파]: 단순 SetForegroundWindow는 크롬·노션·탐색기 위에서
-                    # 무시되어 "소리만 나고 창이 뒤로 숨는" 버그를 유발하므로 AttachThreadInput 기반 강제 활성 사용!
-                    if not _focus_hwnd_reliable(hwnd_t):
-                        u32.SetForegroundWindow(hwnd_t)
+                    u32.SetForegroundWindow(hwnd_t)
                 else:
                     u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, ex_st | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
                     u32.ShowWindow(hwnd_t, 4)  # SW_SHOWNOACTIVATE
                     u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)
+                rc_live = wintypes.RECT()
+                if u32.GetWindowRect(hwnd_t, ctypes.byref(rc_live)) and rc_live.right > rc_live.left and rc_live.bottom > rc_live.top:
+                    actual_rect = (int(rc_live.left), int(rc_live.top), int(rc_live.right), int(rc_live.bottom))
         except Exception:
             pass
         try:
             win.lift()
-            win.update()
         except Exception:
             pass
-        win_rect[0] = (x, y, x + rw, y + rh)
-        opened_at[0] = time.time()
-        was_mouse_down[0] = True
+        win_rect[0] = actual_rect
 
     # =================================================================
     # [창 UI ②] 👻 귀신검색창 (Ghosti 본진 전담 모듈 ghost_search_window_ui2 우선 위임 + 내장 폴백)
@@ -5005,7 +5022,7 @@ def _toast_worker() -> None:
         _apply_win_topmost(win, x, y, rw, rh, activate=False)
 
     def _poll_queue() -> None:
-        global _CURRENT_OPEN_UI_MODE, _UI_LOOP_HEARTBEAT_TS, _IS_UI_HOVERED
+        global _CURRENT_OPEN_UI_MODE, _UI_LOOP_HEARTBEAT_TS, _IS_UI_HOVERED, _LAST_UI_OPENED_TS
         _UI_LOOP_HEARTBEAT_TS = time.time()
         try:
             if current_win[0] is not None:
@@ -5027,17 +5044,21 @@ def _toast_worker() -> None:
                 pt_click = wintypes.POINT()
                 u32.GetCursorPos(ctypes.byref(pt_click))
                 wx1, wy1, wx2, wy2 = win_rect[0]
+                if _CURRENT_OPEN_WIN_HWND and u32.IsWindow(_CURRENT_OPEN_WIN_HWND):
+                    rc_chk = wintypes.RECT()
+                    if u32.GetWindowRect(_CURRENT_OPEN_WIN_HWND, ctypes.byref(rc_chk)) and rc_chk.right > rc_chk.left and rc_chk.bottom > rc_chk.top:
+                        wx1, wy1, wx2, wy2 = int(rc_chk.left), int(rc_chk.top), int(rc_chk.right), int(rc_chk.bottom)
                 inside_rect = (wx1 <= pt_click.x <= wx2 and wy1 <= pt_click.y <= wy2)
                 if is_hovered[0] and not inside_rect and active_mode[0] == "toast":
                     _schedule_close(1800)
                 is_hovered[0] = inside_rect
                 _IS_UI_HOVERED = inside_rect
                 if esc_down and active_mode[0] in ("ui1", "ui2", "ui3", "ui4"):
-                    if (time.time() - opened_at[0]) > 0.35 and (time.time() - _LAST_RBTN_DISMISS_ESC_TS) > 0.45:
+                    if (time.time() - opened_at[0]) > 0.25 and (time.time() - _LAST_RBTN_DISMISS_ESC_TS) > 0.45:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))
                 elif mouse_down and not was_mouse_down[0]:
-                    if (time.time() - opened_at[0]) > 0.65 and not inside_rect:
+                    if (time.time() - opened_at[0]) > 0.22 and not inside_rect:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))
             was_mouse_down[0] = phys_any_btn
@@ -5084,6 +5105,7 @@ def _toast_worker() -> None:
                     win = tk.Toplevel(root)
                     current_win[0] = win
                     opened_at[0] = time.time()
+                    _LAST_UI_OPENED_TS = opened_at[0]
                     was_mouse_down[0] = True
                     win.overrideredirect(True)
                     win.attributes("-topmost", True)
@@ -9596,15 +9618,16 @@ def main(in_process: bool = False) -> None:
         3) [창 UI ① 기본 귀신창]: 일반 입력창에서 드래그/물음표 없이 소환 시 ➔ 기본 귀신창 직행 (타이핑 시작 시 검색창 자동 변신)!
         """
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts, summon_had_recent_drag, last_alpha_type_ts, pending_first_typo
-        global _IS_INPUT_SUMMON_CONTEXT
+        global _IS_INPUT_SUMMON_CONTEXT, _LAST_UI_OPENED_TS
         now_s = time.time()
         # [원엔진·투도어 기본 동작 (멀린님 7번 지시 확정)]:
         # 귀신키 미출시 또는 권한/스위치 비활성 유저는 어느 화면(입력창·바탕화면 무관)에서 Ctrl+0을 눌러도
         # 무조건 '👻 귀신검색창(UI ②)'이 기본으로 열립니다! (탐색기에서 압축파일 선택 시에만 알집 대체 UI ④ 오픈)
         if not is_ghostkey_active_mode():
             if _is_ui_window_actually_open() and _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4", "ui1"):
-                # 방금 열린 지 0.45초 미만(연속 키바운스·이중 감지)이면 닫지 않고 최상단 전면 복원만 수행!
-                if (now_s - last_summon_ts) < 0.45:
+                # 실제 창이 방금 열린 지 0.40초 미만(연속 키바운스·이중 감지)일 때만 닫지 않고 전면 복원!
+                # (호출 직전 갱신되는 last_summon_ts 대신 실제 오픈 시각 _LAST_UI_OPENED_TS 기준으로 판별)
+                if (now_s - _LAST_UI_OPENED_TS) < 0.40:
                     show_ghost_toast("__LIFT__", duration_ms=0)
                     return
                 disarm_sub_hotkeys()
@@ -9663,6 +9686,7 @@ def main(in_process: bool = False) -> None:
             play_baby_ghost_sound(mode="summon")
             record_feature_telemetry("ctrl0_summon_bar")
             disarm_sub_hotkeys()
+            _LAST_UI_OPENED_TS = time.time()
             if sel_file_for_ui2:
                 show_ghost_toast(f"__UI2_SEARCH__|medium|__SEL_FILE__:{sel_file_for_ui2}", duration_ms=8000)
             else:
@@ -10098,7 +10122,8 @@ def main(in_process: bool = False) -> None:
             time.sleep(6.0)
             try:
                 now_w = time.time()
-                if not _MODAL_PROMPT_ACTIVE and (now_w - _MAIN_LOOP_HEARTBEAT_TS) > 18.0:
+                ui_hung = _TOAST_WORKER_STARTED and (now_w - _UI_LOOP_HEARTBEAT_TS) > 18.0
+                if not _MODAL_PROMPT_ACTIVE and ((now_w - _MAIN_LOOP_HEARTBEAT_TS) > 18.0 or ui_hung):
                     if in_process:
                         try:
                             lock_sock.close()
