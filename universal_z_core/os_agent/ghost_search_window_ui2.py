@@ -469,6 +469,8 @@ def build_ui2_search_window(
     get_trial_badge_summary = ctx.get("get_trial_badge_summary")
     get_external_drive_banner = ctx.get("get_external_drive_banner")
     decide_external_drive = ctx.get("decide_external_drive")
+    get_target_ime_korean = ctx.get("get_target_ime_korean")
+    report_ui2_ime_korean = ctx.get("report_ui2_ime_korean")
 
     def _open_file_in_os(fpath: str) -> str:
         abs_fp = os.path.abspath(fpath) if fpath else ""
@@ -736,6 +738,104 @@ def build_ui2_search_window(
     s_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
     if init_query:
         s_entry.insert(0, init_query)
+
+    # [유저 키보드 한/영 상태 100% 동기화]:
+    # Windows는 Tkinter 새 창에 기본 영문 IME(0)를 할당하므로, 소환 직전 활성 창(또는 마지막 설정)의
+    # 한/영 상태를 s_entry의 IMM32 컨텍스트 및 DefaultIMEWnd에 즉시 동기화하여 영타 강제 전환을 원천 해소합니다.
+    _ime_sync_state: dict[str, Any] = {
+        "user_toggled_in_ui2": False,
+        "last_observed_kor": None,
+    }
+
+    def _read_entry_ime_is_korean() -> bool | None:
+        if sys.platform != "win32":
+            return None
+        try:
+            hwnd_e = s_entry.winfo_id()
+            if not hwnd_e:
+                return None
+            imm32 = ctypes.windll.imm32
+            imm32.ImmGetContext.argtypes = [wintypes.HWND]
+            imm32.ImmGetContext.restype = wintypes.HANDLE
+            imm32.ImmReleaseContext.argtypes = [wintypes.HWND, wintypes.HANDLE]
+            imm32.ImmReleaseContext.restype = wintypes.BOOL
+            imm32.ImmGetConversionStatus.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(wintypes.DWORD),
+                ctypes.POINTER(wintypes.DWORD),
+            ]
+            imm32.ImmGetConversionStatus.restype = wintypes.BOOL
+            himc = imm32.ImmGetContext(hwnd_e)
+            if himc:
+                try:
+                    conv = wintypes.DWORD(0)
+                    sent = wintypes.DWORD(0)
+                    if imm32.ImmGetConversionStatus(himc, ctypes.byref(conv), ctypes.byref(sent)):
+                        return bool(conv.value & 0x0001)
+                finally:
+                    imm32.ImmReleaseContext(hwnd_e, himc)
+        except Exception:
+            pass
+        return None
+
+    def _apply_entry_ime_korean(target_korean: bool) -> None:
+        if sys.platform != "win32":
+            return
+        try:
+            if current_win[0] is not win or not win.winfo_exists():
+                return
+            hwnd_e = s_entry.winfo_id()
+            if not hwnd_e:
+                return
+            u32_i = ctypes.windll.user32
+            imm32 = ctypes.windll.imm32
+            imm32.ImmGetContext.argtypes = [wintypes.HWND]
+            imm32.ImmGetContext.restype = wintypes.HANDLE
+            imm32.ImmReleaseContext.argtypes = [wintypes.HWND, wintypes.HANDLE]
+            imm32.ImmReleaseContext.restype = wintypes.BOOL
+            imm32.ImmGetConversionStatus.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(wintypes.DWORD),
+                ctypes.POINTER(wintypes.DWORD),
+            ]
+            imm32.ImmGetConversionStatus.restype = wintypes.BOOL
+            imm32.ImmSetConversionStatus.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD]
+            imm32.ImmSetConversionStatus.restype = wintypes.BOOL
+            imm32.ImmSetOpenStatus.argtypes = [wintypes.HANDLE, wintypes.BOOL]
+            imm32.ImmSetOpenStatus.restype = wintypes.BOOL
+            imm32.ImmGetDefaultIMEWnd.argtypes = [wintypes.HWND]
+            imm32.ImmGetDefaultIMEWnd.restype = wintypes.HWND
+
+            hwnd_top = int(u32_i.GetParent(hwnd_e) or win.winfo_id() or 0)
+            for h_cand in (hwnd_e, hwnd_top):
+                if not h_cand:
+                    continue
+                himc = imm32.ImmGetContext(h_cand)
+                if himc:
+                    try:
+                        conv = wintypes.DWORD(0)
+                        sent = wintypes.DWORD(0)
+                        imm32.ImmGetConversionStatus(himc, ctypes.byref(conv), ctypes.byref(sent))
+                        new_conv = (conv.value | 0x0001) if target_korean else (conv.value & ~0x0001)
+                        imm32.ImmSetOpenStatus(himc, 1)
+                        imm32.ImmSetConversionStatus(himc, new_conv, sent.value)
+                    finally:
+                        imm32.ImmReleaseContext(h_cand, himc)
+                hime = imm32.ImmGetDefaultIMEWnd(h_cand)
+                if hime:
+                    out_r = ctypes.c_size_t(0)
+                    u32_i.SendMessageTimeoutW(
+                        wintypes.HWND(hime),
+                        0x0283,  # WM_IME_CONTROL
+                        wintypes.WPARAM(0x0002),  # IMC_SETCONVERSIONMODE
+                        wintypes.LPARAM(1 if target_korean else 0),
+                        0x0002,
+                        80,
+                        ctypes.byref(out_r),
+                    )
+            _ime_sync_state["last_observed_kor"] = bool(target_korean)
+        except Exception:
+            pass
 
     def _get_live_entry_query() -> str:
         """
@@ -2097,6 +2197,22 @@ def build_ui2_search_window(
 
     # [즉시 표시 보장]: 창 위치·포커스를 먼저 즉시 노출한 뒤 결과를 그려 체감 초기 오픈 지연 0ms 달성
     _resize_for_stage(activate=True)
+    # 소환 직전 사용자가 설정해 둔 키보드 한/영 상태를 검색 입력창에 즉시 동기화 (영타 강제 초기화 차단)
+    _want_ime_kor = get_target_ime_korean() if callable(get_target_ime_korean) else None
+    if _want_ime_kor is not None:
+        _apply_entry_ime_korean(bool(_want_ime_kor))
+
+        def _reverify_initial_ime(target_k: bool = bool(_want_ime_kor)) -> None:
+            if current_win[0] is not win or _ime_sync_state.get("user_toggled_in_ui2"):
+                return
+            cur_k = _read_entry_ime_is_korean()
+            if cur_k is not None and cur_k != target_k:
+                _apply_entry_ime_korean(target_k)
+
+        try:
+            win.after(28, _reverify_initial_ime)
+        except Exception:
+            pass
     _render_search_results()
 
     # [열려 있는 동안 파일 추가·변경·백그라운드 썸네일 디코딩 실시간 자동 반영 (메인 스레드 폴링으로 Tcl 스레드 충돌 0%, 닫혀 있을 때는 타이머 0개로 CPU 0.00%)]
@@ -2126,6 +2242,14 @@ def build_ui2_search_window(
             live_q_poll = _get_live_entry_query()
             if live_q_poll != last_typed_q[0]:
                 _schedule_query_render(live_q_poll)
+            # 사용자가 귀신검색창 안에서 직접 한/영 키를 눌러 바꾼 언어 상태도 실시간 추적해 다음 소환 시 일관 유지
+            cur_ime_k = _read_entry_ime_is_korean()
+            if cur_ime_k is not None and cur_ime_k != _ime_sync_state.get("last_observed_kor"):
+                if _ime_sync_state.get("last_observed_kor") is not None:
+                    _ime_sync_state["user_toggled_in_ui2"] = True
+                _ime_sync_state["last_observed_kor"] = cur_ime_k
+                if callable(report_ui2_ime_korean):
+                    report_ui2_ime_korean(cur_ime_k)
             if st_state.get("bg_ui_dirty"):
                 st_state["bg_ui_dirty"] = False
                 _render_search_results()

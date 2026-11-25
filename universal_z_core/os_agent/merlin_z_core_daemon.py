@@ -219,7 +219,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.93"
+CORE_VERSION = "2.8.94"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -826,6 +826,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if self._reject_untrusted():
             return
 
+        if path in ("/__merlin/account-owner", "/api/merlin/account-owner"):
+            self._send_json(plugin_paid_work_sdrive.handle_pc_account_owner({"action": "status", **qp}))
+            return
+
         # [귀신같이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
         if path in ("/__zcore/watch-sig", "/api/ghosti/watch-sig"):
             self._send_json(plugin_ghosti_os.get_local_watch_signature(qp))
@@ -1147,6 +1151,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if self._reject_untrusted():
                 return
             self._send_json(plugin_ghosti_os.get_photo_thumbs_batch(body))
+            return
+
+        if path in ("/__merlin/account-owner", "/api/merlin/account-owner"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_paid_work_sdrive.handle_pc_account_owner(body))
             return
 
         if path == "/__merlin/query":

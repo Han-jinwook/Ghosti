@@ -848,6 +848,40 @@ def _get_focused_control_hwnd(fg_hwnd: int | None = None) -> int:
     return int(hwnd)
 
 
+_LAST_USER_IME_IS_KOR: bool | None = None
+_PENDING_UI2_IME_IS_KOR: bool | None = None
+_LAST_IME_POLL_TS: list[float] = [0.0]
+
+
+def _report_ui2_ime_korean(is_kor: bool) -> None:
+    global _LAST_USER_IME_IS_KOR
+    _LAST_USER_IME_IS_KOR = bool(is_kor)
+
+
+def _capture_ime_state_for_ui2(fg_hwnd: int | None = None) -> bool | None:
+    """
+    귀신검색창 소환 직전 사용자가 설정해 둔 실제 키보드 한/영(IME) 상태를 캡처합니다.
+    - 크롬·노션·메모장·카톡·탐색기 등 일반 활성 창이면 해당 창의 실시간 IME 상태를 100% 그대로 읽고,
+    - 바탕화면(Progman/WorkerW)처럼 자체 입력 IME가 없는 화면이면 직전 활성 창/사용자가 마지막으로 설정한 한/영 상태를 유지합니다.
+    """
+    global _LAST_USER_IME_IS_KOR, _PENDING_UI2_IME_IS_KOR
+    hwnd = int(fg_hwnd or u32.GetForegroundWindow() or 0)
+    if hwnd and u32.IsWindow(hwnd):
+        cls_n = _get_win_class_only(hwnd)
+        if cls_n not in ("Progman", "WorkerW", "Shell_TrayWnd") and "Tk" not in cls_n:
+            is_kor_live = bool(get_ime_is_korean(hwnd))
+            _LAST_USER_IME_IS_KOR = is_kor_live
+            _PENDING_UI2_IME_IS_KOR = is_kor_live
+            return is_kor_live
+        # 바탕화면/작업표시줄에서도 IME가 한글로 보고되면 반영, 아니면 직전 사용자 키보드 상태 계승
+        if get_ime_is_korean(hwnd):
+            _LAST_USER_IME_IS_KOR = True
+            _PENDING_UI2_IME_IS_KOR = True
+            return True
+    _PENDING_UI2_IME_IS_KOR = _LAST_USER_IME_IS_KOR
+    return _PENDING_UI2_IME_IS_KOR
+
+
 def get_ime_is_korean(fg_hwnd: int | None = None) -> bool:
     """실제 포커스된 입력 컨트롤(Edit/EXCEL6/Chrome) 및 최상위 창의 현재 한/영(IME) 상태를 정확히 조회합니다."""
     hwnd = fg_hwnd or u32.GetForegroundWindow()
@@ -4561,6 +4595,8 @@ def _toast_worker() -> None:
                 "check_feature_quota_allowed": check_feature_quota_allowed,
                 "get_external_drive_banner": get_external_drive_ui_banner_state,
                 "decide_external_drive": decide_external_drive_action,
+                "get_target_ime_korean": lambda: _PENDING_UI2_IME_IS_KOR,
+                "report_ui2_ime_korean": _report_ui2_ime_korean,
             }
             ui2_mod.build_ui2_search_window(
                 ui2_ctx, win, init_stage, init_query, pt_x, pt_y, work_area
@@ -9800,7 +9836,9 @@ def main(in_process: bool = False) -> None:
                 disarm_sub_hotkeys()
                 close_ghost_toast()
                 return
-            fg_chk = u32.GetForegroundWindow()
+            fg_actual_ime = u32.GetForegroundWindow()
+            _capture_ime_state_for_ui2(fg_actual_ime)
+            fg_chk = fg_actual_ime
             # Ctrl+우클릭 호출 시 실제 마우스 커서 아래 창(탐색기 폴더·바탕화면·사진 앱)을 최우선 판별
             if summon_by_rclick:
                 pt_rc_chk = wintypes.POINT()
@@ -9894,6 +9932,7 @@ def main(in_process: bool = False) -> None:
             return
 
         fg_before = u32.GetForegroundWindow()
+        _capture_ime_state_for_ui2(fg_before)
         # 만약 우클릭 소환이면 실제 마우스 커서 아래의 창을 최우선 기준으로 판별 (바탕화면 우클릭 시 직전 메모장 포커스 간섭 원천 차단!)
         if summon_by_rclick:
             pt_m = wintypes.POINT()
@@ -10616,6 +10655,18 @@ def main(in_process: bool = False) -> None:
                 poll_fs_signals_now = (now - last_fs_signal_poll_ts) >= 0.12
                 if poll_fs_signals_now:
                     last_fs_signal_poll_ts = now
+                    # 평상시 일반 활성 창(크롬·노션·메모장 등)의 키보드 한/영 상태를 경량 추적해
+                    # 바탕화면(Progman/WorkerW)에서 Ctrl+우클릭 호출 시에도 직전 키보드 언어를 100% 계승
+                    if (now - _LAST_IME_POLL_TS[0]) >= 0.45:
+                        _LAST_IME_POLL_TS[0] = now
+                        try:
+                            _fg_ip = u32.GetForegroundWindow()
+                            if _fg_ip and u32.IsWindow(_fg_ip):
+                                _cls_ip = _get_win_class_only(_fg_ip)
+                                if _cls_ip not in ("Progman", "WorkerW", "Shell_TrayWnd") and "Tk" not in _cls_ip:
+                                    _report_ui2_ime_korean(bool(get_ime_is_korean(_fg_ip)))
+                        except Exception:
+                            pass
                 sig_triggered = False
                 if poll_fs_signals_now and CLEAR_SIGNAL_FILE.exists():
                     try:
@@ -10874,10 +10925,27 @@ def main(in_process: bool = False) -> None:
 
                 hangul_down = (u32.GetAsyncKeyState(VK_HANGUL) & 0x8000) != 0
                 if hangul_down and not was_key_down.get(VK_HANGUL, False):
-                    # 유저가 직접 한/영 키를 눌렀다면 1단어 대기 버퍼는 즉시 초기화
+                    # 유저가 직접 한/영 키를 눌렀다면 1단어 대기 버퍼는 즉시 초기화 + 최신 키보드 한/영 상태 추적
                     typed_ascii_buf.clear()
                     pending_first_typo = None
                     last_any_key_ts = now
+                    try:
+                        _fg_hgl = u32.GetForegroundWindow()
+                        _cls_hgl = _get_win_class_only(_fg_hgl) if _fg_hgl else ""
+                        if _fg_hgl and _cls_hgl not in ("Progman", "WorkerW", "Shell_TrayWnd"):
+                            def _sync_hgl_after(h_target: int = _fg_hgl) -> None:
+                                global _LAST_USER_IME_IS_KOR
+                                time.sleep(0.045)
+                                try:
+                                    if u32.IsWindow(h_target):
+                                        _LAST_USER_IME_IS_KOR = bool(get_ime_is_korean(h_target))
+                                except Exception:
+                                    pass
+                            threading.Thread(target=_sync_hgl_after, daemon=True).start()
+                        elif _LAST_USER_IME_IS_KOR is not None:
+                            _report_ui2_ime_korean(not _LAST_USER_IME_IS_KOR)
+                    except Exception:
+                        pass
                 was_key_down[VK_HANGUL] = hangul_down
 
                 # 브라우저 주소창 포커스 단축키(Ctrl+L / Alt+D / F6 / Ctrl+T / Ctrl+N) 감지 시 주소창 자동완성 충돌 방지를 위해 본문 클릭·이동 전까지 자동변환 일시 홀드
