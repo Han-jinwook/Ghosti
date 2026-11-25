@@ -583,10 +583,17 @@ export function consumePendingPassportOpen(): PassportRegMode | null {
   }
 }
 
-/** 비서 명령어 인식: "여권 등록", "내 사진 등록", "가족 얼굴 등록하자" 등 */
+/** 비서 명령어 인식: "여권 등록", "내 사진 등록", "가족 얼굴 등록하자" 등 (규칙·장수·캐릭터·동물 문의 문장은 제외) */
 export function matchPassportRegCommand(text: string): PassportRegMode | null {
   const t = (text || '').replace(/\s+/g, ' ').trim();
   if (!t || t.length > 40) return null;
+  if (
+    /몇\s*장|장수|몇\s*명|인원|제한|무제한|규칙|가능|불가|되나|되나요|돼\?|할\s*수\s*있|캐릭터|2d|3d|만화|애니|동물|강아지|고양이|반려|실제\s*인물|어떻게\s*(?:등록|돼|되)/i.test(
+      t
+    )
+  ) {
+    return null;
+  }
   if (
     /가족\s*(얼굴|사진|여권)도?\s*(등록|추가|만들|하자|할래|해\s*줘)|가족\s*여권|가족도\s*등록|^(가족|인물)\s*(추가|등록)/.test(t)
   ) {

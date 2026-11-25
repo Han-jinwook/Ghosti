@@ -977,8 +977,13 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ⓪-0 [D-35] 여권 확인 요청('여권 보여줘' 등) → 프로필 안 여권 위치만 짧게 안내
-  //  ('여권 등록', '가족 얼굴 등록하자' 등 등록 명령은 채팅창에서 먼저 가로채 왼쪽 등록 화면을 즉시 연다)
-  if (/(귀신계?\s*여권|여권\s*(보여|확인|열어|어디|안내|설정))/i.test(text)) {
+  //  ('여권 등록', '가족 얼굴 등록하자' 등 등록 명령은 채팅창에서 먼저 가로채 왼쪽 등록 화면을 즉시 열며,
+  //   장수·규칙·캐릭터·동물 문의는 아래 0토큰 FAQ 엔진으로 넘긴다)
+  const isPassportRuleQuestion =
+    /몇\s*장|장수|몇\s*명|인원|제한|무제한|규칙|누적|10년|5년|캐릭터|2d|3d|만화|애니|동물|강아지|고양이|반려|실제\s*인물|가능|불가|안\s*떠|왜/i.test(
+      text
+    );
+  if (!isPassportRuleQuestion && /(귀신계?\s*여권|여권\s*(보여|확인|열어|어디|안내|설정))/i.test(text)) {
     const nickLabel = nickname ? `${nickname}님! ` : '';
     return {
       scenarioId: 'passport_manual_open_guide',
@@ -1307,6 +1312,35 @@ export function resolveGhostSecretaryTurn(
         id: 'faq_work_lounge_no_passport',
         text: `${nickPrefix}회사 업무 공유(S: 드라이브)에 올라오는 현장·자재 사진과 계약서 스캔본에서는 프라이버시 보호와 업무 문서 집중을 위해 인물 여권 매칭을 발동하지 않도록 분리해 두었어요!`,
       };
+    }
+    // [여권 공식 규칙 — 장수(성인 10년·미성년 5년 단위 5장씩 누적 무제한) · 실제 인물 전용(2D/3D 캐릭터 불가) · 반려동물 다음 버전업 예정]
+    if (
+      /(여권|얼굴\s*등록|가족\s*여권|내\s*여권)/i.test(q) ||
+      (/(2d|3d|만화\s*캐릭터|캐릭터)/i.test(q) && /(등록|가능|불가|되나|돼|할\s*수)/i.test(q))
+    ) {
+      const asksCountOrLimit = /(몇\s*장|장수|몇\s*명|인원|제한|무제한|누적|규칙|10년|5년|추가할\s*수)/i.test(q);
+      const asksCharacterOrPet = /(2d|3d|캐릭터|만화|애니|일러스트|동물|강아지|고양이|반려|실제\s*인물)/i.test(q);
+      if (asksCountOrLimit && asksCharacterOrPet) {
+        return {
+          id: 'faq_passport_rules_combined',
+          text:
+            `${nickPrefix}여권 규칙을 정확히 안내해 드릴게요!\n` +
+            `• **사진 장수**: 성인은 **10년 단위로 5장씩**, 미성년자는 **5년 단위로 5장씩**(정면·옆모습·야외·선글라스·야간 등 다양한 모습) 추가할 수 있고, 계속 누적 합산되어 총량 제한이 없어요(내 여권·가족 여권 동일).\n` +
+            `• **등록 대상**: **실제 사람 얼굴만 등록 가능**(인물 수 무제한)하며, **2D 만화·3D 캐릭터는 등록할 수 없어요.** 반려동물은 다음 버전업에서 지원할 예정입니다!`,
+        };
+      }
+      if (asksCharacterOrPet) {
+        return {
+          id: 'faq_passport_real_person_only_no_character',
+          text: `${nickPrefix}여권은 **실제 사람 얼굴만 등록 가능**하며, **2D 만화 캐릭터나 3D 캐릭터는 등록할 수 없어요!** (실사처럼 생긴 3D 그림이 일반 사진 폴더에 섞여 우연히 후보로 뜨더라도 **[제외]**를 누르시면 앞으로 다시 묻지 않아요. 반려동물은 다음 버전업에서 지원할 예정입니다!)`,
+        };
+      }
+      if (asksCountOrLimit) {
+        return {
+          id: 'faq_passport_bucket_count_and_limit',
+          text: `${nickPrefix}여권 사진은 **성인은 10년 단위로 5장씩, 미성년자는 5년 단위로 5장씩**(정면·옆모습·야외·선글라스·야간 등 다양한 모습) 추가할 수 있고, 계속 누적 합산되어 총량 제한이 없어요! 내 여권·가족 여권 모두 동일하며 등록할 수 있는 실제 인물 수도 무제한입니다. (반려동물은 다음 버전업에서 지원 예정이에요!)`,
+        };
+      }
     }
     if (/(제목을?\s*몰라도|파일명을?\s*몰라도|문서\s*본문|동영상\s*(?:자막|장면|글자)).*?(검색|찾을\s*수|돼|가능)/i.test(q)) {
       return {
