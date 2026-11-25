@@ -1150,7 +1150,7 @@ export async function executeAgentCareBatchCard(
 
   // 버킷 5: 실사용 은행·관공서 보안모듈 무삭제 수면
   if (sleepItems.length > 0 || card.action === 'security_2tier_apply') {
-    const rSlp = await callCareApi<any>('/api/care/sleep', { explicitOptIn: true }, 20000);
+    const rSlp = await callCareApi<any>('/api/care/sleep', { explicitOptIn: true }, 55000);
     if (rSlp.ok) anyOk = true;
     if (rSlp.data?.toastMessage) {
       reportBlocks.push(`🌙 **[실사용 보안모듈 무삭제 수면 적용]**\n${rSlp.data.toastMessage}`);

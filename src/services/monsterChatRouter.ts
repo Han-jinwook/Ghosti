@@ -2427,8 +2427,11 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
   }
 
   // 0-C) [연속 왕복 점검 지원] "은행·관공서 보안절전 및 보안프로그램 즉시 깨우기" 동시 입력 시 절전 ➔ 기상 왕복을 1회로 일관 실행
+  // [자연어 절전·끄기 명령 확장]: "은행 관공서 프로그램 꺼줘", "은행 보안앱 중지해줘" 등 일상어도 누락 없이 보안절전으로 직결 (완전 삭제/제거 의도는 제외)
+  const isExplicitSecurityUninstallIntent = /완전\s*삭제|삭제해|지워\s*(?:줘|주세요|라)|제거해/i.test(clean);
   const hasSleepCue =
-    /(안\s*지우고\s*잠재우|알아서\s*재우고\s*깨워|보안\s*절전|은행.*?(?:보안\s*(?:프로그램|모듈|앱)?.*?)?(?:재우|재워|절전|잠재우|잠재워|자동\s*관리)|보안\s*(?:프로그램|모듈|앱).*?(?:재우|재워|절전|잠재우|잠재워|자동\s*절전))/i.test(
+    !isExplicitSecurityUninstallIntent &&
+    /(안\s*지우고\s*잠재우|알아서\s*재우고\s*깨워|보안\s*절전|(?:은행|관공서|홈택스).*?(?:보안\s*)?(?:프로그램|모듈|앱|서비스)?.*?(?:재우|재워|절전|잠재우|잠재워|자동\s*관리|꺼\s*(?:줘|주세요|라|달라|볼래|도)?|끄기|끄고|중지|멈춰|비활성화)|보안\s*(?:프로그램|모듈|앱|서비스).*?(?:재우|재워|절전|잠재우|잠재워|자동\s*절전|꺼\s*(?:줘|주세요|라|달라|볼래|도)?|끄기|끄고|중지|멈춰|비활성화))/i.test(
       clean
     );
   const hasExplicitWakeCue =
@@ -2442,7 +2445,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(55000),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -2451,7 +2454,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_roundtrip_request' }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(55000),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -2495,26 +2498,36 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     (isSimpleYes && /(은행·관공서\s*보안프로그램.*?깨워드릴까요|삭제하지\s*않고\s*쿨쿨\s*잠재울까요)/.test(lastAssistantText));
 
   if (isBankSleepConsent) {
+    let sleepTimedOut = false;
     const sleepRes = await fetch(getZCoreUrl('/api/care/security-services/sleep'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(15000),
+      // Windows 작업 스케줄러 헬퍼(최대 12초) + 최초 1회 관리자 권한(UAC) 확인 대기(최대 35초)를 충분히 수용
+      signal: AbortSignal.timeout(55000),
     })
       .then((r) => r.json())
-      .catch(() => null);
+      .catch((err: any) => {
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+          sleepTimedOut = true;
+        }
+        return null;
+      });
 
     if (!sleepRes?.ok) {
       const failMsg = sleepRes?.uacDeclined
         ? ` **[관리자 권한 승인 보류 안내]**\n` +
           `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요! (이후에는 권한 팝업이 다시 뜨지 않습니다)`
         : zCoreBridge.isConnected
-        ? ` **[보안절전 실행 지연 안내]**\n` +
-          `현재 실행 중인 윈도우 보안 서비스 제어 중 권한 확인 또는 응답 지연이 발생했습니다. **[은행 보안프로그램 상태 확인해줘]**로 현재 상태를 확인한 뒤 다시 한 번 눌러주세요!`
+        ? sleepTimedOut
+          ? ` **[관리자 권한 확인 대기 시간 초과]**\n` +
+            `윈도우 자체 오류는 아니며, 화면 아래 작업 표시줄에 **방패 모양의 관리자 권한(예/아니오) 창**이 깜빡이며 승인을 기다리고 있을 수 있습니다. 창에서 **[예]**를 눌러주시거나 **[은행 보안프로그램 상태 확인해줘]**로 현재 상태를 확인해 주세요!`
+          : ` **[보안절전 실행 확인 안내]**\n` +
+            `윈도우 보안 서비스 제어 권한 확인 중 일시적 지연이 발생했습니다. 작업 표시줄에 관리자 권한 승인 창이 떠 있지 않은지 확인하신 뒤 **[은행 보안프로그램 상태 확인해줘]**를 눌러 상태를 확인해 주세요!`
         : ` **[내 PC 엔진(멀린 Z-코어) 연결 필요]**\n` +
           `내 PC의 은행·관공서 보안프로그램을 실제로 잠재우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진을 실행한 뒤 다시 말씀해 주세요!`;
       return reply(sourceTab, failMsg, {
-        followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'],
+        followUpSuggestions: ['은행 보안프로그램 상태 확인해줘', '은행·관공서 보안절전'],
       });
     }
 
@@ -2736,21 +2749,32 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 5) 은행·관공서 업무를 위해 잠자던 보안프로그램 즉시 깨우기
   if (hasExplicitWakeCue) {
+    let wakeTimedOut = false;
     const wakeRes = await fetch(getZCoreUrl('/api/care/security-services/wake'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_chat_request' }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(55000),
     })
       .then((r) => r.json())
-      .catch(() => null);
+      .catch((err: any) => {
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError') {
+          wakeTimedOut = true;
+        }
+        return null;
+      });
 
     if (!wakeRes?.ok) {
-      return reply(
-        sourceTab,
-        '내 PC의 보안프로그램을 실제로 깨우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진 실행 상태를 먼저 확인해 주세요!',
-        { followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'] }
-      );
+      const wakeFailKo = wakeRes?.uacDeclined
+        ? '관리자 권한 창에서 승인하지 않으셔서 보안프로그램을 깨우지 못했습니다. 다시 눌러 [예]를 선택해 주세요!'
+        : zCoreBridge.isConnected
+        ? wakeTimedOut
+          ? '윈도우 작업 표시줄에 방패 모양의 관리자 권한(예/아니오) 창이 떠 있는지 확인해 주세요. 승인 후 다시 시도하시면 즉시 깨워드립니다!'
+          : '보안프로그램을 깨우는 중 권한 확인이 지연되었습니다. [은행 보안프로그램 상태 확인해줘]로 상태를 확인해 주세요!'
+        : '내 PC의 보안프로그램을 실제로 깨우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진 실행 상태를 먼저 확인해 주세요!';
+      return reply(sourceTab, wakeFailKo, {
+        followUpSuggestions: ['은행 보안프로그램 상태 확인해줘', '보안프로그램 즉시 깨우기'],
+      });
     }
 
     const wokenLabels: string[] = Array.isArray(wakeRes.wokenModuleLabels) ? wakeRes.wokenModuleLabels : [];
@@ -3075,7 +3099,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     !isPendingMissingFileRestoreApprove &&
     /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
   const isNewIndependentTopicInConsent =
-    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램|재부팅|보안\s*쓰레기|보안\s*모듈|애드웨어|설치\s*파일|다운로드\s*폴더|숨은\s*편의 기능|편의 기능|실적\s*보고|보고서|알려\s*줘|알려\s*주세요|보여\s*줘|보여\s*주세요|설명해|여권|이름\s*등록/i.test(
+    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램|재부팅|보안\s*쓰레기|보안\s*모듈|보안\s*앱|보안\s*프로그램|보안\s*절전|은행|관공서|홈택스|애드웨어|설치\s*파일|다운로드\s*폴더|숨은\s*편의 기능|편의 기능|실적\s*보고|보고서|알려\s*줘|알려\s*주세요|보여\s*줘|보여\s*주세요|설명해|여권|이름\s*등록/i.test(
       clean
     );
   const isPronounNePrefix = /^네\s+(숨은|편의 기능|능력|기능|이름|정체|실적)/i.test(clean);
