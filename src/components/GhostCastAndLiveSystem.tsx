@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
+  filterPhotosByClubFeedTrack,
   filterVisibleGalleryPhotos,
+  resolveEffectiveSharedFeedTrack,
   resolveLoungePhotoCorpus,
 } from '../store/slices/storeSharedRefs';
 import {
@@ -182,6 +184,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     alumniSchoolName,
     setDeviceIntegrationSnapshot,
     showToast,
+    clubFeedTrack,
   } = useSaySeeStore();
 
   const isAuthenticatedLiveSyncMember = useMemo(() => {
@@ -196,9 +199,9 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     );
   }, [isGuestPreviewMode, merlinAuth?.email, merlinAuth?.userId]);
 
-  // [공유방 1:1 단일 SSOT]: 개인 라운지는 내 기기 사진, 사진 공유방(내 방·초대받은 방·게스트 초대방)은
-  // 반드시 현재 열려 있는 단일 room_id의 공유 사진 전체(sharedRoomAddedPhotos/sharedRoomHostPhotos)를 표시합니다.
-  const activePhotos = useMemo(() => {
+  // [공유방 1:1 단일 SSOT + 동호회·동창회 현재 탭 분리]: 개인 라운지는 내 기기 사진, 사진 공유방은 현재 열려 있는
+  // 단일 room_id 공유 사진을 쓰되, 동호회·동창회는 지금 보고 있는 탭(추억/최근)에 올린 사진만 크게 보기·다 같이 보기에 연결합니다.
+  const roomAllPhotos = useMemo(() => {
     const scoped = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom,
@@ -216,6 +219,12 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
   ]);
+  const activePhotos = useMemo(
+    () => filterPhotosByClubFeedTrack(roomAllPhotos, activeLoungeType, clubFeedTrack),
+    [roomAllPhotos, activeLoungeType, clubFeedTrack]
+  );
+  const roomAllPhotosRef = useRef<PhotoItem[]>(roomAllPhotos);
+  roomAllPhotosRef.current = roomAllPhotos;
 
   // 1) 무기 1: 모니터로 크게 보기 & 스마트폰 무선 리모컨 상태
   const [monitorCastOpen, setMonitorCastOpen] = useState(false);
@@ -615,7 +624,22 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           return;
         }
 
-        const list = activePhotosRef.current;
+        let list = activePhotosRef.current;
+        // 발표자가 다른 탭(추억/최근) 사진을 보고 있으면 참여 멤버 화면도 같은 탭으로 자동 전환해 함께 보기 유지
+        if (pkt.photoId && !list.some((p) => p.id === pkt.photoId)) {
+          const stLive = useSaySeeStore.getState();
+          const lounge = stLive.activeLoungeType;
+          if (lounge === 'club' || lounge === 'student') {
+            const presenterPhoto = roomAllPhotosRef.current.find((p) => p.id === pkt.photoId);
+            if (presenterPhoto) {
+              const presenterTrack = resolveEffectiveSharedFeedTrack(presenterPhoto, lounge);
+              if (presenterTrack !== stLive.clubFeedTrack) {
+                stLive.setClubFeedTrack(presenterTrack);
+              }
+              list = filterPhotosByClubFeedTrack(roomAllPhotosRef.current, lounge, presenterTrack);
+            }
+          }
+        }
         let matchedIdx = pkt.photoIndex;
         if (pkt.photoId) {
           const byId = list.findIndex((p) => p.id === pkt.photoId);
@@ -727,6 +751,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       remotePhotoThumbUrl: undefined,
     }));
   }, [activeLoungeType, activeFamilyRoom, activeSharedRoomId]);
+
+  // 동호회·동창회 탭(추억/최근) 전환 시 크게 보기 사진 번호를 새 탭 첫 장으로 초기화
+  useEffect(() => {
+    setCastState((prev) => ({ ...prev, photoIndex: 0, zoom: 1, rotation: 0 }));
+  }, [clubFeedTrack]);
 
   useEffect(() => {
     const maxIdx = Math.max(0, activePhotos.length - 1);
