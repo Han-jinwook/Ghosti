@@ -24,6 +24,8 @@ import { resolveAccountScopedNickname } from '../services/ghostSecretaryEngine';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
 import type { PhotoItem, PricingPlanId } from '../types/saysee';
 
+const LOCAL_CLIP_AUTO_SENT_TOAST = '방금 복사한 텍스트가 연결된 내 기기로 자동 암호화 전송되었습니다!';
+
 export interface MonitorCastState {
   active: boolean;
   photoIndex: number;
@@ -225,6 +227,22 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
   );
   const roomAllPhotosRef = useRef<PhotoItem[]>(roomAllPhotos);
   roomAllPhotosRef.current = roomAllPhotos;
+
+  // 클립보드 자동 전송 알림이 방금 뜬 다른 중요 안내를 덮지 않도록 마지막 일반 안내 시각 추적
+  const lastNonClipToastAtRef = useRef<number>(0);
+  useEffect(() => {
+    let prevToast = useSaySeeStore.getState().lastQuarantineToast;
+    const unsub = useSaySeeStore.subscribe((st) => {
+      const nextToast = st.lastQuarantineToast;
+      if (nextToast !== prevToast) {
+        prevToast = nextToast;
+        if (nextToast && nextToast !== LOCAL_CLIP_AUTO_SENT_TOAST) {
+          lastNonClipToastAtRef.current = Date.now();
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // 1) 무기 1: 모니터로 크게 보기 & 스마트폰 무선 리모컨 상태
   const [monitorCastOpen, setMonitorCastOpen] = useState(false);
@@ -445,9 +463,17 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       },
       onIncomingClip: (clip, meta) => {
         setDeviceIntegrationSnapshot({ incomingClip: clip });
+        if (meta?.isLocalAutoCapture) {
+          // 앱 안 버튼(초대 링크 복사 등)으로 방금 띄운 안내('발급 후 14일간 유효' 등)를
+          // 내 기기 자동 전송 알림이 즉시 덮어 못 읽게 만드는 현상 차단: 최근 5초 안에 다른 안내가 떴으면 조용히 전송만 수행
+          const recentOtherToast =
+            Date.now() - lastNonClipToastAtRef.current < 5000 &&
+            Boolean(useSaySeeStore.getState().lastQuarantineToast);
+          if (recentOtherToast) return;
+        }
         useSaySeeStore.setState({
           lastQuarantineToast: meta?.isLocalAutoCapture
-            ? '방금 복사한 텍스트가 연결된 내 기기로 자동 암호화 전송되었습니다!'
+            ? LOCAL_CLIP_AUTO_SENT_TOAST
             : `[${clip.senderName}]에서 암호화 클립보드가 도착했습니다! 바로 붙여넣기 하세요.`,
         });
       },
