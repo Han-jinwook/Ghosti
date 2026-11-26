@@ -1638,24 +1638,37 @@ export async function fetchSharedPhotoRoomMembers(
 export async function kickMemberFromSupabaseSharedPhotoRoom(
   roomId: string,
   memberNickname: string,
-  memberEmail?: string
+  memberEmail?: string,
+  opts?: { loungeType?: LoungeType; familyRoom?: FamilyRoomId }
 ): Promise<boolean> {
   const cleanRoomId = (roomId || '').trim();
   const cleanNick = (memberNickname || '').trim();
   const cleanEmail = (memberEmail || '').trim().toLowerCase();
-  if (!cleanRoomId || (!cleanNick && !cleanEmail) || !hasAuthenticatedHubAccountSession()) {
+  if (
+    (!cleanRoomId && !opts?.loungeType) ||
+    (!cleanNick && !cleanEmail) ||
+    !hasAuthenticatedHubAccountSession()
+  ) {
     return false;
   }
+  const mappedDb =
+    opts?.loungeType &&
+    (opts.loungeType === 'family' || opts.loungeType === 'club' || opts.loungeType === 'student')
+      ? mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom || '우리집')
+      : null;
   try {
     const bridgeRes = await callGhostiServerBridge('photo_kick_room_member', {
       roomId: cleanRoomId,
       memberNickname: cleanNick,
       memberEmail: cleanEmail,
+      dbLoungeType: mappedDb?.dbLoungeType || '',
+      dbSubType: mappedDb?.dbSubType || '',
     });
     if (bridgeRes.ok) return true;
   } catch {
     /* fallback to direct authed delete */
   }
+  if (!cleanRoomId) return false;
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return false;
   try {

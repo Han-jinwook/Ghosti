@@ -261,11 +261,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         }
       }
     }
-    if (effectiveRoomIdForManage) {
+    if (effectiveRoomIdForManage || activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') {
       void kickMemberFromSupabaseSharedPhotoRoom(
-        effectiveRoomIdForManage,
+        effectiveRoomIdForManage || '',
         clean,
-        cleanEmail || undefined
+        cleanEmail || undefined,
+        { loungeType: activeLoungeType, familyRoom: activeFamilyRoom }
       );
     }
     useSaySeeStore
@@ -349,6 +350,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
     // 서버 멤버 조회가 비어 있는 오프라인/로컬 폴백 시에만 사진 업로더에서 보조 추론
     if (!hasLoadedServerMembers || serverRoomMembers.length === 0) {
+      const seenFallbackNames = new Set<string>(
+        Array.from(byIdentityKey.values()).map((v) => v.rawName.toLowerCase())
+      );
       for (const p of currentRoomCorpus) {
         const uploaderEmail = String(p.sharedUploaderEmail || '').trim().toLowerCase();
         const label = normalizeLabel(p.uploaderLabel);
@@ -358,16 +362,27 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         if (uploaderEmail && myEmailLower && uploaderEmail === myEmailLower) continue;
         if (uploaderEmail && masterEmailLower && uploaderEmail === masterEmailLower) continue;
         if (!uploaderEmail && myIdentityLowerSet.has(lowerLabel)) continue;
+        if (!uploaderEmail && seenFallbackNames.has(lowerLabel)) continue;
 
         const key = uploaderEmail ? `email:${uploaderEmail}` : `name:${lowerLabel}`;
         if (!byIdentityKey.has(key)) {
           byIdentityKey.set(key, { rawName: label, email: uploaderEmail || undefined });
+          seenFallbackNames.add(lowerLabel);
         }
       }
     }
 
     return Array.from(byIdentityKey.values());
   })();
+
+  // 동일 닉네임을 사용하는 별개 계정이 2명 이상일 때 이메일 식별자를 함께 표기해 중복 오인 차단
+  const participantNameCounts = new Map<string, number>();
+  for (const p of derivedParticipants) {
+    const k = p.rawName.trim().toLowerCase();
+    if (k) participantNameCounts.set(k, (participantNameCounts.get(k) || 0) + 1);
+  }
+  const hasDuplicateNickname = (rawName: string) =>
+    (participantNameCounts.get(rawName.trim().toLowerCase()) || 0) > 1;
 
   const visibleFamilyMembers = isLoggedInUser || activeJoinedRoomMeta
     ? [
@@ -1026,9 +1041,15 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 {visibleFamilyMembers.map((m) => (
                   <div
                     key={m.id}
+                    title={m.email || m.rawName}
                     className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5 text-[12px]"
                   >
                     <span className="text-slate-800 font-medium">{m.name}</span>
+                    {m.role !== 'HOST' && m.email && hasDuplicateNickname(m.rawName) && (
+                      <span className="text-[11px] text-slate-400 font-normal">
+                        ({m.email})
+                      </span>
+                    )}
                     {m.role !== 'HOST' && !activeJoinedRoomMeta && (
                       <button
                         type="button"
@@ -1085,9 +1106,15 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             visibleClubMembers.map((m) => (
               <div
                 key={m.id}
+                title={m.email || m.rawName}
                 className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5 text-[12px]"
               >
                 <span className="text-slate-800 font-medium">{m.name}</span>
+                {m.role !== 'HOST' && m.email && hasDuplicateNickname(m.rawName) && (
+                  <span className="text-[11px] text-slate-400 font-normal">
+                    ({m.email})
+                  </span>
+                )}
                 {m.role !== 'HOST' && !activeJoinedRoomMeta && (
                   <button
                     type="button"

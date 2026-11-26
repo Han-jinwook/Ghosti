@@ -3615,6 +3615,7 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
     }
 
+    const resolvedMasterEmail = masterEmailOfPrimary || (isRequesterMasterOfPrimary ? email : '');
     const uniqueEmails = Array.from(
       new Set(
         memRows
@@ -3642,14 +3643,31 @@ export async function handleAuthedWorkAndDeviceAction({
       }
     }
 
+    const genericMemberLabels = new Set([
+      '새 멤버',
+      '멤버',
+      '회원님',
+      '초대 팀원',
+      '방장',
+      '가족방장',
+      '모임방장',
+    ]);
+    // 타 계정의 정식 허브 닉네임을 과거 브라우저 잔상(room_persona_nickname)이 사칭·중복 복제하는 현상 차단용 소유자 맵
+    const hubNickOwners = new Map();
+    for (const [em, nk] of userNickByEmail.entries()) {
+      const lowerNk = nk.toLowerCase();
+      if (!lowerNk || genericMemberLabels.has(nk)) continue;
+      if (!hubNickOwners.has(lowerNk)) hubNickOwners.set(lowerNk, new Set());
+      hubNickOwners.get(lowerNk).add(em);
+    }
+
     const byEmail = new Map();
-    const genericMemberLabels = new Set(['새 멤버', '멤버', '초대 팀원', '방장', '가족방장', '모임방장']);
     for (const row of memRows) {
       const memEmail = String(row?.member_email || '').trim().toLowerCase();
       if (!memEmail) continue;
       const roleRaw = String(row?.role || 'member').trim().toLowerCase();
       const role =
-        roleRaw === 'master' || (masterEmailOfPrimary && memEmail === masterEmailOfPrimary)
+        roleRaw === 'master' || (resolvedMasterEmail && memEmail === resolvedMasterEmail)
           ? 'master'
           : roleRaw === 'admin'
           ? 'admin'
@@ -3657,12 +3675,31 @@ export async function handleAuthedWorkAndDeviceAction({
       const emailPrefix = memEmail.includes('@') ? memEmail.split('@')[0] : memEmail;
       const personaNick = String(row?.room_persona_nickname || '').trim();
       const userNick = userNickByEmail.get(memEmail) || '';
+
+      // 1순위: 허브 SSO 최신 닉네임(public.users.nickname, 매 로그인 시 자동 동기화)
+      // 2순위: room_persona_nickname (단, 타 계정이 정식 허브 닉네임으로 사용 중인 오염 잔상은 제외)
+      // 3순위: 이메일 아이디 접두사
+      const isStrongUserNick =
+        Boolean(userNick) &&
+        !genericMemberLabels.has(userNick) &&
+        userNick.toLowerCase() !== emailPrefix.toLowerCase();
+      const personaOwners = personaNick ? hubNickOwners.get(personaNick.toLowerCase()) : null;
+      const isContaminatedByOtherUser = Boolean(
+        personaOwners && personaOwners.size > 0 && !personaOwners.has(memEmail)
+      );
+      const isUsablePersonaNick =
+        Boolean(personaNick) &&
+        !genericMemberLabels.has(personaNick) &&
+        personaNick.toLowerCase() !== emailPrefix.toLowerCase() &&
+        !isContaminatedByOtherUser;
+
       const resolvedNick =
-        (personaNick && !genericMemberLabels.has(personaNick) && personaNick.toLowerCase() !== emailPrefix.toLowerCase()
+        (isStrongUserNick ? userNick : '') ||
+        (isUsablePersonaNick ? personaNick : '') ||
+        (userNick && !genericMemberLabels.has(userNick) ? userNick : '') ||
+        (!isContaminatedByOtherUser && personaNick && !genericMemberLabels.has(personaNick)
           ? personaNick
           : '') ||
-        (userNick && !genericMemberLabels.has(userNick) ? userNick : '') ||
-        personaNick ||
         emailPrefix ||
         '멤버';
       const prev = byEmail.get(memEmail);
@@ -3690,35 +3727,66 @@ export async function handleAuthedWorkAndDeviceAction({
     const targetRoomId = String(body.roomId || '').trim();
     const targetEmail = String(body.memberEmail || '').trim().toLowerCase();
     const targetNick = String(body.memberNickname || '').trim();
-    if (!targetRoomId || (!targetEmail && !targetNick)) {
+    const dbLoungeType = body.dbLoungeType === 'club' ? 'club' : body.dbLoungeType === 'family' ? 'family' : '';
+    const dbSubType = String(body.dbSubType || '').trim();
+    if ((!targetRoomId && (!dbLoungeType || !dbSubType)) || (!targetEmail && !targetNick)) {
       return { status: 400, body: { ok: false, reason: 'MISSING_KICK_TARGET' } };
     }
-    const rmRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
-        targetRoomId
-      )}&select=room_id,lounge_type,sub_type,master_email&limit=1`,
-      { headers: srvHeaders(serviceKey) }
-    );
-    const rmRows = rmRes.ok ? await rmRes.json().catch(() => []) : [];
-    const targetRoom = Array.isArray(rmRows) ? rmRows[0] || null : null;
+    let targetRoom = null;
+    if (targetRoomId) {
+      const rmRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
+          targetRoomId
+        )}&select=room_id,lounge_type,sub_type,master_email&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const rmRows = rmRes.ok ? await rmRes.json().catch(() => []) : [];
+      targetRoom = Array.isArray(rmRows) ? rmRows[0] || null : null;
+    }
     const masterEmail = String(targetRoom?.master_email || '').trim().toLowerCase();
-    if (!masterEmail || masterEmail !== email) {
+    if (targetRoom && (!masterEmail || masterEmail !== email)) {
       return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
     }
+    const kickRoomIds = new Set();
+    if (targetRoomId) kickRoomIds.add(targetRoomId);
+    const lookupLt = String(targetRoom?.lounge_type || dbLoungeType || '').trim();
+    const lookupSt = String(targetRoom?.sub_type || dbSubType || '').trim();
+    if (lookupLt && lookupSt) {
+      const sameRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=ilike.${encodeURIComponent(
+          email
+        )}&lounge_type=eq.${encodeURIComponent(lookupLt)}&sub_type=eq.${encodeURIComponent(
+          lookupSt
+        )}&select=room_id&limit=10`,
+        { headers: srvHeaders(serviceKey) }
+      ).catch(() => null);
+      const sameRows = sameRes && sameRes.ok ? await sameRes.json().catch(() => []) : [];
+      if (Array.isArray(sameRows)) {
+        for (const r of sameRows) {
+          const rid = String(r?.room_id || '').trim();
+          if (rid) kickRoomIds.add(rid);
+        }
+      }
+    }
+    const kickRoomList = Array.from(kickRoomIds);
+    if (kickRoomList.length === 0) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    const inKickRooms = kickRoomList.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
     const delQuery = targetEmail
-      ? `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(
-          targetRoomId
-        )}&member_email=ilike.${encodeURIComponent(targetEmail)}&role=neq.master`
-      : `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(
-          targetRoomId
-        )}&room_persona_nickname=eq.${encodeURIComponent(targetNick)}&role=neq.master`;
+      ? `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=in.(${encodeURIComponent(
+          inKickRooms
+        )})&member_email=ilike.${encodeURIComponent(targetEmail)}&role=neq.master`
+      : `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=in.(${encodeURIComponent(
+          inKickRooms
+        )})&room_persona_nickname=eq.${encodeURIComponent(targetNick)}&role=neq.master`;
     const delRes = await fetch(delQuery, {
       method: 'DELETE',
       headers: srvHeaders(serviceKey, { Prefer: 'return=minimal' }),
     });
     return {
       status: delRes.ok ? 200 : 500,
-      body: { ok: delRes.ok, roomId: targetRoomId },
+      body: { ok: delRes.ok, roomId: targetRoomId || kickRoomList[0] || '' },
     };
   }
 
