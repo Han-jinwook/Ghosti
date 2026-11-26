@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghosti-pwa-v20261126-v16';
+const CACHE_NAME = 'ghosti-pwa-v20261126-v19';
 const IMMUTABLE_HASHED_ASSET_RX = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(?:js|css|wasm|png|jpg|jpeg|webp|svg|woff2?)$/i;
 
 self.addEventListener('install', () => {
@@ -40,13 +40,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   // Content-hashed immutable Vite bundles (/assets/*-<hash>.js|css) -> Cache-First for <2ms --app startup
+  // (배포 교체 직후 구 해시 청크가 SPA fallback(text/html)으로 내려올 때는 절대 캐시 오염시키지 않고 404 반환해 자동 리로드 복구가 작동하게 보장)
   if (url.origin === self.location.origin && IMMUTABLE_HASHED_ASSET_RX.test(url.pathname)) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(event.request).then((hit) => {
-          if (hit) return hit;
+          if (hit) {
+            const hitType = (hit.headers.get('content-type') || '').toLowerCase();
+            if (!hitType.includes('text/html')) return hit;
+            void cache.delete(event.request);
+          }
           return fetch(event.request).then((res) => {
-            if (res && res.ok) {
+            if (!res) return res;
+            const ct = (res.headers.get('content-type') || '').toLowerCase();
+            if (ct.includes('text/html')) {
+              return new Response('', { status: 404, statusText: 'Stale Chunk' });
+            }
+            if (res.ok) {
               cache.put(event.request, res.clone());
             }
             return res;
