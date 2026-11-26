@@ -2114,7 +2114,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                           </button>
                         </div>
                         <div className="text-[10px] text-slate-400 break-keep">
-                          ※ 예전에 지운 앱은 윈도우 시작 목록에 옛 주소만 남아 있을 수 있어요. [실제 폴더 열기]를 누르면 실제 존재 여부를 바로 확인해 폴더를 열어 드립니다.
+                          ※ 내 컴퓨터에서 실제 실행 파일 존재가 확인된 시작프로그램만 표시됩니다.
                         </div>
                       </>
                     ) : (

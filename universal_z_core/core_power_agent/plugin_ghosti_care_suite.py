@@ -3820,36 +3820,58 @@ USER_PERSONAL_DATA_FOLDER_PROTECTED = {
 }
 
 
-def _extract_target_app_profile(raw_query: str) -> Tuple[str, List[str], str]:
-    """자연어 발화에서 적출 대상 앱 이름을 추출합니다. 대상이 불분명하면 절대 임의 앱(어도비 등)으로 추정하지 않고 빈 목록을 반환합니다."""
-    q = (raw_query or "").strip()
-    q_low = q.lower()
-    for trig, info in DEEP_UNINSTALL_SYNONYM_MAP.items():
-        if trig in q_low:
-            return info["label"], list(info["keywords"]), trig
+def _compact_match_token(s: str) -> str:
+    return re.sub(r"[^a-z0-9가-힣]", "", (s or "").lower())
 
-    cleaned = q
-    noise_phrases = sorted(
-        (
-            "안 지워지는", "안지워지는", "안 꺼지는", "안꺼지는", "안 쓰는", "안쓰는", "불필요한", "이상한", "좀비",
-            "귀신비서", "내 컴퓨터에서", "내 컴퓨터", "컴퓨터에서", "컴퓨터", "노트북", "피씨", "pc",
-            "프로그램", "어플리케이션", "어플", "소프트웨어", "앱",
-            "흔적까지", "뿌리째", "싹 다", "싹다", "깨끗하게", "깨끗이", "완전히", "완전", "강제로", "강제", "심층", "적출",
-            "언인스톨해줘", "언인스톨", "uninstall", "삭제해줘", "삭제해", "삭제", "제거해줘", "제거해", "제거",
-            "지워줘", "지워", "뽑아줘", "뽑아", "없애줘", "없애", "치워줘", "치워",
-            "해줘", "해주세요", "좀", "에서", "다", "그냥",
-        ),
-        key=len,
-        reverse=True,
-    )
-    for noise in noise_phrases:
-        cleaned = re.sub(re.escape(noise), " ", cleaned, flags=re.IGNORECASE)
-    cleaned = " ".join(cleaned.split()).strip(" '\"?!.~,")
-    if not cleaned or len(cleaned) < 2:
+
+def _extract_target_app_profile(raw_query: str) -> Tuple[str, List[str], str]:
+    """자연어 발화에서 적출 대상 앱 이름을 추출합니다. 앱 이름 내부의 단어('소프트웨어', '프로그램', '다', 'PC' 등)가 훼손되지 않도록 앞뒤 조사·서술어만 정밀 제거합니다."""
+    q = (raw_query or "").strip().strip(" '\"‘’“”`")
+    if not q:
         return "", [], ""
 
-    slug = "".join(ch for ch in cleaned.lower() if ch.isalnum()) or "target_app"
-    return f"{cleaned} 관련 상주 프로그램·잔여 흔적", [cleaned.lower()], slug
+    # 앞쪽 호칭·수식어 제거 (문자열 맨 앞만)
+    cleaned = re.sub(
+        r"^(?:귀신비서야?\s*[,!]?\s*|내\s*컴퓨터에서\s*|컴퓨터에서\s*|내\s*피씨에서\s*|피씨에서\s*|내\s*pc에서\s*|pc에서\s*|"
+        r"안\s*지워지는\s*|안\s*꺼지는\s*|안\s*쓰는\s*|불필요한\s*|이상한\s*|오래된\s*|좀비\s*)+",
+        "",
+        q,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # 뒤쪽 삭제·제거 명령 서술어 제거 (문자열 맨 끝만 — 앱 본래 이름 속 '소프트웨어'·'프로그램'·'다' 보존!)
+    cleaned = re.sub(
+        r"(?:\s+(?:프로그램|어플리케이션|어플|소프트웨어|앱|항목|모듈))?"
+        r"(?:\s+(?:완전히|깨끗하게|깨끗이|싹\s*다|흔적까지|뿌리째|강제로|강제|심층|전부|모두|다|좀|그냥))*"
+        r"\s*(?:언인스톨|uninstall|적출|삭제|제거|지워|뽑아|없애|치워|정리)"
+        r"(?:해\s*줘요?|해\s*주세요|해\s*줄래요?|할래요?|해|요|줘|주세요)?[\s\"'?!.~,]*$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip(" '\"?!.~,")
+
+    # 단독 일반명사만 남은 경우("프로그램 지워줘", "앱 삭제해줘")
+    if cleaned.lower() in (
+        "", "프로그램", "어플리케이션", "어플", "소프트웨어", "앱", "컴퓨터", "내 컴퓨터", "피씨", "pc", "항목",
+    ) or len(cleaned) < 2:
+        return "", [], ""
+
+    c_low = cleaned.lower()
+    # 짧은 일반 별칭("어도비", "알약", "고클린" 등)으로 부른 경우에만 동의어 확장 적용
+    # (설치 목록에서 정확한 풀네임 'Veraport(보안모듈 관리 프로그램)...' 등을 클릭한 경우는 원문 우선!)
+    if len(c_low) <= 12:
+        for trig, info in DEEP_UNINSTALL_SYNONYM_MAP.items():
+            if c_low == trig or (trig in c_low and "(" not in c_low and len(c_low) <= len(trig) + 4):
+                return info["label"], list(info["keywords"]), trig
+
+    kws = [c_low]
+    # 괄호 앞 핵심 대표명도 보조 키워드로 추가 (예: "특허청전자출원소프트웨어(통지서열람기)" -> "특허청전자출원소프트웨어")
+    base_before_paren = cleaned.split("(", 1)[0].strip().lower()
+    if len(base_before_paren) >= 3 and base_before_paren not in kws:
+        kws.append(base_before_paren)
+
+    slug = "".join(ch for ch in c_low if ch.isalnum())[:32] or "target_app"
+    return f"{cleaned} 관련 상주 프로그램·잔여 흔적", kws, slug
 
 
 def _is_protected_system_entity(text: str) -> bool:
@@ -3898,7 +3920,7 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
     if not keywords:
         clarify_ko = (
             "👻 어떤 프로그램을 정리해 드릴까요?\n"
-            "**\"어도비 지워줘\"**, **\"알약 삭제해줘\"**, **\"줌 깨끗하게 제거해줘\"**처럼 정리할 프로그램 이름을 함께 말씀해 주세요!"
+            "실수로 필요한 프로그램을 건드리지 않도록 **내 PC에 실제로 설치된 프로그램 목록**에서 선택하시거나 정리할 프로그램 이름을 말씀해 주세요!"
         )
         return {
             "ok": True,
@@ -3924,12 +3946,25 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
         }
 
     kw_lows = [k.lower() for k in keywords if k]
+    kw_compacts = [_compact_match_token(k) for k in kw_lows if len(_compact_match_token(k)) >= 3]
+
+    def _matches_kw(text_val: str) -> bool:
+        tl = (text_val or "").lower()
+        if any(k in tl for k in kw_lows):
+            return True
+        if kw_compacts:
+            tc = _compact_match_token(tl)
+            if tc and any(ck in tc for ck in kw_compacts):
+                return True
+        return False
+
     installed_entries: List[Dict[str, Any]] = []
     running_processes: List[Dict[str, Any]] = []
     matched_services: List[Dict[str, Any]] = []
     scheduled_tasks: List[str] = []
     startup_entries: List[Dict[str, Any]] = []
     residual_folders: List[Dict[str, Any]] = []
+    protected_matched_labels: List[str] = []
 
     if sys.platform == "win32":
         import winreg
@@ -3959,22 +3994,30 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                                 pub = _rv("Publisher")
                                 uninst = _rv("UninstallString")
                                 quiet_uninst = _rv("QuietUninstallString")
-                                inst_loc = _rv("InstallLocation")
+                                inst_loc = _rv("InstallLocation").strip('"')
+                                disp_icon = _rv("DisplayIcon").strip('"')
                                 combined = f"{disp} {pub} {inst_loc} {sub_name}".lower()
-                                if not disp or _is_protected_system_entity(combined):
+                                if not disp or not (uninst or quiet_uninst):
                                     continue
-                                if any(k in combined for k in kw_lows):
-                                    dedup_key = disp.lower()
-                                    if dedup_key not in seen_names:
-                                        seen_names.add(dedup_key)
-                                        installed_entries.append({
-                                            "displayName": disp,
-                                            "publisher": pub,
-                                            "uninstallString": uninst,
-                                            "quietUninstallString": quiet_uninst,
-                                            "installLocation": inst_loc,
-                                            "registryKey": f"{hive_label}\\{subkey_path}\\{sub_name}",
-                                        })
+                                if not _matches_kw(combined):
+                                    continue
+                                if _is_protected_system_entity(combined):
+                                    if disp not in protected_matched_labels:
+                                        protected_matched_labels.append(disp)
+                                    continue
+                                if not _is_uninstall_entry_actually_installed(uninst or quiet_uninst, inst_loc, disp_icon):
+                                    continue
+                                dedup_key = disp.lower()
+                                if dedup_key not in seen_names:
+                                    seen_names.add(dedup_key)
+                                    installed_entries.append({
+                                        "displayName": disp,
+                                        "publisher": pub,
+                                        "uninstallString": uninst,
+                                        "quietUninstallString": quiet_uninst,
+                                        "installLocation": inst_loc,
+                                        "registryKey": f"{hive_label}\\{subkey_path}\\{sub_name}",
+                                    })
                         except Exception:
                             continue
             except Exception:
@@ -3993,7 +4036,14 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                         try:
                             vname, vdata, _ = winreg.EnumValue(rk, idx)
                             comb = f"{vname} {vdata}".lower()
-                            if not _is_protected_system_entity(comb) and any(k in comb for k in kw_lows):
+                            if not _matches_kw(comb):
+                                continue
+                            if _is_protected_system_entity(comb):
+                                if str(vname) not in protected_matched_labels:
+                                    protected_matched_labels.append(str(vname))
+                                continue
+                            _, rex = _resolve_command_executable(str(vdata or ""))
+                            if rex:
                                 startup_entries.append({
                                     "name": str(vname),
                                     "command": str(vdata),
@@ -4005,6 +4055,32 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
             except Exception:
                 continue
 
+        # 귀신비서가 이미 꺼둔 백업 시작프로그램 항목도 함께 매칭
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_READ) as bk_u:
+                for idx in range(winreg.QueryInfoKey(bk_u)[1]):
+                    bname, bdata, _ = winreg.EnumValue(bk_u, idx)
+                    _, sep_b, orig_vname = str(bname or "").partition("__")
+                    if not sep_b or not orig_vname:
+                        continue
+                    comb_b = f"{orig_vname} {bdata}".lower()
+                    if not _matches_kw(comb_b):
+                        continue
+                    if _is_protected_system_entity(comb_b):
+                        if orig_vname not in protected_matched_labels:
+                            protected_matched_labels.append(orig_vname)
+                        continue
+                    _, rex_b = _resolve_command_executable(str(bdata or ""))
+                    if rex_b:
+                        startup_entries.append({
+                            "name": orig_vname,
+                            "command": str(bdata),
+                            "hive": "HKCU",
+                            "regPath": STARTUP_BACKUP_SUBKEY,
+                        })
+        except Exception:
+            pass
+
         my_pid = os.getpid()
         for pinfo in _iter_windows_processes_stdlib():
             try:
@@ -4014,15 +4090,18 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                 pname = str(pinfo.get("name") or "")
                 pexe = str(pinfo.get("exe") or "")
                 comb = f"{pname} {pexe}".lower()
-                if _is_protected_system_entity(comb):
+                if not _matches_kw(comb):
                     continue
-                if any(k in comb for k in kw_lows):
-                    running_processes.append({
-                        "pid": pid,
-                        "name": pname,
-                        "exe": pexe,
-                        "memoryMb": max(1.0, float(pinfo.get("memoryMb") or 1.0)),
-                    })
+                if _is_protected_system_entity(comb):
+                    if pname and pname not in protected_matched_labels:
+                        protected_matched_labels.append(pname)
+                    continue
+                running_processes.append({
+                    "pid": pid,
+                    "name": pname,
+                    "exe": pexe,
+                    "memoryMb": max(1.0, float(pinfo.get("memoryMb") or 1.0)),
+                })
             except Exception:
                 continue
 
@@ -4047,12 +4126,16 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                     cur_disp = ls.split(":", 1)[1].strip()
                 elif ls.startswith("STATE") and cur_svc:
                     comb = f"{cur_svc} {cur_disp}".lower()
-                    if not _is_protected_system_entity(comb) and any(k in comb for k in kw_lows):
-                        matched_services.append({
-                            "serviceName": cur_svc,
-                            "displayName": cur_disp,
-                            "isRunning": "RUNNING" in ls,
-                        })
+                    if _matches_kw(comb):
+                        if _is_protected_system_entity(comb):
+                            if cur_disp not in protected_matched_labels:
+                                protected_matched_labels.append(cur_disp)
+                        else:
+                            matched_services.append({
+                                "serviceName": cur_svc,
+                                "displayName": cur_disp,
+                                "isRunning": "RUNNING" in ls,
+                            })
                     cur_svc = ""
         except Exception:
             pass
@@ -4076,7 +4159,7 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                 tlow = tname.lower()
                 if tlow.startswith("\\microsoft\\"):
                     continue
-                if not _is_protected_system_entity(tlow) and any(k in tlow for k in kw_lows):
+                if not _is_protected_system_entity(tlow) and _matches_kw(tlow):
                     if tname not in seen_tasks:
                         seen_tasks.add(tname)
                         scheduled_tasks.append(tname)
@@ -4108,7 +4191,7 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                         p_str = str(full_p)
                         if _is_protected_personal_data_dir(entry.name, p_str):
                             continue
-                        if any(k in dname_low for k in kw_lows):
+                        if _matches_kw(dname_low):
                             if p_str.lower() not in seen_dirs:
                                 seen_dirs.add(p_str.lower())
                                 sz = _calc_dir_size_fast(full_p)
@@ -4131,7 +4214,7 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                                         sub_str = str(sub_full)
                                         if _is_protected_system_entity(sub_low) or _is_protected_personal_data_dir(sub_e.name, sub_str):
                                             continue
-                                        if any(k in sub_low for k in kw_lows) and sub_str.lower() not in seen_dirs:
+                                        if _matches_kw(sub_low) and sub_str.lower() not in seen_dirs:
                                             seen_dirs.add(sub_str.lower())
                                             sz2 = _calc_dir_size_fast(sub_full)
                                             residual_folders.append({
@@ -4164,10 +4247,17 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
             f"마음대로 영구 삭제하지 않습니다! 아래 버튼을 누르시거나 채팅창에 **\"응 진행해\"**라고 입력하시면, "
             f"공식 언인스톨러 실행 후 남은 잔여 캐시 폴더는 **평소 쓰시는 Windows [휴지통]으로 안전하게 이동**시켜 언제든 휴지통에서 되살리실 수 있습니다."
         )
+    elif protected_matched_labels:
+        prot_disp = ", ".join(protected_matched_labels[:3])
+        briefing_ko = (
+            f"🛡️ **[{prot_disp}]** 항목은 현재 내 컴퓨터에 존재하지만, 그래픽·사운드·보안 또는 필수 구동 모듈이어서 "
+            f"컴퓨터 이상을 막기 위해 삭제 대상에서 안전하게 보호하고 있습니다.\n"
+            f"*(프로그램을 지우지 않고 부팅 시 자동 실행만 켜거나 끄시려면 **\"시작프로그램 목록 보여줘\"**에서 조정하실 수 있어요!)*"
+        )
     else:
         briefing_ko = (
-            f"👻 **[{target_label}]** 관련 레지스트리·상주 프로세스·서비스·스케줄러·잔여 폴더를 전수 스캔했으나, "
-            f"현재 내 PC에 남아 있는 흔적이 **0건**으로 이미 완벽히 깨끗한 상태입니다!"
+            f"👻 **[{target_label}]** 관련 설치 항목·상주 프로세스·서비스·시작 목록을 모두 확인했으나, "
+            f"현재 이 컴퓨터에는 설치되어 있지 않습니다. **\"설치된 프로그램 목록 보여줘\"**로 현재 PC에 실제 깔린 앱만 확인해 보세요!"
         )
 
     return {
@@ -4556,12 +4646,117 @@ def _is_on_unmounted_drive(path_str: str) -> bool:
     return False
 
 
+def _is_uninstall_entry_actually_installed(
+    uninst: str,
+    inst_loc: str = "",
+    disp_icon: str = "",
+) -> bool:
+    """
+    Windows Uninstall 레지스트리 엔트리가 '현재 디스크에 실제 설치되어 있는 프로그램'인지 엄격 검증합니다.
+    - 이미 본체 폴더(InstallLocation)가 삭제된 항목(예: C:\\KIPONET\\NEW_VIEWFILE 삭제 후 시작메뉴 잔재만 남은 경우, C:\\Program Files (x86)\\Common Files\\AMD 삭제 잔재) 제외
+    - 자체 언인스톨러 실행 파일이 삭제된 항목(예: 삭제된 웨일 브라우저 웹앱 급식배틀, 삭제된 iFormScan / PC App Store / Secure KeyStroke) 제외
+    - 과거 설치 시 꽂았던 외장/USB 드라이브(D:\\SETUP_FILES\\...) 아이콘 문자열 때문에 죽은 앱이 살아나는 오탐 원천 차단
+    """
+    uninst_s = (uninst or "").strip()
+    uninst_low = uninst_s.lower().strip('"')
+    if not uninst_low:
+        return False
+
+    uses_system_installer = bool(
+        re.match(r"^(?:msiexec|rundll32|winget|cmd|powershell)(?:\.exe)?\b", uninst_low)
+        or "\\windows\\system32\\msiexec" in uninst_low
+        or "\\windows\\syswow64\\msiexec" in uninst_low
+        or "\\windows\\system32\\rundll32" in uninst_low
+    )
+
+    uninst_resolved, uninst_exists = _resolve_command_executable(uninst_s)
+    icon_resolved, icon_exists = _resolve_command_executable(disp_icon)
+
+    # 1) 자체 언인스톨러 경로가 지정된 일반 앱인데 해당 실행 파일이 마운트된 드라이브에서 이미 사라진 경우 -> 100% 삭제된 잔재
+    if not uses_system_installer and uninst_resolved:
+        if not _is_on_unmounted_drive(uninst_resolved) and not uninst_exists:
+            return False
+
+    # 2) InstallLocation(본체 설치 경로)이 마운트된 고정 드라이브로 기록되어 있는데 실제로 폴더·파일이 아예 없는 경우
+    clean_iloc = os.path.expandvars((inst_loc or "").strip().strip('"')).rstrip("\\/")
+    if clean_iloc and len(clean_iloc) >= 4 and not _is_on_unmounted_drive(clean_iloc):
+        if not os.path.exists(clean_iloc):
+            # 예외: 아이콘 경로가 Windows 시스템 폴더가 아닌 별도 실존 .exe 본체를 가리키는 경우만 허용
+            has_real_app_exe_icon = (
+                icon_exists
+                and icon_resolved.lower().endswith(".exe")
+                and "\\windows\\" not in icon_resolved.lower()
+            )
+            if not has_real_app_exe_icon:
+                return False
+        elif os.path.isdir(clean_iloc):
+            # 폴더 껍데기만 남고 내부 실행·라이브러리 파일이 0개인 빈 폴더 잔재 차단
+            has_live_payload = False
+            try:
+                stack_d = [clean_iloc]
+                checked_cnt = 0
+                while stack_d and checked_cnt < 100 and not has_live_payload:
+                    cur_d = stack_d.pop()
+                    with os.scandir(cur_d) as it_d:
+                        for sub_e in it_d:
+                            checked_cnt += 1
+                            if checked_cnt > 100:
+                                has_live_payload = True
+                                break
+                            nm_l = sub_e.name.lower()
+                            if nm_l.endswith(".disabled_by_ghosti"):
+                                continue
+                            if sub_e.is_file(follow_symlinks=False):
+                                has_live_payload = True
+                                break
+                            if sub_e.is_dir(follow_symlinks=False) and len(stack_d) < 6:
+                                stack_d.append(sub_e.path)
+            except OSError:
+                has_live_payload = True
+            if not has_live_payload:
+                return False
+
+    # 3) MSI 등 시스템 인스톨러 기반인데 InstallLocation이 비어 있고 DisplayIcon이 마운트된 드라이브의 죽은 앱 경로를 가리키는 경우
+    if uses_system_installer and not clean_iloc and icon_resolved:
+        if (
+            not _is_on_unmounted_drive(icon_resolved)
+            and "\\windows\\" not in icon_resolved.lower()
+            and not icon_exists
+        ):
+            return False
+
+    return True
+
+
+def _read_windows_startup_approved_disabled() -> Dict[Tuple[str, str], bool]:
+    """Windows 작업 관리자(StartupApproved\\Run, Run32)에서 이미 '사용 안 함'으로 꺼둔 시작프로그램 맵을 조회합니다."""
+    disabled_map: Dict[Tuple[str, str], bool] = {}
+    if sys.platform != "win32" or winreg is None:
+        return disabled_map
+    sources = [
+        ("HKCU", winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"),
+        ("HKLM", winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"),
+        ("HKLM_WOW64", winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32"),
+    ]
+    for tag, root_h, sub_k in sources:
+        try:
+            with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_READ) as rk:
+                for i in range(winreg.QueryInfoKey(rk)[1]):
+                    try:
+                        vn, vd, _ = winreg.EnumValue(rk, i)
+                        if isinstance(vd, (bytes, bytearray)) and len(vd) >= 1 and vd[0] not in (2, 6):
+                            disabled_map[(tag, str(vn).strip().lower())] = True
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return disabled_map
+
+
 def list_startup_programs() -> Dict[str, Any]:
     """
-    현재 활성화된 시작프로그램(Run 레지스트리)과 귀신비서가 꺼둔(백업된) 항목 중
-    실제 실행 파일이 PC에 존재하는 항목만 반환합니다.
-    이미 삭제된 프로그램의 죽은 레지스트리 잔재(예: 삭제된 MYBOX 등)는 목록 노출 및 스위치 오작동을 막기 위해
-    내 계정(HKCU)에서 안전 아카이브 후 자동 정리하고 목록에서 제외합니다.
+    현재 활성화된 시작프로그램(Run 레지스트리)과 귀신비서·윈도우 설정에서 꺼둔 항목 중
+    실제 실행 파일이 PC에 존재하는 항목만 반환합니다 (작업 관리자 StartupApproved 상태 동기화 포함).
     """
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
@@ -4572,6 +4767,7 @@ def list_startup_programs() -> Dict[str, Any]:
         + ["merlin", "ghosti", "senstalk", "sundream", "securityhealth", "windefend", "msmpeng"]
         if str(x).strip()
     )
+    win_disabled_map = _read_windows_startup_approved_disabled()
     items: List[Dict[str, Any]] = []
     seen_ids = set()
     cleaned_orphan_names: List[str] = []
@@ -4609,6 +4805,7 @@ def list_startup_programs() -> Dict[str, Any]:
                     seen_ids.add(item_id.lower())
                     comb = f"{nm} {cmd}".lower()
                     protected = any(t in comb for t in drm_tokens)
+                    is_win_disabled = win_disabled_map.get((tag, nm.lower()), False)
                     items.append({
                         "id": item_id,
                         "name": nm,
@@ -4617,9 +4814,9 @@ def list_startup_programs() -> Dict[str, Any]:
                         "fileExists": True,
                         "tag": tag,
                         "runSubkey": sub_k,
-                        "locationLabel": loc_lbl,
-                        "enabled": True,
-                        "isProtected": protected,
+                        "locationLabel": "윈도우 설정에서 꺼둠 (다시 켜기 가능)" if is_win_disabled else loc_lbl,
+                        "enabled": not is_win_disabled,
+                        "isProtected": protected and not is_win_disabled,
                         "requiresAdmin": tag != "HKCU",
                     })
         except OSError:
@@ -4867,26 +5064,52 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
             "message": f"✅ 부팅 시 자동 실행되던 '{vname}' 항목을 껐습니다! (현재 실행 중인 창은 건드리지 않았으며 언제든 다시 켤 수 있어요)",
         }
     else:
-        # ON: 백업에서 읽어 다시 Run에 복원
+        # ON: 백업에서 읽어 다시 Run에 복원 (또는 Windows StartupApproved에서 꺼져 있던 항목 활성화)
+        cmd_val = None
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_READ) as bk_r:
                 cmd_val, _ = winreg.QueryValueEx(bk_r, backup_val_name)
         except OSError:
-            return {"ok": False, "error": "BACKUP_NOT_FOUND", "message": f"'{vname}' 항목의 백업 명령을 찾지 못했습니다."}
+            cmd_val = None
+        if cmd_val is None:
+            # Windows 작업 관리자(StartupApproved)에서 꺼둔 항목인 경우 Run에는 그대로 존재함
+            try:
+                with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_READ) as rk_chk:
+                    cmd_val, _ = winreg.QueryValueEx(rk_chk, vname)
+            except OSError:
+                return {"ok": False, "error": "BACKUP_NOT_FOUND", "message": f"'{vname}' 항목의 백업 명령을 찾지 못했습니다."}
+        else:
+            try:
+                with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
+                    winreg.SetValueEx(rk_w, vname, 0, winreg.REG_SZ, str(cmd_val))
+            except PermissionError:
+                ok_uac, err_uac = _elevated_hklm_run_toggle("set", sub_k, vname, str(cmd_val))
+                if not ok_uac:
+                    msg = (
+                        f"'{vname}' 항목은 공용(관리자) 시작프로그램입니다. 윈도우 관리자 허용 창에서 '예'를 눌러주셔야 다시 켤 수 있어요."
+                        if err_uac in ("UAC_CANCELLED", "UAC_TIMEOUT")
+                        else f"'{vname}' 공용 시작프로그램을 복원하지 못했습니다 ({err_uac})."
+                    )
+                    return {"ok": False, "error": err_uac or "ADMIN_REQUIRED", "message": msg}
+            except OSError as exc:
+                return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+
+        # StartupApproved에 비활성(03) 플래그가 남아 있으면 활성(02)로 함께 갱신
+        app_sub = (
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run32"
+            if tag == "HKLM_WOW64"
+            else r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run"
+        )
         try:
-            with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
-                winreg.SetValueEx(rk_w, vname, 0, winreg.REG_SZ, str(cmd_val))
-        except PermissionError:
-            ok_uac, err_uac = _elevated_hklm_run_toggle("set", sub_k, vname, str(cmd_val))
-            if not ok_uac:
-                msg = (
-                    f"'{vname}' 항목은 공용(관리자) 시작프로그램입니다. 윈도우 관리자 허용 창에서 '예'를 눌러주셔야 다시 켤 수 있어요."
-                    if err_uac in ("UAC_CANCELLED", "UAC_TIMEOUT")
-                    else f"'{vname}' 공용 시작프로그램을 복원하지 못했습니다 ({err_uac})."
-                )
-                return {"ok": False, "error": err_uac or "ADMIN_REQUIRED", "message": msg}
-        except OSError as exc:
-            return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+            with winreg.OpenKey(root_h, app_sub, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as ap_k:
+                try:
+                    cur_b, _ = winreg.QueryValueEx(ap_k, vname)
+                    if isinstance(cur_b, (bytes, bytearray)) and len(cur_b) >= 1 and cur_b[0] not in (2, 6):
+                        winreg.SetValueEx(ap_k, vname, 0, winreg.REG_BINARY, b"\x02" + b"\x00" * 11)
+                except OSError:
+                    pass
+        except OSError:
+            pass
 
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_SET_VALUE) as bk_w:
@@ -4901,7 +5124,7 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
             "id": item_id,
             "name": vname,
             "enabled": True,
-            "message": f"🔄 '{vname}' 항목이 부팅 시 다시 켜지도록 원래대로 복원했습니다!",
+            "message": f"🔄 '{vname}' 항목이 부팅 시 다시 켜지도록 복원했습니다!",
         }
 
 
@@ -5063,10 +5286,7 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
                     try:
                         if entry.is_dir(follow_symlinks=False):
                             key_low = entry.name.lower()
-                            sub_ts = max(
-                                entry.stat(follow_symlinks=False).st_mtime,
-                                _estimate_dir_recent_activity_ts(Path(entry.path), max_entries=20),
-                            )
+                            sub_ts = entry.stat(follow_symlinks=False).st_mtime
                             if sub_ts > appdata_dir_ts.get(key_low, 0.0):
                                 appdata_dir_ts[key_low] = sub_ts
                     except OSError:
@@ -5074,6 +5294,7 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
     except Exception:
         appdata_dir_ts = {}
 
+    size_probe_deadline = time.monotonic() + 1.2
     uninstall_roots = [
         (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
         (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
@@ -5152,10 +5373,10 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
                                             cand_dir = exe_p.parent
                                             break
 
-                            # 폴더 용량 보정 (레지스트리에 EstimatedSize가 0으로 비어 있는 대형 앱 CapCut 등 실측)
-                            if size_mb <= 0.0 and cand_dir is not None:
+                            # 폴더 용량 보정 (레지스트리에 EstimatedSize가 0으로 비어 있는 대형 앱 실측 — 전체 1.2초 예산 내 고속 샘플링)
+                            if size_mb <= 0.0 and cand_dir is not None and time.monotonic() < size_probe_deadline:
                                 try:
-                                    est_bytes = _calc_dir_size_fast(cand_dir, max_files=220)
+                                    est_bytes = _calc_dir_size_fast(cand_dir, max_files=60)
                                     if est_bytes > 0:
                                         size_mb = round(est_bytes / (1024.0 * 1024.0), 1)
                                 except Exception:
@@ -5181,38 +5402,9 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
                                 for rp in running_proc_stems
                             )
 
-                            # 이미 폴더·언인스톨러가 모두 지워졌는데 레지스트리 Uninstall 키만 죽어 남은 유령 앱(예: iFormScan, 빈 PCAppStore 등) 제외
-                            if not is_running_now and not is_prot:
-                                uninst_low = uninst.lower().strip().strip('"')
-                                uses_system_installer = bool(
-                                    re.match(r"^(?:msiexec|rundll32|cmd|powershell)(?:\.exe)?\b", uninst_low)
-                                    or "windows\\system32\\msiexec" in uninst_low
-                                    or "windows\\syswow64\\msiexec" in uninst_low
-                                )
-                                has_live_dir_file = False
-                                if cand_dir is not None and cand_dir.is_dir():
-                                    try:
-                                        for idx_f, sub_e in enumerate(os.scandir(str(cand_dir))):
-                                            if idx_f > 60:
-                                                has_live_dir_file = True
-                                                break
-                                            if sub_e.is_file(follow_symlinks=False) and not sub_e.name.endswith(".disabled_by_ghosti"):
-                                                has_live_dir_file = True
-                                                break
-                                            if sub_e.is_dir(follow_symlinks=False):
-                                                has_live_dir_file = True
-                                                break
-                                    except OSError:
-                                        pass
-                                uninst_resolved, uninst_exists = _resolve_command_executable(uninst)
-                                icon_resolved, icon_exists = _resolve_command_executable(disp_icon)
-                                if (
-                                    not uses_system_installer
-                                    and not has_live_dir_file
-                                    and not uninst_exists
-                                    and not icon_exists
-                                    and not _is_on_unmounted_drive(uninst_resolved or icon_resolved)
-                                ):
+                            # 이미 본체 폴더나 언인스톨러가 지워졌는데 레지스트리 키만 남은 유령 앱(예: 삭제된 특허청 뷰어, 웨일 웹앱 잔재, 삭제된 구형 드라이버 잔재 등) 철저 배제
+                            if not is_running_now:
+                                if not _is_uninstall_entry_actually_installed(uninst, inst_loc, disp_icon):
                                     seen_names.discard(disp_low)
                                     continue
 

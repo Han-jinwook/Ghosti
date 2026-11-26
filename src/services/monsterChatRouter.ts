@@ -1299,7 +1299,7 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
       summaryBadge: '삭제할 프로그램 이름을 알려주세요',
       honestBriefingKo:
         r.data.honestBriefingKo ||
-        '어떤 프로그램을 깨끗하게 지워드릴까요? 실수로 소중한 앱을 건드리지 않도록 **삭제할 프로그램 이름**을 함께 말씀해 주세요!\n(예: `"알약 완전히 지워줘"`, `"알집 삭제해줘"`, `"어도비 싹 다 지워줘"`)',
+        '어떤 프로그램을 깨끗하게 지워드릴까요? 실수로 소중한 앱을 건드리지 않도록 아래 **내 PC에 실제 설치된 프로그램 목록**에서 선택하시거나 이름을 함께 말씀해 주세요!',
       sampleProcesses: [],
       sampleServicesAndTasks: [],
       sampleFolders: [],
@@ -4971,20 +4971,27 @@ export async function processUnifiedMonsterChatQuery(params: {
       if (payload.needsClarification && zCoreBridge.isConnected) {
         const appsRes = await fetchInstalledAppsPayload();
         if (appsRes.ok && appsRes.payload && appsRes.payload.items.length > 0) {
+          const dynamicAppChips = appsRes.payload.items
+            .filter((a) => !a.isProtected && a.name)
+            .slice(0, 2)
+            .map((a) => `${a.name} 완전히 삭제해줘`);
           return reply(
             sourceTab,
-            `${payload.honestBriefingKo}\n\n 이름을 일일이 외우실 필요 없도록 **내 PC에 설치된 프로그램 전체 목록(${appsRes.payload.totalCount}개)**을 바로 아래에 띄워 드렸어요! 지우고 싶은 앱 옆의 **[심층 제거 점검]**을 눌러 주세요.`,
+            `${payload.honestBriefingKo}\n\n 이름을 일일이 외우실 필요 없도록 **내 PC에 실제 설치된 프로그램 목록(${appsRes.payload.totalCount}개)**을 바로 아래에 띄워 드렸어요! 지우고 싶은 앱 옆의 **[제거 점검]**을 눌러 주세요.`,
             {
               cardKind: 'INSTALLED_APPS_CARD',
               installedAppsPayload: appsRes.payload,
-              followUpSuggestions: ['알약 흔적까지 지워줘', '알집 완전히 삭제해줘', '고클린 제거해줘'],
+              followUpSuggestions:
+                dynamicAppChips.length > 0
+                  ? [...dynamicAppChips, '시작프로그램 목록 보여줘']
+                  : ['시작프로그램 목록 보여줘', '내 PC 점검해줘'],
             }
           );
         }
       }
       return reply(sourceTab, payload.honestBriefingKo, {
         followUpSuggestions: payload.needsClarification
-          ? ['설치된 프로그램 전체 목록 보여줘', '알약 흔적까지 지워줘', '고클린 제거해줘']
+          ? ['설치된 프로그램 전체 목록 보여줘', '시작프로그램 목록 보여줘', '내 PC 점검해줘']
           : ['요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘'],
       });
     }
