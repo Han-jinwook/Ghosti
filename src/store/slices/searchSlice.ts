@@ -166,7 +166,7 @@ export interface SearchSlice {
   syncRealVideoDuration: (videoId: string, realDurationSec: number) => void;
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
-  refreshLiveLocalFilesInSearchWindow: () => Promise<void>;
+  refreshLiveLocalFilesInSearchWindow: () => Promise<boolean>;
 
 
   // 음성 & 자연어 문장 검색 상태 + 검색 결과 연사 묶기 ([❐ N장 연사])
@@ -571,9 +571,9 @@ export const createSearchSlice: StateCreator<
   },
 
   refreshLiveLocalFilesInSearchWindow: async () => {
-    if (!zCoreBridge.isConnected) return;
+    if (!zCoreBridge.isConnected) return false;
     const stBefore = get();
-    if (isSharedPhotoLounge(stBefore.activeLoungeType)) return;
+    if (isSharedPhotoLounge(stBefore.activeLoungeType)) return true;
 
     const videosPromise = Promise.race([
       fetchIndexedVideosSafe(),
@@ -718,105 +718,108 @@ export const createSearchSlice: StateCreator<
       });
     }
 
-    const videosRes = await videosPromise;
-    const newlyAddedVideos: VideoSceneItem[] = [];
-    if (videosRes && videosRes.ok && Array.isArray(videosRes.videos)) {
-      const freshVideos = videosRes.videos;
-      const curVState = get();
-      const existingVideoByName = new Map<string, VideoSceneItem>();
-      for (const v of curVState.videoSceneItems) {
-        if (v.videoFileName) {
-          existingVideoByName.set(v.videoFileName, v);
+    void videosPromise.then(async (videosRes) => {
+      const newlyAddedVideos: VideoSceneItem[] = [];
+      if (videosRes && videosRes.ok && Array.isArray(videosRes.videos)) {
+        const freshVideos = videosRes.videos;
+        const curVState = get();
+        const existingVideoByName = new Map<string, VideoSceneItem>();
+        for (const v of curVState.videoSceneItems) {
+          if (v.videoFileName) {
+            existingVideoByName.set(v.videoFileName, v);
+          }
         }
-      }
-      const nextVideos: VideoSceneItem[] = freshVideos.map((fv) => {
-        const prevV = existingVideoByName.get(fv.videoFileName);
-        if (!prevV) {
-          newlyAddedVideos.push(fv);
-          return fv;
-        }
-        const hasFreshOcr = Array.isArray(fv.ocrLines) && fv.ocrLines.length > 0;
-        return {
-          ...fv,
-          id: prevV.id,
-          thumbUrl: fv.thumbUrl || prevV.thumbUrl,
-          hasScreenOcrText: hasFreshOcr ? fv.hasScreenOcrText : (prevV.hasScreenOcrText ?? fv.hasScreenOcrText),
-          ocrLineCount: hasFreshOcr ? fv.ocrLineCount : (prevV.ocrLineCount ?? fv.ocrLineCount),
-          ocrLines: hasFreshOcr ? fv.ocrLines : (prevV.ocrLines?.length ? prevV.ocrLines : fv.ocrLines),
-          ocrFullText: hasFreshOcr ? fv.ocrFullText : (prevV.ocrFullText || fv.ocrFullText),
-          keywords: Array.from(new Set([...(fv.keywords || []), ...(prevV.keywords || [])])),
-        };
-      });
-      let shouldCloseStaleVideoModal = false;
-      let deletedVideoToast: string | null = null;
-      if (curVState.selectedVideoModal) {
-        const openVid = curVState.selectedVideoModal;
-        const openVPath = (openVid.fullPath || '').trim().toLowerCase();
-        const stillHasVid = nextVideos.some((v) => {
-          const vp = (v.fullPath || '').trim().toLowerCase();
-          if (openVPath && vp) return vp === openVPath;
-          return v.videoFileName === openVid.videoFileName;
+        const nextVideos: VideoSceneItem[] = freshVideos.map((fv) => {
+          const prevV = existingVideoByName.get(fv.videoFileName);
+          if (!prevV) {
+            newlyAddedVideos.push(fv);
+            return fv;
+          }
+          const hasFreshOcr = Array.isArray(fv.ocrLines) && fv.ocrLines.length > 0;
+          return {
+            ...fv,
+            id: prevV.id,
+            thumbUrl: fv.thumbUrl || prevV.thumbUrl,
+            hasScreenOcrText: hasFreshOcr ? fv.hasScreenOcrText : (prevV.hasScreenOcrText ?? fv.hasScreenOcrText),
+            ocrLineCount: hasFreshOcr ? fv.ocrLineCount : (prevV.ocrLineCount ?? fv.ocrLineCount),
+            ocrLines: hasFreshOcr ? fv.ocrLines : (prevV.ocrLines?.length ? prevV.ocrLines : fv.ocrLines),
+            ocrFullText: hasFreshOcr ? fv.ocrFullText : (prevV.ocrFullText || fv.ocrFullText),
+            keywords: Array.from(new Set([...(fv.keywords || []), ...(prevV.keywords || [])])),
+          };
         });
-        if (!stillHasVid) {
-          shouldCloseStaleVideoModal = true;
-          deletedVideoToast = `[${openVid.videoFileName || openVid.title}] 영상이 삭제되어 상세 창을 닫고 목록을 갱신했습니다.`;
+        let shouldCloseStaleVideoModal = false;
+        let deletedVideoToast: string | null = null;
+        if (curVState.selectedVideoModal) {
+          const openVid = curVState.selectedVideoModal;
+          const openVPath = (openVid.fullPath || '').trim().toLowerCase();
+          const stillHasVid = nextVideos.some((v) => {
+            const vp = (v.fullPath || '').trim().toLowerCase();
+            if (openVPath && vp) return vp === openVPath;
+            return v.videoFileName === openVid.videoFileName;
+          });
+          if (!stillHasVid) {
+            shouldCloseStaleVideoModal = true;
+            deletedVideoToast = `[${openVid.videoFileName || openVid.title}] 영상이 삭제되어 상세 창을 닫고 목록을 갱신했습니다.`;
+          }
         }
-      }
-      set({
-        videoSceneItems: nextVideos,
-        ...(shouldCloseStaleVideoModal ? { selectedVideoModal: null } : {}),
-        ...(deletedVideoToast ? { lastQuarantineToast: deletedVideoToast } : {}),
-      });
-      const afterVidSet = get();
-      if (afterVidSet.hasExecutedUserSearch && afterVidSet.activeQuery.trim()) {
-        await get().runTextQuery(afterVidSet.activeQuery, { preserveCurrentSpace: true });
-      } else {
-        const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
         set({
-          matchedVideoScenes: nextVideos,
-          ...(afterVidSet.searchSpace === 'video'
-            ? {
-                activeQuery: `동영상 ${nextVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
-              }
-            : {}),
+          videoSceneItems: nextVideos,
+          ...(shouldCloseStaleVideoModal ? { selectedVideoModal: null } : {}),
+          ...(deletedVideoToast ? { lastQuarantineToast: deletedVideoToast } : {}),
+        });
+        const afterVidSet = get();
+        if (afterVidSet.hasExecutedUserSearch && afterVidSet.activeQuery.trim()) {
+          await get().runTextQuery(afterVidSet.activeQuery, { preserveCurrentSpace: true });
+        } else {
+          const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+          set({
+            matchedVideoScenes: nextVideos,
+            ...(afterVidSet.searchSpace === 'video'
+              ? {
+                  activeQuery: `동영상 ${nextVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
+                }
+              : {}),
+          });
+        }
+      }
+
+      if (newlyAddedPhotos.length > 0 || newlyAddedVideos.length > 0) {
+        void startSilentRealMediaVisionIndexing({
+          photos: newlyAddedPhotos,
+          videos: newlyAddedVideos,
+          onPhotoVisionHydrated: (photoId, patch) => {
+            set((s) => ({
+              photos: s.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
+              searchResults: s.searchResults.map((sr) =>
+                sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
+              ),
+            }));
+          },
+          onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+            set((s) => ({
+              videoSceneItems: s.videoSceneItems.map((v) =>
+                v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+              ),
+              matchedVideoScenes: s.matchedVideoScenes.map((v) =>
+                v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+              ),
+            }));
+          },
+          onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+            set((s) => ({
+              videoSceneItems: s.videoSceneItems.map((v) =>
+                v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+              ),
+              matchedVideoScenes: s.matchedVideoScenes.map((v) =>
+                v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+              ),
+            }));
+          },
         });
       }
-    }
+    });
 
-    if (newlyAddedPhotos.length > 0 || newlyAddedVideos.length > 0) {
-      void startSilentRealMediaVisionIndexing({
-        photos: newlyAddedPhotos,
-        videos: newlyAddedVideos,
-        onPhotoVisionHydrated: (photoId, patch) => {
-          set((s) => ({
-            photos: s.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
-            searchResults: s.searchResults.map((sr) =>
-              sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
-            ),
-          }));
-        },
-        onVideoThumbHydrated: (videoFileName, thumbUrl) => {
-          set((s) => ({
-            videoSceneItems: s.videoSceneItems.map((v) =>
-              v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-            ),
-            matchedVideoScenes: s.matchedVideoScenes.map((v) =>
-              v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-            ),
-          }));
-        },
-        onVideoOcrHydrated: (videoFileName, ocrMeta) => {
-          set((s) => ({
-            videoSceneItems: s.videoSceneItems.map((v) =>
-              v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-            ),
-            matchedVideoScenes: s.matchedVideoScenes.map((v) =>
-              v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-            ),
-          }));
-        },
-      });
-    }
+    return Boolean(photoFetchOk && docsFetchOk);
   },
 
 

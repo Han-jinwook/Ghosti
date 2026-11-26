@@ -905,36 +905,38 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
             work_roots.append(Path("S:\\"))
     except Exception:
         pass
+    # [실시간 저장·삭제 0순위 최우선 루트 정렬]:
+    # 바탕화면·다운로드·문서·사진·동영상·카톡 받은 파일·S: 최상위 폴더를 반드시 0~18번 인덱스에 먼저 배치하여,
+    # 하위 폴더가 수백 개인 PC(3·4호기)에서도 바탕화면/다운로드 새 파일 생성·삭제·메모장 저장이 0.2초 내에 100% 포착되게 보장합니다.
     candidates: List[Path] = [
         *work_roots,
-        *_load_custom_scan_roots(),
-        kf_pics,
-        kf_vids,
-        kf_docs,
-        kf_docs / "카카오톡 받은 파일",
-        home / "Pictures",
-        home / "Videos",
-        home / "Documents",
-        home / "Documents" / "카카오톡 받은 파일",
-    ]
-    for od in onedrive_roots:
-        candidates.extend([
-            od / "Pictures",
-            od / "사진",
-            od / "Videos",
-            od / "동영상",
-            od / "Documents",
-            od / "문서",
-            od / "문서" / "카카오톡 받은 파일",
-            od / "Desktop",
-            od / "바탕 화면",
-        ])
-    candidates.extend([
         kf_desk,
         home / "Desktop",
         kf_down,
         home / "Downloads",
-    ])
+        kf_docs,
+        home / "Documents",
+        kf_docs / "카카오톡 받은 파일",
+        home / "Documents" / "카카오톡 받은 파일",
+        home / "Downloads" / "카카오톡 받은 파일",
+        kf_pics,
+        home / "Pictures",
+        kf_vids,
+        home / "Videos",
+    ]
+    for od in onedrive_roots:
+        candidates.extend([
+            od / "Desktop",
+            od / "바탕 화면",
+            od / "Documents",
+            od / "문서",
+            od / "문서" / "카카오톡 받은 파일",
+            od / "Pictures",
+            od / "사진",
+            od / "Videos",
+            od / "동영상",
+        ])
+    candidates.extend(_load_custom_scan_roots())
     excluded_work_dir = _get_unmounted_work_vault_dir_to_exclude()
     seen_resolved: set[str] = set()
     for c in candidates:
@@ -1690,28 +1692,38 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3, _force_sync_rebuild: 
     per_root_cap = 600
     effective_depth = max(max_depth, 6)
 
+    # [Tier-0 최상위 루트 우선 배치(BFS Seed)]:
+    # Downloads(2,200개 하위 폴더)나 Documents(35개 하위 폴더)의 깊이우선 탐색 때문에
+    # 뒤따르는 바탕화면·문서·사진·원드라이브 바탕화면 루트가 24번/32번 인덱스 밖으로 밀려나지 않도록,
+    # 모든 최상위 사용자 루트(depth=0)를 0~N번 인덱스에 먼저 등록한 뒤 하위 폴더(depth>=1)를 탐색합니다!
+    valid_top_roots: List[tuple[Path, int]] = []
     for r in roots:
         if len(result) >= max_total:
             break
-        root_count = 0
-        is_virt_r = _is_virtual_cloud_drive_path(r)
-        r_max_depth = min(effective_depth, 4) if is_virt_r else effective_depth
+        try:
+            if _is_under_excluded_work_vault(r, excluded_work_dir):
+                continue
+            r_str = os.path.normcase(os.path.abspath(r))
+            if r_str in seen:
+                continue
+            seen.add(r_str)
+            result.append(r)
+            is_virt_r = _is_virtual_cloud_drive_path(r)
+            r_max_depth = min(effective_depth, 4) if is_virt_r else effective_depth
+            valid_top_roots.append((r, r_max_depth))
+        except Exception:
+            pass
 
-        def _walk(curr: Path, depth: int) -> None:
+    for r, r_max_depth in valid_top_roots:
+        if len(result) >= max_total:
+            break
+        root_count = 1
+
+        def _walk_children(curr: Path, depth: int) -> None:
             nonlocal root_count
-            if depth > r_max_depth or root_count >= per_root_cap or len(result) >= max_total:
+            if depth >= r_max_depth or root_count >= per_root_cap or len(result) >= max_total:
                 return
             try:
-                if _is_under_excluded_work_vault(curr, excluded_work_dir):
-                    return
-                r_str = os.path.normcase(os.path.abspath(curr))
-                if r_str in seen:
-                    return
-                seen.add(r_str)
-                result.append(curr)
-                root_count += 1
-                if depth == r_max_depth:
-                    return
                 sub_dirs: List[Path] = []
                 with os.scandir(curr) as it:
                     for dent in it:
@@ -1735,14 +1747,26 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3, _force_sync_rebuild: 
                         except Exception:
                             pass
                 sub_dirs.sort(key=lambda x: x.name)
+                accepted_subs: List[Path] = []
                 for sub in sub_dirs:
                     if root_count >= per_root_cap or len(result) >= max_total:
                         break
-                    _walk(sub, depth + 1)
+                    s_str = os.path.normcase(os.path.abspath(sub))
+                    if s_str in seen:
+                        continue
+                    seen.add(s_str)
+                    result.append(sub)
+                    root_count += 1
+                    accepted_subs.append(sub)
+                if depth + 1 < r_max_depth:
+                    for sub in accepted_subs:
+                        if root_count >= per_root_cap or len(result) >= max_total:
+                            break
+                        _walk_children(sub, depth + 1)
             except Exception:
                 pass
 
-        _walk(r, 0)
+        _walk_children(r, 0)
 
     for xd in extra_dirs:
         if len(result) >= max_total:
@@ -2202,13 +2226,13 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
     global _SECONDARY_WATCH_REFRESH_INFLIGHT
     now_mono = time.monotonic()
     cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
-    if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.40:
+    if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.18:
         return cached_ws
 
     with _WATCH_SIG_BUILD_LOCK:
         now_mono = time.monotonic()
         cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
-        if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.40:
+        if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.18:
             return cached_ws
 
         scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)

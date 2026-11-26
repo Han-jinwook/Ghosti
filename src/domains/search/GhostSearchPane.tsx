@@ -74,6 +74,7 @@ export const GhostSearchPane: React.FC<{
   const { setOcrModalPhoto } = useDashboardNavStore();
   const lastWatchSigRef = useRef<string>('');
   const watchRefreshInflightRef = useRef<boolean>(false);
+  const queuedReprobeRef = useRef<boolean>(false);
 
   useEffect(() => {
     const isSearchSurfaceActive =
@@ -83,16 +84,17 @@ export const GhostSearchPane: React.FC<{
     let cancelled = false;
 
     const probeWatchSig = async () => {
-      if (
-        cancelled ||
-        watchRefreshInflightRef.current ||
-        !zCoreBridge.isConnected
-      ) {
+      if (cancelled || !zCoreBridge.isConnected) {
+        return;
+      }
+      if (watchRefreshInflightRef.current) {
+        // 직전 파일 생성(예: '새 텍스트 문서.txt') 갱신 도중 이름 변경·메모장 저장이 연속 발생한 경우 절대 유실하지 않고 직후 즉시 재조회!
+        queuedReprobeRef.current = true;
         return;
       }
       try {
         const ctrl = new AbortController();
-        const tid = window.setTimeout(() => ctrl.abort(), 3500);
+        const tid = window.setTimeout(() => ctrl.abort(), 3000);
         const res = await fetch(getZCoreUrl('/__zcore/watch-sig'), {
           cache: 'no-store',
           signal: ctrl.signal,
@@ -105,12 +107,19 @@ export const GhostSearchPane: React.FC<{
           return;
         }
         if (data.sig !== lastWatchSigRef.current) {
-          lastWatchSigRef.current = data.sig;
+          const targetSig = data.sig;
           watchRefreshInflightRef.current = true;
           try {
-            await refreshLiveLocalFilesInSearchWindow();
+            const refreshedOk = await refreshLiveLocalFilesInSearchWindow();
+            if (refreshedOk !== false) {
+              lastWatchSigRef.current = targetSig;
+            }
           } finally {
             watchRefreshInflightRef.current = false;
+            if (!cancelled && queuedReprobeRef.current) {
+              queuedReprobeRef.current = false;
+              void probeWatchSig();
+            }
           }
         }
       } catch {
@@ -124,18 +133,22 @@ export const GhostSearchPane: React.FC<{
     });
     const intervalId = window.setInterval(() => {
       void probeWatchSig();
-    }, 900);
-    const onFocus = () => {
+    }, 650);
+    const onImmediateWake = () => {
       void probeWatchSig();
     };
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('focus', onImmediateWake);
+    window.addEventListener('pointerenter', onImmediateWake);
+    document.addEventListener('mouseenter', onImmediateWake);
+    document.addEventListener('visibilitychange', onImmediateWake);
     return () => {
       cancelled = true;
       unsubZCore();
       window.clearInterval(intervalId);
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener('focus', onImmediateWake);
+      window.removeEventListener('pointerenter', onImmediateWake);
+      document.removeEventListener('mouseenter', onImmediateWake);
+      document.removeEventListener('visibilitychange', onImmediateWake);
     };
   }, [ghostSearchWindowStage, desktopTab, activeLoungeType, refreshLiveLocalFilesInSearchWindow]);
 
