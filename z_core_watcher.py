@@ -262,18 +262,18 @@ def scan_post_office_files(role: str = "all") -> Dict[str, str]:
             # 파일명 앞쪽 태그(_1귀신_, _2귀신_, _3귀신_, _4귀신_) 또는 본문 상단 [N귀신 수신] / 받는이 라인을 최우선 판별
             # (제목 뒷부분에 '1귀신전달' 같은 단어가 섞여 있어도 실제 수신 담당 귀신을 오판하지 않도록 정밀 분기)
             explicit_r1_target = bool(
-                re.search(r"(?:_1귀신_|\[1귀신\s*수신\]|받는이[^\n]*1귀신|받는이[^\n]*1호담당)", p.name + "\n" + recipient_line)
+                re.search(r"(?:_1귀신_|\[1귀신\s*수신\]|(?:받는이|수신)[^\n]*1귀신|(?:받는이|수신)[^\n]*1호담당)", p.name + "\n" + recipient_line)
             )
             explicit_r2 = (
-                bool(re.search(r"(?:_2귀신_|_2호담당_|\[2귀신\s*수신\]|받는이[^\n]*2귀신|받는이[^\n]*2호담당)", p.name + "\n" + recipient_line))
+                bool(re.search(r"(?:_2귀신_|_2호담당_|\[2귀신\s*수신\]|(?:받는이|수신)[^\n]*2귀신|(?:받는이|수신)[^\n]*2호담당)", p.name + "\n" + recipient_line))
                 and not explicit_r1_target
             )
             explicit_r3 = (
-                bool(re.search(r"(?:_3귀신_|_3호담당_|\[3귀신\s*수신\]|받는이[^\n]*3귀신|받는이[^\n]*3호담당)", p.name + "\n" + recipient_line))
+                bool(re.search(r"(?:_3귀신_|_3호담당_|\[3귀신\s*수신\]|(?:받는이|수신)[^\n]*3귀신|(?:받는이|수신)[^\n]*3호담당)", p.name + "\n" + recipient_line))
                 and not explicit_r1_target
             )
             explicit_r4 = (
-                bool(re.search(r"(?:_4귀신_|_4호담당_|\[4귀신\s*수신\]|받는이[^\n]*4귀신|받는이[^\n]*4호담당)", p.name + "\n" + recipient_line))
+                bool(re.search(r"(?:_4귀신_|_4호담당_|\[4귀신\s*수신\]|(?:받는이|수신)[^\n]*4귀신|(?:받는이|수신)[^\n]*4호담당)", p.name + "\n" + recipient_line))
                 and not explicit_r1_target
             )
             if explicit_r2 and role != "all" and "2" not in (role or ""):
