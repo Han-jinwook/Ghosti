@@ -2337,11 +2337,25 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               card.summaryLines &&
               card.summaryLines.length > 0 && (
                 <div className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1 text-[11.5px] text-slate-700 break-keep">
-                  {card.summaryLines.map((ln, i) => (
-                    <div key={i} className="leading-snug break-keep">
-                      {ln}
-                    </div>
-                  ))}
+                  {card.summaryLines.map((ln, i) => {
+                    const dynamicLine =
+                      i === 0 && card.mode === 'CONFIRM_BATCH' && ln.startsWith('🔴')
+                        ? `🔴 정리 실행 예정: ${selectedCount}건${
+                            selectedTotalMb > 0
+                              ? ` (약 ${
+                                  selectedTotalMb >= 1024
+                                    ? `${(selectedTotalMb / 1024).toFixed(2)}GB`
+                                    : `${selectedTotalMb}MB`
+                                })`
+                              : ''
+                          }`
+                        : ln;
+                    return (
+                      <div key={i} className="leading-snug break-keep">
+                        {dynamicLine}
+                      </div>
+                    );
+                  })}
                 </div>
               )
             )}
@@ -2399,109 +2413,217 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </div>
             )}
 
-            {visibleItems.length > 0 && (
-              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                {visibleItems.map((it) => {
-                  const checked = selectedSet.has(it.id) && !it.isProtected;
-                  const badgeStyle =
-                    it.safetyBadge === 'DANGER_DELETE'
-                      ? 'bg-rose-100 text-rose-800 border-rose-200'
-                      : it.safetyBadge === 'SAFE_DELETE'
-                      ? 'bg-orange-50 text-orange-800 border-orange-200'
-                      : it.safetyBadge === 'SAFE_CLEAN'
-                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      : it.safetyBadge === 'SLEEP_RECOMMEND'
-                      ? 'bg-amber-50 text-amber-800 border-amber-200'
-                      : 'bg-slate-100 text-slate-700 border-slate-200';
-                  return (
-                    <div
-                      key={it.id}
-                      className={`rounded-lg border px-2.5 py-2 transition-colors ${
-                        it.isProtected
-                          ? 'bg-slate-100 border-slate-200 opacity-75'
-                          : checked
-                          ? 'bg-white border-teal-300'
-                          : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          disabled={Boolean(card.executed || it.isProtected)}
-                          checked={checked}
-                          onChange={() => toggleItem(it.id)}
-                          className="mt-0.5 accent-teal-600 cursor-pointer shrink-0"
-                        />
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="font-semibold text-slate-900 flex items-center justify-between gap-1.5 flex-wrap">
-                            <span
-                              onClick={() => toggleItem(it.id)}
-                              className="cursor-pointer break-keep [overflow-wrap:break-word]"
-                            >
-                              <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
-                              {it.name}
-                            </span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {it.safetyBadgeLabel && (
-                                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${badgeStyle}`}>
-                                  {it.safetyBadgeLabel}
-                                </span>
-                              )}
-                              {it.sizeMb > 0 && (
-                                <span className="text-[11px] font-semibold text-slate-600">
-                                  {it.sizeMb >= 1024 ? `${(it.sizeMb / 1024).toFixed(2)}GB` : `${it.sizeMb}MB`}
-                                </span>
-                              )}
-                              {!card.executed && !it.isProtected && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const askPrompt =
-                                      it.cat === 'POWER_PLAN' || card.action === 'desktop_power_boost'
-                                        ? `#${it.no}번 ${it.name} 이게 뭔가요? 자세히 설명해줘`
-                                        : `#${it.no}번 ${it.name} 이게 뭐 하는 프로그램이야? 지워도 돼?`;
-                                    void submitExternalMonsterChatQuery(
-                                      askPrompt,
-                                      message.sourceTab || 'trash'
-                                    );
-                                  }}
-                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-[10px] text-slate-600 hover:text-teal-800 font-medium cursor-pointer"
-                                >
-                                  이게 뭐예요?
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {/* 잊고 있던 앱 전용 3대 안심 힌트 배지 줄 (용도 + 마지막 사용 시점) */}
-                          {(it.plainRoleKo || it.lastUsedLabelKo) && (
-                            <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
-                              {it.plainRoleKo && (
-                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                                  📌 용도: {it.plainRoleKo}
-                                </span>
-                              )}
-                              {it.lastUsedLabelKo && (
-                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
-                                  🕒 {it.lastUsedLabelKo}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {it.plainExplainKo ? (
-                            <div className="text-[11px] text-slate-700 leading-snug break-words">
-                              💡 {it.plainExplainKo}
-                            </div>
-                          ) : it.detailKo ? (
-                            <div className="text-[11px] text-slate-500 leading-snug break-words">{it.detailKo}</div>
-                          ) : null}
+            {visibleItems.length > 0 && (() => {
+              const selectableVisible = visibleItems.filter((it) => !it.isProtected);
+              const visibleSelectedCnt = selectableVisible.filter((it) => selectedSet.has(it.id)).length;
+              const allVisibleChecked =
+                selectableVisible.length > 0 && visibleSelectedCnt === selectableVisible.length;
+              const safeRecommendVisible = selectableVisible.filter(
+                (it) =>
+                  it.safetyBadge === 'SAFE_CLEAN' ||
+                  it.safetyBadge === 'DANGER_DELETE' ||
+                  it.safetyBadge === 'SAFE_DELETE'
+              );
+              const hasMixedSafetyItems =
+                selectableVisible.some(
+                  (it) => it.safetyBadge === 'USER_CHECK' || it.safetyBadge === 'SLEEP_RECOMMEND'
+                ) ||
+                (visibleSelectedCnt > 0 && visibleSelectedCnt < selectableVisible.length);
+
+              const handleSelectAllVisible = () => {
+                if (card.executed) return;
+                const next = new Set(selectedSet);
+                for (const it of selectableVisible) next.add(it.id);
+                onUpdateMessage({
+                  ...message,
+                  agentCareCardPayload: {
+                    ...card,
+                    selectedIds: Array.from(next),
+                  },
+                });
+              };
+
+              const handleClearAllVisible = () => {
+                if (card.executed) return;
+                const next = new Set(selectedSet);
+                for (const it of selectableVisible) next.delete(it.id);
+                onUpdateMessage({
+                  ...message,
+                  agentCareCardPayload: {
+                    ...card,
+                    selectedIds: Array.from(next),
+                  },
+                });
+              };
+
+              const handleSelectSafeOnlyVisible = () => {
+                if (card.executed) return;
+                const next = new Set(selectedSet);
+                for (const it of selectableVisible) next.delete(it.id);
+                for (const it of safeRecommendVisible) next.add(it.id);
+                onUpdateMessage({
+                  ...message,
+                  agentCareCardPayload: {
+                    ...card,
+                    selectedIds: Array.from(next),
+                  },
+                });
+              };
+
+              return (
+                <div className="space-y-1.5">
+                  {!card.executed && selectableVisible.length > 0 && (
+                    <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 space-y-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[11.5px] font-semibold text-slate-800 whitespace-nowrap">
+                          현재 목록 {selectableVisible.length}건 중{' '}
+                          <strong className="text-teal-700">{visibleSelectedCnt}건</strong> 선택됨
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllVisible}
+                            disabled={allVisibleChecked}
+                            className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-default ${
+                              allVisibleChecked
+                                ? 'bg-teal-50 border-teal-200 text-teal-800'
+                                : 'bg-white hover:bg-teal-50 border-slate-300 hover:border-teal-300 text-slate-700 hover:text-teal-800'
+                            }`}
+                          >
+                            전체 선택
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleClearAllVisible}
+                            disabled={visibleSelectedCnt === 0}
+                            className="px-2 py-0.5 rounded-md bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-default"
+                          >
+                            전체 해제
+                          </button>
+                          {safeRecommendVisible.length > 0 &&
+                            safeRecommendVisible.length < selectableVisible.length && (
+                              <button
+                                type="button"
+                                onClick={handleSelectSafeOnlyVisible}
+                                className="px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] font-semibold transition-colors cursor-pointer"
+                              >
+                                안전 추천만 ({safeRecommendVisible.length}건)
+                              </button>
+                            )}
                         </div>
                       </div>
+                      {hasMixedSafetyItems && (
+                        <div className="text-[10.5px] text-slate-500 leading-snug break-keep">
+                          안심 기준: 지워도 안전한 임시파일·광고앱만 기본 체크해 두고, 내 개인 파일·설치 앱(🔎 확인 후 선택)은 실수 방지를 위해 비워 두었어요.
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto overflow-x-hidden pr-1">
+                    {visibleItems.map((it) => {
+                      const checked = selectedSet.has(it.id) && !it.isProtected;
+                      const badgeStyle =
+                        it.safetyBadge === 'DANGER_DELETE'
+                          ? 'bg-rose-100 text-rose-800 border-rose-200'
+                          : it.safetyBadge === 'SAFE_DELETE'
+                          ? 'bg-orange-50 text-orange-800 border-orange-200'
+                          : it.safetyBadge === 'SAFE_CLEAN'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : it.safetyBadge === 'SLEEP_RECOMMEND'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-slate-100 text-slate-700 border-slate-200';
+                      return (
+                        <div
+                          key={it.id}
+                          className={`rounded-lg border px-2.5 py-2 transition-colors ${
+                            it.isProtected
+                              ? 'bg-slate-100 border-slate-200 opacity-75'
+                              : checked
+                              ? 'bg-white border-teal-300'
+                              : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              disabled={Boolean(card.executed || it.isProtected)}
+                              checked={checked}
+                              onChange={() => toggleItem(it.id)}
+                              className="mt-0.5 accent-teal-600 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <div className="font-semibold text-slate-900 flex items-center justify-between gap-1.5 flex-wrap">
+                                <span
+                                  onClick={() => toggleItem(it.id)}
+                                  className="cursor-pointer break-keep [overflow-wrap:break-word]"
+                                >
+                                  <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
+                                  {it.name}
+                                </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {it.safetyBadgeLabel && (
+                                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap ${badgeStyle}`}>
+                                      {it.safetyBadgeLabel}
+                                    </span>
+                                  )}
+                                  {it.sizeMb > 0 && (
+                                    <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">
+                                      {it.sizeMb >= 1024 ? `${(it.sizeMb / 1024).toFixed(2)}GB` : `${it.sizeMb}MB`}
+                                    </span>
+                                  )}
+                                  {!card.executed && !it.isProtected && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const askPrompt =
+                                          it.cat === 'POWER_PLAN' || card.action === 'desktop_power_boost'
+                                            ? `#${it.no}번 ${it.name} 이게 뭔가요? 자세히 설명해줘`
+                                            : `#${it.no}번 ${it.name} 이게 뭐 하는 프로그램이야? 지워도 돼?`;
+                                        void submitExternalMonsterChatQuery(
+                                          askPrompt,
+                                          message.sourceTab || 'trash'
+                                        );
+                                      }}
+                                      className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-[10px] text-slate-600 hover:text-teal-800 font-medium whitespace-nowrap cursor-pointer"
+                                    >
+                                      이게 뭐예요?
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              {/* 잊고 있던 앱 전용 3대 안심 힌트 배지 줄 (용도 + 마지막 사용 시점) */}
+                              {(it.plainRoleKo || it.lastUsedLabelKo) && (
+                                <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
+                                  {it.plainRoleKo && (
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                                      📌 용도: {it.plainRoleKo}
+                                    </span>
+                                  )}
+                                  {it.lastUsedLabelKo && (
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                                      🕒 {it.lastUsedLabelKo}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {it.plainExplainKo ? (
+                                <div className="text-[11px] text-slate-700 leading-snug break-words">
+                                  💡 {it.plainExplainKo}
+                                </div>
+                              ) : it.detailKo ? (
+                                <div className="text-[11px] text-slate-500 leading-snug break-words">{it.detailKo}</div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* 여유 드라이브(D: 등) 안전 이사 전환 스위치 */}
             {canOfferMoveDrive && card.availableMoveDrives && (

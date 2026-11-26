@@ -4326,32 +4326,65 @@ export async function processUnifiedMonsterChatQuery(params: {
 
           const selLookup = new Set(selectedIds);
           const excLookup = new Set(excludedNames);
-          const orderedConfirmItems = [...curScanCtx.items].sort((a, b) => {
+          const allSelectedAreDesktop =
+            selectedIds.length > 0 &&
+            curScanCtx.items
+              .filter((it) => selLookup.has(it.id))
+              .every((it) => it.cat.startsWith('DESKTOP_'));
+
+          // 특정 영역(바탕화면·묵은 앱·안전 캐시·빨간색 광고앱)만 지정해 정리를 요청한 경우,
+          // 무관한 다른 영역의 미체크 항목들이 한 목록에 뒤섞여 혼란을 주지 않도록 요청 범위 항목만 노출합니다.
+          const scopedConfirmPool = curScanCtx.items.filter((it) => {
+            if (selLookup.has(it.id) || excLookup.has(it.name)) return true;
+            if (wantsSafeCacheOnlyTurn) {
+              return it.cat === 'SAFE_CACHE' || it.cat === 'DESKTOP_HIBERFIL';
+            }
+            if (wantsRedSafeOnlyTurn) {
+              return (
+                it.safetyBadge === 'DANGER_DELETE' ||
+                it.safetyBadge === 'SAFE_DELETE' ||
+                (wantsAlsoSleepBankTurn && it.safetyBadge === 'SLEEP_RECOMMEND')
+              );
+            }
+            if (wantsStaleAppsTurn) {
+              return it.cat === 'INSTALLED_APP';
+            }
+            if (wantsDesktopTurn || (mp.action === 'desktop_batch_action' && allSelectedAreDesktop)) {
+              return it.cat.startsWith('DESKTOP_');
+            }
+            return true;
+          });
+
+          const orderedConfirmItems = [...scopedConfirmPool].sort((a, b) => {
             const rankA = selLookup.has(a.id) ? 0 : excLookup.has(a.name) ? 1 : 2;
             const rankB = selLookup.has(b.id) ? 0 : excLookup.has(b.name) ? 1 : 2;
             return rankA - rankB;
           });
+          const finalConfirmItems = orderedConfirmItems.slice(0, 120);
+          const finalConfirmIdSet = new Set(finalConfirmItems.map((it) => it.id));
+          const finalSelectedIds = selectedIds.filter((id) => finalConfirmIdSet.has(id));
+          const finalSelLookup = new Set(finalSelectedIds);
 
           const totalSelMb = Math.round(
-            curScanCtx.items
-              .filter((it) => selLookup.has(it.id))
+            finalConfirmItems
+              .filter((it) => finalSelLookup.has(it.id) && !it.isProtected)
               .reduce((acc, it) => acc + (it.sizeMb || 0), 0)
           );
           const confirmCard: MonsterAgentCareCardPayload = {
             mode: 'CONFIRM_BATCH',
-            title: mp.reasonSummaryKo || `취사선택 일괄 정리 최종 확인 (${selectedIds.length}건 예정)`,
+            title: mp.reasonSummaryKo || `취사선택 일괄 정리 최종 확인 (${finalSelectedIds.length}건 예정)`,
             badgeText: mp.moveDestinationDrive
               ? `${mp.moveDestinationDrive} 안전 이사 확인`
               : '휴지통 안전 보관 · 1회 최종 확인',
             summaryLines: [
-              `🔴 정리 실행 예정: ${selectedIds.length}건${totalSelMb > 0 ? ` (약 ${(totalSelMb / 1024).toFixed(2)}GB)` : ''}`,
+              `🔴 정리 실행 예정: ${finalSelectedIds.length}건${totalSelMb > 0 ? ` (약 ${totalSelMb >= 1024 ? `${(totalSelMb / 1024).toFixed(2)}GB` : `${totalSelMb}MB`})` : ''}`,
               excludedNames.length > 0
                 ? `🟢 유저 지시로 보존(제외) 확정: ${excludedNames.slice(0, 8).join(', ')}`
                 : '🟢 필수 시스템·하드웨어 드라이버·개인 데이터 자동 보호됨',
             ],
             action: mp.action,
-            items: orderedConfirmItems.slice(0, 60),
-            selectedIds,
+            items: finalConfirmItems,
+            selectedIds: finalSelectedIds,
             excludedNames,
             moveDestinationDrive: mp.moveDestinationDrive || '',
             availableMoveDrives: curScanCtx.availableMoveDrives,
@@ -4368,7 +4401,7 @@ export async function processUnifiedMonsterChatQuery(params: {
           const replyKo =
             `${plan.replyKo}\n` +
             `• **🟢 보존 확정(제외)**: ${excludedNames.length > 0 ? excludedNames.join(', ') : '없음(시스템 필수 항목만 보호)'}\n` +
-            `• **🔴 실행 예정 (${selectedIds.length}건)**: 아래 체크박스를 한 번 더 확인하신 뒤 **[✅ ${selectedIds.length}건 일괄 실행]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요!`;
+            `• **🔴 실행 예정 (${finalSelectedIds.length}건)**: 상단 **[전체 선택 / 전체 해제]** 또는 개별 체크박스로 확인하신 뒤 **[✅ ${finalSelectedIds.length}건 일괄 실행]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요!`;
           speak(plan.replyKo);
           return reply(sourceTab, replyKo, {
             cardKind: 'AGENT_CARE_BATCH_CARD',
