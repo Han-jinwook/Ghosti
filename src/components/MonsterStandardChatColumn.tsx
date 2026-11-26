@@ -2473,51 +2473,66 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             unlockMobileAudioOnUserGesture();
             void handleSend(undefined, 'text');
           }}
-          className="flex items-end gap-1.5 sm:gap-2 w-full min-w-0"
+          className={`flex ${
+            isMobileOrStore ? 'items-center gap-1.5' : 'items-end gap-1.5 sm:gap-2'
+          } w-full min-w-0`}
         >
-          <textarea
-            id="ghosti-secretary-chat-input"
-            rows={2}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                if (busy || !inputText.trim()) return;
-                unlockMobileAudioOnUserGesture();
-                void handleSend(undefined, 'text');
-              }
-            }}
-            onFocus={() => {
-              if (
-                isMobileOrStore &&
-                typeof navigator !== 'undefined' &&
-                !/iPhone|iPad|iPod/i.test(navigator.userAgent || '')
-              ) {
-                window.setTimeout(() => {
-                  const el = scrollContainerRef.current;
-                  if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 8) {
-                    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-                  }
-                }, 80);
-              }
-            }}
-            placeholder={
-              isMicListening
-                ? '듣고 있습니다...'
-                : isMobileOrStore
-                ? currentRollingPlaceholder
-                : `예) ${currentRollingPlaceholder}`
-            }
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] leading-snug text-slate-900 placeholder:text-slate-400 resize-none transition-colors"
-          />
+          {isMobileOrStore ? (
+            <input
+              id="ghosti-secretary-chat-input"
+              type="text"
+              enterKeyHint="send"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (busy || !inputText.trim()) return;
+                  unlockMobileAudioOnUserGesture();
+                  void handleSend(undefined, 'text');
+                }
+              }}
+              onFocus={() => {
+                if (
+                  typeof navigator !== 'undefined' &&
+                  !/iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+                ) {
+                  window.setTimeout(() => {
+                    const el = scrollContainerRef.current;
+                    if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 8) {
+                      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+                    }
+                  }, 80);
+                }
+              }}
+              placeholder={isMicListening ? '듣고 있습니다...' : currentRollingPlaceholder}
+              className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-[38px] px-3 py-0 m-0 box-border appearance-none rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] leading-normal text-slate-900 placeholder:text-slate-400 transition-colors"
+            />
+          ) : (
+            <textarea
+              id="ghosti-secretary-chat-input"
+              rows={2}
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (busy || !inputText.trim()) return;
+                  unlockMobileAudioOnUserGesture();
+                  void handleSend(undefined, 'text');
+                }
+              }}
+              placeholder={`예) ${currentRollingPlaceholder}`}
+              className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] leading-snug text-slate-900 placeholder:text-slate-400 resize-none transition-colors"
+            />
+          )}
           {isMobileOrStore && (
             <button
               type="button"
               onClick={toggleChatMicRecording}
               disabled={busy}
               title="음성으로 말하기"
-              className={`px-2.5 sm:px-3 py-2 rounded-lg text-[12px] font-medium flex items-center gap-1 transition shrink-0 cursor-pointer border ${
+              className={`h-[38px] min-h-[38px] max-h-[38px] px-2.5 sm:px-3 py-0 m-0 box-border rounded-lg text-[12px] leading-none font-medium flex items-center justify-center gap-1 transition shrink-0 cursor-pointer border ${
                 isMicListening
                   ? 'bg-rose-600 text-white border-rose-600'
                   : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
@@ -2532,8 +2547,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             disabled={busy || !inputText.trim()}
             aria-label="전송"
             className={`${
-              isMobileOrStore && !inputText.trim() ? 'px-2.5' : 'px-3'
-            } py-2 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-[12.5px] font-semibold flex items-center justify-center gap-1 transition shrink-0 cursor-pointer`}
+              isMobileOrStore
+                ? `h-[38px] min-h-[38px] max-h-[38px] ${
+                    !inputText.trim() ? 'px-2.5' : 'px-3'
+                  } py-0 m-0 box-border leading-none border border-transparent`
+                : 'px-3 py-2'
+            } rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-[12.5px] font-semibold flex items-center justify-center gap-1 transition shrink-0 cursor-pointer`}
           >
             <Send className="w-4 h-4 shrink-0" />
             {(!isMobileOrStore || Boolean(inputText.trim())) && <span className="shrink-0">전송</span>}
