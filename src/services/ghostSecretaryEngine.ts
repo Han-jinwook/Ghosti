@@ -10,6 +10,7 @@
 import playbookJson from '../data/ghost_secretary_playbook.json';
 import { isAndroidMobileBrowserOrApp, isIosMobileBrowserOrApp } from './ghostiMobileCareBridge';
 import { updateProfile as updateHubProfile } from './merlin-hub-sdk/Auth/auth';
+import { getSessionToken } from './merlin-hub-sdk/CoreLogic/client';
 
 // ─────────────────────────────────────────────────────────────
 // 대본집 타입 & 로딩
@@ -293,14 +294,14 @@ export function isPassportGenderAgeHint(text: string): boolean {
 
 /** 별명 답변 정제: "저는 멀린이에요", "멀린이라고 불러줘", "안녕 반가워 담곰이라고 불러", "아냐 으노 말고 은호라고 해" → "멀린", "담곰", "은호" */
 export function sanitizeNicknameAnswer(raw: string): string {
-  let s = raw.trim().replace(/[!.~?？！。"'`]+/g, '').trim();
+  let s = raw.trim().replace(/[!.~?？！。"'`‘’“”「」『』[\]]+/g, '').trim();
   // 문장 끝에 'OO(님)이라고/라고 불러/해' 형태가 명확히 있으면 그 바로 앞 단어(별명)를 우선 추출 ("안녕 반가워 담곰이라고 불러" ➔ "담곰")
   const trailingCallMatch = s.match(
-    /(?:^|\s)([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고)\s*(?:불러\s*(?:줘|주세요|줘요|라)?|해\s*(?:줘|주세요|줘요|라)?|부르면\s*(?:돼|돼요|됩니다)|할게|할래)\s*$/i
+    /(?:^|\s)([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고)\s*(?:불러\s*(?:줘|주세요|줘요|줄래|라)?|해\s*(?:줘|주세요|줘요|줄래|라)?|부르면\s*(?:돼|돼요|됩니다)|할게|할게요|할래|할래요)\s*$/i
   );
   if (trailingCallMatch && trailingCallMatch[1]) {
     const direct = trailingCallMatch[1].trim();
-    if (direct && !/^(저는|나는|이름은|별명은|닉네임은|그냥|다시|앞으로)$/i.test(direct)) {
+    if (direct && !/^(저는|나는|이름은|별명은|닉네임은|호칭은|그냥|다시|앞으로)$/i.test(direct)) {
       return direct.slice(0, 12);
     }
   }
@@ -308,19 +309,19 @@ export function sanitizeNicknameAnswer(raw: string): string {
   for (let pass = 0; pass < 4; pass++) {
     const next = s
       .replace(
-        /^(?:안녕하세요|안녕|반갑습니다|만나서\s*반가워요?|반가워요?|하이|헬로|귀신비서야?|귀신아|비서야|아냐|아니야|아니|잠깐|저기요?|음|어|그게)\s*[,/·\s]*/i,
+        /^(?:안녕하세요|안녕|반갑습니다|만나서\s*반가워요?|반가워요?|하이|헬로|귀신비서야?|귀신아|비서야|아냐|아니야|아니|잠깐|저기요?|음|어|그게|네|응|좋아|좋아요|그럼)\s*[,/·\s]*/i,
         ''
       )
       .replace(/^.+?\s*말고\s+/, '')
       .replace(
-        /^(?:저는|전|나는|난|제\s*이름은|내\s*이름은|제\s*별명은|내\s*별명은|이름은|별명은|닉네임은|호칭은|앞으로는|앞으로|이제부터는|이제부터|그냥|다시)\s*/i,
+        /^(?:저는|전|나는|난|제\s*프로필\s*닉네임은|내\s*프로필\s*닉네임은|프로필\s*닉네임은|제\s*이름은|내\s*이름은|제\s*별명은|내\s*별명은|제\s*닉네임은|내\s*닉네임은|이름은|별명은|닉네임은|호칭은|앞으로는|앞으로|이제부터는|이제부터|그냥|다시)\s*/i,
         ''
       );
     if (next === s) break;
     s = next;
   }
   s = s.replace(
-    /\s*(이라고|라고|으로|로)\s*(불러\s*(줘|주세요|줘요|라)?|해\s*(줘|주세요|줘요|라)?|바꿔\s*(줘|주세요|줘요|라)?|변경\s*(해\s*줘|해\s*주세요|해)?|수정\s*(해\s*줘|해\s*주세요|해)?|저장\s*(해\s*줘|해\s*주세요|해)?|부르면\s*(돼|돼요|됩니다)?)?\s*$/i,
+    /\s*(?:이라고|라고|으로|로)\s*(?:불러\s*(?:줘|주세요|줘요|줄래|줄래요|라)?|해\s*(?:줘|주세요|줘요|줄래|줄래요|라)?|바꿔\s*(?:줘|주세요|줘요|줄래|줄래요|라)?|바꾸고\s*싶(?:어|어요|습니다)?|변경\s*(?:해\s*줘|해\s*주세요|해\s*줘요|해\s*줄래|할래|할래요|할게|할게요|부탁해|부탁해요|해)?|수정\s*(?:해\s*줘|해\s*주세요|해\s*줘요|해\s*줄래|할래|할래요|할게|할게요|부탁해|해)?|설정\s*(?:해\s*줘|해\s*주세요|할래|할게|해)?|저장\s*(?:해\s*줘|해\s*주세요|할래|할게|해)?|정할(?:게|게요|래|래요)|부르면\s*(?:돼|돼요|됩니다)?|할게|할게요|할래|할래요|부탁해|부탁해요)?\s*$/i,
     ''
   );
   s = s.replace(/\s*(이에요|예요|입니다|이야|야|요)$/, '');
@@ -358,33 +359,38 @@ export function parseNicknameSettingIntent(
   raw: string,
   currentNickname?: string
 ): { kind: 'change'; newNickname: string } | { kind: 'ask' } | { kind: 'query' } | null {
-  const t = raw.trim();
-  if (!t || t.length > 50) return null;
+  const tRaw = raw.trim();
+  if (!tRaw || tRaw.length > 56) return null;
+  const t = tRaw.replace(/["'`‘’“”「」『』[\]]+/g, '').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
   // 파일·폴더·요일·시간·귀신창·여권·구독·청소앱 설정/문의 명령과 혼동 방지
   if (/파일|폴더|사진|문서|여권|\d+\s*번|요일|시간|소리|효과음|라벨러|검진|알림|귀신검색창|단축키|구독|해지|결제|환불|청소\s*앱|클리너|cleanx|클린\s*x|클린엑스/i.test(t)) return null;
 
   // 1) 내 이름/별명/닉네임 조회 ("닉네임", "별명", "내 이름이 뭐야?", "내 별명 뭐라고 했지?", "닉네임 알려줘", "나 누구야?")
   if (
-    /^(?:내\s*|제\s*)?(?:닉네임|별명|호칭)(?:은|이|가|을|를)?(?:\s*(?:뭐|뭐야|뭔지|뭔가요|알려\s*줘|알려\s*주세요|확인|보여\s*줘|보여\s*주세요|어디|어떻게))?[.!~?]*$/i.test(
+    /^(?:내\s*|제\s*)?(?:프로필\s*)?(?:닉네임|별명|호칭)(?:은|이|가|을|를)?(?:\s*(?:뭐|뭐야|뭔지|뭔가요|알려\s*줘|알려\s*주세요|확인|보여\s*줘|보여\s*주세요))?[.!~?]*$/i.test(
       t
     ) ||
-    /(?:내|제)\s*(?:이름|별명|닉네임|호칭).*?(?:뭐|뭔지|누구|알아|기억|뭐라고)/i.test(t) ||
+    /(?:내|제)\s*(?:프로필\s*)?(?:이름|별명|닉네임|호칭).*?(?:뭐|뭔지|누구|알아|기억|뭐라고)/i.test(t) ||
     /^(?:내가\s*누구게|나\s*누구야|내\s*이름\s*뭐야|내\s*별명\s*뭐야|내\s*닉네임\s*뭐야)\??$/i.test(t)
   ) {
     return { kind: 'query' };
   }
 
-  // 2) "이름/별명/닉네임 다른 걸로 바꿔줘/변경해줘/수정해줘" 또는 새 이름 없이 "별명 바꿀래 / 닉네임 설정 / 별명 등록"만 말한 경우 (최우선 판별하여 '다른걸'님이 되는 사고 원천 차단!)
+  // 2) "이름/별명/닉네임 다른 걸로 바꿔줘/변경해줘/수정해줘", "닉네임 바꾸고 싶어/변경하고 싶은데/어떻게 바꿔?" 등 새 이름 없이 변경 의사만 말한 경우
   if (
     /(?:다른\s*(?:걸|것|거|이름|별명|닉네임)|딴\s*(?:걸|거|이름|별명)|새\s*(?:이름|별명|닉네임))(?:으로|로)?\s*(?:바꿔|바꿀|바꾸|변경|수정|다시|새로|해)/i.test(t) ||
-    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:좀\s*)?(?:다시\s*|새로\s*)?(?:바꿔|바꿀|바꾸고\s*싶|바꾸기|변경|수정|설정|등록|정하|다시\s*설정|새로\s*설정)(?:줘|주세요|줘요|래|래요|게|게요|까|까요|할래|할래요|할게|할게요|해줘|해주세요|해|기|어|어요|습니다)?[.!~?]*$/i.test(t)
+    /^(?:내\s*|제\s*)?(?:프로필\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:좀\s*)?(?:어떻게|어디서)?\s*(?:다시\s*|새로\s*)?(?:바꿔|바꿀|바꾸|변경|수정|설정|등록|정하)(?:고\s*싶[가-힣]*|려면[가-힣\s]*|수\s*있[가-힣]*|방법[가-힣\s]*|줘|주세요|줘요|줄래|줄래요|래|래요|게|게요|까|까요|할래|할래요|할게|할게요|해줘|해주세요|해줄래|부탁해|부탁해요|해|기|어|어요|은데|는데|습니다|요|지|나요)?[.!~?]*$/i.test(t)
   ) {
     return { kind: 'ask' };
   }
 
+  const changeActionTailRe =
+    '(?:불러|바꿔|바꾸고\\s*싶|변경|수정|등록|설정|저장|정할|해|부르면|할게|할래)';
+
   // 3) "A 말고 B라고 해/불러/바꿔/변경/수정" 또는 "A가 아니라 B로 바꿔줘"
   const malgoMatch = t.match(
-    /(?:말고|아닌|아니고|아니라)\s+([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러|해|바꿔|변경|수정|할게|할래)/i
+    new RegExp(`(?:말고|아닌|아니고|아니라)\\s+([가-힣a-zA-Z0-9][가-힣a-zA-Z0-9\\s]{0,11}?)(?:님)?\\s*(?:이라고|라고|으로|로)\\s*${changeActionTailRe}`, 'i')
   );
   if (malgoMatch) {
     const nick = sanitizeNicknameAnswer(malgoMatch[1]);
@@ -395,7 +401,7 @@ export function parseNicknameSettingIntent(
 
   // 4) "A(을/를/에서) B(으)로 바꿔줘/변경해줘/수정해줘" (예: "은숙을 은호로 바꿔줘", "은숙에서 은호로 변경해줘")
   const fromToChangeMatch = t.match(
-    /^(?:아냐\s*|아니야\s*)?(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)?\s*([가-힣a-zA-Z0-9]{1,12}?)(?:님)?(?:을|를|에서| 말고)\s*([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:으로|로|이라고|라고)\s*(?:바꿔|변경|수정|설정|저장|불러|해)/i
+    new RegExp(`^(?:아냐\\s*|아니야\\s*)?(?:내\\s*|제\\s*)?(?:프로필\\s*)?(?:이름|별명|닉네임|호칭)?\\s*([가-힣a-zA-Z0-9]{1,12}?)(?:님)?(?:을|를|에서|\\s+말고)\\s*([가-힣a-zA-Z0-9][가-힣a-zA-Z0-9\\s]{0,11}?)(?:님)?\\s*(?:으로|로|이라고|라고)\\s*${changeActionTailRe}`, 'i')
   );
   if (fromToChangeMatch) {
     const nick = sanitizeNicknameAnswer(fromToChangeMatch[2]);
@@ -404,9 +410,9 @@ export function parseNicknameSettingIntent(
     }
   }
 
-  // 5) "내 별명(이름/닉네임)을 B(으)로 바꿔줘/변경해줘/수정해줘/설정해줘"
+  // 5) "내(프로필) 별명(이름/닉네임)을 B(으)로 바꿔줘/변경해줘/수정해줘/설정해줘/할래"
   const explicitChangeMatch = t.match(
-    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:.+?\s*말고\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:으로|로|이라고|라고)\s*(?:바꿔|변경|수정|등록|설정|저장|불러|해)/i
+    new RegExp(`(?:내\\s*|제\\s*)?(?:프로필\\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\\s*(?:.+?\\s*말고\\s*)?([가-힣a-zA-Z0-9][가-힣a-zA-Z0-9\\s]{0,11}?)(?:님)?\\s*(?:으로|로|이라고|라고)\\s*${changeActionTailRe}`, 'i')
   );
   if (explicitChangeMatch) {
     const nick = sanitizeNicknameAnswer(explicitChangeMatch[1]);
@@ -415,9 +421,9 @@ export function parseNicknameSettingIntent(
     }
   }
 
-  // 6) "(안녕 반가워 / 앞으로는 / 그냥) B라고 불러줘 / B로 바꿔줘 / B로 변경해줘 / B로 수정해줘" (인사말 동반 문장 포함)
+  // 6) "(안녕 반가워 / 앞으로는 / 그냥) B라고 불러줘 / B로 바꿔줘 / B로 변경할래 / B로 설정해줘"
   const directCallMatch = t.match(
-    /^(?:(?:안녕하세요|안녕|반갑습니다|만나서\s*반가워요?|반가워요?|하이|헬로|귀신비서야?|귀신아|비서야|아냐|아니야|아니)[\s,!.~]*)*(?:앞으로는?\s*|이제부터는?\s*)?(?:저는\s*|전\s*|나는\s*|난\s*)?(?:내\s*이름(?:은|을)?\s*|제\s*이름(?:은|을)?\s*|내\s*별명(?:은|을)?\s*|별명(?:은|을)?\s*|닉네임(?:은|을)?\s*|호칭(?:은|을)?\s*|그냥\s*)?([가-힣a-zA-Z0-9]{1,12}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러\s*(?:줘|주세요|줘요|라)?|바꿔\s*(?:줘|주세요|줘요|라)?|변경\s*(?:해\s*줘|해\s*주세요|해)?|수정\s*(?:해\s*줘|해\s*주세요|해)?|해\s*(?:줘|주세요|줘요|라)?|부르면\s*(?:돼|돼요|됩니다)|할게|할래)[.!~?]*$/i
+    /^(?:(?:안녕하세요|안녕|반갑습니다|만나서\s*반가워요?|반가워요?|하이|헬로|귀신비서야?|귀신아|비서야|아냐|아니야|아니)[\s,!.~]*)*(?:앞으로는?\s*|이제부터는?\s*)?(?:저는\s*|전\s*|나는\s*|난\s*)?(?:내\s*프로필\s*닉네임(?:은|을)?\s*|프로필\s*닉네임(?:은|을)?\s*|내\s*이름(?:은|을)?\s*|제\s*이름(?:은|을)?\s*|내\s*별명(?:은|을)?\s*|별명(?:은|을)?\s*|내\s*닉네임(?:은|을)?\s*|닉네임(?:은|을)?\s*|호칭(?:은|을)?\s*|그냥\s*)?([가-힣a-zA-Z0-9][가-힣a-zA-Z0-9\s]{0,11}?)(?:님)?\s*(?:이라고|라고|으로|로)\s*(?:불러\s*[가-힣]*|바꿔\s*[가-힣]*|바꾸고\s*싶[가-힣]*|변경\s*[가-힣\s]*|수정\s*[가-힣\s]*|설정\s*[가-힣\s]*|저장\s*[가-힣\s]*|정할[가-힣]*|해\s*(?:줘|주세요|줘요|줄래|줄래요|라)?|부르면\s*(?:돼|돼요|됩니다)|할게|할게요|할래|할래요)[.!~?]*$/i
   );
   if (directCallMatch) {
     const nick = sanitizeNicknameAnswer(directCallMatch[1]);
@@ -430,7 +436,7 @@ export function parseNicknameSettingIntent(
   if (currentNickname && t.includes(currentNickname)) {
     const curEsc = currentNickname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const curMatch = t.match(
-      new RegExp(`${curEsc}(?:님)?(?:을|를|에서|말고|\s)+([가-힣a-zA-Z0-9]{1,12}?)(?:님)?(?:으로|로|이라고|라고)?\s*(?:바꿔|변경|수정|불러|해)`, 'i')
+      new RegExp(`${curEsc}(?:님)?(?:을|를|에서|말고|\\s)+([가-힣a-zA-Z0-9][가-힣a-zA-Z0-9\\s]{0,11}?)(?:님)?(?:으로|로|이라고|라고)?\\s*${changeActionTailRe}`, 'i')
     );
     if (curMatch) {
       const nick = sanitizeNicknameAnswer(curMatch[1]);
@@ -588,6 +594,60 @@ export function saveGhostSecretaryState(st: GhostSecretaryState): void {
 }
 
 const LAST_ACTIVE_ACCOUNT_EMAIL_KEY = 'ghosti_last_active_account_email';
+const PENDING_HUB_NICK_SYNC_KEY = 'ghosti_pending_hub_nick_sync_v1';
+
+interface PendingHubNickSyncRecord {
+  email: string;
+  nickname: string;
+  ts: number;
+}
+
+function readPendingHubNickSync(forEmail: string): string | null {
+  if (typeof window === 'undefined' || !forEmail) return null;
+  try {
+    const raw = localStorage.getItem(PENDING_HUB_NICK_SYNC_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PendingHubNickSyncRecord>;
+    const pEmail = (parsed.email || '').trim().toLowerCase();
+    const pNick = (parsed.nickname || '').trim();
+    const pTs = Number(parsed.ts || 0);
+    if (
+      pEmail === forEmail.trim().toLowerCase() &&
+      pNick &&
+      !isInvalidNicknameCandidate(pNick) &&
+      Date.now() - pTs < 5 * 60 * 1000
+    ) {
+      return pNick;
+    }
+    if (Date.now() - pTs >= 5 * 60 * 1000) {
+      localStorage.removeItem(PENDING_HUB_NICK_SYNC_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function updateCachedHubUserNicknameOptimistic(cleanNick: string): string {
+  if (typeof window === 'undefined') return '';
+  let existingAvatar = localStorage.getItem('userProfileImage') || '';
+  try {
+    const rawCached = localStorage.getItem('merlin_cached_user');
+    if (rawCached) {
+      const parsed = JSON.parse(rawCached);
+      if (parsed && typeof parsed === 'object') {
+        if (!existingAvatar && typeof parsed.avatar_url === 'string') {
+          existingAvatar = parsed.avatar_url;
+        }
+        parsed.nickname = cleanNick;
+        localStorage.setItem('merlin_cached_user', JSON.stringify(parsed));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return existingAvatar;
+}
 
 /**
  * 로그인 계정이 확정될 때 귀신비서·여권·공유방 별명 저장소를 해당 이메일 단독 소유로 격리합니다.
@@ -600,12 +660,21 @@ export function bindGhostSecretaryAccountOwner(
   if (typeof window === 'undefined') return;
   const cleanEmail = (email || '').trim().toLowerCase();
   if (!cleanEmail) return;
-  const cleanHubNick =
+  const pendingLocalNick = readPendingHubNickSync(cleanEmail);
+  const rawHubNick =
     verifiedHubNickname &&
     !TEST_ACCOUNT_NICKNAMES.has(verifiedHubNickname.trim()) &&
     !isInvalidNicknameCandidate(verifiedHubNickname.trim())
       ? verifiedHubNickname.trim()
       : '';
+  const cleanHubNick = pendingLocalNick || rawHubNick;
+  if (pendingLocalNick && rawHubNick === pendingLocalNick) {
+    try {
+      localStorage.removeItem(PENDING_HUB_NICK_SYNC_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 
   try {
     const prevEmail = (localStorage.getItem(LAST_ACTIVE_ACCOUNT_EMAIL_KEY) || '')
@@ -616,12 +685,13 @@ export function bindGhostSecretaryAccountOwner(
     const isDifferentAccount =
       Boolean(prevEmail && prevEmail !== cleanEmail) ||
       Boolean(stOwner && stOwner !== cleanEmail) ||
-      Boolean(!stOwner && !prevEmail && rawSt.nickname && cleanHubNick && rawSt.nickname !== cleanHubNick);
+      Boolean(!stOwner && !prevEmail && !pendingLocalNick && rawSt.nickname && cleanHubNick && rawSt.nickname !== cleanHubNick);
 
     if (isDifferentAccount) {
       localStorage.removeItem('userNickname');
       localStorage.removeItem('ghosti_invited_member_nickname');
       localStorage.removeItem('ghosti_joined_invite_room_v1');
+      localStorage.removeItem(PENDING_HUB_NICK_SYNC_KEY);
       const cleanedBook = loadGhostPassportBook();
       if (cleanedBook.self) {
         saveGhostPassportBook({ ...cleanedBook, self: undefined });
@@ -638,13 +708,15 @@ export function bindGhostSecretaryAccountOwner(
       }
     } else {
       // [단일 SSOT 통일]: 내 프로필 닉네임(MerlinHub)이 유효한 고유값이면 귀신비서 별명과 100% 일치시킵니다.
+      // 단, 방금 귀신비서 채팅에서 변경해 서버 전송 대기 중인 닉네임(pendingLocalNick)이 있으면 구 캐시로 덮어쓰지 않고 우선 보존 후 재동기화합니다.
       const isGenericHubNick = cleanHubNick === '회원' || cleanHubNick === '가족회원';
-      const unifiedNick =
-        cleanHubNick && !isGenericHubNick
-          ? cleanHubNick
-          : !rawSt.nickname || isInvalidNicknameCandidate(rawSt.nickname)
-          ? cleanHubNick || undefined
-          : rawSt.nickname;
+      const unifiedNick = pendingLocalNick
+        ? pendingLocalNick
+        : cleanHubNick && !isGenericHubNick
+        ? cleanHubNick
+        : !rawSt.nickname || isInvalidNicknameCandidate(rawSt.nickname)
+        ? cleanHubNick || undefined
+        : rawSt.nickname;
       writeJson(GHOST_SECRETARY_STATE_KEY, {
         ...rawSt,
         ownerEmail: cleanEmail,
@@ -657,10 +729,16 @@ export function bindGhostSecretaryAccountOwner(
     if (cleanHubNick) {
       localStorage.setItem('ghosti_hub_user_nickname', cleanHubNick);
       localStorage.setItem('userNickname', cleanHubNick);
+      if (pendingLocalNick) {
+        updateCachedHubUserNicknameOptimistic(pendingLocalNick);
+      }
     } else if (isDifferentAccount) {
       localStorage.removeItem('ghosti_hub_user_nickname');
     }
     localStorage.setItem(LAST_ACTIVE_ACCOUNT_EMAIL_KEY, cleanEmail);
+    if (pendingLocalNick && rawHubNick !== pendingLocalNick) {
+      void syncSecretaryNicknameToHubProfile(pendingLocalNick);
+    }
   } catch {
     /* ignore storage error */
   }
@@ -691,6 +769,7 @@ export function syncProfileNicknameFromHubEvent(rawNick: string): string | null 
   try {
     localStorage.setItem('userNickname', clean);
     localStorage.setItem('ghosti_hub_user_nickname', clean);
+    updateCachedHubUserNicknameOptimistic(clean);
   } catch {
     /* ignore */
   }
@@ -708,17 +787,37 @@ export async function syncSecretaryNicknameToHubProfile(rawNick: string): Promis
   try {
     localStorage.setItem('userNickname', clean);
     localStorage.setItem('ghosti_hub_user_nickname', clean);
-    const hasLoginToken =
-      Boolean((localStorage.getItem('merlin_session_token') || '').trim()) &&
-      localStorage.getItem('merlin_logged_out') !== '1';
-    if (hasLoginToken) {
-      const avatarUrl = localStorage.getItem('userProfileImage') || '';
-      const res = await updateHubProfile({ nickname: clean, avatar_url: avatarUrl });
+    const existingAvatar = updateCachedHubUserNicknameOptimistic(clean);
+    const activeEmail = (
+      localStorage.getItem('ghosti_hub_user_email') ||
+      localStorage.getItem('userEmail') ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+    if (activeEmail) {
+      localStorage.setItem(
+        PENDING_HUB_NICK_SYNC_KEY,
+        JSON.stringify({ email: activeEmail, nickname: clean, ts: Date.now() } satisfies PendingHubNickSyncRecord)
+      );
+    }
+    const token = getSessionToken();
+    const isLoggedOut =
+      localStorage.getItem('merlin_logged_out') === '1' ||
+      sessionStorage.getItem('merlin_logged_out') === '1';
+    if (token && !isLoggedOut) {
+      const res = await updateHubProfile({ nickname: clean, avatar_url: existingAvatar });
       if (res?.success) {
         const finalNick = (res.nickname || clean).trim();
         localStorage.setItem('userNickname', finalNick);
         localStorage.setItem('ghosti_hub_user_nickname', finalNick);
+        updateCachedHubUserNicknameOptimistic(finalNick);
+        localStorage.removeItem(PENDING_HUB_NICK_SYNC_KEY);
+        window.dispatchEvent(new Event('profileUpdated'));
+        return;
       }
+      // 서버 반영 실패 시 profileUpdated로 구 서버 값을 다시 당겨와 덮어쓰지 않도록 보호하고 PENDING_HUB_NICK_SYNC_KEY 유지
+      return;
     }
     window.dispatchEvent(new Event('profileUpdated'));
   } catch {
@@ -1089,7 +1188,7 @@ export function resolveGhostSecretaryTurn(
     );
 
   const isLastAssistantAskingNickname =
-    /(?:어떤|무슨|새)\s*(?:별명|이름|닉네임|호칭).*?(?:바꿔|불러|말씀|알려|좋을)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
+    /(?:어떤|무슨|새|새로|바꾸실|변경하실|원하시는)\s*(?:별명|이름|닉네임|호칭)|(?:별명|닉네임|호칭)(?:을|으로|로)?\s*(?:말씀|입력|알려|적어)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
       ctx.lastAssistantText || ''
     );
 

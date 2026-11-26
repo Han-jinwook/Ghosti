@@ -1250,7 +1250,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       .reverse()
       .find((m) => m.role === 'assistant');
     const isLastBubbleAskingNickname =
-      /(?:어떤|무슨|새)\s*(?:별명|이름|닉네임|호칭).*?(?:바꿔|불러|말씀|알려|좋을)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
+      /(?:어떤|무슨|새|새로|바꾸실|변경하실|원하시는)\s*(?:별명|이름|닉네임|호칭)|(?:별명|닉네임|호칭)(?:을|으로|로)?\s*(?:말씀|입력|알려|적어)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
         lastAssistantBubble?.text || ''
       );
     const isNickOrStoreSpecial =
@@ -1416,6 +1416,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         if (turn.clipboardText) {
           void navigator.clipboard?.writeText(turn.clipboardText).catch(() => {});
         }
+        let shouldSyncHubNickname = false;
         if (nextState.nickname) {
           saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), nextState.nickname));
           try {
@@ -1429,7 +1430,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             turn.scenarioId === 'nickname_registered' ||
             turn.scenarioId === 'profile_change_nickname'
           ) {
-            void syncSecretaryNicknameToHubProfile(nextState.nickname);
+            shouldSyncHubNickname = true;
           }
         }
         setAwaitingNickname(Boolean(nextState.awaitingNickname));
@@ -1505,6 +1506,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           }
         }
         saveGhostSecretaryState(nextState);
+        if (shouldSyncHubNickname && nextState.nickname) {
+          await Promise.race([
+            syncSecretaryNicknameToHubProfile(nextState.nickname),
+            new Promise<void>((r) => window.setTimeout(r, 2500)),
+          ]);
+        }
         setSharedMonsterMessages((prev) => [...prev, ...replies]);
         setSharedMonsterBusy(false);
         return;

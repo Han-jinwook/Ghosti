@@ -39,7 +39,18 @@ import {
   evaluateDualProactiveCareEngine,
   type ProactiveCareBriefingResult,
 } from './weeklyCareAndPlaceholderEngine';
-import { normalizeSuggestionChips } from './ghostSecretaryEngine';
+import {
+  isInvalidNicknameCandidate,
+  loadGhostPassportBook,
+  loadGhostSecretaryState,
+  normalizeSuggestionChips,
+  parseNicknameSettingIntent,
+  sanitizeNicknameAnswer,
+  saveGhostPassportBook,
+  saveGhostSecretaryState,
+  setPassportSelf,
+  syncSecretaryNicknameToHubProfile,
+} from './ghostSecretaryEngine';
 import {
   buildCareFourBucketSummaries,
   detectAgentCareIntent,
@@ -3010,6 +3021,61 @@ export async function processUnifiedMonsterChatQuery(params: {
   const speak = (text: string) => {
     if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
   };
+
+  // 0-00-N) [귀신비서 ↔ 내 프로필 닉네임 단일 SSOT 실시간 동기화 가드 (LLM 할루시네이션 원천 차단)]
+  {
+    const curSecSt = loadGhostSecretaryState();
+    const prevAssistant = [...sharedChatState.messages]
+      .reverse()
+      .find((m) => m.role === 'assistant');
+    const wasAskingNick =
+      Boolean(curSecSt.awaitingNickname) ||
+      /(?:어떤|무슨|새|새로|바꾸실|변경하실|원하시는)\s*(?:별명|이름|닉네임|호칭)|(?:별명|닉네임|호칭)(?:을|으로|로)?\s*(?:말씀|입력|알려|적어)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
+        prevAssistant?.text || ''
+      );
+    const routerNickIntent = parseNicknameSettingIntent(clean, curSecSt.nickname);
+    if (routerNickIntent) {
+      if (routerNickIntent.kind === 'change') {
+        const newNick = routerNickIntent.newNickname;
+        saveGhostSecretaryState({ ...curSecSt, nickname: newNick, awaitingNickname: false });
+        saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), newNick));
+        await Promise.race([
+          syncSecretaryNicknameToHubProfile(newNick),
+          new Promise<void>((r) => window.setTimeout(r, 2500)),
+        ]);
+        const msg = `알겠어요! 앞으로는 **『${newNick}』**님으로 불러드릴게요. 오른쪽 위 **[내 프로필]** 닉네임도 **『${newNick}』**님으로 바로 통일해 두었습니다!`;
+        speak(`앞으로는 ${newNick}님으로 불러드릴게요. 내 프로필 닉네임도 함께 변경했습니다.`);
+        return reply(sourceTab, msg);
+      }
+      if (routerNickIntent.kind === 'ask') {
+        saveGhostSecretaryState({ ...curSecSt, awaitingNickname: true });
+        const msg = '좋아요! 앞으로 제가 뭐라고 불러드리면 될까요? 바꾸고 싶으신 새 별명(닉네임)을 편하게 말씀해 주세요!';
+        speak(msg);
+        return reply(sourceTab, msg);
+      }
+      if (routerNickIntent.kind === 'query') {
+        const curN = (curSecSt.nickname || '').trim();
+        const msg = curN
+          ? `현재 프로필 닉네임과 귀신비서 호칭은 **『${curN}』**님으로 저장되어 있어요. 바꾸고 싶으시면 **'해나라라고 불러줘'**처럼 말씀해 주세요!`
+          : '아직 설정된 별명이 없어요. 부르기 편한 별명을 알려주시면 내 프로필 닉네임과 함께 등록해 드릴게요!';
+        speak(msg);
+        return reply(sourceTab, msg);
+      }
+    } else if (wasAskingNick && clean.length <= 36) {
+      const candNick = sanitizeNicknameAnswer(clean);
+      if (candNick && !/^[ㄱ-ㅎㅏ-ㅣ]+$/.test(candNick) && !isInvalidNicknameCandidate(candNick)) {
+        saveGhostSecretaryState({ ...curSecSt, nickname: candNick, awaitingNickname: false });
+        saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), candNick));
+        await Promise.race([
+          syncSecretaryNicknameToHubProfile(candNick),
+          new Promise<void>((r) => window.setTimeout(r, 2500)),
+        ]);
+        const msg = `알겠어요! 앞으로는 **『${candNick}』**님으로 불러드릴게요. 오른쪽 위 **[내 프로필]** 닉네임도 **『${candNick}』**님으로 바로 통일해 두었습니다!`;
+        speak(`앞으로는 ${candNick}님으로 불러드릴게요. 내 프로필 닉네임도 함께 변경했습니다.`);
+        return reply(sourceTab, msg);
+      }
+    }
+  }
 
   // 0-00) [모바일 유료결제 유도 클리너(CleanX 등) 3단 원터치 구출(🤖 Android 전용) & 🍎 iOS 맞춤 안내 라우터]
   const isCleanerTrapQuery =
