@@ -124,6 +124,8 @@ export interface MonsterAgentCareCardPayload {
   isDesktop?: boolean;
   isHighPerformance?: boolean;
   executed?: boolean;
+  /** 이미 정리 완료된 개별 항목 ID 목록 — 남은 미정리 항목(#48 테스트폴더 등)은 계속 추가 체크·정리할 수 있도록 개별 추적 */
+  executedIds?: string[];
   executionReportKo?: string;
   approvedTypedText?: string;
 }

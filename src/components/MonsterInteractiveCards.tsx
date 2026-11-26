@@ -2215,15 +2215,21 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
       {/* 11-B7) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 카드 (2026-11-24 합의 5대 기둥)] */}
       {message.cardKind === 'AGENT_CARE_BATCH_CARD' && message.agentCareCardPayload && (() => {
         const card = message.agentCareCardPayload;
-        const selectedSet = new Set(card.selectedIds || []);
-        const selectedCount = card.items.filter((it) => selectedSet.has(it.id) && !it.isProtected).length;
+        // 이미 실행된 구형 카드(executed=true, executedIds 미기록)의 경우 당시 selectedIds만 완료 처리하고 나머지 미체크 항목은 추가 선택 가능하게 유지
+        const executedIdList = card.executedIds ?? (card.executed ? card.selectedIds || [] : []);
+        const executedSet = new Set(executedIdList);
+        const activeSelectedIds = card.executed && !card.executedIds ? [] : card.selectedIds || [];
+        const selectedSet = new Set(activeSelectedIds.filter((id) => !executedSet.has(id)));
+        const selectedCount = card.items.filter(
+          (it) => selectedSet.has(it.id) && !it.isProtected && !executedSet.has(it.id)
+        ).length;
         const selectedTotalMb = Math.round(
           card.items
-            .filter((it) => selectedSet.has(it.id) && !it.isProtected)
+            .filter((it) => selectedSet.has(it.id) && !it.isProtected && !executedSet.has(it.id))
             .reduce((acc, it) => acc + (it.sizeMb || 0), 0)
         );
         const toggleItem = (id: string) => {
-          if (card.executed) return;
+          if (executedSet.has(id)) return;
           const next = new Set(selectedSet);
           if (next.has(id)) next.delete(id);
           else next.add(id);
@@ -2231,12 +2237,12 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             ...message,
             agentCareCardPayload: {
               ...card,
+              executedIds: executedIdList,
               selectedIds: Array.from(next),
             },
           });
         };
         const setMoveDrive = (drv: string) => {
-          if (card.executed) return;
           onUpdateMessage({
             ...message,
             agentCareCardPayload: {
@@ -2257,7 +2263,6 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             : []
           : card.items;
         const canOfferMoveDrive =
-          !card.executed &&
           Boolean(card.availableMoveDrives && card.availableMoveDrives.length > 0) &&
           (card.action === 'disk_hog_clean' ||
             card.action === 'desktop_batch_action' ||
@@ -2297,7 +2302,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
         const renderCareItemsList = (targetItems: typeof card.items) => {
           if (targetItems.length === 0) return null;
-          const selectableVisible = targetItems.filter((it) => !it.isProtected);
+          const selectableVisible = targetItems.filter((it) => !it.isProtected && !executedSet.has(it.id));
           const visibleSelectedCnt = selectableVisible.filter((it) => selectedSet.has(it.id)).length;
           const allVisibleChecked =
             selectableVisible.length > 0 && visibleSelectedCnt === selectableVisible.length;
@@ -2314,33 +2319,32 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             (visibleSelectedCnt > 0 && visibleSelectedCnt < selectableVisible.length);
 
           const handleSelectAllVisible = () => {
-            if (card.executed) return;
             const next = new Set(selectedSet);
             for (const it of selectableVisible) next.add(it.id);
             onUpdateMessage({
               ...message,
               agentCareCardPayload: {
                 ...card,
+                executedIds: executedIdList,
                 selectedIds: Array.from(next),
               },
             });
           };
 
           const handleClearAllVisible = () => {
-            if (card.executed) return;
             const next = new Set(selectedSet);
             for (const it of selectableVisible) next.delete(it.id);
             onUpdateMessage({
               ...message,
               agentCareCardPayload: {
                 ...card,
+                executedIds: executedIdList,
                 selectedIds: Array.from(next),
               },
             });
           };
 
           const handleSelectSafeOnlyVisible = () => {
-            if (card.executed) return;
             const next = new Set(selectedSet);
             for (const it of selectableVisible) next.delete(it.id);
             for (const it of safeRecommendVisible) next.add(it.id);
@@ -2348,6 +2352,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               ...message,
               agentCareCardPayload: {
                 ...card,
+                executedIds: executedIdList,
                 selectedIds: Array.from(next),
               },
             });
@@ -2355,7 +2360,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
           return (
             <div className="space-y-1.5">
-              {!card.executed && selectableVisible.length > 0 && (
+              {selectableVisible.length > 0 && (
                 <div className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 space-y-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[11.5px] font-semibold text-slate-800 whitespace-nowrap">
@@ -2405,7 +2410,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
               <div className="space-y-1.5 max-h-64 overflow-y-auto overflow-x-hidden pr-1">
                 {targetItems.map((it) => {
-                  const checked = selectedSet.has(it.id) && !it.isProtected;
+                  const isItemExecuted = executedSet.has(it.id);
+                  const checked = selectedSet.has(it.id) && !it.isProtected && !isItemExecuted;
+                  const openablePath = String(it.path || '').trim();
                   const badgeStyle =
                     it.safetyBadge === 'DANGER_DELETE'
                       ? 'bg-rose-100 text-rose-800 border-rose-200'
@@ -2422,6 +2429,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       className={`rounded-lg border px-2.5 py-2 transition-colors ${
                         it.isProtected
                           ? 'bg-slate-100 border-slate-200 opacity-75'
+                          : isItemExecuted
+                          ? 'bg-emerald-50/40 border-emerald-200 opacity-70'
                           : checked
                           ? 'bg-white border-teal-300'
                           : 'bg-white border-slate-200'
@@ -2430,32 +2439,73 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       <div className="flex items-start gap-2">
                         <input
                           type="checkbox"
-                          disabled={Boolean(card.executed || it.isProtected)}
-                          checked={checked}
+                          disabled={Boolean(isItemExecuted || it.isProtected)}
+                          checked={isItemExecuted || checked}
                           onChange={() => toggleItem(it.id)}
-                          className="mt-0.5 accent-teal-600 cursor-pointer shrink-0"
+                          className="mt-0.5 accent-teal-600 cursor-pointer shrink-0 disabled:cursor-default"
                         />
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="font-semibold text-slate-900 flex items-center justify-between gap-1.5 flex-wrap">
                             <span
-                              onClick={() => toggleItem(it.id)}
-                              className="cursor-pointer break-keep [overflow-wrap:break-word]"
+                              onClick={() => !isItemExecuted && !it.isProtected && toggleItem(it.id)}
+                              className={`break-keep [overflow-wrap:break-word] ${
+                                isItemExecuted || it.isProtected ? '' : 'cursor-pointer'
+                              }`}
                             >
                               <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
                               {it.name}
                             </span>
                             <div className="flex items-center gap-1 flex-wrap">
-                              {it.safetyBadgeLabel && (
-                                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap ${badgeStyle}`}>
-                                  {it.safetyBadgeLabel}
+                              {isItemExecuted ? (
+                                <span className="px-1.5 py-0.5 rounded border bg-emerald-50 border-emerald-200 text-emerald-800 text-[10px] font-semibold whitespace-nowrap">
+                                  ✅ 정리 완료
                                 </span>
-                              )}
+                              ) : it.safetyBadgeLabel ? (
+                                openablePath ? (
+                                  <button
+                                    type="button"
+                                    title="클릭하면 실제 폴더·파일 위치를 바로 열어 내용을 확인할 수 있습니다"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      const resOpen = await openStartupProgramLocation(openablePath);
+                                      onToast?.(
+                                        resOpen.ok
+                                          ? `'${it.name}' 위치를 파일 탐색기에서 열었습니다. 내용을 확인한 뒤 체크해 주세요!`
+                                          : resOpen.messageKo
+                                      );
+                                    }}
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap cursor-pointer hover:ring-1 hover:ring-teal-400 transition-all ${badgeStyle}`}
+                                  >
+                                    <FolderOpen className="w-2.5 h-2.5 shrink-0" />
+                                    <span>{it.safetyBadgeLabel} (열기)</span>
+                                  </button>
+                                ) : it.safetyBadge === 'USER_CHECK' ? (
+                                  <button
+                                    type="button"
+                                    title="클릭하면 이 항목이 무엇인지 귀신비서가 바로 설명해 드립니다"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void submitExternalMonsterChatQuery(
+                                        `#${it.no}번 ${it.name} 이게 뭐 하는 프로그램이야? 지워도 돼?`,
+                                        message.sourceTab || 'trash'
+                                      );
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap cursor-pointer hover:ring-1 hover:ring-teal-400 transition-all ${badgeStyle}`}
+                                  >
+                                    {it.safetyBadgeLabel}
+                                  </button>
+                                ) : (
+                                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap ${badgeStyle}`}>
+                                    {it.safetyBadgeLabel}
+                                  </span>
+                                )
+                              ) : null}
                               {it.sizeMb > 0 && (
                                 <span className="text-[11px] font-semibold text-slate-600 whitespace-nowrap">
                                   {it.sizeMb >= 1024 ? `${(it.sizeMb / 1024).toFixed(2)}GB` : `${it.sizeMb}MB`}
                                 </span>
                               )}
-                              {!card.executed && !it.isProtected && (
+                              {!isItemExecuted && !it.isProtected && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -2672,7 +2722,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </>
             )}
 
-            {card.executed ? (
+            {card.executed && (
               <div className="space-y-2">
                 <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[11.5px] text-emerald-950 whitespace-pre-line leading-relaxed">
                   {card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.'}
@@ -2696,7 +2746,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {(!card.executed || selectedCount > 0) && (
               <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-200">
                 <span className="text-[11px] text-slate-500">
                   {card.currentFreeGb !== undefined && card.projectedFreeAfterEmptyGb !== undefined
@@ -2704,7 +2756,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     : '영구 삭제 0% · Windows 기본 휴지통 안전 보관'}
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {card.isDesktop && card.isHighPerformance === false && (
+                  {!card.executed && card.isDesktop && card.isHighPerformance === false && (
                     <button
                       type="button"
                       onClick={() => void submitExternalMonsterChatQuery('데스크톱 전원 옵션 고성능으로 바꿔줘', message.sourceTab || 'trash')}
@@ -2717,14 +2769,21 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     type="button"
                     disabled={busyId === 'agent_batch_exec' || (selectedCount === 0 && card.action !== 'desktop_system_icon_toggle' && card.action !== 'desktop_power_boost')}
                     onClick={async () => {
+                      const runningIds = Array.from(selectedSet);
+                      const payloadForRun = { ...card, selectedIds: runningIds };
                       setBusyId('agent_batch_exec');
-                      const res = await executeAgentCareBatchCard(card, '원클릭 체크박스 최종 확인 실행');
+                      const res = await executeAgentCareBatchCard(payloadForRun, '원클릭 체크박스 최종 확인 실행');
                       setBusyId(null);
+                      const nextExecIds = res.ok
+                        ? Array.from(new Set([...executedIdList, ...runningIds]))
+                        : executedIdList;
                       onUpdateMessage({
                         ...message,
                         agentCareCardPayload: {
                           ...card,
-                          executed: res.ok,
+                          executed: res.ok || Boolean(card.executed),
+                          executedIds: nextExecIds,
+                          selectedIds: res.ok ? [] : runningIds,
                           executionReportKo: res.reportKo,
                           currentFreeGb: res.currentFreeGb ?? card.currentFreeGb,
                           projectedFreeAfterEmptyGb: res.projectedFreeAfterEmptyGb ?? card.projectedFreeAfterEmptyGb,
@@ -2742,7 +2801,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       ? '✨ 시스템 아이콘 안전 숨김'
                       : card.action === 'hidden_rats_apply'
                       ? `✅ ${selectedCount}건 안전 차단·수동전환 실행 (1초 원복 보장)`
-                      : `✅ ${selectedCount}건 일괄 실행${selectedTotalMb > 0 ? ` (${selectedTotalMb >= 1024 ? `${(selectedTotalMb / 1024).toFixed(1)}GB` : `${selectedTotalMb}MB`})` : ''} (휴지통 안전 보관)`}
+                      : `✅ ${selectedCount}건 ${card.executed ? '추가 정리 실행' : '일괄 실행'}${selectedTotalMb > 0 ? ` (${selectedTotalMb >= 1024 ? `${(selectedTotalMb / 1024).toFixed(1)}GB` : `${selectedTotalMb}MB`})` : ''} (휴지통 안전 보관)`}
                   </button>
                 </div>
               </div>
