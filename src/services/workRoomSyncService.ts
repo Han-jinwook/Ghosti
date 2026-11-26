@@ -1020,29 +1020,56 @@ export async function mountWorkSDriveNative(opts?: {
   const url = resolveWorkApiUrl('/__work/s-drive');
   if (!url) return { ok: false };
   const resolvedEmail = resolveCurrentWorkAccountEmail(opts?.accountEmail);
+  const action = opts?.action || 'mount';
+  const timeoutMs = action === 'pick_folder' ? 185_000 : 20_000;
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: opts?.action || 'mount',
-        openExplorer: Boolean(opts?.openExplorer),
-        ...(resolvedEmail && resolvedEmail !== 'anonymous' ? { email: resolvedEmail } : {}),
-        ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
-      }),
-    });
-    if (!res.ok) return { ok: false };
-    return (await res.json()) as {
-      ok: boolean;
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          openExplorer: Boolean(opts?.openExplorer),
+          ...(resolvedEmail && resolvedEmail !== 'anonymous' ? { email: resolvedEmail } : {}),
+          ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
+        }),
+      },
+      timeoutMs
+    );
+    const parsed = (await res.json().catch(() => null)) as {
+      ok?: boolean;
       cancelled?: boolean;
       mounted?: boolean;
       driveLetter?: string;
       targetDir?: string;
       isCustomTarget?: boolean;
       message?: string;
+    } | null;
+    if (parsed && typeof parsed === 'object') {
+      return {
+        ok: Boolean(res.ok && parsed.ok),
+        cancelled: parsed.cancelled,
+        mounted: parsed.mounted,
+        driveLetter: parsed.driveLetter,
+        targetDir: parsed.targetDir,
+        isCustomTarget: parsed.isCustomTarget,
+        message: parsed.message,
+      };
+    }
+    return {
+      ok: false,
+      message: 'PC 엔진과 통신하지 못했습니다. 트레이의 귀신같이(Merlin Z-Core) 엔진 상태를 확인해 주세요.',
     };
-  } catch {
-    return { ok: false };
+  } catch (err) {
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    return {
+      ok: false,
+      ...(isAbort && action === 'pick_folder' ? { cancelled: true } : {}),
+      message: isAbort
+        ? '폴더 선택 대기 시간이 초과되었습니다. 다시 [업무 폴더 변경]을 눌러 선택해 주세요.'
+        : 'PC 엔진 연결이 일시 중단되었습니다. 잠시 후 다시 눌러 주세요.',
+    };
   }
 }
 
@@ -1123,6 +1150,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
   listSig?: string;
   mounted: boolean;
   targetDir?: string;
+  previewPendingCount?: number;
   docs: WorkLoungeDocDto[];
   locallyDeletedRelPaths: string[];
   localDeletedTombstones: WorkDeletedTombstoneMap;
@@ -1159,6 +1187,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
       listSig?: string;
       mounted?: boolean;
       targetDir?: string;
+      previewPendingCount?: number;
       files?: Array<Record<string, unknown>>;
       locallyDeletedRelPaths?: string[];
       localDeletedTombstones?: WorkDeletedTombstoneMap;
@@ -1170,6 +1199,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
         listSig: typeof data.listSig === 'string' ? data.listSig : opts?.knownSig,
         mounted: Boolean(data.mounted),
         targetDir: data.targetDir,
+        previewPendingCount: Number(data.previewPendingCount || 0),
         docs: [],
         locallyDeletedRelPaths: [],
         localDeletedTombstones:
@@ -1193,6 +1223,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
       listSig: typeof data.listSig === 'string' ? data.listSig : '',
       mounted: Boolean(data.mounted),
       targetDir: data.targetDir,
+      previewPendingCount: Number(data.previewPendingCount || 0),
       docs: data.files.map((rf, i) => mapRawWorkFileToDto(rf, i)),
       locallyDeletedRelPaths: Array.isArray(data.locallyDeletedRelPaths)
         ? data.locallyDeletedRelPaths

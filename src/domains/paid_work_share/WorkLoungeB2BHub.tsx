@@ -2295,6 +2295,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
     setLocalDocs([]);
     setRemoteDocs([]);
     await syncRealWorkFiles();
+    window.setTimeout(() => {
+      if (!unmountedRef.current) {
+        void syncRealWorkFiles();
+      }
+    }, 1200);
     showToast(`✓ S: 업무 폴더가 [${res.targetDir || '지정 폴더'}]로 연결되어 파일 인덱싱을 시작했습니다!`);
   };
 
@@ -2303,8 +2308,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
       openZCoreConnectModal();
       return;
     }
-    showToast('윈도우 폴더 선택창에서 연결할 폴더(예: G:\\내 드라이브\\테스트폴더)를 선택해 주세요...');
-    const res = await mountWorkSDriveNative({ action: 'pick_folder', openExplorer: true });
+    showToast('화면 맨 앞에 열린 윈도우 폴더 선택창에서 연결할 폴더(예: 네이버 MYBOX · 구글 드라이브 하위 폴더)를 선택해 주세요...');
+    const res = await mountWorkSDriveNative({
+      action: 'pick_folder',
+      openExplorer: true,
+      accountEmail: merlinAuth?.email || undefined,
+    });
     await applyFolderSwitchResult(res);
   };
 
@@ -2315,7 +2324,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
       openZCoreConnectModal();
       return;
     }
-    const res = await mountWorkSDriveNative({ action: 'mount', targetDir: clean, openExplorer: true });
+    const res = await mountWorkSDriveNative({
+      action: 'mount',
+      targetDir: clean,
+      openExplorer: true,
+      accountEmail: merlinAuth?.email || undefined,
+    });
     await applyFolderSwitchResult(res);
   };
 
@@ -2324,7 +2338,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
       openZCoreConnectModal();
       return;
     }
-    const res = await mountWorkSDriveNative({ action: 'reset_default', openExplorer: false });
+    const res = await mountWorkSDriveNative({
+      action: 'reset_default',
+      openExplorer: false,
+      accountEmail: merlinAuth?.email || undefined,
+    });
     await applyFolderSwitchResult(res);
   };
 
@@ -2852,7 +2870,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handlePickCustomWorkFolder()}
-                    title="구글 드라이브(G:\내 드라이브\...) 하위 폴더나 기존 회사 폴더를 선택해 S: 드라이브로 그대로 연결합니다"
+                    title="네이버 MYBOX·구글 드라이브(G:\내 드라이브\...) 하위 폴더나 기존 회사 폴더를 선택해 S: 드라이브로 그대로 연결합니다"
                     className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
                   >
                     <span>업무 폴더 변경 (G: 연결)</span>

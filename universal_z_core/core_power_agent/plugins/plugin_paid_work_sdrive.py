@@ -188,15 +188,85 @@ def _drive_root(drive_letter: str) -> str:
     return f"{_norm_letter(drive_letter)}\\"
 
 
+def _to_long_clean_path_str(p: Path | str) -> str:
+    raw = os.path.abspath(str(p or ""))
+    if os.name == "nt" and raw:
+        try:
+            from ctypes import wintypes as _wt_lp
+            k32 = ctypes.windll.kernel32
+            k32.GetLongPathNameW.argtypes = [_wt_lp.LPCWSTR, _wt_lp.LPWSTR, _wt_lp.DWORD]
+            k32.GetLongPathNameW.restype = _wt_lp.DWORD
+            buf = ctypes.create_unicode_buffer(2048)
+            n = k32.GetLongPathNameW(raw, buf, 2048)
+            if 0 < n < 2048 and buf.value:
+                raw = os.path.abspath(buf.value)
+        except Exception:
+            pass
+    return raw.rstrip("\\/") if len(raw) > 3 else raw
+
+
 def _same_path(a: Path | str, b: Path | str) -> bool:
     try:
-        return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+        return os.path.normcase(_to_long_clean_path_str(a)) == os.path.normcase(_to_long_clean_path_str(b))
     except Exception:
         return False
 
 
+def _norm_vault_path(p: Path | str) -> Path:
+    """로컬 NTFS는 심볼릭/정션 실경로로 정규화하되, 네이버 MYBOX(NNFS/CBFS)·구글 드라이브 등 가상 드라이브 문자(N:\\, G:\\)가
+    GetFinalPathNameByHandleW 오류를 내거나 \\\\?\\UNC\\... 네트워크 경로로 변질되는 현상을 원천 방지합니다."""
+    abs_str = _to_long_clean_path_str(p)
+    abs_path = Path(abs_str)
+    has_drive_letter = len(abs_str) >= 2 and abs_str[0].isalpha() and abs_str[1] == ":"
+    try:
+        resolved = abs_path.resolve(strict=False)
+        res_str = str(resolved)
+        if res_str.startswith("\\\\?\\"):
+            res_str = res_str[4:]
+            if res_str.upper().startswith("UNC\\"):
+                res_str = "\\\\" + res_str[4:]
+            resolved = Path(res_str)
+        if has_drive_letter and (str(resolved).startswith("\\\\") or not (len(str(resolved)) >= 2 and str(resolved)[1] == ":")):
+            return abs_path
+        return resolved
+    except Exception:
+        return abs_path
+
+
+def _query_dos_device_raw(drive_letter: str) -> str:
+    if os.name != "nt":
+        return ""
+    letter = _norm_letter(drive_letter)
+    try:
+        from ctypes import wintypes as _wt_qd
+        k32 = ctypes.windll.kernel32
+        k32.QueryDosDeviceW.argtypes = [_wt_qd.LPCWSTR, _wt_qd.LPWSTR, _wt_qd.DWORD]
+        k32.QueryDosDeviceW.restype = _wt_qd.DWORD
+        buf = ctypes.create_unicode_buffer(2048)
+        if k32.QueryDosDeviceW(letter, buf, 2048):
+            return buf.value or ""
+    except Exception:
+        pass
+    return ""
+
+
+def _notify_shell_drive_change(drive_letter: str, added: bool = True) -> None:
+    if os.name != "nt":
+        return
+    try:
+        from ctypes import wintypes as _wt_sh
+        sh32 = ctypes.windll.shell32
+        sh32.SHChangeNotify.argtypes = [ ctypes.c_long, _wt_sh.UINT, _wt_sh.LPCWSTR, _wt_sh.LPCWSTR ]
+        sh32.SHChangeNotify.restype = None
+        # SHCNE_DRIVEADD = 0x00000100, SHCNE_DRIVEREMOVED = 0x00000080, SHCNF_PATHW = 0x0005
+        event_id = 0x00000100 if added else 0x00000080
+        sh32.SHChangeNotify(event_id, 0x0005, _drive_root(drive_letter), None)
+    except Exception:
+        pass
+
+
 def _list_subst_map(force: bool = False) -> Dict[str, Path]:
-    """`subst` 현재 매핑 전체를 { 'S:': Path(...) } 형태로 반환합니다 (2초 캐시 — 3초 폴링마다 프로세스 폭주 방지)."""
+    """`subst` 및 Win32 DosDevice(네이버 MYBOX 가상드라이브 커널 매핑 포함) 현재 매핑 전체를 { 'S:': Path(...) } 형태로 반환합니다."""
     if os.name != "nt":
         return {}
     import time as _time
@@ -219,9 +289,31 @@ def _list_subst_map(force: bool = False) -> Dict[str, Path]:
             s = line.strip()
             m = re.match(r"^([A-Za-z]):\\:\s*=>\s*(.+)$", s)
             if m:
-                out[f"{m.group(1).upper()}:"] = Path(m.group(2).strip())
+                out[f"{m.group(1).upper()}:"] = Path(_to_long_clean_path_str(m.group(2).strip()))
     except Exception:
         pass
+
+    # QueryDosDeviceW 보강: 네이버 MYBOX(NNFS/WebDAV) 등 subst가 직접 출력하지 않는 Raw NT Device 매핑까지 정확히 역추적
+    try:
+        cfg_saved = _load_sdrive_config()
+        saved_target = str(cfg_saved.get("targetDir") or "").strip()
+        saved_src_letter = saved_target[:2].upper() if len(saved_target) >= 2 and saved_target[1] == ":" else ""
+        saved_src_raw = _query_dos_device_raw(saved_src_letter) if saved_src_letter else ""
+        for cand_l in (WORK_DRIVE_PREFERRED, *_WORK_DRIVE_FALLBACKS):
+            if cand_l in out:
+                continue
+            raw_t = _query_dos_device_raw(cand_l)
+            if not raw_t:
+                continue
+            if raw_t.startswith("\\??\\") and len(raw_t) >= 6 and raw_t[5] == ":":
+                out[cand_l] = Path(_to_long_clean_path_str(raw_t[4:]))
+            elif saved_target and saved_src_raw and raw_t.lower().startswith(saved_src_raw.rstrip("\\").lower()):
+                sub_rel = raw_t[len(saved_src_raw.rstrip("\\")) :].lstrip("\\")
+                reconstructed = f"{saved_src_letter}\\{sub_rel}" if sub_rel else f"{saved_src_letter}\\"
+                out[cand_l] = Path(_to_long_clean_path_str(reconstructed))
+    except Exception:
+        pass
+
     _SUBST_CACHE["at"] = now
     _SUBST_CACHE["map"] = out
     return dict(out)
@@ -272,23 +364,29 @@ def _mounted_letter_for_vault(vault_dir: Path) -> Optional[str]:
 
 def _validate_custom_work_target(raw_target: Any) -> Tuple[Optional[Path], str]:
     """업무 폴더 지정(targetDir) 안전 검증 — 드라이브 루트·Windows·Program Files·AppData·사용자 폴더 최상위 등
-    시스템/민감 경로를 업무 폴더로 지정해 원격 다운로드·삭제 대상이 되는 것을 원천 차단합니다."""
+    시스템/민감 경로를 업무 폴더로 지정해 원격 다운로드·삭제 대상이 되는 것을 원천 차단합니다.
+    네이버 MYBOX 탐색기(N:\\폴더 등 가상드라이브 및 로컬 동기화 폴더)와 구글 드라이브(G:\\내 드라이브\\폴더)를 100% 지원합니다."""
     s = str(raw_target or "").strip()
     if not s:
         return None, "EMPTY_TARGET_DIR"
+    if s.startswith("\\\\?\\") and not s.upper().startswith("\\\\?\\UNC\\"):
+        s = s[4:]
     if s.startswith("\\\\") or s.startswith("//"):
         return None, "NETWORK_PATH_NOT_SUPPORTED"
     cand = Path(s)
     if not cand.is_absolute():
         return None, "TARGET_DIR_NOT_ABSOLUTE"
     try:
-        resolved = cand.resolve(strict=False)
+        resolved = _norm_vault_path(cand)
     except Exception:
         return None, "TARGET_DIR_UNRESOLVABLE"
-    if resolved.parent == resolved:
+    if resolved.parent == resolved or len(str(resolved).rstrip("\\/")) <= 2:
         return None, "DRIVE_ROOT_NOT_ALLOWED"
     # 이미 subst로 만든 가상 드라이브 자체(S:\, Z:\ 등)를 다시 업무 폴더로 지정하는 순환 금지
-    if _norm_letter(str(resolved)[:2]) in _list_subst_map():
+    # (단, 네이버 MYBOX N:\ · 구글 드라이브 G:\ 같은 클라우드 드라이브 문자는 subst 매핑이 아니므로 정상 통과)
+    subst_map_now = _list_subst_map()
+    cand_drv = _norm_letter(str(resolved)[:2])
+    if cand_drv == WORK_DRIVE_PREFERRED or (cand_drv in subst_map_now and str(subst_map_now[cand_drv]) != str(resolved)):
         return None, "VIRTUAL_DRIVE_NOT_ALLOWED"
 
     lowered_parts = {p.lower() for p in resolved.parts}
@@ -300,7 +398,7 @@ def _validate_custom_work_target(raw_target: Any) -> Tuple[Optional[Path], str]:
         if not v:
             return None
         try:
-            return Path(v).resolve(strict=False)
+            return _norm_vault_path(v)
         except Exception:
             return None
 
@@ -308,12 +406,12 @@ def _validate_custom_work_target(raw_target: Any) -> Tuple[Optional[Path], str]:
         if parent is None:
             return False
         try:
-            child.relative_to(parent)
+            Path(os.path.normcase(str(child))).relative_to(Path(os.path.normcase(str(parent))))
             return True
         except ValueError:
             return False
 
-    merlin_dir = _get_merlin_appdata_dir().resolve(strict=False)
+    merlin_dir = _norm_vault_path(_get_merlin_appdata_dir())
     if _is_under(resolved, merlin_dir):
         return resolved, ""  # 기본 업무 폴더(%LOCALAPPDATA%\Merlin\...)는 허용
 
@@ -415,46 +513,386 @@ def inspect_s_drive_status(drive_letter: str = WORK_DRIVE_PREFERRED) -> Dict[str
     }
 
 
-def _pick_folder_dialog_win32(initial_dir: str = "") -> Optional[str]:
-    """방장이 직접 클릭했을 때 Windows 탐색기 폴더 선택창(TopMost)을 띄워 구글 드라이브(G:) 하위 폴더 등을 선택합니다."""
-    if os.name != "nt":
-        return None
-    # Google Drive(G:/H:)가 마운트되어 있고 현재 기본 폴더 상태라면 내 드라이브를 기본 시작 경로로 제안
-    start_dir = initial_dir
-    if not start_dir or "AppData" in start_dir:
-        for cand_g in ("G:\\내 드라이브", "G:\\My Drive", "H:\\내 드라이브", "H:\\My Drive"):
+class _COM_GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", ctypes.c_uint32),
+        ("Data2", ctypes.c_uint16),
+        ("Data3", ctypes.c_uint16),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+class _WIN_RECT(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
+
+
+class _WIN_MONITORINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_uint32),
+        ("rcMonitor", _WIN_RECT),
+        ("rcWork", _WIN_RECT),
+        ("dwFlags", ctypes.c_uint32),
+    ]
+
+
+_CLSID_FileOpenDialog = _COM_GUID(
+    0xDC1C5A9C, 0xE88A, 0x4DDE, (ctypes.c_ubyte * 8)(0xA5, 0xA1, 0x60, 0xF8, 0x2A, 0x20, 0xAE, 0xF7)
+)
+_IID_IFileOpenDialog = _COM_GUID(
+    0xD57C7288, 0xD4AD, 0x4768, (ctypes.c_ubyte * 8)(0xBE, 0x02, 0x9D, 0x96, 0x95, 0x32, 0xD9, 0x60)
+)
+_IID_IShellItem = _COM_GUID(
+    0x43826D1E, 0xE718, 0x42EE, (ctypes.c_ubyte * 8)(0xBC, 0x55, 0xA1, 0xE2, 0x61, 0xC3, 0x7B, 0xFE)
+)
+
+_PICKER_SINGLE_FLIGHT_LOCK = threading.Lock()
+_ACTIVE_PICKER_STATE: Dict[str, Any] = {
+    "running": False,
+    "owner_hwnd": 0,
+    "done": None,
+    "result": (None, None),
+}
+
+
+def _suggest_initial_picker_dir(initial_dir: str = "") -> str:
+    """네이버 MYBOX 탐색기(N:\\ 등 가상드라이브 및 로컬 동기화 폴더) -> 구글 드라이브(G:\\내 드라이브) -> 사용자 폴더 순으로 시작 위치를 자동 제안합니다."""
+    if initial_dir and "appdata" not in initial_dir.lower() and os.path.isdir(initial_dir):
+        return initial_dir
+
+    # 1순위: 네이버 MYBOX 탐색기 마운트 드라이브 또는 로컬 동기화 폴더 자동 감지
+    mybox_cands: List[str] = []
+    if os.name == "nt":
+        try:
+            import winreg
+
+            for reg_path, val_name in (
+                (r"Software\NHN Corporation\NaverNDrive", "Recent Drive letter"),
+                (r"Software\Naver\Naver MYBOX", "DriveLetter"),
+                (r"Software\NAVER Cloud\MYBOX", "DriveLetter"),
+            ):
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path) as rk:
+                        v, _ = winreg.QueryValueEx(rk, val_name)
+                        dl = str(v or "").strip().rstrip(":\\/")
+                        if len(dl) == 1 and dl.isalpha():
+                            mybox_cands.append(f"{dl.upper()}:\\")
+                except Exception:
+                    pass
+
+            # 볼륨명에 MYBOX / NDRIVE 가 포함된 드라이브 스캔
+            k32 = ctypes.windll.kernel32
+            mask = int(k32.GetLogicalDrives())
+            vol_buf = ctypes.create_unicode_buffer(260)
+            for idx in range(26):
+                if not (mask & (1 << idx)):
+                    continue
+                ch = chr(ord("A") + idx)
+                if ch in ("A", "B", "C", "S"):
+                    continue
+                root_s = f"{ch}:\\"
+                vol_buf.value = ""
+                try:
+                    if k32.GetVolumeInformationW(ctypes.c_wchar_p(root_s), vol_buf, 260, None, None, None, None, 0):
+                        vname = (vol_buf.value or "").lower()
+                        if any(tok in vname for tok in ("mybox", "ndrive", "네이버", "naver")):
+                            mybox_cands.insert(0, root_s)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    home_s = str(Path.home())
+    mybox_cands.extend([
+        os.path.join(home_s, "네이버 MYBOX"),
+        os.path.join(home_s, "Naver MYBOX"),
+        os.path.join(home_s, "MYBOX"),
+        "D:\\네이버 MYBOX",
+        "D:\\MYBOX",
+    ])
+    for mc in mybox_cands:
+        try:
+            if mc and os.path.isdir(mc):
+                return mc
+        except Exception:
+            pass
+
+    # 2순위: Google Drive(G:/H:) 내 드라이브
+    for cand_g in ("G:\\내 드라이브", "G:\\My Drive", "H:\\내 드라이브", "H:\\My Drive"):
+        try:
             if os.path.isdir(cand_g):
-                start_dir = cand_g
-                break
-    ps_init = (start_dir or "").replace("'", "''")
-    ps_script = (
-        "Add-Type -AssemblyName System.Windows.Forms; "
-        "$f = New-Object System.Windows.Forms.Form; $f.TopMost = $true; $f.ShowInTaskbar = $false; "
-        "$f.Width = 1; $f.Height = 1; $f.StartPosition = 'Manual'; $f.Location = New-Object System.Drawing.Point(-2000,-2000); "
-        "$f.Show(); $f.Activate(); "
-        "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
-        "$d.Description = 'S: 업무 공유 드라이브로 연결할 폴더(예: 구글 드라이브 내 테스트 폴더)를 선택해 주세요.'; "
-        "$d.ShowNewFolderButton = $true; "
-        f"if ('{ps_init}' -ne '' -and (Test-Path -LiteralPath '{ps_init}')) {{ $d.SelectedPath = '{ps_init}' }}; "
-        "if ($d.ShowDialog($f) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }; "
-        "$f.Close()"
-    )
+                return cand_g
+        except Exception:
+            pass
+
+    return home_s if os.path.isdir(home_s) else ""
+
+
+def _bring_picker_window_to_front(owner_hwnd_int: int) -> None:
+    """Win32 Foreground Lock을 안전하게 해제하여 이미 열려 있거나 막 생성된 폴더 선택창을 크롬 창 맨 앞으로 즉시 끌어올립니다."""
+    if os.name != "nt" or not owner_hwnd_int:
+        return
     try:
-        res = subprocess.run(
-            ["powershell", "-NoProfile", "-STA", "-Command", ps_script],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            timeout=180,
-            creationflags=_CREATE_NO_WINDOW,
-        )
-        picked = (res.stdout or "").strip()
-        if picked:
-            return picked
+        from ctypes import wintypes as _wt_fg
+
+        u32 = ctypes.windll.user32
+        k32 = ctypes.windll.kernel32
+        u32.GetLastActivePopup.argtypes = [_wt_fg.HWND]
+        u32.GetLastActivePopup.restype = _wt_fg.HWND
+        u32.GetForegroundWindow.restype = _wt_fg.HWND
+        u32.GetWindowThreadProcessId.argtypes = [_wt_fg.HWND, ctypes.POINTER(_wt_fg.DWORD)]
+        u32.GetWindowThreadProcessId.restype = _wt_fg.DWORD
+        u32.SetWindowPos.argtypes = [_wt_fg.HWND, _wt_fg.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, _wt_fg.UINT]
+        u32.SetWindowPos.restype = _wt_fg.BOOL
+
+        owner_hw = _wt_fg.HWND(owner_hwnd_int)
+        popup_hw = u32.GetLastActivePopup(owner_hw) or owner_hw
+        fg_hw = u32.GetForegroundWindow()
+        fg_tid = u32.GetWindowThreadProcessId(fg_hw, None) if fg_hw else 0
+        pop_tid = u32.GetWindowThreadProcessId(popup_hw, None)
+        cur_tid = k32.GetCurrentThreadId()
+
+        # VK_MENU(Alt) keyup 신호로 OS Foreground Lock 합법 해제
+        u32.keybd_event(0x12, 0, 0x0002, 0)
+        attached_fg = False
+        attached_pop = False
+        try:
+            if fg_tid and fg_tid != cur_tid:
+                attached_fg = bool(u32.AttachThreadInput(fg_tid, cur_tid, True))
+            if pop_tid and pop_tid not in (0, cur_tid, fg_tid):
+                attached_pop = bool(u32.AttachThreadInput(pop_tid, cur_tid, True))
+            u32.ShowWindow(popup_hw, 9)  # SW_RESTORE
+            u32.SetWindowPos(popup_hw, _wt_fg.HWND(-1), 0, 0, 0, 0, 0x0001 | 0x0002)  # HWND_TOPMOST | NOSIZE | NOMOVE
+            u32.BringWindowToTop(popup_hw)
+            u32.SetForegroundWindow(popup_hw)
+        finally:
+            if attached_pop:
+                u32.AttachThreadInput(pop_tid, cur_tid, False)
+            if attached_fg:
+                u32.AttachThreadInput(fg_tid, cur_tid, False)
     except Exception:
         pass
-    return None
+
+
+def _pick_folder_dialog_win32(initial_dir: str = "") -> Tuple[Optional[str], Optional[str]]:
+    """방장이 [업무 폴더 변경]을 클릭했을 때 0.05초 내 크롬 맨 앞에 현대식 Windows 탐색기 폴더 선택창(IFileOpenDialog, 좌측 사이드바 네이버 MYBOX·구글 드라이브·내 PC 표시)을 띄웁니다.
+    반환: (선택된 폴더 경로, 오류 메시지) — 사용자가 취소(X/취소)한 경우 (None, None)."""
+    if os.name != "nt":
+        return None, "Windows 환경에서만 사용할 수 있습니다."
+
+    with _PICKER_SINGLE_FLIGHT_LOCK:
+        if _ACTIVE_PICKER_STATE.get("running") and isinstance(_ACTIVE_PICKER_STATE.get("done"), threading.Event):
+            existing_owner = int(_ACTIVE_PICKER_STATE.get("owner_hwnd") or 0)
+            existing_done: threading.Event = _ACTIVE_PICKER_STATE["done"]
+            should_join_existing = True
+        else:
+            done_ev = threading.Event()
+            _ACTIVE_PICKER_STATE["running"] = True
+            _ACTIVE_PICKER_STATE["owner_hwnd"] = 0
+            _ACTIVE_PICKER_STATE["done"] = done_ev
+            _ACTIVE_PICKER_STATE["result"] = (None, None)
+            existing_owner = 0
+            existing_done = done_ev
+            should_join_existing = False
+
+    if should_join_existing:
+        _bring_picker_window_to_front(existing_owner)
+        existing_done.wait(timeout=180.0)
+        res_pair = _ACTIVE_PICKER_STATE.get("result") or (None, None)
+        return res_pair[0], res_pair[1]
+
+    start_dir = _suggest_initial_picker_dir(initial_dir)
+
+    def _sta_picker_worker() -> None:
+        from ctypes import wintypes as _wt
+
+        picked_out: Optional[str] = None
+        err_out: Optional[str] = None
+        owner_hwnd_val = 0
+        co_init_ok = False
+        u32 = ctypes.windll.user32
+        k32 = ctypes.windll.kernel32
+        ole32 = ctypes.windll.ole32
+        sh32 = ctypes.windll.shell32
+
+        try:
+            try:
+                import merlin_z_core_os as _zos_pk
+
+                _zos_pk.attach_thread_to_interactive_desktop()
+            except Exception:
+                pass
+
+            hr_ci = ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
+            co_init_ok = hr_ci in (0, 1)
+
+            u32.GetForegroundWindow.restype = _wt.HWND
+            u32.MonitorFromWindow.argtypes = [_wt.HWND, _wt.DWORD]
+            u32.MonitorFromWindow.restype = _wt.HANDLE
+            u32.GetMonitorInfoW.argtypes = [_wt.HANDLE, ctypes.POINTER(_WIN_MONITORINFO)]
+            u32.GetMonitorInfoW.restype = _wt.BOOL
+            u32.CreateWindowExW.argtypes = [
+                _wt.DWORD, _wt.LPCWSTR, _wt.LPCWSTR, _wt.DWORD,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                _wt.HWND, _wt.HMENU, _wt.HINSTANCE, _wt.LPVOID,
+            ]
+            u32.CreateWindowExW.restype = _wt.HWND
+            u32.DestroyWindow.argtypes = [_wt.HWND]
+            u32.DestroyWindow.restype = _wt.BOOL
+
+            cx, cy = 640, 380
+            fg_hwnd = u32.GetForegroundWindow()
+            if fg_hwnd:
+                hmon = u32.MonitorFromWindow(fg_hwnd, 2)
+                if hmon:
+                    mi = _WIN_MONITORINFO()
+                    mi.cbSize = ctypes.sizeof(_WIN_MONITORINFO)
+                    if u32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+                        cx = int((mi.rcWork.left + mi.rcWork.right) // 2)
+                        cy = int((mi.rcWork.top + mi.rcWork.bottom) // 2)
+
+            # WS_EX_TOPMOST(0x8) | WS_EX_APPWINDOW(0x40000), WS_POPUP(0x80000000) | WS_VISIBLE(0x10000000)
+            # 화면 정중앙(cx, cy)에 위치 + 작업표시줄 노출 보장 -> 모달 자식인 IFileOpenDialog가 크롬 맨 앞 중앙에 즉시 렌더링!
+            owner_hw = u32.CreateWindowExW(
+                0x00000008 | 0x00040000,
+                "STATIC",
+                "귀신같이 S: 업무 폴더 선택",
+                0x80000000 | 0x10000000,
+                cx,
+                cy,
+                1,
+                1,
+                None,
+                None,
+                None,
+                None,
+            )
+            owner_hwnd_val = int(owner_hw) if owner_hw else 0
+            _ACTIVE_PICKER_STATE["owner_hwnd"] = owner_hwnd_val
+            if owner_hwnd_val:
+                _bring_picker_window_to_front(owner_hwnd_val)
+
+            ole32.CoCreateInstance.argtypes = [
+                ctypes.POINTER(_COM_GUID),
+                ctypes.c_void_p,
+                _wt.DWORD,
+                ctypes.POINTER(_COM_GUID),
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+            ole32.CoCreateInstance.restype = ctypes.c_long
+            sh32.SHCreateItemFromParsingName.argtypes = [
+                _wt.LPCWSTR,
+                ctypes.c_void_p,
+                ctypes.POINTER(_COM_GUID),
+                ctypes.POINTER(ctypes.c_void_p),
+            ]
+            sh32.SHCreateItemFromParsingName.restype = ctypes.c_long
+
+            dlg = ctypes.c_void_p()
+            hr = ole32.CoCreateInstance(
+                ctypes.byref(_CLSID_FileOpenDialog),
+                None,
+                1,
+                ctypes.byref(_IID_IFileOpenDialog),
+                ctypes.byref(dlg),
+            )
+            if hr != 0 or not dlg.value:
+                err_out = "윈도우 탐색기 폴더 선택창을 열지 못했습니다."
+                return
+
+            vtbl = ctypes.cast(
+                ctypes.cast(dlg, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p),
+            )
+            ReleaseDlg = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtbl[2])
+            ShowDlg = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.HWND)(vtbl[3])
+            SetOptions = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.DWORD)(vtbl[9])
+            GetOptions = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(_wt.DWORD))(vtbl[10])
+            SetFolder = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p)(vtbl[12])
+            SetTitle = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.LPCWSTR)(vtbl[17])
+            SetOkButtonLabel = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.LPCWSTR)(vtbl[18])
+            GetResult = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(vtbl[20])
+
+            try:
+                cur_opts = _wt.DWORD(0)
+                GetOptions(dlg, ctypes.byref(cur_opts))
+                # FOS_PICKFOLDERS(0x20) | FOS_FORCEFILESYSTEM(0x40) | FOS_NOCHANGEDIR(0x8) | FOS_PATHMUSTEXIST(0x800)
+                SetOptions(dlg, cur_opts.value | 0x20 | 0x40 | 0x08 | 0x800)
+                SetTitle(dlg, "S: 업무 공유 드라이브로 연결할 폴더 선택 (네이버 MYBOX · 구글 드라이브 · 내 PC 하위 폴더)")
+                SetOkButtonLabel(dlg, "이 폴더를 S:로 연결")
+
+                if start_dir:
+                    si_init = ctypes.c_void_p()
+                    if sh32.SHCreateItemFromParsingName(start_dir, None, ctypes.byref(_IID_IShellItem), ctypes.byref(si_init)) == 0 and si_init.value:
+                        try:
+                            SetFolder(dlg, si_init)
+                        finally:
+                            si_init_vtbl = ctypes.cast(ctypes.cast(si_init, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+                            ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(si_init_vtbl[2])(si_init)
+
+                # 모달 창이 생성된 직후(0.12초·0.35초) 팝업 자체도 한 번 더 최상단 포커스 보장
+                if owner_hwnd_val:
+                    for delay_s in (0.12, 0.35):
+                        t_front = threading.Timer(delay_s, _bring_picker_window_to_front, args=(owner_hwnd_val,))
+                        t_front.daemon = True
+                        t_front.start()
+
+                hr_show = ShowDlg(dlg, _wt.HWND(owner_hwnd_val) if owner_hwnd_val else None)
+                hr_u32 = hr_show & 0xFFFFFFFF
+                if hr_show == 0:
+                    si_res = ctypes.c_void_p()
+                    if GetResult(dlg, ctypes.byref(si_res)) == 0 and si_res.value:
+                        si_vtbl = ctypes.cast(ctypes.cast(si_res, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+                        GetDisplayName = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.DWORD, ctypes.POINTER(ctypes.c_void_p))(si_vtbl[5])
+                        ReleaseSi = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(si_vtbl[2])
+                        try:
+                            for sigdn in (0x80058000, 0x80028000):  # SIGDN_FILESYSPATH, SIGDN_DESKTOPABSOLUTEPARSING
+                                psz = ctypes.c_void_p()
+                                if GetDisplayName(si_res, sigdn, ctypes.byref(psz)) == 0 and psz.value:
+                                    cand_str = ctypes.wstring_at(psz.value).strip()
+                                    ole32.CoTaskMemFree(psz)
+                                    if cand_str:
+                                        picked_out = cand_str
+                                        break
+                        finally:
+                            ReleaseSi(si_res)
+                elif hr_u32 == 0x800704C7:  # ERROR_CANCELLED (사용자가 X 또는 취소를 누름)
+                    picked_out = None
+                    err_out = None
+                else:
+                    err_out = f"윈도우 폴더 선택창 호출 중 오류가 발생했습니다 (0x{hr_u32:08X})."
+            finally:
+                ReleaseDlg(dlg)
+        except Exception as exc:
+            err_out = f"폴더 선택창 실행 오류: {exc}"
+        finally:
+            if owner_hwnd_val:
+                try:
+                    u32.DestroyWindow(_wt.HWND(owner_hwnd_val))
+                except Exception:
+                    pass
+            if co_init_ok:
+                try:
+                    ole32.CoUninitialize()
+                except Exception:
+                    pass
+            with _PICKER_SINGLE_FLIGHT_LOCK:
+                _ACTIVE_PICKER_STATE["result"] = (picked_out, err_out)
+                _ACTIVE_PICKER_STATE["running"] = False
+                _ACTIVE_PICKER_STATE["owner_hwnd"] = 0
+                done_ref = _ACTIVE_PICKER_STATE.get("done")
+                if isinstance(done_ref, threading.Event):
+                    done_ref.set()
+
+    th = threading.Thread(target=_sta_picker_worker, name="ghosti-sdrive-folder-picker", daemon=True)
+    th.start()
+    existing_done.wait(timeout=182.0)
+    res_final = _ACTIVE_PICKER_STATE.get("result") or (None, "폴더 선택 응답 시간이 초과되었습니다.")
+    return res_final[0], res_final[1]
 
 
 def _run_subst(args: List[str]) -> Tuple[bool, str]:
@@ -471,6 +909,68 @@ def _run_subst(args: List[str]) -> Tuple[bool, str]:
         return res.returncode == 0, (res.stderr or res.stdout or "").strip()
     except Exception as exc:
         return False, str(exc)
+
+
+def _mount_drive_letter_sota(letter: str, vault_dir: Path) -> Tuple[bool, str]:
+    """1차 표준 subst 마운트 -> 실패 시(네이버 MYBOX NNFS/WebDAV 등 가상·리디렉터 드라이브) Win32 DefineDosDeviceW 커널 심볼릭 링크 폴백."""
+    clean_letter = _norm_letter(letter)
+    target_str = str(vault_dir)
+    ok_s, err_s = _run_subst([clean_letter, target_str])
+    if ok_s and os.path.exists(_drive_root(clean_letter)):
+        _notify_shell_drive_change(clean_letter, added=True)
+        return True, ""
+
+    if os.name != "nt":
+        return False, err_s
+
+    try:
+        from ctypes import wintypes as _wt_dd
+        k32 = ctypes.windll.kernel32
+        k32.DefineDosDeviceW.argtypes = [_wt_dd.DWORD, _wt_dd.LPCWSTR, _wt_dd.LPCWSTR]
+        k32.DefineDosDeviceW.restype = _wt_dd.BOOL
+
+        # 2차: Win32 DefineDosDeviceW 기본 매핑 (subst.exe의 DRIVE_REMOTE 사용자모드 검사 우회)
+        if k32.DefineDosDeviceW(0, clean_letter, target_str) and os.path.exists(_drive_root(clean_letter)):
+            _notify_shell_drive_change(clean_letter, added=True)
+            return True, ""
+
+        # 3차: 원본 드라이브 문자(예: N:\테스트폴더)의 NT 커널 디바이스 경로(\Device\NNFS\...) 직결 매핑
+        if len(target_str) >= 3 and target_str[1] == ":":
+            src_letter = f"{target_str[0].upper()}:"
+            sub_rel = target_str[2:].lstrip("\\/")
+            src_raw = _query_dos_device_raw(src_letter)
+            if src_raw:
+                nt_target = f"{src_raw.rstrip('\\')}\\{sub_rel}" if sub_rel else src_raw
+                # DDD_RAW_TARGET_PATH = 0x1
+                if k32.DefineDosDeviceW(0x1, clean_letter, nt_target) and os.path.exists(_drive_root(clean_letter)):
+                    _notify_shell_drive_change(clean_letter, added=True)
+                    return True, ""
+    except Exception as exc:
+        err_s = f"{err_s} | DefineDosDeviceW: {exc}".strip(" |")
+
+    return False, err_s
+
+
+def _unmount_drive_letter_sota(letter: str) -> bool:
+    clean_letter = _norm_letter(letter)
+    ok_d, _ = _run_subst([clean_letter, "/d"])
+    if not ok_d and os.name == "nt":
+        try:
+            from ctypes import wintypes as _wt_ud
+            k32 = ctypes.windll.kernel32
+            k32.DefineDosDeviceW.argtypes = [_wt_ud.DWORD, _wt_ud.LPCWSTR, _wt_ud.LPCWSTR]
+            k32.DefineDosDeviceW.restype = _wt_ud.BOOL
+            raw_cur = _query_dos_device_raw(clean_letter)
+            if raw_cur:
+                # DDD_REMOVE_DEFINITION(0x2) | DDD_RAW_TARGET_PATH(0x1) | DDD_EXACT_MATCH_ON_REMOVE(0x4)
+                ok_d = bool(k32.DefineDosDeviceW(0x1 | 0x2 | 0x4, clean_letter, raw_cur)) or bool(
+                    k32.DefineDosDeviceW(0x2, clean_letter, None)
+                )
+        except Exception:
+            pass
+    if ok_d:
+        _notify_shell_drive_change(clean_letter, added=False)
+    return ok_d
 
 
 _OWNER_LOCK = threading.RLock()
@@ -559,11 +1059,13 @@ def check_pc_account_owner_allowed(req_email: Optional[str]) -> Optional[Dict[st
         st = _load_pc_owner_state_unlocked()
         live_owner, _ = _prune_and_get_live_owner_unlocked(st, now_ms)
         if live_owner and clean_req and clean_req != live_owner:
+            masked = _mask_email_for_display(live_owner)
             return {
                 "ok": False,
                 "error": "PC_OWNED_BY_OTHER_ACCOUNT",
                 "reason": "PC_OWNED_BY_OTHER_ACCOUNT",
-                "activeEmailMasked": _mask_email_for_display(live_owner),
+                "activeEmailMasked": masked,
+                "message": f"현재 이 PC는 다른 계정({masked})에 연결되어 있습니다. 한 PC에서는 한 번에 하나의 계정만 사용할 수 있습니다.",
             }
     return None
 
@@ -685,7 +1187,14 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
                 }
 
     if action == "pick_folder":
-        picked = _pick_folder_dialog_win32(str(prev_vault_dir))
+        picked, picker_err = _pick_folder_dialog_win32(str(prev_vault_dir))
+        if picker_err:
+            return {
+                "ok": False,
+                "cancelled": False,
+                "targetDir": str(prev_vault_dir),
+                "message": picker_err,
+            }
         if not picked:
             return {
                 "ok": False,
@@ -704,18 +1213,24 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
     if custom_target and str(custom_target).strip():
         valid_p, reason = _validate_custom_work_target(custom_target)
         if valid_p is None:
+            if reason == "DRIVE_ROOT_NOT_ALLOWED":
+                invalid_msg = "드라이브 최상위(예: N:\\ 또는 G:\\) 전체 대신 그 안의 업무용 하위 폴더(예: 네이버 MYBOX\\테스트폴더)를 선택해 주세요!"
+            elif reason == "VIRTUAL_DRIVE_NOT_ALLOWED":
+                invalid_msg = "이미 S: 업무 드라이브로 연결된 경로 자체는 다시 선택할 수 없어요. 원본 폴더(예: 네이버 MYBOX·구글 드라이브 안의 폴더)를 선택해 주세요."
+            else:
+                invalid_msg = "이 폴더는 업무 공유 폴더로 지정할 수 없어요. (시스템·프로그램 폴더 대신 네이버 MYBOX·구글 드라이브·문서 안의 업무용 하위 폴더를 선택해 주세요)"
             return {
                 "ok": False,
                 "error": "INVALID_TARGET_DIR",
                 "reason": reason,
-                "message": "이 폴더는 업무 공유 폴더로 지정할 수 없어요. (드라이브 최상위 G:\\ 자체 대신 G:\\내 드라이브\\폴더명 같은 하위 폴더를 선택해 주세요 · 시스템 폴더 제외)",
+                "message": invalid_msg,
             }
         if not _same_path(prev_vault_dir, valid_p):
             folder_switched = True
             # 이전 업무 폴더에 연결돼 있던 우리 S: 드라이브를 먼저 해제해 동일 S: 문자를 그대로 이어받게 보장
             if os.name == "nt":
                 for old_letter in _letters_mapped_to(prev_vault_dir):
-                    _run_subst([old_letter, "/d"])
+                    _unmount_drive_letter_sota(old_letter)
                 _list_subst_map(force=True)
             def _reset_known_on_switch(cur: Dict[str, Any]) -> None:
                 cur["targetDir"] = str(valid_p)
@@ -736,7 +1251,7 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         failed: List[str] = []
         if os.name == "nt":
             for letter in _letters_mapped_to(vault_dir):  # 우리 연결만 해제 (남의 NAS·USB는 절대 미접촉)
-                ok_d, _msg = _run_subst([letter, "/d"])
+                ok_d = _unmount_drive_letter_sota(letter)
                 (released if ok_d else failed).append(letter)
             _list_subst_map(force=True)
         still = _mounted_letter_for_vault(vault_dir)
@@ -756,7 +1271,7 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
     cfg_now = _load_sdrive_config()
     if cfg_now.get("workEntitlementLocked") is True and not bool(payload.get("forceMount")):
         for letter in _letters_mapped_to(vault_dir):
-            _run_subst([letter, "/d"])
+            _unmount_drive_letter_sota(letter)
         _list_subst_map(force=True)
         return {
             "ok": False,
@@ -775,7 +1290,7 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
     if preferred in ours:
         chosen = preferred  # 이미 동일 경로로 연결됨 → 열린 엑셀 핸들 보호를 위해 재연결 생략
     elif not _is_drive_letter_occupied(preferred):
-        ok_m, mount_error = _run_subst([preferred, str(vault_dir)])
+        ok_m, mount_error = _mount_drive_letter_sota(preferred, vault_dir)
         if ok_m:
             chosen = preferred
     elif ours:
@@ -784,13 +1299,13 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         for letter in _WORK_DRIVE_FALLBACKS:
             if letter == preferred or _is_drive_letter_occupied(letter):
                 continue
-            ok_m, mount_error = _run_subst([letter, str(vault_dir)])
+            ok_m, mount_error = _mount_drive_letter_sota(letter, vault_dir)
             if ok_m:
                 chosen = letter
                 break
 
     _list_subst_map(force=True)
-    verified = bool(chosen) and chosen in _letters_mapped_to(vault_dir) and os.path.exists(_drive_root(chosen))
+    verified = bool(chosen) and (chosen in _letters_mapped_to(vault_dir) or os.path.exists(_drive_root(chosen)))
 
     if not verified:
         return {
@@ -800,13 +1315,13 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
             "mounted": False,
             "driveLetter": preferred,
             "targetDir": str(vault_dir),
-            "message": "업무 드라이브를 만들지 못했어요. 업무 폴더는 그대로 사용할 수 있습니다.",
+            "message": "업무 드라이브를 만들지 못했어요. 선택한 폴더가 현재 열려 있는지(네이버 MYBOX·구글 드라이브 로그인 상태) 확인해 주세요.",
         }
 
     # 구버전(S:) 또는 이전 대체 문자 연결이 남아 있으면 새 연결 성공 후에만 정리 (우리 연결만)
     for stale in _letters_mapped_to(vault_dir):
         if stale != chosen:
-            _run_subst([stale, "/d"])
+            _unmount_drive_letter_sota(stale)
     _list_subst_map(force=True)
     _save_sdrive_config({"driveLetter": chosen})
 
@@ -1006,10 +1521,11 @@ def detect_file_lock_owner(file_path: Path, fallback_owner: str = "") -> Optiona
 
 
 def _parse_xlsx_preview_stdlib(file_path: Path) -> Tuple[List[str], List[List[str]], str]:
-    """외부 무거운 의존성 없이 표준 zipfile+XML로 엑셀(.xlsx) 첫 시트의 표 헤더·상위 행·본문 요약을 초고속 추출합니다."""
+    """외부 무거운 의존성 없이 표준 zipfile+XML로 엑셀(.xlsx) 첫 시트 표 미리보기 + 전체 시트 본문(최대 12,000자)을 초고속 추출합니다."""
     headers: List[str] = []
     rows: List[List[str]] = []
     flat_lines: List[str] = []
+    total_chars = 0
     try:
         with zipfile.ZipFile(file_path, "r") as zf:
             shared_strings: List[str] = []
@@ -1026,45 +1542,55 @@ def _parse_xlsx_preview_stdlib(file_path: Path) -> Tuple[List[str], List[List[st
             if not sheet_names:
                 return headers, rows, ""
 
-            ws_root = ET.fromstring(zf.read(sheet_names[0]))
-            parsed_matrix: List[List[str]] = []
-            for row_el in ws_root.iter():
-                if not (row_el.tag.endswith("}row") or row_el.tag == "row"):
-                    continue
-                row_vals: List[str] = []
-                for c_el in row_el:
-                    if not (c_el.tag.endswith("}c") or c_el.tag == "c"):
+            first_sheet_matrix: List[List[str]] = []
+            total_rows_seen = 0
+            for s_idx, s_name in enumerate(sheet_names[:12]):
+                ws_root = ET.fromstring(zf.read(s_name))
+                for row_el in ws_root.iter():
+                    if not (row_el.tag.endswith("}row") or row_el.tag == "row"):
                         continue
-                    c_type = c_el.attrib.get("t", "")
-                    val_str = ""
-                    for child in c_el:
-                        if child.tag.endswith("}v") or child.tag == "v":
-                            raw_v = (child.text or "").strip()
-                            if c_type == "s" and raw_v.isdigit():
-                                idx = int(raw_v)
-                                val_str = shared_strings[idx] if 0 <= idx < len(shared_strings) else raw_v
-                            else:
-                                val_str = raw_v
-                        elif child.tag.endswith("}is") or child.tag == "is":
-                            val_str = "".join(t.text or "" for t in child.iter() if t.tag.endswith("}t") or t.tag == "t").strip()
-                    row_vals.append(val_str)
-                    if len(row_vals) >= 6:
+                    row_vals: List[str] = []
+                    for c_el in row_el:
+                        if not (c_el.tag.endswith("}c") or c_el.tag == "c"):
+                            continue
+                        c_type = c_el.attrib.get("t", "")
+                        val_str = ""
+                        for child in c_el:
+                            if child.tag.endswith("}v") or child.tag == "v":
+                                raw_v = (child.text or "").strip()
+                                if c_type == "s" and raw_v.isdigit():
+                                    idx = int(raw_v)
+                                    val_str = shared_strings[idx] if 0 <= idx < len(shared_strings) else raw_v
+                                else:
+                                    val_str = raw_v
+                            elif child.tag.endswith("}is") or child.tag == "is":
+                                val_str = "".join(
+                                    t.text or "" for t in child.iter() if (t.tag.endswith("}t") or t.tag == "t")
+                                ).strip()
+                        row_vals.append(val_str)
+                        if len(row_vals) >= 24:
+                            break
+                    if any(v.strip() for v in row_vals):
+                        if s_idx == 0 and len(first_sheet_matrix) < 12:
+                            first_sheet_matrix.append(row_vals[:6])
+                        line_joined = " | ".join(v for v in row_vals if v.strip())
+                        flat_lines.append(line_joined)
+                        total_chars += len(line_joined) + 1
+                        total_rows_seen += 1
+                    if total_rows_seen >= 400 or total_chars >= 12500:
                         break
-                if any(v.strip() for v in row_vals):
-                    parsed_matrix.append(row_vals)
-                    flat_lines.append(" | ".join(v for v in row_vals if v.strip()))
-                if len(parsed_matrix) >= 12:
+                if total_rows_seen >= 400 or total_chars >= 12500:
                     break
 
-            if parsed_matrix:
-                headers = [h or f"열 {i + 1}" for i, h in enumerate(parsed_matrix[0][:6])]
+            if first_sheet_matrix:
+                headers = [h or f"열 {i + 1}" for i, h in enumerate(first_sheet_matrix[0][:6])]
                 col_len = len(headers)
-                for r in parsed_matrix[1:8]:
+                for r in first_sheet_matrix[1:8]:
                     padded = (r + [""] * col_len)[:col_len]
                     rows.append(padded)
     except Exception:
         pass
-    return headers, rows, "\n".join(flat_lines)[:2800]
+    return headers, rows, "\n".join(flat_lines)[:12000]
 
 
 def _make_lightweight_image_data_url(file_path: Path, size_bytes: int) -> str:
@@ -1122,7 +1648,46 @@ def _put_cached_preview(sig_key: str, res: Dict[str, Any]) -> None:
             _PREVIEW_CACHE.popitem(last=False)
 
 
-def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]:
+def _sync_doc_body_to_ghost_search_cache(
+    real_path: Path,
+    s_drive_full_path: Optional[str],
+    st: os.stat_result,
+    preview_text: str,
+) -> None:
+    """업무 공유(S:)에서 추출된 한글(.hwp)·엑셀(.xlsx)·PDF·워드 본문을 Ctrl+0 귀신검색창 공용 캐시(doc_text_cache_v1.json)에
+    원본 경로 + S:\\ 가상드라이브 경로 양쪽으로 즉시 동시 등록하여, 마이박스 폴더 연결 직후 1초 내 본문 검색을 보장합니다."""
+    clean_body = (preview_text or "").strip()
+    if not clean_body:
+        return
+    if "로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다." in clean_body:
+        return
+    try:
+        import plugin_ghosti_os
+
+        plugin_ghosti_os._load_doc_text_cache()
+        mt_int = int(st.st_mtime)
+        sz_int = int(st.st_size)
+        path_keys = {str(real_path), str(_norm_vault_path(real_path))}
+        if s_drive_full_path:
+            path_keys.add(str(s_drive_full_path))
+        for pk in path_keys:
+            if pk:
+                sig = f"{pk}|{sz_int}|{mt_int}|v3_sota50k"
+                plugin_ghosti_os._save_doc_text_cache_entry(sig, clean_body, flush_disk=False)
+    except Exception:
+        pass
+
+
+def _flush_ghost_search_doc_cache() -> None:
+    try:
+        import plugin_ghosti_os
+
+        plugin_ghosti_os._flush_doc_text_cache_if_dirty()
+    except Exception:
+        pass
+
+
+def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr: bool = False) -> Dict[str, Any]:
     ext_low = file_path.suffix.lower()
     ext_upper = ext_low.lstrip(".").upper() or "FILE"
     is_image = ext_low in _IMAGE_EXTS
@@ -1135,7 +1700,7 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]
         if is_image:
             image_base64 = _make_lightweight_image_data_url(file_path, st.st_size)
         elif ext_low == ".csv":
-            raw_bytes = file_path.read_bytes()[:262144]
+            raw_bytes = file_path.read_bytes()[:524288]
             try:
                 raw_txt = raw_bytes.decode("utf-8-sig")
             except UnicodeDecodeError:
@@ -1147,7 +1712,7 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]
                 col_n = len(table_headers)
                 for r in non_empty[1:8]:
                     table_rows.append([(c.strip() if i < len(r) else "") for i, c in enumerate((r + [""] * col_n)[:col_n])])
-                preview_text = "\n".join(" | ".join(r[:6]) for r in non_empty[:15])[:2800]
+                preview_text = "\n".join(" | ".join(r[:16]) for r in non_empty[:200])[:12000]
         elif ext_low == ".xlsx":
             table_headers, table_rows, preview_text = _parse_xlsx_preview_stdlib(file_path)
         elif ext_low in (".gdoc", ".gsheet", ".gslides"):
@@ -1207,18 +1772,27 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]
                 )
             )
         elif ext_low in (".txt", ".md", ".json", ".log"):
-            raw_bytes = file_path.read_bytes()[:131072]
+            raw_bytes = file_path.read_bytes()[:262144]
             try:
-                preview_text = raw_bytes.decode("utf-8-sig")[:2800]
+                preview_text = raw_bytes.decode("utf-8-sig")[:12000]
             except UnicodeDecodeError:
-                preview_text = raw_bytes.decode("cp949", errors="ignore")[:2800]
+                preview_text = raw_bytes.decode("cp949", errors="ignore")[:12000]
         elif ext_low in (".pdf", ".hwp", ".hwpx", ".docx", ".doc", ".pptx", ".ppt", ".xls"):
             try:
                 import plugin_ghosti_os
 
-                extracted = plugin_ghosti_os._extract_doc_text(file_path, allow_pdf_winrt_ocr=False)
-                if extracted and "로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다." not in extracted:
-                    preview_text = extracted[:3000]
+                use_ocr = bool(allow_pdf_ocr and ext_low == ".pdf" and st.st_size <= 15 * 1024 * 1024)
+                extracted = plugin_ghosti_os._extract_doc_text(
+                    file_path,
+                    allow_pdf_winrt_ocr=use_ocr,
+                    flush_disk=False,
+                )
+                if (
+                    extracted
+                    and "로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다." not in extracted
+                    and "PDF 문서입니다." not in extracted
+                ):
+                    preview_text = extracted[:12000]
             except Exception:
                 pass
     except Exception:
@@ -1269,7 +1843,7 @@ _PREVIEW_PENDING: "OrderedDict[str, Path]" = OrderedDict()
 _PREVIEW_PENDING_LOCK = threading.Lock()
 _PREVIEW_WAKE = threading.Event()
 _PREVIEW_WORKER: Dict[str, Any] = {"thread": None}
-_PREVIEW_SYNC_BUDGET_SEC = 1.2  # 목록 요청 1회당 즉시 추출에 쓰는 최대 시간 (나머지는 백그라운드)
+_PREVIEW_SYNC_BUDGET_SEC = 1.6  # 목록 요청 1회당 즉시 추출에 쓰는 최대 시간 (나머지는 백그라운드)
 
 
 def _preview_worker_loop() -> None:
@@ -1281,6 +1855,7 @@ def _preview_worker_loop() -> None:
             pass
     while True:
         _PREVIEW_WAKE.wait(timeout=30)
+        did_extract = False
         while True:
             with _PREVIEW_PENDING_LOCK:
                 if not _PREVIEW_PENDING:
@@ -1292,9 +1867,24 @@ def _preview_worker_loop() -> None:
                 if _preview_sig_key(path, st) != key:
                     continue  # 대기 중 파일이 바뀜 → 다음 스캔에서 새 시그니처로 재등록
                 if _get_cached_preview(key) is None:
-                    _put_cached_preview(key, _compute_rich_preview(path, st))
+                    meta_bg = _compute_rich_preview(path, st, allow_pdf_ocr=True)
+                    _put_cached_preview(key, meta_bg)
+                    if meta_bg.get("previewText") and not meta_bg.get("isImage"):
+                        s_full_bg: Optional[str] = None
+                        try:
+                            v_dir_bg = get_work_vault_dir(ensure_dirs=False)
+                            m_let_bg = _mounted_letter_for_vault(v_dir_bg)
+                            if m_let_bg:
+                                rel_bg = str(Path(os.path.normcase(str(_norm_vault_path(path)))).relative_to(Path(os.path.normcase(str(_norm_vault_path(v_dir_bg))))))
+                                s_full_bg = _drive_root(m_let_bg) + rel_bg.replace("/", "\\")
+                        except Exception:
+                            s_full_bg = None
+                        _sync_doc_body_to_ghost_search_cache(path, s_full_bg, st, str(meta_bg["previewText"]))
+                        did_extract = True
             except Exception:
                 pass
+        if did_extract:
+            _flush_ghost_search_doc_cache()
 
 
 def _enqueue_preview(sig_key: str, path: Path) -> None:
@@ -1349,10 +1939,10 @@ def _safe_resolve_inside_vault(vault_dir: Path, rel_path: str) -> Optional[Path]
             return None
         if part.split(".")[0].strip().upper() in _WIN_RESERVED_NAMES:
             return None
-    cand = (vault_dir / clean).resolve()
-    vault_resolved = vault_dir.resolve()
+    cand = _norm_vault_path(vault_dir / clean)
+    vault_resolved = _norm_vault_path(vault_dir)
     try:
-        cand.relative_to(vault_resolved)
+        Path(os.path.normcase(str(cand))).relative_to(Path(os.path.normcase(str(vault_resolved))))
     except ValueError:
         return None
     return cand
@@ -1495,10 +2085,12 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
     deadline = _time.monotonic() + _PREVIEW_SYNC_BUDGET_SEC
     pending_count = 0
+    synced_doc_cache_any = False
     sig_h = hashlib.sha256()
     sig_h.update(f"{mounted_letter or ''}|{vault_dir}\n".encode("utf-8", "ignore"))
     files_out: List[Dict[str, Any]] = []
     for full_p, rel_p, st in entries:
+        s_full_str = (_drive_root(mounted_letter) + rel_p.replace("/", "\\")) if mounted_letter else str(full_p)
         key = _preview_sig_key(full_p, st)
         meta = _get_cached_preview(key)
         if meta is None and _time.monotonic() < deadline:
@@ -1518,6 +2110,9 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 "imageBase64": "",
                 "sha256": "",
             }
+        elif meta.get("previewText") and not meta.get("isImage"):
+            _sync_doc_body_to_ghost_search_cache(full_p, s_full_str, st, str(meta["previewText"]))
+            synced_doc_cache_any = True
         folder_id, folder_name, folder_path = _resolve_folder_meta(rel_p, mounted_letter)
         locked_by = _lock_owner_from_scan(
             full_p, lock_names_by_dir.get(os.path.normcase(str(full_p.parent))), fallback_owner, win32_map, rel_p
@@ -1532,7 +2127,7 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             {
                 "name": full_p.name,
                 "relPath": rel_p,
-                "fullPath": (_drive_root(mounted_letter) + rel_p.replace("/", "\\")) if mounted_letter else str(full_p),
+                "fullPath": s_full_str,
                 "realDiskPath": str(full_p),
                 "folderId": folder_id,
                 "folderName": folder_name,
@@ -1554,6 +2149,8 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 "previewPending": pending,
             }
         )
+    if synced_doc_cache_any:
+        _flush_ghost_search_doc_cache()
     list_sig = sig_h.hexdigest()[:40]
 
     # ── 탐색기에서 직접 지운 파일 감지 (스캔이 100% 완료된 경우에만 · 실제 부재 재확인 후에만) ──

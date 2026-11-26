@@ -3718,7 +3718,23 @@ _SEARCH_SKIP_SUB_DIRS = {
     ".cache", "coverage", "storybook-static", "documents and settings",
 }
 
-_SCAN_DIRS_CACHE: dict = {"ts": 0.0, "dirs": []}
+_SCAN_DIRS_CACHE: dict = {"ts": 0.0, "s_sig": "", "dirs": []}
+
+
+def _get_s_drive_mount_fast_sig() -> str:
+    if os.name != "nt":
+        return ""
+    try:
+        from ctypes import wintypes as _wt_sd
+        _buf_sd = ctypes.create_unicode_buffer(1024)
+        _k32_sd = ctypes.windll.kernel32
+        _k32_sd.QueryDosDeviceW.argtypes = [_wt_sd.LPCWSTR, _wt_sd.LPWSTR, _wt_sd.DWORD]
+        _k32_sd.QueryDosDeviceW.restype = _wt_sd.DWORD
+        if _k32_sd.QueryDosDeviceW("S:", _buf_sd, 1024):
+            return _buf_sd.value
+    except Exception:
+        pass
+    return "1" if os.path.exists("S:\\") else "0"
 
 
 def _collect_search_scan_dirs(
@@ -3734,7 +3750,15 @@ def _collect_search_scan_dirs(
       대형 프로젝트 폴더가 있어도 D:\\기타 · D:\\C드라이브에서 이동 등 모든 폴더의 보유 파일 전부를 누락 없이 수집합니다!
     """
     now_c = time.time()
-    if not force and _SCAN_DIRS_CACHE["dirs"] and (now_c - float(_SCAN_DIRS_CACHE["ts"])) < 20.0:
+    cur_s_sig = _get_s_drive_mount_fast_sig()
+    if cur_s_sig != _SCAN_DIRS_CACHE.get("s_sig"):
+        _KNOWN_USER_FOLDERS_CACHE.clear()
+    if (
+        not force
+        and _SCAN_DIRS_CACHE["dirs"]
+        and cur_s_sig == _SCAN_DIRS_CACHE.get("s_sig")
+        and (now_c - float(_SCAN_DIRS_CACHE["ts"])) < 20.0
+    ):
         return list(_SCAN_DIRS_CACHE["dirs"])
 
     folders = _get_known_user_folders_for_search()
@@ -3877,6 +3901,7 @@ def _collect_search_scan_dirs(
             grp["elapsed"] += max(0.0, time.time() - t_step)
 
     _SCAN_DIRS_CACHE["dirs"] = list(scan_dirs)
+    _SCAN_DIRS_CACHE["s_sig"] = cur_s_sig
     _SCAN_DIRS_CACHE["ts"] = time.time()
     return scan_dirs
 
@@ -4167,7 +4192,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                     if doc_body_cache:
                         sig_v3 = f"{fp_str}|{st_sz}|{st_mt}|v3_sota50k"
                         cached_txt = doc_body_cache.get(sig_v3) or ""
-                        if not cached_txt and idx_d < 80:
+                        if not cached_txt and (idx_d < 80 or fp_str.upper().startswith("S:")):
                             try:
                                 resolved_entry = Path(fp_str).resolve()
                                 cached_txt = doc_body_cache.get(f"{resolved_entry}|{st_sz}|{st_mt}|v3_sota50k") or ""
@@ -5221,9 +5246,11 @@ def _toast_worker() -> None:
         _render_search_results()
         _resize_for_stage()
 
+    ui3_main_callbacks: queue.Queue = queue.Queue()
+
     # =================================================================
-    # [창 UI ③] 📸 사진·OCR 공간이동창 (원본 사진 넣기 vs OCR 단어칩 콕 찍기)
-    # - [창 UI ①], [창 UI ②]와 100% 분리된 사진·OCR 전용 독립 창!
+    # [창 UI ③] 📝 사진·표 OCR 창 (원본 사진 복사 + 표 전체 엑셀(TSV)로 복사 + 전체 텍스트 복사 + 단어칩)
+    # - [창 UI ①], [창 UI ②]와 100% 분리된 사진·표 OCR 전용 독립 창!
     # =================================================================
     def _build_ui3_photo_ocr_window(win: tk.Toplevel, img_path_arg: str, pt_x: int, pt_y: int, work_area: tuple[int, int, int, int]) -> None:
         global _CURRENT_OPEN_UI_MODE
@@ -5284,8 +5311,8 @@ def _toast_worker() -> None:
 
         hdr = tk.Frame(outer, bg="#0F172A", padx=6, pady=4)
         hdr.pack(fill="x", pady=(0, 6))
-        tk.Label(hdr, text="👻 사진·OCR 공간이동창", fg="#0B1120", bg="#FDE047", padx=6, pady=1, font=("Malgun Gothic", 8, "bold")).pack(side="left", padx=(0, 6))
-        tk.Label(hdr, text=str(get_trial_badge_summary().get("ui3_hint") or "원하는 단어칩을 클릭하면 커서에 0.1초 입력!"), fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold")).pack(side="left")
+        tk.Label(hdr, text="📝 사진·표 OCR 창", fg="#0B1120", bg="#FDE047", padx=6, pady=1, font=("Malgun Gothic", 8, "bold")).pack(side="left", padx=(0, 6))
+        tk.Label(hdr, text=str(get_trial_badge_summary().get("ui3_hint") or "복사 버튼을 누르거나 단어칩을 콕 찍어 바로 복사·입력하세요!"), fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 8, "bold")).pack(side="left")
 
         close_b = tk.Label(hdr, text="✕", fg="#94A3B8", bg="#1E293B", padx=5, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         close_b.pack(side="right", padx=(4, 0))
@@ -5305,6 +5332,17 @@ def _toast_worker() -> None:
         right_p.pack(side="left", fill="both", expand=True)
 
         img_p_str = str((target_rec.get("img_path") or target_rec.get("file_path") if target_rec else "") or img_path_arg or "").strip()
+        if not img_p_str and target_rec and target_rec.get("png_bytes"):
+            try:
+                cap_dir = _MERLIN_APPDATA / "captures"
+                cap_dir.mkdir(parents=True, exist_ok=True)
+                tmp_cap = cap_dir / f"귀신같이_캡처_{time.strftime('%Y%m%d_%H%M%S')}_{int(time.time()*1000)%1000:03d}.png"
+                tmp_cap.write_bytes(target_rec["png_bytes"])
+                img_p_str = str(tmp_cap)
+                target_rec["img_path"] = img_p_str
+            except Exception:
+                pass
+
         if Image is not None and ImageTk is not None:
             try:
                 im_o = None
@@ -5322,9 +5360,44 @@ def _toast_worker() -> None:
             except Exception:
                 pass
 
-        b_orig = tk.Label(left_p, text="🖼️ 원본 사진 그대로 넣기", fg="#0B1120", bg="#2DD4BF", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
+        def _copy_and_optional_paste_ui3(text_val: str = "", file_path: str = "", toast_done: str = "") -> None:
+            _close_win()
+            should_paste_into_input = bool(_IS_INPUT_SUMMON_CONTEXT and _LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND))
+            if file_path and Path(file_path).exists():
+                set_clipboard_hdrop_file(file_path)
+                if should_paste_into_input:
+                    try:
+                        if u32.GetForegroundWindow() != _LAST_TARGET_HWND:
+                            u32.SetForegroundWindow(_LAST_TARGET_HWND)
+                            time.sleep(0.025)
+                        time.sleep(0.03)
+                        tap_key_combo([VK_CONTROL], VK_V)
+                    except Exception:
+                        pass
+                show_ghost_toast(toast_done or "원본 사진이 클립보드에 복사되었습니다", duration_ms=1300)
+                return
+            if text_val:
+                set_clipboard_text(text_val)
+                if should_paste_into_input:
+                    try:
+                        if u32.GetForegroundWindow() != _LAST_TARGET_HWND:
+                            u32.SetForegroundWindow(_LAST_TARGET_HWND)
+                            time.sleep(0.025)
+                        time.sleep(0.03)
+                        tap_key_combo([VK_CONTROL], VK_V)
+                    except Exception:
+                        pass
+                show_ghost_toast(toast_done or "클립보드에 복사되었습니다", duration_ms=1300)
+
+        b_orig = tk.Label(left_p, text="🖼️ 원본 사진 복사", fg="#0B1120", bg="#2DD4BF", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         b_orig.pack(fill="x", pady=2)
-        b_orig.bind("<Button-1>", lambda _e: _paste_to_target(file_path=img_p_str))
+        b_orig.bind(
+            "<Button-1>",
+            lambda _e: _copy_and_optional_paste_ui3(
+                file_path=img_p_str,
+                toast_done="원본 사진이 클립보드에 복사되었습니다",
+            ),
+        )
 
         rec_txt_raw = str(target_rec.get("text", "") if target_rec else "").strip()
         is_placeholder_txt = (
@@ -5345,23 +5418,45 @@ def _toast_worker() -> None:
             init_ocr_t = get_clipboard_text()
 
         need_ondemand_ocr = bool(not teleport_text and img_p_str and os.path.isfile(img_p_str) and not init_ocr_t.strip())
+        ocr_loading = [need_ondemand_ocr]
+        pending_copy_mode: list[str] = [""]
         ocr_state: dict[str, str] = {
             "full": init_ocr_t,
             "tsv": teleport_tsv or (re.sub(r"  +", "\t", _clean_ocr_noise(init_ocr_t)) if init_ocr_t else ""),
         }
 
-        b_tsv = tk.Label(left_p, text="📊 표 전체 엑셀(TSV)로 넣기", fg="#F8FAFC", bg="#1E293B", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
-        b_tsv.pack(fill="x", pady=2)
-        b_tsv.bind(
-            "<Button-1>",
-            lambda _e: _paste_to_target(
-                text_val=ocr_state["tsv"] or re.sub(r"  +", "\t", _clean_ocr_noise(ocr_state["full"]))
-            )
-            if ocr_state["full"].strip()
-            else None,
-        )
+        def _handle_tsv_copy(_e=None) -> None:
+            full_now = ocr_state["full"].strip()
+            if full_now:
+                tsv_out = ocr_state["tsv"].strip() or re.sub(r"  +", "\t", _clean_ocr_noise(full_now))
+                _copy_and_optional_paste_ui3(
+                    text_val=tsv_out,
+                    toast_done="표 전체가 엑셀(TSV) 형식으로 복사되었습니다",
+                )
+            elif ocr_loading[0]:
+                pending_copy_mode[0] = "tsv"
+                _render_ui3_chips([], status_msg="⏳ 표 데이터를 추출하는 즉시 엑셀 형식으로 자동 복사합니다...")
+            else:
+                show_ghost_toast("추출된 표·글자가 없어 복사할 내용이 없습니다", duration_ms=1400)
 
-        tk.Label(right_p, text="📝 추출된 단어 조각(칩) — 콕 찍으면 커서에 즉시 입력", fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 6))
+        def _handle_full_text_copy(_e=None) -> None:
+            full_now = _clean_ocr_noise(ocr_state["full"]).strip()
+            if full_now:
+                _copy_and_optional_paste_ui3(
+                    text_val=full_now,
+                    toast_done="전체 텍스트가 클립보드에 복사되었습니다",
+                )
+            elif ocr_loading[0]:
+                pending_copy_mode[0] = "full"
+                _render_ui3_chips([], status_msg="⏳ 글자 추출이 끝나는 즉시 전체 텍스트를 자동 복사합니다...")
+            else:
+                show_ghost_toast("추출된 글자가 없어 복사할 내용이 없습니다", duration_ms=1400)
+
+        b_tsv = tk.Label(left_p, text="📊 표 전체 엑셀(TSV)로 복사", fg="#F8FAFC", bg="#1E293B", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
+        b_tsv.pack(fill="x", pady=2)
+        b_tsv.bind("<Button-1>", _handle_tsv_copy)
+
+        tk.Label(right_p, text="📝 추출된 단어 조각(칩) — 클릭하면 즉시 복사·입력", fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 6))
         chips_box = tk.Frame(right_p, bg="#0F172A")
         chips_box.pack(fill="both", expand=True)
 
@@ -5383,12 +5478,19 @@ def _toast_worker() -> None:
             for idx_ch, ch_val in enumerate(chip_items[:15]):
                 ch_lbl = tk.Label(chips_box, text=f" {ch_val} ", fg="#5EEAD4", bg="#1E293B", padx=6, pady=3, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
                 ch_lbl.grid(row=idx_ch // 3, column=idx_ch % 3, padx=3, pady=3, sticky="ew")
-                ch_lbl.bind("<Button-1>", lambda _e, v=ch_val: _paste_to_target(text_val=v))
+                ch_lbl.bind(
+                    "<Button-1>",
+                    lambda _e, v=ch_val: _copy_and_optional_paste_ui3(
+                        text_val=v,
+                        toast_done=f"단어칩 복사 완료: {v[:22]}",
+                    ),
+                )
 
         if need_ondemand_ocr:
             _render_ui3_chips([], status_msg="⏳ 사진 속 글자·표를 읽어오는 중...")
 
             def _bg_ocr_worker(target_img_p: str) -> None:
+                _set_current_thread_priority(-1)
                 res = _run_ondemand_winrt_image_ocr(target_img_p)
                 ft = str(res.get("fullText") or "").strip()
                 tsv = str(res.get("tsvTable") or ft).strip()
@@ -5403,21 +5505,31 @@ def _toast_worker() -> None:
                         target_rec["text"] = ft
 
                 def _apply_on_ui() -> None:
+                    ocr_loading[0] = False
                     if current_win[0] is not win:
                         return
                     if res.get("hasText") and ft:
                         ocr_state["full"] = ft
-                        ocr_state["tsv"] = tsv
+                        ocr_state["tsv"] = tsv or re.sub(r"  +", "\t", _clean_ocr_noise(ft))
+                        if pending_copy_mode[0] == "tsv":
+                            pending_copy_mode[0] = ""
+                            _handle_tsv_copy()
+                            return
+                        if pending_copy_mode[0] == "full":
+                            pending_copy_mode[0] = ""
+                            _handle_full_text_copy()
+                            return
                         _render_ui3_chips(ch_list or [ft[:28]])
                     else:
                         ocr_state["full"] = ""
                         ocr_state["tsv"] = ""
-                        _render_ui3_chips([], status_msg="인식된 글자가 없어요 (좌측 [원본 사진 그대로 넣기] 가능)")
+                        if pending_copy_mode[0]:
+                            pending_copy_mode[0] = ""
+                            show_ghost_toast("추출된 글자가 없어 복사할 내용이 없습니다", duration_ms=1400)
+                            return
+                        _render_ui3_chips([], status_msg="인식된 글자가 없어요 (좌측 [🖼️ 원본 사진 복사] 가능)")
 
-                try:
-                    win.after(0, _apply_on_ui)
-                except Exception:
-                    pass
+                ui3_main_callbacks.put(_apply_on_ui)
 
             threading.Thread(target=_bg_ocr_worker, args=(img_p_str,), daemon=True).start()
         else:
@@ -5425,18 +5537,13 @@ def _toast_worker() -> None:
             if chips:
                 _render_ui3_chips(chips)
             else:
-                _render_ui3_chips([], status_msg="인식된 글자가 없어요 (좌측 [원본 사진 그대로 넣기] 가능)")
+                _render_ui3_chips([], status_msg="인식된 글자가 없어요 (좌측 [🖼️ 원본 사진 복사] 가능)")
 
-        b_all = tk.Label(right_p, text="📋 전체 텍스트 통째로 넣기", fg="#E2E8F0", bg="#334155", padx=6, pady=3, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
+        b_all = tk.Label(right_p, text="📋 전체 텍스트 복사", fg="#E2E8F0", bg="#334155", padx=6, pady=3, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         b_all.pack(fill="x", pady=(6, 0))
-        b_all.bind(
-            "<Button-1>",
-            lambda _e: _paste_to_target(text_val=_clean_ocr_noise(ocr_state["full"]))
-            if ocr_state["full"].strip()
-            else None,
-        )
+        b_all.bind("<Button-1>", _handle_full_text_copy)
 
-        rw, rh = 620, 310
+        rw, rh = 640, 310
         x = max(m_left + 12, min(pt_x - 20, m_right - rw - 16))
         y = max(m_top + 12, min(pt_y + 16, m_bottom - rh - 16))
         _apply_win_topmost(win, x, y, rw, rh, activate=False)
@@ -5485,6 +5592,13 @@ def _toast_worker() -> None:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))
             was_mouse_down[0] = phys_any_btn
+
+            while not ui3_main_callbacks.empty():
+                try:
+                    cb_fn = ui3_main_callbacks.get_nowait()
+                    cb_fn()
+                except Exception:
+                    pass
 
             msg_item = None
             need_lift = False
@@ -10139,6 +10253,25 @@ def main(in_process: bool = False) -> None:
                         fg_chk = root_under_chk
             proc_chk = _get_process_name_from_hwnd(fg_chk).lower() if fg_chk else ""
             cls_chk = _get_win_class_only(fg_chk) if fg_chk else ""
+            # [기획서·기능명세서 확정 규칙 ③]: 화면 캡처(Win+Shift+S 등) 직후 15초 내 최초 1회 소환 시 📝 사진·표 OCR 창(UI ③) 직행!
+            if recent_images and last_image_ts > last_consumed_image_ts and last_image_ts > last_copy_ts and (now_s - last_image_ts) <= 15.0:
+                last_consumed_image_ts = last_image_ts
+                _IS_INPUT_SUMMON_CONTEXT = bool(
+                    proc_chk not in ("explorer.exe", "python.exe", "pythonw.exe", "")
+                    and cls_chk not in ("Progman", "WorkerW", "Shell_TrayWnd", "CabinetWClass", "ExploreWClass")
+                )
+                if proc_chk not in ("python.exe", "pythonw.exe"):
+                    _capture_target_hwnd()
+                play_baby_ghost_sound(mode="summon")
+                record_feature_telemetry("ctrl0_summon_bar")
+                disarm_sub_hotkeys()
+                _LAST_UI_OPENED_TS = time.time()
+                _log_seq_diag(
+                    "SUMMON_OPEN_UI3_RECENT_SHOT",
+                    f"src={source} fg_proc={proc_chk} age={now_s - last_image_ts:.2f}s",
+                )
+                show_ghost_toast("__UI3_OCR__|", duration_ms=8000)
+                return
             sel_file_for_ui2 = ""
             if (proc_chk == "explorer.exe" and cls_chk in ("CabinetWClass", "ExploreWClass")) or cls_chk in ("Progman", "WorkerW"):
                 try:
@@ -11145,9 +11278,9 @@ def main(in_process: bool = False) -> None:
                                         last_image_sig = png_bytes
                                         if last_image_ts > 0 and (ts_cap - last_image_ts) > IMAGE_CLEAN_SECONDS:
                                             recent_images.clear()
-                                        recent_images.append(png_bytes)
-                                        last_image_ts = ts_cap
                                         record_ai_image_history(png_bytes)
+                                        recent_images.append(png_bytes)
+                                        last_image_ts = max(ts_cap, time.time())
                             except Exception:
                                 pass
 
