@@ -1436,7 +1436,9 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
 
         ocrTitleLabel.text = "📝 영상 화면 속 한글 자동 추출"
         ocrTitleLabel.textColor = UIColor(red: 94.0 / 255.0, green: 234.0 / 255.0, blue: 212.0 / 255.0, alpha: 1.0)
-        ocrTitleLabel.font = UIFont.boldSystemFont(ofSize: 13.5)
+        ocrTitleLabel.font = UIFont.boldSystemFont(ofSize: 13.0)
+        ocrTitleLabel.lineBreakMode = .byTruncatingTail
+        ocrTitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         copyAllButton.setTitle("📋 전체 복사", for: .normal)
         copyAllButton.setTitleColor(UIColor(red: 15.0 / 255.0, green: 23.0 / 255.0, blue: 42.0 / 255.0, alpha: 1.0), for: .normal)
@@ -1446,6 +1448,7 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
         copyAllButton.contentEdgeInsets = UIEdgeInsets(top: 5, left: 11, bottom: 5, right: 11)
         copyAllButton.isHidden = true
         copyAllButton.setContentHuggingPriority(.required, for: .horizontal)
+        copyAllButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         copyAllButton.addTarget(self, action: #selector(handleCopyAllTapped), for: .touchUpInside)
 
         ocrHeader.addArrangedSubview(ocrTitleLabel)
@@ -1454,8 +1457,11 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
 
         let ocrScroll = UIScrollView()
         ocrScroll.translatesAutoresizingMaskIntoConstraints = false
+        ocrScroll.alwaysBounceVertical = true
         linesStack.axis = .vertical
-        linesStack.spacing = 6
+        linesStack.alignment = .fill
+        linesStack.distribution = .fill
+        linesStack.spacing = 8
         linesStack.translatesAutoresizingMaskIntoConstraints = false
         ocrScroll.addSubview(linesStack)
         ocrCard.addSubview(ocrScroll)
@@ -1565,28 +1571,45 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
             return
         }
 
-        ocrTitleLabel.text = "📝 추출된 화면 한글 (\(cur.lines.count)구간 · 터치 시 구간 이동·복사)"
+        ocrTitleLabel.text = "📝 추출된 화면 한글 (\(cur.lines.count)구간 · 터치 시 이동·복사)"
         copyAllButton.isHidden = false
         for (idx, entry) in cur.lines.enumerated() {
             lineTimeSecs.append(entry.timeSec)
             lineTexts.append(entry.text)
 
-            let btn = UIButton(type: .system)
-            btn.tag = idx
-            btn.contentHorizontalAlignment = .leading
-            btn.titleLabel?.numberOfLines = 0
-            btn.titleLabel?.font = UIFont.systemFont(ofSize: 13.5, weight: .medium)
-            btn.setTitle("[\(entry.timestamp)]  \(entry.text)", for: .normal)
-            btn.setTitleColor(UIColor(red: 248.0 / 255.0, green: 250.0 / 255.0, blue: 252.0 / 255.0, alpha: 1.0), for: .normal)
-            btn.backgroundColor = UIColor(red: 30.0 / 255.0, green: 41.0 / 255.0, blue: 59.0 / 255.0, alpha: 1.0)
-            btn.layer.cornerRadius = 10
-            btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
-            btn.addTarget(self, action: #selector(handleLineTapped(_:)), for: .touchUpInside)
-            linesStack.addArrangedSubview(btn)
+            // [줄겹침 원천 차단]: classic UIButton은 다중 줄 intrinsicContentSize가 1줄로 고정되어
+            // 다음 행과 겹치므로, UIControl 컨테이너 내부에 4면 오토레이아웃 UILabel을 배치합니다.
+            let rowBox = UIControl()
+            rowBox.tag = idx
+            rowBox.backgroundColor = UIColor(red: 30.0 / 255.0, green: 41.0 / 255.0, blue: 59.0 / 255.0, alpha: 1.0)
+            rowBox.layer.cornerRadius = 10
+            rowBox.clipsToBounds = true
+            rowBox.translatesAutoresizingMaskIntoConstraints = false
+            rowBox.addTarget(self, action: #selector(handleLineTapped(_:)), for: .touchUpInside)
+
+            let rowLbl = UILabel()
+            rowLbl.text = "[\(entry.timestamp)]  \(entry.text)"
+            rowLbl.textColor = UIColor(red: 248.0 / 255.0, green: 250.0 / 255.0, blue: 252.0 / 255.0, alpha: 1.0)
+            rowLbl.font = UIFont.systemFont(ofSize: 13.5, weight: .medium)
+            rowLbl.numberOfLines = 0
+            rowLbl.lineBreakMode = .byWordWrapping
+            rowLbl.isUserInteractionEnabled = false
+            rowLbl.translatesAutoresizingMaskIntoConstraints = false
+            rowLbl.setContentCompressionResistancePriority(.required, for: .vertical)
+            rowLbl.setContentHuggingPriority(.required, for: .vertical)
+
+            rowBox.addSubview(rowLbl)
+            NSLayoutConstraint.activate([
+                rowLbl.topAnchor.constraint(equalTo: rowBox.topAnchor, constant: 9),
+                rowLbl.bottomAnchor.constraint(equalTo: rowBox.bottomAnchor, constant: -9),
+                rowLbl.leadingAnchor.constraint(equalTo: rowBox.leadingAnchor, constant: 11),
+                rowLbl.trailingAnchor.constraint(equalTo: rowBox.trailingAnchor, constant: -11)
+            ])
+            linesStack.addArrangedSubview(rowBox)
         }
     }
 
-    @objc private func handleLineTapped(_ sender: UIButton) {
+    @objc private func handleLineTapped(_ sender: UIControl) {
         let idx = sender.tag
         guard idx >= 0 && idx < lineTexts.count else { return }
         let sec = lineTimeSecs[idx]

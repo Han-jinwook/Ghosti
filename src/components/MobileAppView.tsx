@@ -45,6 +45,10 @@ import {
   maskSensitiveDocText,
 } from './PricingModal';
 import { CrossDeviceClipboardAndPairingBar } from '../domains/paid_device_sync/CrossDeviceClipboardAndPairingBar';
+import {
+  importMobileDocumentFiles,
+  loadPersistedMobileImportedDocuments,
+} from '../services/mobileDocumentImportService';
 
 type MainMenuId = 'personal' | 'photo_share' | 'work';
 
@@ -146,6 +150,63 @@ export const MobileAppView: React.FC = () => {
     mobileGalleryLimitedAccess,
     syncMobileNativeGalleryAuto,
   } = useSaySeeStore();
+
+  const mobileDocInputRef = useRef<HTMLInputElement | null>(null);
+  const [importingMobileDocs, setImportingMobileDocs] = useState<boolean>(false);
+
+  // [아이폰·모바일 파일 앱 문서 영구 복원]: 처음 1회 불러온 내 폰 문서를 재실행 시 자동 복원해 즉시 검색 가능하게 유지
+  useEffect(() => {
+    let cancelled = false;
+    void loadPersistedMobileImportedDocuments().then((savedDocs) => {
+      if (cancelled || savedDocs.length === 0) return;
+      useSaySeeStore.setState((st) => {
+        const existingIds = new Set((st.localDocuments || []).map((d) => d.id));
+        const toAdd = savedDocs.filter((d) => !existingIds.has(d.id));
+        if (toAdd.length === 0) return {};
+        const mergedLocal = [...toAdd, ...(st.localDocuments || [])];
+        const mergedMatched =
+          st.hasExecutedUserSearch && st.activeQuery
+            ? st.matchedLocalDocs
+            : [...toAdd, ...(st.matchedLocalDocs || [])];
+        return {
+          localDocuments: mergedLocal,
+          matchedLocalDocs: mergedMatched,
+        };
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleMobileDocumentPick = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setImportingMobileDocs(true);
+    try {
+      const imported = await importMobileDocumentFiles(files);
+      if (imported.length > 0) {
+        useSaySeeStore.setState((st) => {
+          const importedIdSet = new Set(imported.map((d) => d.id));
+          const mergedLocal = [
+            ...imported,
+            ...(st.localDocuments || []).filter((d) => !importedIdSet.has(d.id)),
+          ];
+          const mergedMatched = [
+            ...imported,
+            ...(st.matchedLocalDocs || []).filter((d) => !importedIdSet.has(d.id)),
+          ];
+          return {
+            localDocuments: mergedLocal,
+            matchedLocalDocs: mergedMatched,
+            lastQuarantineToast: `내 폰 문서 ${imported.length}건을 불러와 검색 준비를 마쳤습니다.`,
+          };
+        });
+      }
+    } finally {
+      setImportingMobileDocs(false);
+      if (mobileDocInputRef.current) mobileDocInputRef.current.value = '';
+    }
+  };
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -1174,11 +1235,49 @@ export const MobileAppView: React.FC = () => {
               );
             })() : searchSpace === 'vault' ? (
               <section className="flex flex-col gap-3">
-                <div className="flex items-center justify-between px-0.5">
+                <input
+                  ref={mobileDocInputRef}
+                  type="file"
+                  multiple
+                  accept=".pdf,.txt,.md,.csv,.json,.xml,.html,.htm,.docx,.xlsx,.pptx,.hwp,.hwpx"
+                  className="hidden"
+                  onChange={(e) => void handleMobileDocumentPick(e.target.files)}
+                />
+                <div className="flex items-center justify-between gap-2 px-0.5">
                   <span className="text-[14.5px] text-slate-900 font-bold">
                     문서 · 서류 (문서 {matchedLocalDocs.length}건 · 사진 {matchedVaultPhotos.length}장)
                   </span>
+                  <button
+                    type="button"
+                    disabled={importingMobileDocs}
+                    onClick={() => mobileDocInputRef.current?.click()}
+                    className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-60"
+                  >
+                    {importingMobileDocs ? '불러오는 중...' : '📂 문서 불러오기'}
+                  </button>
                 </div>
+
+                {matchedLocalDocs.length === 0 && matchedVaultPhotos.length === 0 && (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-start gap-2.5">
+                    <p className="text-[12.5px] text-slate-700 leading-relaxed m-0">
+                      {isIosMobileBrowserOrApp()
+                        ? "아이폰 보안 정책상 '파일' 앱 속 문서는 처음 1회 직접 선택해 주셔야 본문 검색과 바로 열기가 시작됩니다."
+                        : '스마트폰에 저장된 PDF·한글·워드·엑셀·텍스트 문서를 선택하면 본문까지 바로 검색할 수 있습니다.'}
+                    </p>
+                    <button
+                      type="button"
+                      disabled={importingMobileDocs}
+                      onClick={() => mobileDocInputRef.current?.click()}
+                      className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer disabled:opacity-60"
+                    >
+                      {importingMobileDocs
+                        ? '문서 읽는 중...'
+                        : isIosMobileBrowserOrApp()
+                        ? '📂 아이폰 파일 앱에서 문서 불러오기'
+                        : '📂 내 폰 문서 불러오기'}
+                    </button>
+                  </div>
+                )}
 
                 {hasExecutedUserSearch &&
                   activeQuery &&
