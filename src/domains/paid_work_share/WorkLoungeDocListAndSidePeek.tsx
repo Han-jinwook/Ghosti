@@ -177,12 +177,12 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                         setIsSidePeekOpen(true);
                       }
                     }}
-                    className={`px-4 py-3 flex flex-col gap-1.5 cursor-pointer transition-colors ${
+                    className={`px-3 sm:px-4 py-3 flex flex-col gap-1.5 cursor-pointer transition-colors ${
                       isSelected ? 'bg-slate-100/80' : 'hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 w-full sm:w-auto sm:flex-1">
                         <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-semibold shrink-0">
                           {doc.ext}
                         </span>
@@ -196,23 +196,23 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 sm:gap-2 min-w-0 max-w-full w-full sm:w-auto">
                         <span
                           data-testid="work-doc-folder-path-badge"
-                          className="inline-flex items-center px-2 py-0.5 rounded bg-teal-50 border border-teal-200/80 text-teal-800 text-[11px] font-semibold font-mono max-w-full truncate"
+                          className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded bg-teal-50 border border-teal-200/80 text-teal-800 text-[10.5px] sm:text-[11px] font-semibold font-mono max-w-[46vw] sm:max-w-full truncate"
                         >
                           {doc.folderPath}
                         </span>
-                        <span className="text-[11.5px] text-slate-500 whitespace-nowrap">
+                        <span className="text-[11px] sm:text-[11.5px] text-slate-500 whitespace-nowrap">
                           {doc.sizeLabel} · {doc.updatedAt}
                         </span>
                         {doc.lockedBy ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium whitespace-nowrap shrink-0">
+                          <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] sm:text-[11px] font-medium whitespace-nowrap shrink-0 ml-auto sm:ml-0">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                             {doc.lockedBy}님 열람 중
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-medium whitespace-nowrap shrink-0">
+                          <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[10.5px] sm:text-[11px] font-medium whitespace-nowrap shrink-0 ml-auto sm:ml-0">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                             편집 가능
                           </span>

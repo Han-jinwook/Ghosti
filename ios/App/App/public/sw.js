@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghosti-pwa-v20261120-v15';
+const CACHE_NAME = 'ghosti-pwa-v20261126-v16';
 const IMMUTABLE_HASHED_ASSET_RX = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(?:js|css|wasm|png|jpg|jpeg|webp|svg|woff2?)$/i;
 
 self.addEventListener('install', () => {
@@ -6,22 +6,14 @@ self.addEventListener('install', () => {
 });
 
 self.addEventListener('activate', (event) => {
+  // [시크릿 창·신규 방문자 10초 2중 로딩 근본 해결]:
+  // 최초 SW 활성화 시 client.navigate(client.url)로 멀쩡히 로드된 페이지를 강제 리로드하던 동작을 제거합니다.
+  // HTML navigate 요청은 아래 fetch 핸들러에서 cache:'no-store'로 항상 최신 배포본을 받으므로 강제 리로드가 불필요합니다.
   event.waitUntil(
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
-      .then(() =>
-        self.clients.matchAll({ type: 'window' }).then((windowClients) => {
-          windowClients.forEach((client) => {
-            try {
-              client.navigate(client.url);
-            } catch {
-              // ignore navigation error
-            }
-          });
-        })
-      )
   );
 });
 
