@@ -244,13 +244,23 @@ export function setActiveHostTunnelSession(
   };
 }
 
-function resolveCurrentWorkAccountEmail(explicitEmail?: string): string {
+export function resolveCurrentWorkAccountEmail(explicitEmail?: string): string {
   const clean = (explicitEmail || '').trim().toLowerCase();
-  if (clean) return clean;
+  if (clean && clean !== 'anonymous') return clean;
   if (typeof window !== 'undefined') {
     try {
-      const saved = (localStorage.getItem('merlin_hub_user_email') || '').trim().toLowerCase();
-      if (saved) return saved;
+      const directKeys = ['ghosti_hub_user_email', 'userEmail', 'merlin_hub_user_email'];
+      for (const k of directKeys) {
+        const v = (localStorage.getItem(k) || '').trim().toLowerCase();
+        if (v && v.includes('@') && v !== 'anonymous') return v;
+      }
+      const rawUser =
+        localStorage.getItem('merlin_cached_user') || localStorage.getItem('merlin_hub_user');
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser) as { email?: string };
+        const ce = String(parsed?.email || '').trim().toLowerCase();
+        if (ce && ce.includes('@') && ce !== 'anonymous') return ce;
+      }
     } catch {
       /* ignore */
     }
@@ -558,17 +568,32 @@ export function readActiveWorkRoomInviteMeta(): WorkRoomInviteMeta {
   try {
     const params = new URLSearchParams(window.location.search);
     const urlRoomId = (params.get('workRoom') || '').trim();
-    const urlToken = (params.get('inviteToken') || params.get('token') || '').trim();
+    const rawUrlToken = (params.get('inviteToken') || params.get('token') || '').trim();
+    const urlToken =
+      rawUrlToken.startsWith('eyJ') && rawUrlToken.split('.').length === 3 ? '' : rawUrlToken;
     const urlHost = (params.get('host') || '').trim();
     const urlTitle = (params.get('title') || '').trim();
 
+    let savedParsed: Partial<WorkRoomInviteMeta> | null = null;
+    try {
+      const rawSaved = sessionStorage.getItem(WORK_INVITE_SESSION_KEY);
+      if (rawSaved) {
+        savedParsed = JSON.parse(rawSaved) as Partial<WorkRoomInviteMeta>;
+      }
+    } catch {
+      savedParsed = null;
+    }
+
     if (urlRoomId) {
+      const preservedToken =
+        urlToken ||
+        (savedParsed?.roomId === urlRoomId ? (savedParsed.inviteToken || '').trim() : '');
       const resolved: WorkRoomInviteMeta = {
         hasWorkInvite: true,
         roomId: urlRoomId,
-        inviteToken: urlToken,
-        hostNickname: urlHost || '방장',
-        roomTitle: urlTitle || '우리팀 업무 공유방 (S:)',
+        inviteToken: preservedToken,
+        hostNickname: urlHost || savedParsed?.hostNickname || '방장',
+        roomTitle: urlTitle || savedParsed?.roomTitle || '우리팀 업무 공유방 (S:)',
       };
       try {
         sessionStorage.setItem(WORK_INVITE_SESSION_KEY, JSON.stringify(resolved));
@@ -578,18 +603,18 @@ export function readActiveWorkRoomInviteMeta(): WorkRoomInviteMeta {
       return resolved;
     }
 
-    const rawSaved = sessionStorage.getItem(WORK_INVITE_SESSION_KEY);
-    if (rawSaved) {
-      const parsed = JSON.parse(rawSaved) as Partial<WorkRoomInviteMeta>;
-      if (parsed?.roomId) {
-        return {
-          hasWorkInvite: true,
-          roomId: parsed.roomId,
-          inviteToken: parsed.inviteToken || '',
-          hostNickname: parsed.hostNickname || '방장',
-          roomTitle: parsed.roomTitle || '우리팀 업무 공유방 (S:)',
-        };
-      }
+    if (savedParsed?.roomId) {
+      const cleanSavedTok = String(savedParsed.inviteToken || '').trim();
+      return {
+        hasWorkInvite: true,
+        roomId: savedParsed.roomId,
+        inviteToken:
+          cleanSavedTok.startsWith('eyJ') && cleanSavedTok.split('.').length === 3
+            ? ''
+            : cleanSavedTok,
+        hostNickname: savedParsed.hostNickname || '방장',
+        roomTitle: savedParsed.roomTitle || '우리팀 업무 공유방 (S:)',
+      };
     }
   } catch {
     /* ignore */
@@ -679,6 +704,7 @@ export async function ensureMyWorkRoomAndInvite(opts: {
  */
 export async function acceptWorkRoomInvite(opts: {
   inviteToken: string;
+  roomId?: string;
   nickname: string;
 }): Promise<{
   ok: boolean;
@@ -694,7 +720,8 @@ export async function acceptWorkRoomInvite(opts: {
   message?: string;
 }> {
   const cleanTok = (opts.inviteToken || '').trim();
-  if (!cleanTok || !hasAuthenticatedHubAccountSession()) {
+  const cleanRoomId = (opts.roomId || '').trim();
+  if ((!cleanTok && !cleanRoomId) || !hasAuthenticatedHubAccountSession()) {
     return { ok: false };
   }
   const res = await callGhostiServerBridge<{
@@ -710,6 +737,7 @@ export async function acceptWorkRoomInvite(opts: {
     message?: string;
   }>('work_accept_invite', {
     inviteToken: cleanTok,
+    ...(cleanRoomId ? { roomId: cleanRoomId } : {}),
     nickname: resolveCleanWorkClientNickname(opts.nickname),
   });
   if (res.ok && res.roomId && res.hostTunnel?.tunnelUrl) {
@@ -864,10 +892,10 @@ export function readCachedMyWorkRoomMeta(accountEmail?: string): {
       roomTitle?: string;
       hostNickname?: string;
     };
-    if (parsed?.roomId && parsed?.inviteToken) {
+    if (parsed?.roomId) {
       return {
         roomId: parsed.roomId,
-        inviteToken: parsed.inviteToken,
+        inviteToken: parsed.inviteToken || '',
         roomTitle: parsed.roomTitle || '우리팀 업무 공유방 (S:)',
         hostNickname: parsed.hostNickname || '방장',
       };
@@ -876,6 +904,31 @@ export function readCachedMyWorkRoomMeta(accountEmail?: string): {
     /* ignore */
   }
   return null;
+}
+
+export function syncCachedMyWorkRoomMetaFromServer(
+  meta: { roomId: string; roomTitle?: string; hostNickname?: string },
+  accountEmail?: string
+): void {
+  if (typeof window === 'undefined' || !meta.roomId) return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (scopeEmail === 'anonymous') return;
+    const key = `${MY_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`;
+    const prevRaw = localStorage.getItem(key);
+    const prev = prevRaw ? (JSON.parse(prevRaw) as { roomId?: string; inviteToken?: string }) : null;
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        roomId: meta.roomId,
+        inviteToken: prev?.roomId === meta.roomId ? prev.inviteToken || '' : '',
+        roomTitle: meta.roomTitle || '우리팀 업무 공유방 (S:)',
+        hostNickname: meta.hostNickname || '방장',
+      })
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 const KICKED_WORK_ROOM_NOTICE_PREFIX = 'ghosti_kicked_work_room_notice_v1::';

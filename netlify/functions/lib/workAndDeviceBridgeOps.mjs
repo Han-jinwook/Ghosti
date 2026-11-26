@@ -155,9 +155,6 @@ async function verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, inviteToken
   const inv = Array.isArray(invRows) ? invRows[0] : null;
   if (!inv?.room_id) return null;
   if (inv.expires_at && Date.parse(inv.expires_at) <= Date.now()) return null;
-  const maxUses = Number(inv.max_uses || 5);
-  const usedCount = Number(inv.used_count || 0);
-  if (maxUses > 0 && usedCount >= maxUses) return null;
 
   const roomRes = await fetch(
     `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(inv.room_id)}&lounge_type=eq.work&select=room_id,lounge_type,room_title,master_email,pricing_plan&limit=1`,
@@ -830,6 +827,38 @@ export async function handleAuthedWorkAndDeviceAction({
     email
   );
 
+  // 방장이 과거 테스트 등으로 복수의 work 방 행을 가진 경우 PC(work_ensure_room)와 모바일(work_list_my_rooms)이
+  // 100% 동일한 단일 정본 업무방을 선택하도록 보장하는 SSOT 정렬기:
+  // 1순위: 대장 PC 직통 터널(hostTunnelUrl) 활성 방 -> 2순위: 최근 터널 갱신(hostUpdatedAt) -> 3순위: 등록 팀원 수 -> 4순위: 생성일 오름차순
+  function pickCanonicalHostedWorkRoom(candidateRooms, p2pMap, memCountMap, ownerEmail) {
+    if (!Array.isArray(candidateRooms) || candidateRooms.length === 0) return null;
+    if (candidateRooms.length === 1) return candidateRooms[0];
+    const canonicalDetId = `room_${sha256Hex(`${String(ownerEmail || '').trim().toLowerCase()}:work`).slice(0, 16)}`;
+    const sorted = [...candidateRooms].sort((a, b) => {
+      const aId = String(a?.room_id || '');
+      const bId = String(b?.room_id || '');
+      const aP2p = p2pMap?.get(aId)?.state || p2pMap?.get(aId) || {};
+      const bP2p = p2pMap?.get(bId)?.state || p2pMap?.get(bId) || {};
+      const aHasTunnel = aP2p?.hostTunnelUrl ? 1 : 0;
+      const bHasTunnel = bP2p?.hostTunnelUrl ? 1 : 0;
+      if (aHasTunnel !== bHasTunnel) return bHasTunnel - aHasTunnel;
+      const aUpd = Date.parse(aP2p?.hostUpdatedAt || '') || 0;
+      const bUpd = Date.parse(bP2p?.hostUpdatedAt || '') || 0;
+      if (aUpd !== bUpd) return bUpd - aUpd;
+      const aMems = Number(memCountMap?.get(aId) || 0);
+      const bMems = Number(memCountMap?.get(bId) || 0);
+      if (aMems !== bMems) return bMems - aMems;
+      const aDet = aId === canonicalDetId ? 1 : 0;
+      const bDet = bId === canonicalDetId ? 1 : 0;
+      if (aDet !== bDet) return bDet - aDet;
+      const aCreated = Date.parse(a?.created_at || '') || 0;
+      const bCreated = Date.parse(b?.created_at || '') || 0;
+      if (aCreated !== bCreated) return aCreated - bCreated;
+      return aId.localeCompare(bId);
+    });
+    return sorted[0] || null;
+  }
+
   // ===================================================================
   // A. 6. 💼 업무 공유 (S: 드라이브 · Zero-Cloud 대장 PC 직통 터널) 액션군
   // ===================================================================
@@ -839,11 +868,38 @@ export async function handleAuthedWorkAndDeviceAction({
     const hostNickname = String(body.hostNickname || actorNick || '방장').trim().slice(0, 32);
 
     const existRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(email)}&lounge_type=eq.work&order=created_at.asc&limit=1`,
+      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(email)}&lounge_type=eq.work&select=room_id,room_title,master_email,pricing_plan,created_at&order=created_at.asc&limit=10`,
       { headers: srvHeaders(serviceKey) }
     );
     const existRows = existRes.ok ? await existRes.json().catch(() => []) : [];
-    let roomId = Array.isArray(existRows) && existRows[0]?.room_id ? String(existRows[0].room_id) : '';
+    const safeExistRooms = Array.isArray(existRows) ? existRows.filter((r) => r?.room_id) : [];
+    let chosenRoom = safeExistRooms[0] || null;
+    if (safeExistRooms.length > 1) {
+      const existIds = safeExistRooms.map((r) => String(r.room_id));
+      const inExist = existIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
+      const [memCntRes, p2pPairs] = await Promise.all([
+        fetch(
+          `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=in.(${encodeURIComponent(inExist)})&select=room_id,member_email`,
+          { headers: srvHeaders(serviceKey) }
+        ),
+        Promise.all(
+          existIds.map(async (rid) => [rid, await readWorkRoomP2pState(supabaseUrl, serviceKey, rid)])
+        ),
+      ]);
+      const memCntRows = memCntRes.ok ? await memCntRes.json().catch(() => []) : [];
+      const memCountMap = new Map();
+      for (const mr of Array.isArray(memCntRows) ? memCntRows : []) {
+        const rid = String(mr?.room_id || '');
+        if (rid) memCountMap.set(rid, (memCountMap.get(rid) || 0) + 1);
+      }
+      chosenRoom = pickCanonicalHostedWorkRoom(
+        safeExistRooms,
+        new Map(p2pPairs),
+        memCountMap,
+        email
+      );
+    }
+    let roomId = chosenRoom?.room_id ? String(chosenRoom.room_id) : '';
 
     if (!gate.ok) {
       return {
@@ -908,8 +964,7 @@ export async function handleAuthedWorkAndDeviceAction({
     if (
       Array.isArray(invRows) &&
       invRows[0]?.token &&
-      Date.parse(invRows[0].expires_at || '') > Date.now() &&
-      Number(invRows[0].used_count || 0) < Number(invRows[0].max_uses || seatLimit)
+      Date.parse(invRows[0].expires_at || '') > Date.now()
     ) {
       inviteToken = String(invRows[0].token);
     } else {
@@ -926,7 +981,7 @@ export async function handleAuthedWorkAndDeviceAction({
           room_id: roomId,
           created_by_email: email,
           default_role: 'member',
-          max_uses: seatLimit,
+          max_uses: Math.max(seatLimit * 10, 50),
           expires_at: exp,
         }),
       });
@@ -949,6 +1004,58 @@ export async function handleAuthedWorkAndDeviceAction({
   if (action === 'work_accept_invite') {
     const verified = await verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, body.inviteToken);
     if (!verified) {
+      // 방장이 다른 팀원을 내보내며 초대 토큰이 회전된 직후, 이미 정식 멤버로 등록된 기존 팀원이
+      // 이전 초대 URL(?workRoom=...&inviteToken=...) 탭에서 새로고침(F5)한 경우에는 정식 멤버십(getWorkRoomMemberContext)을 확인해 정상 복원합니다.
+      // (방장에게 내보내진 계정은 ghosti_lounge_members에 없으므로 existingCtx === null -> INVALID_OR_EXPIRED_INVITE로 100% 차단됨)
+      const fallbackRoomId = String(body.roomId || '').trim();
+      if (fallbackRoomId) {
+        const existingCtx = await getWorkRoomMemberContext(
+          supabaseUrl,
+          serviceKey,
+          fallbackRoomId,
+          email
+        );
+        if (existingCtx) {
+          const ownerGate = await assertWorkOwnerUnlocked(
+            supabaseUrl,
+            serviceKey,
+            existingCtx.room.master_email
+          );
+          if (!ownerGate.ok) {
+            return ownerGate.response;
+          }
+          const { state, tombstones } = await readWorkRoomP2pState(
+            supabaseUrl,
+            serviceKey,
+            fallbackRoomId
+          );
+          const membersList = sortAndMapWorkMembers(
+            existingCtx.members,
+            existingCtx.room.master_email
+          );
+          const hostMem = membersList.find((m) => m.role === 'master');
+          return {
+            status: 200,
+            body: {
+              ok: true,
+              roomId: fallbackRoomId,
+              roomTitle: existingCtx.room.room_title || '💼 우리팀 업무 공유방 (S:)',
+              hostNickname: hostMem?.nickname || '방장',
+              role: existingCtx.isMaster ? 'host' : existingCtx.role,
+              seatLimit: ownerGate.entitlement.workSeatLimit || 5,
+              members: membersList,
+              deletedTombstones: tombstones,
+              hostTunnel: {
+                tunnelUrl: state.hostTunnelUrl,
+                accessKey: state.hostAccessKey,
+                updatedAt: state.hostUpdatedAt,
+                masterServerName: state.masterServerName,
+                backupServers: state.backupServers,
+              },
+            },
+          };
+        }
+      }
       return { status: 200, body: { ok: false, reason: 'INVALID_OR_EXPIRED_INVITE' } };
     }
     const roomId = verified.room.room_id;
@@ -1085,12 +1192,33 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'work_list_my_rooms') {
-    const memRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(email)}&select=room_id,role,room_persona_nickname,joined_at&order=joined_at.desc&limit=30`,
-      { headers: srvHeaders(serviceKey) }
-    );
-    const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
-    const safeMems = Array.isArray(memRows) ? memRows : [];
+    const [memRes, ownMasterRoomsRes] = await Promise.all([
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=ilike.${encodeURIComponent(email)}&select=room_id,role,room_persona_nickname,joined_at&order=joined_at.desc&limit=30`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=ilike.${encodeURIComponent(email)}&lounge_type=eq.work&select=room_id,room_title,master_email,pricing_plan,created_at&order=created_at.asc&limit=10`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+    ]);
+    const [memRows, ownMasterRooms] = await Promise.all([
+      memRes.ok ? memRes.json().catch(() => []) : Promise.resolve([]),
+      ownMasterRoomsRes.ok ? ownMasterRoomsRes.json().catch(() => []) : Promise.resolve([]),
+    ]);
+    const safeMems = Array.isArray(memRows) ? [...memRows] : [];
+    const safeOwnRooms = Array.isArray(ownMasterRooms) ? ownMasterRooms : [];
+    for (const orw of safeOwnRooms) {
+      const rid = String(orw?.room_id || '').trim();
+      if (rid && !safeMems.some((m) => String(m?.room_id || '').trim() === rid)) {
+        safeMems.push({
+          room_id: rid,
+          role: 'master',
+          room_persona_nickname: actorNick,
+          joined_at: orw.created_at || null,
+        });
+      }
+    }
     const roomIds = Array.from(
       new Set(safeMems.map((m) => String(m.room_id || '').trim()).filter(Boolean))
     );
@@ -1119,6 +1247,7 @@ export async function handleAuthedWorkAndDeviceAction({
       }
     }
     const membersByRoomId = new Map();
+    const memCountMap = new Map();
     if (Array.isArray(allRoomMemRows)) {
       for (const rm of allRoomMemRows) {
         const rid = String(rm?.room_id || '').trim();
@@ -1131,7 +1260,7 @@ export async function handleAuthedWorkAndDeviceAction({
         ) {
           rm.room_persona_nickname = actorNick;
           fetch(
-            `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(rid)}&member_email=eq.${encodeURIComponent(email)}`,
+            `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(rid)}&member_email=ilike.${encodeURIComponent(email)}`,
             {
               method: 'PATCH',
               headers: srvHeaders(serviceKey, {
@@ -1145,6 +1274,7 @@ export async function handleAuthedWorkAndDeviceAction({
         const arr = membersByRoomId.get(rid) || [];
         arr.push(rm);
         membersByRoomId.set(rid, arr);
+        memCountMap.set(rid, arr.length);
       }
     }
 
@@ -1173,6 +1303,20 @@ export async function handleAuthedWorkAndDeviceAction({
     const gateByMaster = new Map(gateEntries);
     const p2pByRoomId = new Map(p2pEntries);
 
+    // 방장(isHost)인 방이 여러 개 있을 경우 PC(work_ensure_room)와 100% 동일한 정본 1개만 채택
+    const ownHostedCandidates = validWorkRoomIds
+      .map((rid) => roomById.get(rid))
+      .filter((r) => r && String(r.master_email || '').trim().toLowerCase() === email);
+    const canonicalHostedRoom = pickCanonicalHostedWorkRoom(
+      ownHostedCandidates,
+      p2pByRoomId,
+      memCountMap,
+      email
+    );
+    const canonicalHostedRoomId = canonicalHostedRoom?.room_id
+      ? String(canonicalHostedRoom.room_id)
+      : '';
+
     const outRooms = [];
     const seenOutRooms = new Set();
     for (const m of safeMems) {
@@ -1180,9 +1324,12 @@ export async function handleAuthedWorkAndDeviceAction({
       if (!rId || seenOutRooms.has(rId)) continue;
       const room = roomById.get(rId);
       if (!room) continue;
-      seenOutRooms.add(rId);
       const masterEmail = String(room.master_email || '').trim().toLowerCase();
       const isHost = masterEmail === email;
+      if (isHost && canonicalHostedRoomId && rId !== canonicalHostedRoomId) {
+        continue;
+      }
+      seenOutRooms.add(rId);
       const normalized = normalizeWorkRoleFromDb(m.role, isHost);
       const role = normalized === 'master' ? 'host' : normalized;
       const ownerGate =
