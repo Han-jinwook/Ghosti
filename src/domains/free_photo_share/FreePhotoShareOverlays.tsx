@@ -461,10 +461,13 @@ export const FreePhotoShareOverlays: React.FC = () => {
       const urlHasInviteParam =
         params.has('invite') || params.has('inviteToken') || params.has('token');
       if (urlHasInviteParam) {
+        const w = window as unknown as { __GHOSTI_BOOT_INVITE_HREF__?: string };
+        const alreadyStartedByApp = w.__GHOSTI_BOOT_INVITE_HREF__ === window.location.href;
         const hasRealToken = Boolean(
           (params.get('inviteToken') || params.get('token') || readActiveInviteToken() || '').trim()
         );
-        if (hasRealToken || !hasAuthenticatedHubAccountSession()) {
+        if (!alreadyStartedByApp && (hasRealToken || !hasAuthenticatedHubAccountSession())) {
+          w.__GHOSTI_BOOT_INVITE_HREF__ = window.location.href;
           void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
         }
       } else if (params.get('preview') !== 'guest') {

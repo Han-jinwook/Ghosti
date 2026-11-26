@@ -123,6 +123,31 @@ export const App: React.FC = () => {
   } = useSaySeeStore();
   const { ocrModalPhoto, setOcrModalPhoto } = useDashboardNavStore();
 
+  // [3귀신 시크릿 창 초대 링크 0.5초 초고속 진입]:
+  // lazy 청크(<FreePhotoShareOverlays />) 다운로드 완료를 기다리지 않고 App 마운트 직후 0ms에
+  // 공유방 초대 RPC(applyShareInviteDeepLink)를 최우선 발사합니다.
+  useEffect(() => {
+    if (typeof window === 'undefined' || isCapacitorNativeMobileRuntime()) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlHasInviteParam =
+        params.has('invite') || params.has('inviteToken') || params.has('token');
+      if (!urlHasInviteParam || params.has('workRoom')) return;
+      const hasRealToken = Boolean((params.get('inviteToken') || params.get('token') || '').trim());
+      if (hasRealToken || !hasAuthenticatedHubAccountSession()) {
+        const w = window as unknown as { __GHOSTI_BOOT_INVITE_HREF__?: string };
+        if (w.__GHOSTI_BOOT_INVITE_HREF__ !== window.location.href) {
+          w.__GHOSTI_BOOT_INVITE_HREF__ = window.location.href;
+          void useSaySeeStore
+            .getState()
+            .applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   // [D-35] 🪪 여권 조용한 등록: 사진 활동(검색·사진 추가) 감지기 1회 기동 (날짜 고정 없이 활동 직후 1번만 질문)
   useEffect(() => {
     startPassportPhotoActivityWatcher();
@@ -1456,38 +1481,52 @@ export const App: React.FC = () => {
             </Suspense>
           )}
 
+          {/* [직렬 Lazy Suspense 워터폴 박멸]: 열려 있지 않은 대형 모달은 실제 오픈 시에만 로드하고, 상시 오버레이는 각자 독립 Suspense로 분리 */}
           <Suspense fallback={null}>
-            {/* 체험판 1분 고속 스캔 & 검진 구역 직접 허용 모달 (인포데스크 온보딩 3탭 가이드 모달) */}
-            <OnboardingModal />
-
-            {/* 사진 상세 & 연사 비교 Pick & 2차 연관 꼬리물기 탐색 모달 */}
-            <PhotoDetailModal />
-
-            {/* [스펙 4] 카페 런칭용 심플 과금 퍼널 & 스토어 클린 모드 데스크톱 기기 연동 모달 */}
-            <PricingModal />
-
-            {/* [안전장치 2] /?master=pc 모바일 접속 시 결제/요금 안내 없는 순수 'PC 데스크톱 엔진 기능 소개 화면' 이중 방어 모달 */}
-            <MobileMasterPcIntroModal />
-
-            {/* [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달 */}
-            <LocalDocPreviewModal />
-
-            {/* [체험판 타겟 ②] 동영상 장면 검색 상세 & 원본 MP4 재생 모달 */}
-            <VideoScenePreviewModal />
-
-            {/* [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 대표 멤버 등록 & 초대 레이더 시드 모달 */}
-            <FaceMemberRegistryModal />
-
-            {/* [🛠️ 구 설정몬스터 팝업 비활성화 — 1. 👻 귀신비서 채팅 원클릭 칩으로 100% 일원화] 타사 앱 최상단 손가락 화살표 가이드(👆)만 유지 */}
-            <SetupFloatingOverlayGuide />
-
-            {/* [고스트 캐스트 & 라이브 3대 핵심 무기] ① PC/노트북 모니터 풀스크린 클린 뷰어 + 무선 리모컨, ② 방 전용 프라이빗 라이브 생중계 & 라이브 포토 싱크, ③ 원격 모니터링 셔터(선별/즉시 공유 선택) */}
-            <GhostCastAndLiveGlobalOverlay />
-
-            {/* PC·모바일 공통 공유방 오버레이 (카톡 1초 합류 Auth-Wall & 공유방 사진 골라 올리기 모달) 및 사진 OCR 모달 */}
             <FreePhotoShareOverlays />
-            <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
           </Suspense>
+          <Suspense fallback={null}>
+            <GhostCastAndLiveGlobalOverlay />
+          </Suspense>
+          <Suspense fallback={null}>
+            <OnboardingModal />
+          </Suspense>
+          <Suspense fallback={null}>
+            <SetupFloatingOverlayGuide />
+          </Suspense>
+          <Suspense fallback={null}>
+            <MobileMasterPcIntroModal />
+          </Suspense>
+          {selectedPhoto && (
+            <Suspense fallback={null}>
+              <PhotoDetailModal />
+            </Suspense>
+          )}
+          {showProModal && (
+            <Suspense fallback={null}>
+              <PricingModal />
+            </Suspense>
+          )}
+          {selectedDocModal && (
+            <Suspense fallback={null}>
+              <LocalDocPreviewModal />
+            </Suspense>
+          )}
+          {selectedVideoModal && (
+            <Suspense fallback={null}>
+              <VideoScenePreviewModal />
+            </Suspense>
+          )}
+          {showFaceRegistryModal && (
+            <Suspense fallback={null}>
+              <FaceMemberRegistryModal />
+            </Suspense>
+          )}
+          {ocrModalPhoto && (
+            <Suspense fallback={null}>
+              <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
+            </Suspense>
+          )}
           <GhostSecretaryFirstModal />
 
           {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}

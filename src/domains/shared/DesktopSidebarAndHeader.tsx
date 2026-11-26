@@ -631,7 +631,9 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
     setActiveLoungeType,
     subscribedLounges,
     activeFamilyRoom,
+    activeSharedRoomId,
     activeJoinedRoomMeta,
+    isLoadingSharedRoomPhotos,
     joinedSharedRooms,
     selectOwnSharedRoom,
     selectJoinedSharedRoom,
@@ -921,7 +923,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
               <div className="px-4 py-2.5 rounded-xl border bg-slate-50 border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[12.5px] font-semibold text-slate-900">
-                    {inviteMeta.inviteToken && !inviteMeta.isHostVerified
+                    {inviteMeta.inviteToken && !inviteMeta.isHostVerified && isLoadingSharedRoomPhotos && !activeSharedRoomId
                       ? `${inviteMeta.roomTitle} 불러오는 중...`
                       : `${inviteMeta.hostName} 님의 공유방 (${inviteMeta.roomTitle})`}
                   </span>
