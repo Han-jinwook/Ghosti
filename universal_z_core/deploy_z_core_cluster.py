@@ -754,10 +754,11 @@ def main():
         _now_hr = _dt.datetime.now().hour
         _is_qa_work_hours = (9 <= _now_hr < 15)
         if _is_qa_work_hours:
-            log("🕘 [알바 근무시간(09:00~15:00) 전용 배포 모드] 1·2·5·6호기는 제외하고 오직 3호기(달나라)·4호기(해나라)에만 무중단 원자적 스왑 설치합니다.")
+            log("🕘 [알바 근무시간(09:00~15:00) 전용 배포 모드] 1·5·6호기는 제외하고 통합테스트용 2호기·3호기(달나라)·4호기(해나라)에 무중단 원자적 스왑 설치합니다.")
+            update_pc2(core_ver)
             update_pc3(core_ver)
             update_pc4(core_ver)
-            log(f"\n🎉 근무시간(09:00~15:00) 안전 배포 완료 — 3호기 · 4호기 Z-코어(v{core_ver}) 설치 완료!")
+            log(f"\n🎉 근무시간(09:00~15:00) 안전 배포 완료 — 2호기 · 3호기 · 4호기 Z-코어(v{core_ver}) 설치 완료!")
         else:
             update_pc1()
             update_pc1_remote(core_ver)
