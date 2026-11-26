@@ -622,7 +622,14 @@ if (-not $swapped) {{
     exit 4
 }}
 
-# 3-4) Run 레지스트리 + 인터랙티브 ONLOGON 예약작업 갱신 및 즉시 기동
+# 3-4) 모드 전환기(Merlin_Mode_Vault) 구버전(--onefile v2.8.x) 역주입 원천 차단 + Run 레지스트리 · ONLOGON 예약작업 갱신 및 즉시 기동
+$mvRoot = 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault'
+if (Test-Path $mvRoot) {{
+    $mvCache = Join-Path $mvRoot 'snapshots\\cached_installer'
+    New-Item -ItemType Directory -Force -Path $mvCache | Out-Null
+    Copy-Item -Path $exe -Destination (Join-Path $mvCache 'Merlin_Z_Core_Setup.exe') -Force -ErrorAction SilentlyContinue
+    Copy-Item -Path $int -Destination (Join-Path $mvCache '_internal') -Recurse -Force -ErrorAction SilentlyContinue
+}}
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinSeqPaste' -ErrorAction SilentlyContinue
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value "`"$exe`""
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name

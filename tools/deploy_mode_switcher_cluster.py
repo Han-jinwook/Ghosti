@@ -18,7 +18,7 @@ from typing import List, Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SWITCHER_SRC = REPO_ROOT / "tools" / "ghosti_mode_switcher.py"
 ICON_SRC = REPO_ROOT / "public" / "favicon.ico"
-LOCAL_ZCORE_EXE = REPO_ROOT / "universal_z_core" / "os_agent" / "dist" / "Merlin_Z_Core_Setup.exe"
+LOCAL_ZCORE_EXE = REPO_ROOT / "universal_z_core" / "os_agent" / "dist" / "Merlin_Z_Core_Setup" / "Merlin_Z_Core_Setup.exe"
 
 # (호기 라벨, Tailscale IP, 원격 사용자명) — 6호컴 엄격 제외!
 TARGET_NODES: List[Tuple[str, str, str]] = [
@@ -72,18 +72,25 @@ def deploy_to_node(label: str, host: str, remote_user: str, key_path: str) -> bo
 
     print(f"\n=== [{label} ({ssh_target})] 3대 모드 전환기 배포 시작 ===", flush=True)
 
-    # 1) 원격 금고 디렉토리 준비
+    # 1) 원격 금고 디렉토리 준비 (--onedir exe + _internal 동시 캐시 · 구버전 --onefile 단독 exe 제거)
     prep_ps = r"""
 $appDir = Join-Path $env:LOCALAPPDATA "Merlin_Mode_Vault\app"
 $cacheDir = Join-Path $env:LOCALAPPDATA "Merlin_Mode_Vault\snapshots\cached_installer"
 New-Item -ItemType Directory -Force -Path $appDir | Out-Null
 New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
-$installedExe = Join-Path $env:LOCALAPPDATA "Programs\MerlinFamily\Merlin_Z_Core_Setup.exe"
+$installedDir = Join-Path $env:LOCALAPPDATA "Programs\MerlinFamily"
+$installedExe = Join-Path $installedDir "Merlin_Z_Core_Setup.exe"
+$installedInt = Join-Path $installedDir "_internal"
 $cachedExe = Join-Path $cacheDir "Merlin_Z_Core_Setup.exe"
-if (Test-Path $installedExe) {
+$cachedInt = Join-Path $cacheDir "_internal"
+if ((Test-Path $installedExe) -and (Test-Path $installedInt)) {
     Copy-Item -Path $installedExe -Destination $cachedExe -Force
+    Copy-Item -Path $installedInt -Destination $cachedInt -Recurse -Force
     Write-Output "SEEDED_FROM_LOCAL_INSTALL"
 } else {
+    if ((Test-Path $cachedExe) -and -not (Test-Path $cachedInt)) {
+        Remove-Item -Path $cachedExe -Force -ErrorAction SilentlyContinue
+    }
     Write-Output "NEED_SEED_UPLOAD"
 }
 """

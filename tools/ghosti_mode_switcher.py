@@ -42,7 +42,7 @@ import urllib.request
 import webbrowser
 import zipfile
 
-SWITCHER_VERSION = "1.1.0"
+SWITCHER_VERSION = "1.2.0"
 WINDOW_TITLE = f"👻 귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
 
 GHOSTI_ORIGIN = "https://ghosti.sundreamer.app"
@@ -1344,59 +1344,107 @@ def clean_downloads_zcore_artifacts(downloads_dir: Optional[Path] = None) -> int
     return removed
 
 
-def cache_installer_exe_if_available() -> Optional[Path]:
+def _is_valid_onedir_bundle(exe_path: Path) -> bool:
+    return exe_path.is_file() and exe_path.stat().st_size > 1_000_000 and (exe_path.parent / "_internal").is_dir()
+
+
+def cache_installer_exe_if_available(move_from_installed: bool = False) -> Optional[Path]:
+    """
+    최신 --onedir Z-코어(Merlin_Z_Core_Setup.exe + _internal/)를 금고에 백업합니다.
+    구버전 --onefile 단독 exe(v2.8.19 등, _internal 없음)는 구형 유물로 간주해 역주입을 원천 차단합니다.
+    """
     cached = get_cached_installer_path()
+    cache_dir = cached.parent
+    installed_exe = get_installed_zcore_exe()
+    installed_dir = installed_exe.parent
+
+    if move_from_installed and _is_valid_onedir_bundle(installed_exe):
+        try:
+            if cache_dir.exists():
+                shutil.rmtree(cache_dir, ignore_errors=True)
+            cache_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(installed_dir), str(cache_dir))
+            if _is_valid_onedir_bundle(cached):
+                return cached
+        except Exception:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
     candidates = [
-        get_installed_zcore_exe(),
-        Path(r"D:\Ghosti\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup.exe"),
-        Path(r"C:\MerlinTools\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup.exe"),
+        installed_exe,
+        Path(r"D:\Ghosti\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup\Merlin_Z_Core_Setup.exe"),
+        Path(r"C:\MerlinTools\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup\Merlin_Z_Core_Setup.exe"),
     ]
     dl = get_user_downloads_dir()
     if dl.is_dir():
         try:
             for item in dl.iterdir():
                 low = item.name.lower()
-                if not low.startswith("merlin_z_core"):
+                if not low.startswith("merlin_z_core") or not item.is_dir():
                     continue
-                if item.is_file() and low.endswith(".exe"):
-                    candidates.append(item)
-                elif item.is_dir():
-                    sub_exe = item / "Merlin_Z_Core_Setup.exe"
-                    if sub_exe.is_file():
-                        candidates.append(sub_exe)
+                sub_exe = item / "Merlin_Z_Core_Setup.exe"
+                if _is_valid_onedir_bundle(sub_exe):
+                    candidates.append(sub_exe)
         except Exception:
             pass
 
     for cand in candidates:
-        if cand.is_file() and cand.stat().st_size > 1_000_000:
+        if _is_valid_onedir_bundle(cand):
             try:
+                # 이미 동일한 최신 번들이 캐시되어 있으면 불필요한 1,190개 파일 재복사 생략
+                if (
+                    _is_valid_onedir_bundle(cached)
+                    and abs(cached.stat().st_mtime - cand.stat().st_mtime) < 1.0
+                    and cached.stat().st_size == cand.stat().st_size
+                ):
+                    return cached
+                cache_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(cand, cached)
+                shutil.copytree(cand.parent / "_internal", cache_dir / "_internal", dirs_exist_ok=True)
                 return cached
             except Exception:
                 pass
-    if cached.is_file() and cached.stat().st_size > 1_000_000:
+
+    # 구형 --onefile 단독 exe(_internal 폴더 없음)가 남아 있으면 삭제하여 v2.8.19 역주입 방지
+    if cached.is_file() and not (cache_dir / "_internal").is_dir():
+        try:
+            cached.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return None
+
+    if _is_valid_onedir_bundle(cached):
         return cached
     return None
 
 
 def ensure_installer_exe_ready() -> Optional[Path]:
     cached = cache_installer_exe_if_available()
-    if cached and cached.is_file():
+    if cached and _is_valid_onedir_bundle(cached):
         return cached
-    # 최후 폴백: 정식 배포 서버에서 Merlin_Z_Core.zip 무소음 다운로드 후 추출
+    # 최후 폴백: 정식 배포 서버에서 Merlin_Z_Core.zip(--onedir 전체: exe + _internal/) 무소음 다운로드 후 추출
     try:
         req = urllib.request.Request(
             "https://ghosti.sundreamer.app/Merlin_Z_Core.zip",
             headers={"User-Agent": f"GhostiModeSwitcher/{SWITCHER_VERSION}"},
         )
-        with urllib.request.urlopen(req, timeout=25) as resp:
+        with urllib.request.urlopen(req, timeout=35) as resp:
             zbytes = resp.read()
+        cache_dir = get_cached_installer_path().parent
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir, ignore_errors=True)
+        cache_dir.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(io.BytesIO(zbytes)) as zf:
-            for name in zf.namelist():
-                if name.endswith("Merlin_Z_Core_Setup.exe"):
-                    out_p = get_cached_installer_path()
-                    out_p.write_bytes(zf.read(name))
-                    return out_p
+            zf.extractall(cache_dir)
+        out_p = get_cached_installer_path()
+        if _is_valid_onedir_bundle(out_p):
+            return out_p
+        # 하위 폴더에 풀린 경우 승격
+        for sub in cache_dir.iterdir():
+            if sub.is_dir() and _is_valid_onedir_bundle(sub / "Merlin_Z_Core_Setup.exe"):
+                shutil.copy2(sub / "Merlin_Z_Core_Setup.exe", out_p)
+                shutil.copytree(sub / "_internal", cache_dir / "_internal", dirs_exist_ok=True)
+                shutil.rmtree(sub, ignore_errors=True)
+                return out_p
     except Exception:
         pass
     return None
@@ -1594,6 +1642,7 @@ def restore_and_mount_work_sdrive() -> str:
 def stop_and_uninstall_zcore_completely(
     delete_merlin_dir: bool = True,
     clean_downloads: bool = True,
+    keep_program_dir_for_move: bool = False,
 ) -> int:
     """Z코어(5199) 종료, 시작프로그램 해제, 설치 폴더·데이터 폴더 및 다운로드 폴더 Merlin_Z_Core* 정리."""
     for url in ("http://127.0.0.1:5199/__merlin/shutdown", "http://127.0.0.1:51988/__merlin/shutdown"):
@@ -1636,9 +1685,10 @@ def stop_and_uninstall_zcore_completely(
             )
 
     time.sleep(0.6)
-    prog_dir = get_merlin_program_dir()
-    if prog_dir.exists():
-        shutil.rmtree(prog_dir, ignore_errors=True)
+    if not keep_program_dir_for_move:
+        prog_dir = get_merlin_program_dir()
+        if prog_dir.exists():
+            shutil.rmtree(prog_dir, ignore_errors=True)
     if delete_merlin_dir:
         mdir = get_merlin_data_dir()
         if mdir.exists():
@@ -1648,19 +1698,23 @@ def stop_and_uninstall_zcore_completely(
 
 
 def ensure_zcore_installed_and_running() -> bool:
-    """Z코어가 꺼져 있거나 Mode 1에서 삭제된 경우 즉시 복원·자동실행 등록 후 데스크톱 세션으로 기동합니다."""
+    """Z코어가 꺼져 있거나 Mode 1에서 삭제된 경우 즉시 --onedir(exe + _internal) 복원·자동실행 등록 후 데스크톱 세션으로 기동합니다."""
     alive, _, _ = probe_zcore_health()
     installed_exe = get_installed_zcore_exe()
-    if alive and installed_exe.is_file():
+    if alive and _is_valid_onedir_bundle(installed_exe):
         return True
 
     src_exe = ensure_installer_exe_ready()
     if not src_exe or not src_exe.is_file():
         return alive
 
-    installed_exe.parent.mkdir(parents=True, exist_ok=True)
-    if not installed_exe.is_file():
+    installed_dir = installed_exe.parent
+    installed_dir.mkdir(parents=True, exist_ok=True)
+    if not _is_valid_onedir_bundle(installed_exe):
         shutil.copy2(src_exe, installed_exe)
+        src_int = src_exe.parent / "_internal"
+        if src_int.is_dir():
+            shutil.copytree(src_int, installed_dir / "_internal", dirs_exist_ok=True)
 
     if os.name == "nt":
         ps_reg = f"""
@@ -1709,9 +1763,13 @@ def switch_to_mode(mode_num: int, open_browser: bool = True, progress_cb: Option
 
     if mode_num == 1:
         step("1/4 · 엔진 종료·금고 보관 및 다운로드 폴더 정리 중...")
-        cache_installer_exe_if_available()
         backup_and_detach_work_sdrive(move_out_of_merlin=True)
-        stop_and_uninstall_zcore_completely(delete_merlin_dir=False, clean_downloads=False)
+        # 프로세스를 먼저 종료한 뒤 설치 폴더(exe + _internal)를 0.01초 만에 금고로 이동 후 삭제 마무리
+        stop_and_uninstall_zcore_completely(delete_merlin_dir=False, clean_downloads=False, keep_program_dir_for_move=True)
+        cache_installer_exe_if_available(move_from_installed=True)
+        prog_dir_left = get_merlin_program_dir()
+        if prog_dir_left.exists():
+            shutil.rmtree(prog_dir_left, ignore_errors=True)
         backup_personal_merlin_dir_if_nonempty(move_mode=True)
         mdir = get_merlin_data_dir()
         if mdir.exists():
