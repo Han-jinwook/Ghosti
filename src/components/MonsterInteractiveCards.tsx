@@ -1871,7 +1871,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 hasFolderPath,
                 folderDir,
                 exeName,
-              } = formatStartupDisplay(stItem.name, stItem.command);
+              } = formatStartupDisplay(stItem.name, stItem.resolvedPath || stItem.command);
 
               const effectiveSummary = isMissingFile
                 ? '이미 삭제된 프로그램의 남은 시작 흔적 (현재 PC에 실제 파일 없음)'
@@ -1949,7 +1949,11 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     </div>
                   </button>
 
-                  {stItem.isProtected ? (
+                  {isMissingFile ? (
+                    <span className="px-2 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] font-semibold shrink-0">
+                      삭제됨 (실행 불가)
+                    </span>
+                  ) : stItem.isProtected ? (
                     <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">
                       필수 보호
                     </span>

@@ -369,6 +369,33 @@ def _recycle_dir_contents_skip_locked(dir_path: Path) -> Dict[str, Any]:
     return {"ok": moved > 0 or skipped == 0, "movedCount": moved, "reclaimedBytes": reclaimed, "skippedLocked": skipped}
 
 
+def _has_live_pup_files(target: Path) -> bool:
+    """빈 껍데기 폴더(children=[])나 .disabled_by_ghosti 비활성 파일만 남은 경우 '실물파일존재' 오탐을 원천 차단합니다."""
+    try:
+        if not target.exists():
+            return False
+        if target.is_file():
+            return not target.name.endswith(".disabled_by_ghosti")
+        if target.is_dir():
+            checked = 0
+            stack = [target]
+            while stack and checked < 120:
+                cur = stack.pop()
+                try:
+                    with os.scandir(str(cur)) as it:
+                        for entry in it:
+                            checked += 1
+                            if entry.is_file(follow_symlinks=False) and not entry.name.endswith(".disabled_by_ghosti"):
+                                return True
+                            if entry.is_dir(follow_symlinks=False):
+                                stack.append(Path(entry.path))
+                except OSError:
+                    continue
+        return False
+    except OSError:
+        return False
+
+
 def _disable_locked_pup_path_safe(target: Path) -> Dict[str, Any]:
     """
     [토론 1 확정: 잠긴 악성 PUP 파일 3단계 안전 적출 — 영구 삭제 0% + 부활 0%]
@@ -961,7 +988,7 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
                     pass
         for pp in meta.get("paths", []):
             try:
-                if Path(pp).exists():
+                if _has_live_pup_files(Path(pp)):
                     found_reasons.append("실물파일존재")
                     break
             except OSError:
@@ -997,6 +1024,8 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
                 age_days = 0
 
         if any(tok in comb_low for tok in GRID_AND_ADWARE_APP_TOKENS):
+            if any(nm_low in str(ex.get("name") or "").lower() for ex in delete_recommend):
+                continue
             delete_recommend.append({
                 "id": f"app_{re.sub(r'[^a-z0-9가-힣]', '_', nm_low)[:28]}",
                 "name": nm,
@@ -1960,6 +1989,8 @@ $procs = Get-Process | Group-Object ProcessName | ForEach-Object {
         exe_p = str(t.get("executePath") or "").strip()
         args = str(t.get("arguments") or "").strip()
         sig = str(t.get("sigStatus") or "")
+        if sig == "Missing":
+            continue
         pub = str(t.get("publisher") or "")
         prot = _is_protected_rat_target(tname, tpath, exe_p, pub)
         if prot:
@@ -1990,6 +2021,8 @@ $procs = Get-Process | Group-Object ProcessName | ForEach-Object {
         bpath = str(s.get("binaryPath") or "").strip()
         smode = str(s.get("startMode") or "")
         sig = str(s.get("sigStatus") or "")
+        if sig == "Missing":
+            continue
         pub = str(s.get("publisher") or "")
         prot = _is_protected_rat_target(sname, disp, bpath, pub)
         if prot:

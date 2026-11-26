@@ -4494,8 +4494,75 @@ def execute_deep_uninstall_target(
 STARTUP_BACKUP_SUBKEY = r"Software\Merlin\DisabledStartupBackup"
 
 
+ORPHAN_STARTUP_ARCHIVE_SUBKEY = r"Software\MerlinZCore\OrphanStartupArchive"
+
+
+def _resolve_command_executable(raw_cmd: str) -> Tuple[str, bool]:
+    """
+    레지스트리 Run / UninstallString / DisplayIcon 명령줄에서 실제 실행 파일 경로를 추출해
+    현재 디스크(및 System32/PATH)에 실재하는지 검증합니다.
+    Returns: (resolved_path, exists_on_disk)
+    """
+    s = os.path.expandvars(str(raw_cmd or "").strip())
+    if not s:
+        return "", False
+    # DisplayIcon 형태("C:\...\app.exe,0")의 아이콘 인덱스 제거
+    if re.search(r",\s*-?\d+\s*$", s) and not s.lower().startswith("rundll32"):
+        s = re.sub(r",\s*-?\d+\s*$", "", s).strip()
+
+    cand = ""
+    m_q = re.match(r'^"([^"]+)"', s)
+    if m_q:
+        cand = m_q.group(1).strip()
+    else:
+        m_abs = re.match(
+            r"^([A-Za-z]:[\\/].+?\.(?:exe|bat|cmd|vbs|ps1|msc|cpl|lnk|msi|ico|dll))(?:\s|$|,)",
+            s,
+            flags=re.IGNORECASE,
+        )
+        if m_abs:
+            cand = m_abs.group(1).strip()
+        else:
+            cand = s.split()[0].strip('"').strip("'")
+
+    if not cand:
+        return "", False
+    if os.path.isfile(cand):
+        return cand, True
+    # 절대 경로(C:\...)가 이미 주어졌는데 파일이 없으면 PATH 전체 탐색(shutil.which 수천 회 stat 지연)을 즉시 생략!
+    if "\\" in cand or "/" in cand or ":" in cand:
+        return cand, False
+    found = shutil.which(cand)
+    if found and os.path.isfile(found):
+        return found, True
+    for sys_dir in (
+        Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32",
+        Path(os.environ.get("SystemRoot", r"C:\Windows")),
+        Path(os.environ.get("SystemRoot", r"C:\Windows")) / "SysWOW64",
+    ):
+        cand_sys = sys_dir / cand
+        if cand_sys.is_file():
+            return str(cand_sys), True
+        if "." not in Path(cand).name and (sys_dir / f"{cand}.exe").is_file():
+            return str(sys_dir / f"{cand}.exe"), True
+    return cand, False
+
+
+def _is_on_unmounted_drive(path_str: str) -> bool:
+    """외장 드라이브(D:, E: 등)가 일시 분리된 상태인지 확인 (마운트된 C: 등에서 파일만 없는 경우 False)."""
+    p = (path_str or "").strip()
+    if len(p) >= 3 and p[0].isalpha() and p[1] == ":" and p[2] in ("\\", "/"):
+        return not os.path.isdir(p[:3])
+    return False
+
+
 def list_startup_programs() -> Dict[str, Any]:
-    """현재 활성화된 시작프로그램(Run 레지스트리 + 시작프로그램 폴더)과 귀신비서가 꺼둔(백업된) 항목을 한눈에 반환합니다."""
+    """
+    현재 활성화된 시작프로그램(Run 레지스트리)과 귀신비서가 꺼둔(백업된) 항목 중
+    실제 실행 파일이 PC에 존재하는 항목만 반환합니다.
+    이미 삭제된 프로그램의 죽은 레지스트리 잔재(예: 삭제된 MYBOX 등)는 목록 노출 및 스위치 오작동을 막기 위해
+    내 계정(HKCU)에서 안전 아카이브 후 자동 정리하고 목록에서 제외합니다.
+    """
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
     wl_data = load_security_whitelist(allow_remote_sync=False)
@@ -4507,6 +4574,9 @@ def list_startup_programs() -> Dict[str, Any]:
     )
     items: List[Dict[str, Any]] = []
     seen_ids = set()
+    cleaned_orphan_names: List[str] = []
+    hkcu_orphans_to_archive: List[Tuple[str, str]] = []
+    backup_orphans_to_archive: List[Tuple[str, str, str]] = []
 
     run_sources = [
         (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU", "내 계정 시작프로그램"),
@@ -4527,6 +4597,12 @@ def list_startup_programs() -> Dict[str, Any]:
                     cmd = str(vval or "").strip()
                     if not nm:
                         continue
+                    resolved_exe, exe_exists = _resolve_command_executable(cmd)
+                    if not exe_exists and not _is_on_unmounted_drive(resolved_exe):
+                        cleaned_orphan_names.append(nm)
+                        if tag == "HKCU":
+                            hkcu_orphans_to_archive.append((nm, cmd))
+                        continue
                     item_id = f"{tag}::{nm}"
                     if item_id.lower() in seen_ids:
                         continue
@@ -4537,6 +4613,8 @@ def list_startup_programs() -> Dict[str, Any]:
                         "id": item_id,
                         "name": nm,
                         "command": cmd,
+                        "resolvedPath": resolved_exe,
+                        "fileExists": True,
                         "tag": tag,
                         "runSubkey": sub_k,
                         "locationLabel": loc_lbl,
@@ -4547,7 +4625,27 @@ def list_startup_programs() -> Dict[str, Any]:
         except OSError:
             continue
 
-    # 귀신비서가 안전하게 꺼둔 백업 항목(다시 켜기 지원)
+    # 내 계정(HKCU\Run)에 남아 있던 삭제된 앱 유령 등록값은 아카이브 백업 후 자동 정리 (부팅 헛실행 및 목록 노출 원천 제거)
+    if hkcu_orphans_to_archive:
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, ORPHAN_STARTUP_ARCHIVE_SUBKEY) as ak:
+                for o_nm, o_cmd in hkcu_orphans_to_archive:
+                    winreg.SetValueEx(ak, f"HKCU__{o_nm}", 0, winreg.REG_SZ, o_cmd)
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_SET_VALUE,
+            ) as rk_clean:
+                for o_nm, _ in hkcu_orphans_to_archive:
+                    try:
+                        winreg.DeleteValue(rk_clean, o_nm)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
+    # 귀신비서가 안전하게 꺼둔 백업 항목(다시 켜기 지원 — 단, 이후 프로그램 자체가 삭제된 경우 제외)
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_READ) as bk:
             idx = 0
@@ -4562,6 +4660,11 @@ def list_startup_programs() -> Dict[str, Any]:
                 tag_b, sep, orig_nm = raw_b.partition("__")
                 if not sep or not orig_nm:
                     continue
+                resolved_b, exists_b = _resolve_command_executable(cmd_b)
+                if not exists_b and not _is_on_unmounted_drive(resolved_b):
+                    cleaned_orphan_names.append(orig_nm)
+                    backup_orphans_to_archive.append((raw_b, orig_nm, cmd_b))
+                    continue
                 item_id = f"{tag_b}::{orig_nm}"
                 if item_id.lower() in seen_ids:
                     continue
@@ -4575,6 +4678,8 @@ def list_startup_programs() -> Dict[str, Any]:
                     "id": item_id,
                     "name": orig_nm,
                     "command": cmd_b,
+                    "resolvedPath": resolved_b,
+                    "fileExists": True,
                     "tag": tag_b,
                     "runSubkey": sub_k,
                     "locationLabel": "귀신비서가 잠시 꺼둠 (언제든 다시 켜기 가능)",
@@ -4585,12 +4690,27 @@ def list_startup_programs() -> Dict[str, Any]:
     except OSError:
         pass
 
+    if backup_orphans_to_archive:
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, ORPHAN_STARTUP_ARCHIVE_SUBKEY) as ak:
+                for raw_b, _, cmd_b in backup_orphans_to_archive:
+                    winreg.SetValueEx(ak, raw_b, 0, winreg.REG_SZ, cmd_b)
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_SET_VALUE) as bk_clean:
+                for raw_b, _, _ in backup_orphans_to_archive:
+                    try:
+                        winreg.DeleteValue(bk_clean, raw_b)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
     items.sort(key=lambda x: (not x["enabled"], x["isProtected"], x["name"].lower()))
     return {
         "ok": True,
         "count": len(items),
         "enabledCount": sum(1 for x in items if x["enabled"]),
         "disabledCount": sum(1 for x in items if not x["enabled"]),
+        "cleanedOrphanNames": sorted(set(cleaned_orphan_names)),
         "items": items,
     }
 
@@ -4880,12 +5000,27 @@ def _estimate_dir_recent_activity_ts(folder: Path, max_entries: int = 35) -> flo
     return best
 
 
+_INSTALLED_APPS_CACHE: Dict[str, Any] = {"ts": 0.0, "apps": []}
+
+
 def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str, Any]:
     """내 PC에 설치된 전체 프로그램 목록(용량·설치일·제조사 + 용도·마지막 사용 시점·안전 힌트 포함)을 조회합니다."""
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
     q_low = (filter_query or "").strip().lower()
     now_ts = time.time()
+    if not q_low and (now_ts - float(_INSTALLED_APPS_CACHE.get("ts") or 0.0)) < 15.0 and _INSTALLED_APPS_CACHE.get("apps"):
+        cached_apps = list(_INSTALLED_APPS_CACHE["apps"])
+        stale_c = sum(
+            1 for a in cached_apps
+            if not a.get("isProtected") and a.get("lastUsedStatus") in ("DORMANT", "STALE", "UNUSED_SINCE_INSTALL")
+        )
+        return {
+            "ok": True,
+            "totalCount": len(cached_apps),
+            "staleUnusedCount": stale_c,
+            "items": cached_apps[: max(10, min(200, int(limit or 80)))],
+        }
 
     # 1) 현재 실행 중인 프로세스 이름 집합 (실행 중이면 '지금 사용 중')
     running_proc_stems = set()
@@ -5046,6 +5181,41 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
                                 for rp in running_proc_stems
                             )
 
+                            # 이미 폴더·언인스톨러가 모두 지워졌는데 레지스트리 Uninstall 키만 죽어 남은 유령 앱(예: iFormScan, 빈 PCAppStore 등) 제외
+                            if not is_running_now and not is_prot:
+                                uninst_low = uninst.lower().strip().strip('"')
+                                uses_system_installer = bool(
+                                    re.match(r"^(?:msiexec|rundll32|cmd|powershell)(?:\.exe)?\b", uninst_low)
+                                    or "windows\\system32\\msiexec" in uninst_low
+                                    or "windows\\syswow64\\msiexec" in uninst_low
+                                )
+                                has_live_dir_file = False
+                                if cand_dir is not None and cand_dir.is_dir():
+                                    try:
+                                        for idx_f, sub_e in enumerate(os.scandir(str(cand_dir))):
+                                            if idx_f > 60:
+                                                has_live_dir_file = True
+                                                break
+                                            if sub_e.is_file(follow_symlinks=False) and not sub_e.name.endswith(".disabled_by_ghosti"):
+                                                has_live_dir_file = True
+                                                break
+                                            if sub_e.is_dir(follow_symlinks=False):
+                                                has_live_dir_file = True
+                                                break
+                                    except OSError:
+                                        pass
+                                uninst_resolved, uninst_exists = _resolve_command_executable(uninst)
+                                icon_resolved, icon_exists = _resolve_command_executable(disp_icon)
+                                if (
+                                    not uses_system_installer
+                                    and not has_live_dir_file
+                                    and not uninst_exists
+                                    and not icon_exists
+                                    and not _is_on_unmounted_drive(uninst_resolved or icon_resolved)
+                                ):
+                                    seen_names.discard(disp_low)
+                                    continue
+
                             best_activity_ts = 0.0
                             if cand_dir is not None:
                                 best_activity_ts = max(best_activity_ts, _estimate_dir_recent_activity_ts(cand_dir, max_entries=30))
@@ -5127,6 +5297,9 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
         return (prot_rank, stale_rank, -float(a.get("sizeMb") or 0.0), str(a.get("name") or "").lower())
 
     apps.sort(key=_app_sort_key)
+    if not q_low:
+        _INSTALLED_APPS_CACHE["ts"] = now_ts
+        _INSTALLED_APPS_CACHE["apps"] = list(apps)
     total_cnt = len(apps)
     stale_cnt = sum(
         1 for a in apps

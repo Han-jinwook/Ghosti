@@ -4494,8 +4494,75 @@ def execute_deep_uninstall_target(
 STARTUP_BACKUP_SUBKEY = r"Software\Merlin\DisabledStartupBackup"
 
 
+ORPHAN_STARTUP_ARCHIVE_SUBKEY = r"Software\MerlinZCore\OrphanStartupArchive"
+
+
+def _resolve_command_executable(raw_cmd: str) -> Tuple[str, bool]:
+    """
+    레지스트리 Run / UninstallString / DisplayIcon 명령줄에서 실제 실행 파일 경로를 추출해
+    현재 디스크(및 System32/PATH)에 실재하는지 검증합니다.
+    Returns: (resolved_path, exists_on_disk)
+    """
+    s = os.path.expandvars(str(raw_cmd or "").strip())
+    if not s:
+        return "", False
+    # DisplayIcon 형태("C:\...\app.exe,0")의 아이콘 인덱스 제거
+    if re.search(r",\s*-?\d+\s*$", s) and not s.lower().startswith("rundll32"):
+        s = re.sub(r",\s*-?\d+\s*$", "", s).strip()
+
+    cand = ""
+    m_q = re.match(r'^"([^"]+)"', s)
+    if m_q:
+        cand = m_q.group(1).strip()
+    else:
+        m_abs = re.match(
+            r"^([A-Za-z]:[\\/].+?\.(?:exe|bat|cmd|vbs|ps1|msc|cpl|lnk|msi|ico|dll))(?:\s|$|,)",
+            s,
+            flags=re.IGNORECASE,
+        )
+        if m_abs:
+            cand = m_abs.group(1).strip()
+        else:
+            cand = s.split()[0].strip('"').strip("'")
+
+    if not cand:
+        return "", False
+    if os.path.isfile(cand):
+        return cand, True
+    # 절대 경로(C:\...)가 이미 주어졌는데 파일이 없으면 PATH 전체 탐색(shutil.which 수천 회 stat 지연)을 즉시 생략!
+    if "\\" in cand or "/" in cand or ":" in cand:
+        return cand, False
+    found = shutil.which(cand)
+    if found and os.path.isfile(found):
+        return found, True
+    for sys_dir in (
+        Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32",
+        Path(os.environ.get("SystemRoot", r"C:\Windows")),
+        Path(os.environ.get("SystemRoot", r"C:\Windows")) / "SysWOW64",
+    ):
+        cand_sys = sys_dir / cand
+        if cand_sys.is_file():
+            return str(cand_sys), True
+        if "." not in Path(cand).name and (sys_dir / f"{cand}.exe").is_file():
+            return str(sys_dir / f"{cand}.exe"), True
+    return cand, False
+
+
+def _is_on_unmounted_drive(path_str: str) -> bool:
+    """외장 드라이브(D:, E: 등)가 일시 분리된 상태인지 확인 (마운트된 C: 등에서 파일만 없는 경우 False)."""
+    p = (path_str or "").strip()
+    if len(p) >= 3 and p[0].isalpha() and p[1] == ":" and p[2] in ("\\", "/"):
+        return not os.path.isdir(p[:3])
+    return False
+
+
 def list_startup_programs() -> Dict[str, Any]:
-    """현재 활성화된 시작프로그램(Run 레지스트리 + 시작프로그램 폴더)과 귀신비서가 꺼둔(백업된) 항목을 한눈에 반환합니다."""
+    """
+    현재 활성화된 시작프로그램(Run 레지스트리)과 귀신비서가 꺼둔(백업된) 항목 중
+    실제 실행 파일이 PC에 존재하는 항목만 반환합니다.
+    이미 삭제된 프로그램의 죽은 레지스트리 잔재(예: 삭제된 MYBOX 등)는 목록 노출 및 스위치 오작동을 막기 위해
+    내 계정(HKCU)에서 안전 아카이브 후 자동 정리하고 목록에서 제외합니다.
+    """
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
     wl_data = load_security_whitelist(allow_remote_sync=False)
@@ -4507,6 +4574,9 @@ def list_startup_programs() -> Dict[str, Any]:
     )
     items: List[Dict[str, Any]] = []
     seen_ids = set()
+    cleaned_orphan_names: List[str] = []
+    hkcu_orphans_to_archive: List[Tuple[str, str]] = []
+    backup_orphans_to_archive: List[Tuple[str, str, str]] = []
 
     run_sources = [
         (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU", "내 계정 시작프로그램"),
@@ -4527,6 +4597,12 @@ def list_startup_programs() -> Dict[str, Any]:
                     cmd = str(vval or "").strip()
                     if not nm:
                         continue
+                    resolved_exe, exe_exists = _resolve_command_executable(cmd)
+                    if not exe_exists and not _is_on_unmounted_drive(resolved_exe):
+                        cleaned_orphan_names.append(nm)
+                        if tag == "HKCU":
+                            hkcu_orphans_to_archive.append((nm, cmd))
+                        continue
                     item_id = f"{tag}::{nm}"
                     if item_id.lower() in seen_ids:
                         continue
@@ -4537,6 +4613,8 @@ def list_startup_programs() -> Dict[str, Any]:
                         "id": item_id,
                         "name": nm,
                         "command": cmd,
+                        "resolvedPath": resolved_exe,
+                        "fileExists": True,
                         "tag": tag,
                         "runSubkey": sub_k,
                         "locationLabel": loc_lbl,
@@ -4547,7 +4625,27 @@ def list_startup_programs() -> Dict[str, Any]:
         except OSError:
             continue
 
-    # 귀신비서가 안전하게 꺼둔 백업 항목(다시 켜기 지원)
+    # 내 계정(HKCU\Run)에 남아 있던 삭제된 앱 유령 등록값은 아카이브 백업 후 자동 정리 (부팅 헛실행 및 목록 노출 원천 제거)
+    if hkcu_orphans_to_archive:
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, ORPHAN_STARTUP_ARCHIVE_SUBKEY) as ak:
+                for o_nm, o_cmd in hkcu_orphans_to_archive:
+                    winreg.SetValueEx(ak, f"HKCU__{o_nm}", 0, winreg.REG_SZ, o_cmd)
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_SET_VALUE,
+            ) as rk_clean:
+                for o_nm, _ in hkcu_orphans_to_archive:
+                    try:
+                        winreg.DeleteValue(rk_clean, o_nm)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
+    # 귀신비서가 안전하게 꺼둔 백업 항목(다시 켜기 지원 — 단, 이후 프로그램 자체가 삭제된 경우 제외)
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_READ) as bk:
             idx = 0
@@ -4562,6 +4660,11 @@ def list_startup_programs() -> Dict[str, Any]:
                 tag_b, sep, orig_nm = raw_b.partition("__")
                 if not sep or not orig_nm:
                     continue
+                resolved_b, exists_b = _resolve_command_executable(cmd_b)
+                if not exists_b and not _is_on_unmounted_drive(resolved_b):
+                    cleaned_orphan_names.append(orig_nm)
+                    backup_orphans_to_archive.append((raw_b, orig_nm, cmd_b))
+                    continue
                 item_id = f"{tag_b}::{orig_nm}"
                 if item_id.lower() in seen_ids:
                     continue
@@ -4575,6 +4678,8 @@ def list_startup_programs() -> Dict[str, Any]:
                     "id": item_id,
                     "name": orig_nm,
                     "command": cmd_b,
+                    "resolvedPath": resolved_b,
+                    "fileExists": True,
                     "tag": tag_b,
                     "runSubkey": sub_k,
                     "locationLabel": "귀신비서가 잠시 꺼둠 (언제든 다시 켜기 가능)",
@@ -4585,18 +4690,107 @@ def list_startup_programs() -> Dict[str, Any]:
     except OSError:
         pass
 
+    if backup_orphans_to_archive:
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, ORPHAN_STARTUP_ARCHIVE_SUBKEY) as ak:
+                for raw_b, _, cmd_b in backup_orphans_to_archive:
+                    winreg.SetValueEx(ak, raw_b, 0, winreg.REG_SZ, cmd_b)
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_SET_VALUE) as bk_clean:
+                for raw_b, _, _ in backup_orphans_to_archive:
+                    try:
+                        winreg.DeleteValue(bk_clean, raw_b)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+
     items.sort(key=lambda x: (not x["enabled"], x["isProtected"], x["name"].lower()))
     return {
         "ok": True,
         "count": len(items),
         "enabledCount": sum(1 for x in items if x["enabled"]),
         "disabledCount": sum(1 for x in items if not x["enabled"]),
+        "cleanedOrphanNames": sorted(set(cleaned_orphan_names)),
         "items": items,
     }
 
 
+def _elevated_hklm_run_toggle(
+    op: str,
+    sub_k: str,
+    vname: str,
+    cmd_val: str = "",
+    timeout_sec: float = 28.0,
+) -> Tuple[bool, str]:
+    """HKLM 공용 시작프로그램 켜기/끄기를 위해 1회 Windows UAC(runas)로 레지스트리 변경을 실행합니다."""
+    if sys.platform != "win32":
+        return False, "WINDOWS_ONLY"
+    import base64
+    import tempfile
+
+    reg_path = f"HKLM:\\{sub_k}"
+    out_file = Path(tempfile.gettempdir()) / f"ghosti_st_uac_{int(time.time() * 1000)}_{os.getpid()}.json"
+    ps_payload = json.dumps(
+        {
+            "op": op,
+            "regPath": reg_path,
+            "name": vname,
+            "value": cmd_val,
+            "outFile": str(out_file),
+        },
+        ensure_ascii=False,
+    )
+    payload_b64 = base64.b64encode(ps_payload.encode("utf-8")).decode("ascii")
+    ps_script = (
+        f"$cfg = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{payload_b64}')) | ConvertFrom-Json\n"
+        "$res = @{ ok = $false; err = '' }\n"
+        "try {\n"
+        "  if ($cfg.op -eq 'delete') {\n"
+        "    Remove-ItemProperty -Path $cfg.regPath -Name $cfg.name -ErrorAction Stop\n"
+        "    $res.ok = $true\n"
+        "  } elseif ($cfg.op -eq 'set') {\n"
+        "    if (-not (Test-Path $cfg.regPath)) { New-Item -Path $cfg.regPath -Force | Out-Null }\n"
+        "    Set-ItemProperty -Path $cfg.regPath -Name $cfg.name -Value $cfg.value -Type String -ErrorAction Stop\n"
+        "    $res.ok = $true\n"
+        "  }\n"
+        "} catch {\n"
+        "  $res.err = $_.Exception.Message\n"
+        "}\n"
+        "$res | ConvertTo-Json -Compress | Set-Content -Path $cfg.outFile -Encoding UTF8\n"
+    )
+    enc_cmd = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
+    params = f"-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {enc_cmd}"
+    try:
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 0)
+        if int(rc) <= 32:
+            return False, "UAC_CANCELLED"
+    except Exception as exc:
+        return False, str(exc)
+
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        if out_file.is_file():
+            try:
+                raw = out_file.read_text(encoding="utf-8-sig", errors="ignore").strip()
+                if raw:
+                    data = json.loads(raw)
+                    try:
+                        out_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    return bool(data.get("ok")), str(data.get("err") or "")
+            except Exception:
+                pass
+        time.sleep(0.25)
+    try:
+        out_file.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return False, "UAC_TIMEOUT"
+
+
 def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str = "") -> Dict[str, Any]:
-    """특정 시작프로그램 1개를 안전하게 켜거나(ON) 끕니다(OFF, 백업 보관 + 복원기록 등록)."""
+    """특정 시작프로그램 1개를 안전하게 켜거나(ON) 끕니다(OFF, 백업 보관 + 복원기록 등록). 공용(HKLM) 항목은 UAC 승격으로 직접 처리합니다."""
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY"}
     tag, sep, vname = (item_id or "").strip().partition("::")
@@ -4611,7 +4805,7 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
     backup_val_name = f"{tag}__{vname}"
 
     if not enable:
-        # OFF: 원본 명령 백업 후 Run에서 제거 (보호 대상 차단)
+        # OFF: 보호 대상 차단 후 Run에서 제거 (성공 후에만 백업 기록하여 고아 백업 원천 차단)
         wl_data = load_security_whitelist(allow_remote_sync=False)
         drm_tokens = tuple(
             str(x).strip().lower()
@@ -4627,18 +4821,26 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
         if any(t in f"{vname} {cmd_val}".lower() for t in drm_tokens):
             return {"ok": False, "error": "PROTECTED_STARTUP", "message": f"'{vname}' 항목은 시스템·보안 필수 모듈이어서 안전을 위해 끄지 않습니다."}
         try:
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY) as bk:
-                winreg.SetValueEx(bk, backup_val_name, 0, winreg.REG_SZ, str(cmd_val))
             with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
                 winreg.DeleteValue(rk_w, vname)
         except PermissionError:
-            return {
-                "ok": False,
-                "error": "ADMIN_REQUIRED",
-                "message": f"'{vname}' 항목은 PC 전체(관리자) 시작프로그램이어서 표준 권한에서는 변경하지 않았습니다.",
-            }
+            ok_uac, err_uac = _elevated_hklm_run_toggle("delete", sub_k, vname)
+            if not ok_uac:
+                msg = (
+                    f"'{vname}' 항목은 공용(관리자) 시작프로그램입니다. 윈도우 관리자 허용 창에서 '예'를 눌러주셔야 끌 수 있어요."
+                    if err_uac in ("UAC_CANCELLED", "UAC_TIMEOUT")
+                    else f"'{vname}' 공용 시작프로그램을 끄지 못했습니다 ({err_uac})."
+                )
+                return {"ok": False, "error": err_uac or "ADMIN_REQUIRED", "message": msg}
         except OSError as exc:
             return {"ok": False, "error": str(exc), "message": f"시작프로그램 변경 실패: {exc}"}
+
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY) as bk:
+                winreg.SetValueEx(bk, backup_val_name, 0, winreg.REG_SZ, str(cmd_val))
+        except OSError:
+            pass
+
         try:
             import ghosti_safe_ops as _safe_st
             _safe_st.add_restore_point(
@@ -4662,7 +4864,7 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
             "id": item_id,
             "name": vname,
             "enabled": False,
-            "message": f"✅ 부팅 시 자동 실행되던 '{vname}' 항목을 껐습니다! (언제든 같은 스위치로 다시 켤 수 있어요)",
+            "message": f"✅ 부팅 시 자동 실행되던 '{vname}' 항목을 껐습니다! (현재 실행 중인 창은 건드리지 않았으며 언제든 다시 켤 수 있어요)",
         }
     else:
         # ON: 백업에서 읽어 다시 Run에 복원
@@ -4674,19 +4876,26 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
         try:
             with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
                 winreg.SetValueEx(rk_w, vname, 0, winreg.REG_SZ, str(cmd_val))
+        except PermissionError:
+            ok_uac, err_uac = _elevated_hklm_run_toggle("set", sub_k, vname, str(cmd_val))
+            if not ok_uac:
+                msg = (
+                    f"'{vname}' 항목은 공용(관리자) 시작프로그램입니다. 윈도우 관리자 허용 창에서 '예'를 눌러주셔야 다시 켤 수 있어요."
+                    if err_uac in ("UAC_CANCELLED", "UAC_TIMEOUT")
+                    else f"'{vname}' 공용 시작프로그램을 복원하지 못했습니다 ({err_uac})."
+                )
+                return {"ok": False, "error": err_uac or "ADMIN_REQUIRED", "message": msg}
+        except OSError as exc:
+            return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+
+        try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_SET_VALUE) as bk_w:
                 try:
                     winreg.DeleteValue(bk_w, backup_val_name)
                 except OSError:
                     pass
-        except PermissionError:
-            return {
-                "ok": False,
-                "error": "ADMIN_REQUIRED",
-                "message": f"'{vname}' 항목은 관리자 권한 영역이어서 복원하지 못했습니다.",
-            }
-        except OSError as exc:
-            return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+        except OSError:
+            pass
         return {
             "ok": True,
             "id": item_id,
@@ -4696,11 +4905,175 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
         }
 
 
+def _infer_plain_app_role_ko(name: str, publisher: str = "") -> str:
+    """일반 유저가 이름만 봐도 '무슨 용도의 앱인지' 1초 만에 이해하도록 쉬운 한글 1줄 역할을 반환합니다."""
+    comb = f"{name} {publisher}".lower()
+    if any(k in comb for k in ("merlin", "ghosti", "귀신같이", "senstalk", "센스톡", "sundream")):
+        return "귀신같이·멀린 패밀리 필수 엔진"
+    if any(k in comb for k in ("nvidia", "geforce", "radeon", "amd software", "intel(r) graphics")):
+        return "그래픽카드 화면 드라이버 (필수 보호)"
+    if any(k in comb for k in ("realtek", "dolby", "nahimic", "audio driver")):
+        return "사운드·스피커 오디오 드라이버 (필수 보호)"
+    if any(k in comb for k in ("chipset", "mei", "rapid storage", "wi-fi", "wireless", "bluetooth", "lan driver")):
+        return "메인보드·인터넷·블루투스 장치 드라이버 (필수 보호)"
+    if any(k in comb for k in ("visual c++", ".net runtime", "edgewebview2", "directx")):
+        return "윈도우 프로그램 실행 공용 부품 (필수 보호)"
+    if any(k in comb for k in ("pc app store", "pcappstore", "cachecloud", "cloudtask", "storageservice", "utilzone", "tabbie", "yoondisk", "natservice", "clipdown")):
+        return "무료 유틸 설치 시 함께 깔린 광고·제휴 번들 프로그램"
+    if any(k in comb for k in ("고클린", "goclean")):
+        return "구형 PC 정리 유틸리티 (귀신비서로 대체 가능)"
+    if any(k in comb for k in ("알약", "alyac", "v3 lite", "ahnlab v3", "avast", "mcafee", "norton")):
+        return "외부 사설 백신 프로그램 (윈도우 순정 백신으로 대체 가능)"
+    if any(k in comb for k in ("알집", "alzip", "반디집", "bandizip", "7-zip", "winrar")):
+        return "압축 풀기·묶기 프로그램"
+    if any(k in comb for k in ("nprotect", "ahnlab safe", "astx", "touchen", "anysign", "veraport", "wizvera", "delfino", "crossex", "iniline", "ipinside", "keysharp", "magicline", "crosscert", "secukit")):
+        return "은행·홈택스·관공서 키보드/인증서 보안 프로그램"
+    if any(k in comb for k in ("miplatform", "iformscan", "inziiform", "ozweb", "ozx", "markany", "e-pagesafer", "redbc", "kipo")):
+        return "관공서·등기소·특허청 문서 출력용 구형 플러그인"
+    if any(k in comb for k in ("capcut", "캡컷", "premiere", "davinci", "vrew", "곰믹스", "샤나인코더", "팟인코더")):
+        return "동영상 편집·인코딩 프로그램"
+    if any(k in comb for k in ("ocam", "오캠", "obs studio", "bandicam", "반디캠")):
+        return "PC 화면 녹화·캡처 프로그램"
+    if any(k in comb for k in ("scapture", "s캡쳐", "알캡처", "alcapture", "hancapture", "한캡처", "greenshot", "sharex")):
+        return "화면 캡처 도구"
+    if any(k in comb for k in ("포토스케이프", "photoscape", "photoshop", "illustrator", "gimp", "꿀뷰", "알씨")):
+        return "사진 보기·보정·편집 프로그램"
+    if any(k in comb for k in ("곰플레이어", "gom player", "potplayer", "팟플레이어", "kmplayer", "vlc")):
+        return "동영상 재생 플레이어"
+    if "calibre" in comb:
+        return "전자책(eBook) 뷰어·관리 프로그램"
+    if any(k in comb for k in ("kakaotalk", "카카오톡", "line", "telegram", "slack", "discord", "zoom", "teams")):
+        return "메신저·화상회의 프로그램"
+    if any(k in comb for k in ("한컴", "한글", "hancom", "hnc", "microsoft office", "microsoft 365", "onenote", "acrobat", "pdf")):
+        return "문서 작성·열람 오피스 프로그램"
+    if any(k in comb for k in ("google play games", "play games")):
+        return "구글 모바일 게임을 PC에서 실행하는 런처"
+    if any(k in comb for k in ("google drive", "onedrive", "dropbox", "mybox", "마이박스")):
+        return "클라우드 폴더 동기화 프로그램"
+    if any(k in comb for k in ("microsoft edge", "chrome", "whale", "웨일", "firefox", "opera", "brave")):
+        return "인터넷 웹 브라우저"
+    if disp_only := name.strip().lower():
+        if disp_only in ("사진", "microsoft photos", "photos"):
+            return "윈도우 기본 사진·앨범 뷰어"
+    if "aippt" in comb:
+        return "AI 발표자료(PPT) 제작 도구"
+    if any(k in comb for k in ("hp ", "hewlett-packard", "canon", "epson", "brother", "samsung printer")):
+        if any(k in comb for k in ("개선 연구", "dropbox", "google drive", "print scan doctor")):
+            return "프린터 부가 통계·연동 플러그인 (지워도 인쇄 가능)"
+        return "프린터·복합기 인쇄 관련 프로그램"
+    if any(k in comb for k in ("steam", "riot", "epic games", "nexon", "stove", "battle.net", "roblox", "minecraft")):
+        return "게임 런처 또는 PC 게임"
+    if any(k in comb for k in ("cursor", "windsurf", "antigravity", "visual studio", "vscode", "python", "node.js", "git", "postman", "docker", "figma")):
+        return "개발·디자인 전문 작업 도구"
+    if "copilot" in comb:
+        return "윈도우 기본 AI 보조 앱"
+    if "tailscale" in comb or "wireguard" in comb or "openvpn" in comb:
+        return "원격 네트워크·VPN 연결 도구"
+    return f"{publisher} 설치 프로그램" if publisher else "사용자 설치 응용 프로그램"
+
+
+def _estimate_dir_recent_activity_ts(folder: Path, max_entries: int = 35) -> float:
+    """관리자 권한 없이 폴더 내 설정·실행·로그 파일의 가장 최근 수정/접근 시각(epoch)을 최대 35개 항목 한도로 초고속 조회합니다."""
+    best = 0.0
+    try:
+        if not folder.exists() or not folder.is_dir():
+            return 0.0
+        cnt = 0
+        with os.scandir(str(folder)) as it:
+            for entry in it:
+                cnt += 1
+                if cnt > max_entries:
+                    break
+                try:
+                    st = entry.stat(follow_symlinks=False)
+                    if entry.is_file(follow_symlinks=False):
+                        if st.st_mtime > best:
+                            best = st.st_mtime
+                    elif entry.is_dir(follow_symlinks=False) and cnt <= 8:
+                        # 1단계 하위 폴더의 mtime만 가볍게 반영
+                        if st.st_mtime > best:
+                            best = st.st_mtime
+                except OSError:
+                    continue
+    except OSError:
+        return 0.0
+    return best
+
+
+_INSTALLED_APPS_CACHE: Dict[str, Any] = {"ts": 0.0, "apps": []}
+
+
 def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str, Any]:
-    """내 PC에 설치된 전체 프로그램 목록(용량·설치일·제조사 포함)을 조회하여 이름을 몰라도 골라서 정리할 수 있게 합니다."""
+    """내 PC에 설치된 전체 프로그램 목록(용량·설치일·제조사 + 용도·마지막 사용 시점·안전 힌트 포함)을 조회합니다."""
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
     q_low = (filter_query or "").strip().lower()
+    now_ts = time.time()
+    if not q_low and (now_ts - float(_INSTALLED_APPS_CACHE.get("ts") or 0.0)) < 15.0 and _INSTALLED_APPS_CACHE.get("apps"):
+        cached_apps = list(_INSTALLED_APPS_CACHE["apps"])
+        stale_c = sum(
+            1 for a in cached_apps
+            if not a.get("isProtected") and a.get("lastUsedStatus") in ("DORMANT", "STALE", "UNUSED_SINCE_INSTALL")
+        )
+        return {
+            "ok": True,
+            "totalCount": len(cached_apps),
+            "staleUnusedCount": stale_c,
+            "items": cached_apps[: max(10, min(200, int(limit or 80)))],
+        }
+
+    # 1) 현재 실행 중인 프로세스 이름 집합 (실행 중이면 '지금 사용 중')
+    running_proc_stems = set()
+    try:
+        for p_info in _iter_windows_processes_stdlib():
+            p_nm = str(p_info.get("name") or "").lower().strip()
+            if p_nm.endswith(".exe"):
+                p_nm = p_nm[:-4]
+            if len(p_nm) >= 3:
+                running_proc_stems.add(p_nm)
+    except Exception:
+        pass
+
+    # 2) Windows Recent 폴더 최근 열람 흔적 및 Local/Roaming AppData 1계층 폴더 mtime 맵 (0.02초 초고속 수집)
+    recent_token_ts: Dict[str, float] = {}
+    try:
+        appdata_roam = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+        appdata_local = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        recent_dir = appdata_roam / "Microsoft" / "Windows" / "Recent"
+        if recent_dir.is_dir():
+            with os.scandir(str(recent_dir)) as rit:
+                for idx_r, entry in enumerate(rit):
+                    if idx_r > 250:
+                        break
+                    try:
+                        nm_low = entry.name.lower()
+                        mt = entry.stat(follow_symlinks=False).st_mtime
+                        if mt > recent_token_ts.get(nm_low, 0.0):
+                            recent_token_ts[nm_low] = mt
+                    except OSError:
+                        continue
+        appdata_dir_ts: Dict[str, float] = {}
+        for ad_root in (appdata_local, appdata_roam):
+            if not ad_root.is_dir():
+                continue
+            with os.scandir(str(ad_root)) as ait:
+                for idx_a, entry in enumerate(ait):
+                    if idx_a > 200:
+                        break
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            key_low = entry.name.lower()
+                            sub_ts = max(
+                                entry.stat(follow_symlinks=False).st_mtime,
+                                _estimate_dir_recent_activity_ts(Path(entry.path), max_entries=20),
+                            )
+                            if sub_ts > appdata_dir_ts.get(key_low, 0.0):
+                                appdata_dir_ts[key_low] = sub_ts
+                    except OSError:
+                        continue
+    except Exception:
+        appdata_dir_ts = {}
+
     uninstall_roots = [
         (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
         (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
@@ -4735,36 +5108,207 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
                             pub = str(_qv("Publisher") or "").strip()
                             ver = str(_qv("DisplayVersion") or "").strip()
                             inst_dt = str(_qv("InstallDate") or "").strip()
+                            inst_loc = str(_qv("InstallLocation") or "").strip().strip('"')
+                            disp_icon = str(_qv("DisplayIcon") or "").strip().strip('"')
                             est_kb = _qv("EstimatedSize")
                             size_mb = round(int(est_kb) / 1024.0, 1) if isinstance(est_kb, int) and est_kb > 0 else 0.0
                             if q_low and q_low not in disp_low and q_low not in pub.lower():
                                 continue
                             seen_names.add(disp_low)
                             is_prot = _is_protected_system_entity(disp_low) or any(
-                                x in disp_low for x in ("merlin", "ghosti", "senstalk", "sundream")
+                                x in disp_low for x in ("merlin", "ghosti", "senstalk", "sundream", "tailscale")
                             )
+
+                            install_date_fmt = (
+                                f"{inst_dt[:4]}-{inst_dt[4:6]}-{inst_dt[6:8]}"
+                                if len(inst_dt) == 8 and inst_dt.isdigit()
+                                else inst_dt
+                            )
+                            install_epoch = 0.0
+                            if len(inst_dt) == 8 and inst_dt.isdigit():
+                                try:
+                                    import datetime as _dt
+                                    install_epoch = _dt.datetime(
+                                        int(inst_dt[:4]), int(inst_dt[4:6]), int(inst_dt[6:8])
+                                    ).timestamp()
+                                except Exception:
+                                    install_epoch = 0.0
+
+                            # 앱 폴더 후보 경로 추출 (InstallLocation 또는 DisplayIcon/UninstallString 상위 폴더)
+                            cand_dir: Optional[Path] = None
+                            if inst_loc:
+                                p_loc = Path(inst_loc)
+                                if p_loc.is_dir():
+                                    cand_dir = p_loc
+                            if cand_dir is None:
+                                for raw_cmd in (disp_icon, uninst):
+                                    if not raw_cmd:
+                                        continue
+                                    cleaned_cmd = raw_cmd.split(",")[0].strip().strip('"')
+                                    if ".exe" in cleaned_cmd.lower():
+                                        exe_idx = cleaned_cmd.lower().find(".exe") + 4
+                                        exe_p = Path(cleaned_cmd[:exe_idx].strip().strip('"'))
+                                        if exe_p.parent.is_dir() and "system32" not in str(exe_p.parent).lower() and "windows\\installer" not in str(exe_p.parent).lower():
+                                            cand_dir = exe_p.parent
+                                            break
+
+                            # 폴더 용량 보정 (레지스트리에 EstimatedSize가 0으로 비어 있는 대형 앱 CapCut 등 실측)
+                            if size_mb <= 0.0 and cand_dir is not None:
+                                try:
+                                    est_bytes = _calc_dir_size_fast(cand_dir, max_files=220)
+                                    if est_bytes > 0:
+                                        size_mb = round(est_bytes / (1024.0 * 1024.0), 1)
+                                except Exception:
+                                    pass
+
+                            # 마지막 사용 시점 교차 실측 (추측 0% · Google/Microsoft 회사명 오탐 배제)
+                            brand_stopwords = {
+                                "64bit", "64-bit", "32bit", "x64", "x86", "for", "windows", "the", "app",
+                                "service", "client", "program", "google", "microsoft", "naver", "kakao",
+                                "samsung", "intel", "amd", "nvidia", "adobe", "apple", "corporation",
+                                "inc", "ltd", "desktop", "player", "studio", "user", "ide",
+                            }
+                            tokens = [
+                                t for t in (
+                                    disp_low.replace("(", " ").replace(")", " ").replace("-", " ").split()
+                                    + ([cand_dir.name.lower()] if cand_dir and cand_dir.name.lower() not in brand_stopwords else [])
+                                )
+                                if len(t) >= 3 and t not in brand_stopwords and not t[0].isdigit()
+                            ]
+                            is_running_now = any(
+                                (rp == tok or rp.startswith(tok) or (len(tok) >= 5 and tok in rp)) and len(rp) >= 4
+                                for tok in tokens[:3]
+                                for rp in running_proc_stems
+                            )
+
+                            # 이미 폴더·언인스톨러가 모두 지워졌는데 레지스트리 Uninstall 키만 죽어 남은 유령 앱(예: iFormScan, 빈 PCAppStore 등) 제외
+                            if not is_running_now and not is_prot:
+                                uninst_low = uninst.lower().strip().strip('"')
+                                uses_system_installer = bool(
+                                    re.match(r"^(?:msiexec|rundll32|cmd|powershell)(?:\.exe)?\b", uninst_low)
+                                    or "windows\\system32\\msiexec" in uninst_low
+                                    or "windows\\syswow64\\msiexec" in uninst_low
+                                )
+                                has_live_dir_file = False
+                                if cand_dir is not None and cand_dir.is_dir():
+                                    try:
+                                        for idx_f, sub_e in enumerate(os.scandir(str(cand_dir))):
+                                            if idx_f > 60:
+                                                has_live_dir_file = True
+                                                break
+                                            if sub_e.is_file(follow_symlinks=False) and not sub_e.name.endswith(".disabled_by_ghosti"):
+                                                has_live_dir_file = True
+                                                break
+                                            if sub_e.is_dir(follow_symlinks=False):
+                                                has_live_dir_file = True
+                                                break
+                                    except OSError:
+                                        pass
+                                uninst_resolved, uninst_exists = _resolve_command_executable(uninst)
+                                icon_resolved, icon_exists = _resolve_command_executable(disp_icon)
+                                if (
+                                    not uses_system_installer
+                                    and not has_live_dir_file
+                                    and not uninst_exists
+                                    and not icon_exists
+                                    and not _is_on_unmounted_drive(uninst_resolved or icon_resolved)
+                                ):
+                                    seen_names.discard(disp_low)
+                                    continue
+
+                            best_activity_ts = 0.0
+                            if cand_dir is not None:
+                                best_activity_ts = max(best_activity_ts, _estimate_dir_recent_activity_ts(cand_dir, max_entries=30))
+                            for tok in tokens[:3]:
+                                if len(tok) < 4:
+                                    continue
+                                for ad_k, ad_ts in appdata_dir_ts.items():
+                                    if ad_k == tok or ad_k.startswith(tok) or (len(tok) >= 5 and tok in ad_k):
+                                        if ad_ts > best_activity_ts:
+                                            best_activity_ts = ad_ts
+                                for rc_k, rc_ts in recent_token_ts.items():
+                                    if tok in rc_k and rc_ts > best_activity_ts:
+                                        best_activity_ts = rc_ts
+
+                            # 설치 당일 파일 생성 시각과 구분해 실제 마지막 활동일 산출
+                            last_used_days: Optional[int] = None
+                            last_used_status = "UNKNOWN"
+                            if is_running_now:
+                                last_used_days = 0
+                                last_used_status = "ACTIVE_NOW"
+                                last_used_label = "🟢 지금 실행 중"
+                            elif best_activity_ts > 0 and best_activity_ts <= now_ts + 86400:
+                                days_ago = max(0, int((now_ts - best_activity_ts) // 86400))
+                                last_used_days = days_ago
+                                if install_epoch > 0 and abs(best_activity_ts - install_epoch) < 86400 * 2 and days_ago >= 30:
+                                    last_used_status = "UNUSED_SINCE_INSTALL"
+                                    months = max(1, days_ago // 30)
+                                    last_used_label = (
+                                        f"⚪ 설치 후 미사용 추정 ({days_ago // 365}년 전 설치)"
+                                        if days_ago >= 365
+                                        else f"⚪ 설치 후 미사용 추정 (약 {months}개월 전 설치)"
+                                    )
+                                elif days_ago <= 14:
+                                    last_used_status = "RECENT"
+                                    last_used_label = "🟢 최근 사용 (오늘)" if days_ago == 0 else f"🟢 최근 사용 ({days_ago}일 전)"
+                                elif days_ago < 90:
+                                    last_used_status = "OCCASIONAL"
+                                    weeks = max(2, days_ago // 7)
+                                    last_used_label = f"🟡 마지막 흔적 약 {weeks}주 전"
+                                elif days_ago < 365:
+                                    last_used_status = "STALE"
+                                    months = max(3, days_ago // 30)
+                                    last_used_label = f"🟠 약 {months}개월간 미사용"
+                                else:
+                                    last_used_status = "DORMANT"
+                                    years = max(1, days_ago // 365)
+                                    last_used_label = f"⚪ {years}년 이상 장기 미사용"
+                            elif install_epoch > 0:
+                                inst_days = max(0, int((now_ts - install_epoch) // 86400))
+                                last_used_days = inst_days
+                                last_used_status = "INSTALL_ONLY" if inst_days >= 90 else "UNKNOWN"
+                                last_used_label = f"❔ 사용 시점 미상 (설치일 {install_date_fmt})"
+                            else:
+                                last_used_label = "❔ 사용 시점 확인 불가"
+
+                            plain_role = _infer_plain_app_role_ko(disp, pub)
                             apps.append({
                                 "name": disp,
                                 "publisher": pub,
                                 "version": ver,
-                                "installDate": (
-                                    f"{inst_dt[:4]}-{inst_dt[4:6]}-{inst_dt[6:8]}"
-                                    if len(inst_dt) == 8 and inst_dt.isdigit()
-                                    else inst_dt
-                                ),
+                                "installDate": install_date_fmt,
                                 "sizeMb": size_mb,
                                 "isProtected": is_prot,
+                                "plainRoleKo": plain_role,
+                                "lastUsedDaysAgo": last_used_days,
+                                "lastUsedStatus": last_used_status,
+                                "lastUsedLabelKo": last_used_label,
                             })
                     except OSError:
                         continue
         except OSError:
             continue
 
-    apps.sort(key=lambda x: (-x["sizeMb"], x["name"].lower()))
+    # 오래 안 쓴 미보호 앱 · 용량 큰 앱이 먼저 보이도록 스마트 정렬 (보호 시스템 앱은 하단 배치)
+    def _app_sort_key(a: Dict[str, Any]) -> Tuple[int, int, float, str]:
+        prot_rank = 1 if a.get("isProtected") else 0
+        st = a.get("lastUsedStatus")
+        stale_rank = 0 if st in ("DORMANT", "STALE", "UNUSED_SINCE_INSTALL") else (1 if st in ("INSTALL_ONLY", "OCCASIONAL", "UNKNOWN") else 2)
+        return (prot_rank, stale_rank, -float(a.get("sizeMb") or 0.0), str(a.get("name") or "").lower())
+
+    apps.sort(key=_app_sort_key)
+    if not q_low:
+        _INSTALLED_APPS_CACHE["ts"] = now_ts
+        _INSTALLED_APPS_CACHE["apps"] = list(apps)
     total_cnt = len(apps)
+    stale_cnt = sum(
+        1 for a in apps
+        if not a.get("isProtected") and a.get("lastUsedStatus") in ("DORMANT", "STALE", "UNUSED_SINCE_INSTALL")
+    )
     return {
         "ok": True,
         "totalCount": total_cnt,
+        "staleUnusedCount": stale_cnt,
         "items": apps[: max(10, min(200, int(limit or 80)))],
     }
 

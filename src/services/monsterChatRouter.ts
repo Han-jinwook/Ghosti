@@ -342,6 +342,7 @@ export interface MonsterStartupItem {
   id: string;
   name: string;
   command: string;
+  resolvedPath?: string;
   locationLabel: string;
   enabled: boolean;
   isProtected: boolean;
@@ -351,6 +352,7 @@ export interface MonsterStartupItem {
 
 export interface MonsterStartupManagerPayload {
   items: MonsterStartupItem[];
+  cleanedOrphanNames?: string[];
   lastToggleNoteKo?: string;
   lastToggleOk?: boolean;
 }
@@ -1576,6 +1578,7 @@ export async function fetchStartupManagerPayload(): Promise<{
     ok: true,
     payload: {
       items: Array.isArray(r.data.items) ? r.data.items : [],
+      cleanedOrphanNames: Array.isArray(r.data.cleanedOrphanNames) ? r.data.cleanedOrphanNames : [],
     },
   };
 }
@@ -4911,9 +4914,38 @@ export async function processUnifiedMonsterChatQuery(params: {
     clean.length <= 30 &&
     !/바탕화면|다운로드|휴지통|사진|동영상|문서|복원|부팅|시작\s*프로그램|사양|편의 기능|여권/i.test(clean);
 
+  // [죽은 시작프로그램 잔여 등록 흔적 정리 요청 ("이미 삭제되고 시작 목록에만 남은 프로그램 삭제" 등) 전용 처리]
+  const isOrphanStartupCleanQuery =
+    /(시작\s*목록|시작\s*프로그램|부팅\s*목록)/i.test(clean) &&
+    /(이미\s*삭제|남은|흔적|유령|없는\s*프로그램)/i.test(clean) &&
+    /(삭제|제거|정리|지워|없애)/i.test(clean);
+  if (isOrphanStartupCleanQuery) {
+    const stCleanRes = await fetchStartupManagerPayload();
+    if (!stCleanRes.ok || !stCleanRes.payload) {
+      return reply(
+        sourceTab,
+        stCleanRes.errorKo || '내 컴퓨터 연결(PC 엔진) 상태를 확인한 뒤 다시 말씀해 주세요.',
+        { followUpSuggestions: ['시작프로그램 목록 보여줘'] }
+      );
+    }
+    const cleanedNames = stCleanRes.payload.cleanedOrphanNames || [];
+    const enCnt = stCleanRes.payload.items.filter((x) => x.enabled).length;
+    const disCnt = stCleanRes.payload.items.filter((x) => !x.enabled).length;
+    const msgKo =
+      cleanedNames.length > 0
+        ? `이미 지워졌는데 윈도우 시작 목록에만 남아 있던 흔적(**${cleanedNames.join(', ')}**)을 깨끗하게 정리해 목록에서 제외했어요!\n아래에는 현재 내 컴퓨터에 **실제로 설치되어 있는 시작프로그램(켜짐 ${enCnt}개 · 꺼둠 ${disCnt}개)**만 표시됩니다.`
+        : `윈도우 시작 목록에 남아 있던 삭제된 프로그램 흔적을 모두 정리하여, 현재는 **실제로 존재하는 시작프로그램(켜짐 ${enCnt}개 · 꺼둠 ${disCnt}개)**만 깨끗하게 남아 있어요!`;
+    speak('삭제된 프로그램의 시작 목록 흔적을 정리하고 실제 존재하는 시작프로그램만 보여드렸습니다.');
+    return reply(sourceTab, msgKo, {
+      cardKind: 'STARTUP_MANAGER_CARD',
+      startupManagerPayload: stCleanRes.payload,
+      followUpSuggestions: ['설치된 프로그램 목록 보여줘', '내 PC 점검해줘'],
+    });
+  }
+
   const isDeepUninstallRequest =
     isFollowUpAppNameAfterClarify ||
-    (!/바탕화면|다운로드\s*폴더|휴지통|사진|동영상|문서|파일|폴더|복사\s*기록|중복|연사|보안\s*쓰레기|보안\s*프로그램|시작\s*프로그램|방금\s*지운/i.test(
+    (!/바탕화면|다운로드\s*폴더|휴지통|사진|동영상|문서|파일|폴더|복사\s*기록|중복|연사|보안\s*쓰레기|보안\s*프로그램|시작\s*프로그램|시작\s*목록|방금\s*지운/i.test(
       clean
     ) &&
       (/(어도비|adobe|포토샵|아크로뱃|acrobat|creative\s*cloud|알약|알집|고클린|한컴|줌|zoom|팀뷰어|teamviewer|애니데스크|anydesk|카카오톡|카톡|kakaotalk|라인|텔레그램|디스코드|슬랙|배틀넷|스팀|steam|구글\s*드라이브|원드라이브|드롭박스).*?(지워|삭제|제거|없애|뽑아|적출|언인스톨|치워)/i.test(
