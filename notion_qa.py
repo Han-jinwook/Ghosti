@@ -228,12 +228,25 @@ def is_red_annotated(bdata: Dict[str, Any]) -> bool:
     return False
 
 
-def _format_blocks_recursive(blocks: List[Dict[str, Any]], indent: str = "") -> List[str]:
+def resolve_tester_name(title_text: str = "", track_name: str = "") -> str:
+    """[테스터 단일 SSOT] 1·2귀신(🟢) 카드 = 해나라, 3·4귀신(🟣) 카드 = 달나라."""
+    t = (track_name or "").strip()
+    if t in ("해나라", "달나라"):
+        return t
+    title = title_text or ""
+    if any(tag in title for tag in ("[3귀신", "[4귀신")) or "🟣" in title:
+        return "달나라"
+    return "해나라"
+
+
+def _format_blocks_recursive(
+    blocks: List[Dict[str, Any]], indent: str = "", tester_name: str = "해나라"
+) -> List[str]:
     lines: List[str] = []
     for blk in blocks:
         btype = blk.get("type", "")
         bdata = blk.get(btype, {})
-        red_prefix = "🔴 [해나라님 붉은색 코멘트] " if is_red_annotated(bdata) else ""
+        red_prefix = f"🔴 [{tester_name}님 붉은색 코멘트] " if is_red_annotated(bdata) else ""
 
         if btype in (
             "paragraph",
@@ -275,13 +288,13 @@ def _format_blocks_recursive(blocks: List[Dict[str, Any]], indent: str = "") -> 
                 c_res = requests.get(child_url, headers=get_headers(), timeout=10)
                 if c_res.status_code == 200:
                     c_blocks = c_res.json().get("results", [])
-                    lines.extend(_format_blocks_recursive(c_blocks, indent + "   ↳ "))
+                    lines.extend(_format_blocks_recursive(c_blocks, indent + "   ↳ ", tester_name))
             except Exception:
                 pass
     return lines
 
 
-def fetch_page_body_text(page_id: str) -> str:
+def fetch_page_body_text(page_id: str, tester_name: str = "해나라") -> str:
     """카드(Page) 내부의 본문 블록(children)을 조회하여 읽기 좋은 텍스트로 변환합니다 (붉은색 인라인 코멘트 자동 감지)."""
     url = f"{NOTION_API_BASE}/blocks/{page_id}/children?page_size=100"
     res = requests.get(url, headers=get_headers(), timeout=15)
@@ -289,7 +302,7 @@ def fetch_page_body_text(page_id: str) -> str:
         return "(본문 블록 조회 실패)"
 
     blocks = res.json().get("results", [])
-    lines = _format_blocks_recursive(blocks)
+    lines = _format_blocks_recursive(blocks, "", tester_name)
     return "\n".join(lines).strip() if lines else "(본문 내용 없음)"
 
 
@@ -492,7 +505,8 @@ def query_bugs_raw(
         if not _matches_role_strict(title_text, app_select, resolved_role, resolved_status, page_id):
             continue
         card_role = classify_ghosti_bug_role(title_text, "", app_select)
-        body_text = fetch_page_body_text(page_id)
+        track_select = (props.get("담당", {}).get("select") or {}).get("name", "")
+        body_text = fetch_page_body_text(page_id, resolve_tester_name(title_text, track_select))
         if (
             not app_select
             and not is_ghosti_card
@@ -652,8 +666,8 @@ def validate_qa_card_rules(
     [전사 강령 제16조 제5·6항 코드 강제 가드]
     1) 맨 첫 줄에 📌 + [기존 규칙 유지] 또는 [신규 변경 규칙] 태그와 함께
        개발 용어 없는 1~2줄 테스트 판정 기준(정상/비정상 기준) 요약 필수
-    2) 1개 카드(또는 재테스트 안내)당 to_do 체크박스 항목은 기본 1~3개 이하(<= 3)로 제한하며,
-       오직 '로직' 담당의 초반 둘러보기/완주/UX 점검 카드에 한해서만 최대 5개 이하(<= 5) 예외를 허용합니다.
+    2) 1개 카드(또는 재테스트 안내)당 to_do 체크박스 항목은 기본 상한(MAX_QA_TODOS_PER_CARD) 이하로 제한하며,
+       초반 둘러보기/완주 점검 카드에 한해서만 별도 상한(MAX_QA_TODOS_LOGIC_WALKTHROUGH)을 적용합니다.
     """
     effective_max = max_todos if max_todos is not None else MAX_QA_TODOS_PER_CARD
     if todo_count <= 0:
@@ -947,7 +961,17 @@ def complete_bug(
     print("\n✅ [노션 인라인 피드백 자동 반영 완료!]")
     print(f"   • 카드 ID : {clean_page_id}")
     print(f"   • 상태 변경: '{STATUS_READY_FOR_QA}' 🚀")
-    print(f"   • 해나라님 인라인 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
+    tester_label = "테스터"
+    try:
+        r_pg = requests.get(f"{NOTION_API_BASE}/pages/{clean_page_id}", headers=get_headers(), timeout=10)
+        if r_pg.status_code == 200:
+            pg_props = r_pg.json().get("properties", {})
+            pg_title = extract_plain_text(pg_props.get(SCHEMA.title_prop_name, {}).get("title", []))
+            pg_track = (pg_props.get("담당", {}).get("select") or {}).get("name", "")
+            tester_label = resolve_tester_name(pg_title, pg_track) + "님"
+    except Exception:
+        pass
+    print(f"   • {tester_label} 인라인 안내문:\n     {full_instruction_text.replace(chr(10), chr(10) + '     ')}")
 
     # 3단계: 남은 '발견 버그' 자동 확인 후 다음 작업 제안 (추가 토큰 0)
     remaining_bugs = query_bugs_raw()
@@ -984,7 +1008,7 @@ def archive_done(
     step_num: Optional[str] = None,
 ) -> bool:
     """
-    해나라님이 메시지 작성 후 '발견된 버그'로 넘긴 카드를
+    테스터(1·2귀신=해나라님, 3·4귀신=달나라님)가 메시지 작성 후 '발견된 버그'로 넘긴 카드를
     AI가 확인/반영한 뒤 해당 코멘트 바로 아래에 인라인 피드백을 기록하고 '완료' 상태로 넘기는 함수입니다.
     """
     ensure_valid_token()
@@ -1140,8 +1164,8 @@ def move_card_to_column_bottom(page_id: str, target_status: str) -> bool:
         if "우선순위" in props and props["우선순위"].get("select"):
             new_props["우선순위"] = {"select": {"name": props["우선순위"]["select"]["name"]}}
         if "담당" in props:
-            inferred_track = "UX" if ("[UX]" in title_plain or "🟢" in title_plain) else "로직"
-            track_val = (props["담당"].get("select") or {}).get("name") or inferred_track
+            raw_track = (props["담당"].get("select") or {}).get("name") or ""
+            track_val = resolve_tester_name(title_plain, raw_track)
             new_props["담당"] = {"select": {"name": track_val}}
         if "담당자" in props and props["담당자"].get("people"):
             people_ids = [{"id": u["id"]} for u in props["담당자"]["people"] if isinstance(u, dict) and u.get("id")]
@@ -1216,28 +1240,16 @@ def create_mission(
     """
     [전사 강령 제16조 제5·6항 준수]
     1) 맨 첫 줄: 📌 [테스트 기준 규칙 | 기존 규칙 유지] 또는 [신규 변경 규칙] + 1~2줄 평이한 판정 기준 요약 (공허한 상투어·개발 용어 금지)
-    2) 하단 체크리스트: 실제 클릭 가능한 to_do 블록 기본 최대 3개 이하(1~3개), 단 '로직' 담당 초반 둘러보기/완주/UX 점검 카드에 한해 최대 5개 이하(<= 5) 허용
+    2) 하단 체크리스트: 실제 클릭 가능한 to_do 블록 기본 상한 이하, 초반 둘러보기/완주 점검 카드는 별도 상한 적용
     3) 노션 DB '담당' 속성('해나라' 또는 '달나라') 자동 부착 (1·2귀신 🟢 -> '해나라', 3·4귀신 🟣 -> '달나라')
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = initial_status or STATUS_MISSION
 
-    clean_title = (
-        title.strip()
-        .replace("[1귀신] [UX] ", "[1귀신] ")
-        .replace("[1귀신] [로직] ", "[1귀신] ")
-        .replace("[2귀신] [UX] ", "[2귀신] ")
-        .replace("[2귀신] [로직] ", "[2귀신] ")
-        .replace("[3귀신] [UX] ", "[3귀신] ")
-        .replace("[3귀신] [로직] ", "[3귀신] ")
-        .replace("[4귀신] [UX] ", "[4귀신] ")
-        .replace("[4귀신] [로직] ", "[4귀신] ")
-        .replace("[UX] ", "")
-        .replace("[로직] ", "")
-    )
+    clean_title = title.strip()
     is_dalnara_role = any(tag in clean_title for tag in ("[3귀신", "[4귀신")) or (
-        track_select_name and track_select_name.strip() in ("달나라", "로직") and "[1귀신" not in clean_title and "[2귀신" not in clean_title
+        track_select_name and track_select_name.strip() == "달나라" and "[1귀신" not in clean_title and "[2귀신" not in clean_title
     )
 
     if is_dalnara_role:
@@ -1256,7 +1268,7 @@ def create_mission(
         resolved_track = "해나라"
 
     is_logic_walkthrough = (
-        any(k in clean_title for k in ("둘러보기", "완주", "UX 점검", "UX점검"))
+        any(k in clean_title for k in ("둘러보기", "완주"))
         and not any(k in clean_title for k in ("엣지", "스트레스", "고강도", "저강도"))
     )
     allowed_max_todos = MAX_QA_TODOS_LOGIC_WALKTHROUGH if is_logic_walkthrough else MAX_QA_TODOS_PER_CARD
@@ -1371,7 +1383,7 @@ def create_mission(
 def create_split_retest_card(source_page_id: str, new_title: str, guide_text: str) -> str:
     """
     긴 버그/재테스트 카드에서 통과(☑)분을 '완료'로 보내고 남은 미검증 항목만 깔끔한 새 카드로 '재테스트 대기'에 생성합니다.
-    🚨 [필수 가드]: 알바생(테스터)들이 노션 보드에서 '담당(로직/UX)', '담당자(people)', '앱(귀신같이)' 필터로 조회할 때
+    🚨 [필수 가드]: 테스터(해나라·달나라)들이 노션 보드에서 '담당(해나라/달나라)', '담당자(people)', '앱(귀신같이)' 필터로 조회할 때
     절대 누락·비가시화되지 않도록 원본 카드(source_page_id)의 담당·담당자·앱·우선순위 속성을 100% 자동 상속(및 제목 기반 추론 보강)합니다.
     """
     ensure_valid_token()
@@ -1387,9 +1399,8 @@ def create_split_retest_card(source_page_id: str, new_title: str, guide_text: st
         if r_src.status_code == 200:
             src_props = r_src.json().get("properties") or {}
 
-    inferred_track = "달나라" if (any(t in clean_title for t in ("[3귀신", "[4귀신")) or "🟣" in clean_title) else "해나라"
-    raw_track = ((src_props.get("담당") or {}).get("select") or {}).get("name") or inferred_track
-    track_val = "해나라" if raw_track == "UX" else ("달나라" if raw_track == "로직" else raw_track)
+    raw_track = ((src_props.get("담당") or {}).get("select") or {}).get("name") or ""
+    track_val = resolve_tester_name(clean_title, raw_track)
     app_val = ((src_props.get("앱") or {}).get("select") or {}).get("name") or "귀신같이"
 
     new_props: Dict[str, Any] = {
@@ -1562,7 +1573,7 @@ def run_cli() -> None:
                 continue
 
             print(f"\n   🎯 선택된 카드: {title} ({page_id})")
-            print("   💬 해나라님에게 전달할 쉬운 [재테스트 안내문]을 입력하세요.")
+            print(f"   💬 {resolve_tester_name(title)}님에게 전달할 쉬운 [재테스트 안내문]을 입력하세요.")
             print("      (여러 줄 입력 가능 — 입력을 마치려면 빈 줄에서 Enter)")
 
             guide_lines: List[str] = []
