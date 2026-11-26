@@ -1837,6 +1837,140 @@ export function scheduleSaveCachedMobileGalleryIndex(
   }, delayMs);
 }
 
+export const SHOWROOM_SAMPLE_PHOTO_NAME_RE =
+  /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/;
+
+export function isShowroomSamplePhotoName(name: string): boolean {
+  return SHOWROOM_SAMPLE_PHOTO_NAME_RE.test(String(name || ''));
+}
+
+export function isRemoteOrSharedPhotoItem(p: PhotoItem): boolean {
+  const id = String(p?.id || '');
+  const fp = String(p?.fullPath || '');
+  return (
+    id.startsWith('shadow-remote-') ||
+    id.startsWith('shared_sb_') ||
+    id.startsWith('shared_added_') ||
+    /^s:[\\/]/i.test(fp)
+  );
+}
+
+export function matchesPhotoTrashTab(photo: PhotoItem, tabKey: string): boolean {
+  if (!photo.trashCategory || photo.quarantined) return false;
+  if (tabKey === 'all') return true;
+  if (tabKey === 'memo') {
+    return (
+      photo.trashCategory === 'memo' ||
+      photo.trashCategory === 'object' ||
+      photo.trashCategory === 'document' ||
+      photo.trashCategory === 'receipt'
+    );
+  }
+  return photo.trashCategory === tabKey;
+}
+
+export interface LocalPhotoCleanupSummary {
+  displayPhotos: PhotoItem[];
+  activeLocalPhotos: PhotoItem[];
+  quarantinedPhotos: PhotoItem[];
+  activeTrash: PhotoItem[];
+  activeDuplicateGroups: DuplicateGroup[];
+  totalLocalPhotoCount: number;
+  quarantinedCount: number;
+  totalCandidateCount: number;
+  totalCandidateBytes: number;
+  dupPhotoCount: number;
+  dupSetCount: number;
+  memoCount: number;
+  screenshotCount: number;
+  memoAndScreenCount: number;
+  blurryCount: number;
+}
+
+/**
+ * 좌측 사진 정리 워크스페이스와 우측 귀신비서 대화창이 1장 오차 없이 동일한 수치를 안내하도록 보장하는 단일 SSOT 집계 함수.
+ * - 원격 기기 동기화 썸네일(shadow-remote-*), 공유방 사진, 업무용 S: 드라이브, 쇼룸 샘플 사진을 일관되게 제외합니다.
+ */
+export function computeLocalPhotoCleanupSummary(
+  photos: PhotoItem[],
+  duplicateGroups: DuplicateGroup[],
+  options?: {
+    skippedGroupIds?: ReadonlySet<string>;
+    isDesktopWebMode?: boolean;
+    zConnected?: boolean;
+    isRealDeviceModeOverride?: boolean;
+  }
+): LocalPhotoCleanupSummary {
+  const skippedGroupIds = options?.skippedGroupIds ?? new Set<string>();
+  const localOnlyPhotos = (photos || []).filter((p) => p && !isRemoteOrSharedPhotoItem(p));
+  const hasAnyRealUserPhoto = localOnlyPhotos.some((p) => !isShowroomSamplePhotoName(p.name));
+
+  let displayPhotos: PhotoItem[];
+  if (options?.isDesktopWebMode) {
+    displayPhotos = options.zConnected
+      ? localOnlyPhotos.filter((p) => !isShowroomSamplePhotoName(p.name))
+      : [];
+  } else {
+    const isRealDevice =
+      options?.isRealDeviceModeOverride !== undefined
+        ? options.isRealDeviceModeOverride
+        : Boolean(options?.zConnected) || hasAnyRealUserPhoto;
+    displayPhotos = isRealDevice
+      ? localOnlyPhotos.filter((p) => !isShowroomSamplePhotoName(p.name))
+      : localOnlyPhotos;
+  }
+
+  const skippedPhotoIds = new Set<string>();
+  if (skippedGroupIds.size > 0) {
+    (duplicateGroups || []).forEach((g) => {
+      if (skippedGroupIds.has(g.groupId)) {
+        g.photoIds.forEach((pid) => skippedPhotoIds.add(pid));
+      }
+    });
+  }
+
+  const activeLocalPhotos = displayPhotos.filter((p) => !p.quarantined);
+  const quarantinedPhotos = displayPhotos.filter((p) => Boolean(p.quarantined));
+  const activeTrash = displayPhotos.filter(
+    (p) => Boolean(p.trashCategory) && !p.quarantined && !skippedPhotoIds.has(p.id)
+  );
+  const totalCandidateBytes = activeTrash.reduce((acc, p) => acc + (p.size || 0), 0);
+
+  const dupPhotoCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'duplicate')).length;
+  const memoCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'memo')).length;
+  const screenshotCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'screenshot')).length;
+  const blurryCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'blurry')).length;
+  const memoAndScreenCount = memoCount + screenshotCount;
+
+  const photoById = new Map(displayPhotos.map((p) => [p.id, p]));
+  const activeDuplicateGroups = (duplicateGroups || []).filter(
+    (g) =>
+      !skippedGroupIds.has(g.groupId) &&
+      g.photoIds.some((id) => {
+        const ph = photoById.get(id);
+        return Boolean(ph && !ph.quarantined && id !== g.bestPhotoId);
+      })
+  );
+
+  return {
+    displayPhotos,
+    activeLocalPhotos,
+    quarantinedPhotos,
+    activeTrash,
+    activeDuplicateGroups,
+    totalLocalPhotoCount: activeLocalPhotos.length,
+    quarantinedCount: quarantinedPhotos.length,
+    totalCandidateCount: activeTrash.length,
+    totalCandidateBytes,
+    dupPhotoCount,
+    dupSetCount: activeDuplicateGroups.length,
+    memoCount,
+    screenshotCount,
+    memoAndScreenCount,
+    blurryCount,
+  };
+}
+
 export async function saveCachedMobileGalleryIndex(
   photos: PhotoItem[],
   videos: VideoSceneItem[]

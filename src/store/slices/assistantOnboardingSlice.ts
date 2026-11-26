@@ -13,6 +13,7 @@ import {
   applyCachedPcOpticalAuditInstant,
   auditRealPcPhotosAndCluster,
   clusterPhotosIntoDuplicateGroups,
+  computeLocalPhotoCleanupSummary,
   convertNativeGalleryVideos,
   loadCachedMobileGalleryIndex,
   migrateOpticalSigPhotoId,
@@ -1711,14 +1712,11 @@ export const createAssistantOnboardingSlice: StateCreator<
       void saveCachedMobileGalleryIndex(finalPhotos, finalVideos);
 
       if (newlyAddedTotal > 0 && typeof window !== 'undefined') {
-        const dupSetsCount = get().duplicateGroups.length;
-        const blurryCount = finalPhotos.filter(
-          (p) => p.trashCategory === 'blurry' && !p.quarantined
-        ).length;
-        const memoScreenCount = finalPhotos.filter(
-          (p) =>
-            (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') && !p.quarantined
-        ).length;
+        const ssotAudit = computeLocalPhotoCleanupSummary(finalPhotos, get().duplicateGroups, {
+          isRealDeviceModeOverride: true,
+        });
+        const blurryCount = ssotAudit.blurryCount;
+        const memoScreenCount = ssotAudit.memoAndScreenCount;
         const remainingOld = Math.max(0, totalGalleryPhotos - finalPhotos.length);
         const secSt = loadGhostSecretaryState();
         saveGhostSecretaryState({
@@ -1729,8 +1727,10 @@ export const createAssistantOnboardingSlice: StateCreator<
         window.dispatchEvent(
           new CustomEvent('ghosti_photo_audit_summary', {
             detail: {
-              total: finalPhotos.length,
-              dupSets: dupSetsCount,
+              total: ssotAudit.totalLocalPhotoCount,
+              candidates: ssotAudit.totalCandidateCount,
+              dupPhotos: ssotAudit.dupPhotoCount,
+              dupSets: ssotAudit.dupSetCount,
               blurry: blurryCount,
               memoScreen: memoScreenCount,
               remainingOldPhotos: remainingOld,
@@ -1811,8 +1811,18 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (analyzed.length === 0) return;
     const isSample = (name: string) =>
       /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
-    let summaryDetail = {
+    let summaryDetail: {
+      total: number;
+      candidates?: number;
+      dupPhotos?: number;
+      dupSets: number;
+      blurry: number;
+      memoScreen: number;
+      remainingOldPhotos: number;
+    } = {
       total: analyzed.length,
+      candidates: 0,
+      dupPhotos: 0,
       dupSets: 0,
       blurry: 0,
       memoScreen: 0,
@@ -1866,14 +1876,12 @@ export const createAssistantOnboardingSlice: StateCreator<
       updatedPhotos.forEach((p) => {
         if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
       });
-      const dupSetsCount = nextDupGroups.length;
-      const blurryCount = updatedPhotos.filter(
-        (p) => p.trashCategory === 'blurry' && !p.quarantined
-      ).length;
-      const memoScreenCount = updatedPhotos.filter(
-        (p) =>
-          (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') && !p.quarantined
-      ).length;
+      const ssotPicked = computeLocalPhotoCleanupSummary(updatedPhotos, nextDupGroups, {
+        isRealDeviceModeOverride: true,
+      });
+      const dupSetsCount = ssotPicked.dupSetCount;
+      const blurryCount = ssotPicked.blurryCount;
+      const memoScreenCount = ssotPicked.memoAndScreenCount;
       const stepping = executeMobileSteppingStoneScan({
         totalPhotoCount: updatedPhotos.length,
         countFacesInWindow: (windowLimit) =>
@@ -1890,6 +1898,8 @@ export const createAssistantOnboardingSlice: StateCreator<
       });
       summaryDetail = {
         total: newAnalyzed.length,
+        candidates: ssotPicked.totalCandidateCount,
+        dupPhotos: ssotPicked.dupPhotoCount,
         dupSets: dupSetsCount,
         blurry: blurryCount,
         memoScreen: memoScreenCount,

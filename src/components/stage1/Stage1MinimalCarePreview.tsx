@@ -4,7 +4,11 @@ import type { PhotoItem, TrashCategory } from '../../types/saysee';
 import {
   PC_OPTICAL_AUDIT_EVENT,
   auditRealPcPhotosAndCluster,
+  computeLocalPhotoCleanupSummary,
   isPcOpticalAuditInProgress,
+  isRemoteOrSharedPhotoItem,
+  isShowroomSamplePhotoName,
+  matchesPhotoTrashTab,
 } from '../../services/mobilePhotoPicker';
 import {
   zCoreBridge,
@@ -76,17 +80,7 @@ const FALLBACK_SAMPLE_TRASH_ITEMS: Record<
 const fmtMB = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 function matchesTrashTab(photo: PhotoItem, tabKey: string): boolean {
-  if (!photo.trashCategory || photo.quarantined) return false;
-  if (tabKey === 'all') return true;
-  if (tabKey === 'memo') {
-    return (
-      photo.trashCategory === 'memo' ||
-      photo.trashCategory === 'object' ||
-      photo.trashCategory === 'document' ||
-      photo.trashCategory === 'receipt'
-    );
-  }
-  return photo.trashCategory === tabKey;
+  return matchesPhotoTrashTab(photo, tabKey);
 }
 
 export const Stage1MinimalCarePreview: React.FC = () => {
@@ -187,58 +181,39 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     };
   }, []);
 
-  const isShowroomSamplePhoto = (name: string): boolean =>
-    /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
-  const isRemoteOrSharedPhoto = (p: PhotoItem): boolean => {
-    const id = String(p.id || '');
-    const fp = String(p.fullPath || '');
-    return (
-      id.startsWith('shadow-remote-') ||
-      id.startsWith('shared_sb_') ||
-      id.startsWith('shared_added_') ||
-      /^s:[\\/]/i.test(fp)
-    );
-  };
   const isDesktopWebMode = !isCapacitorNativeMobileRuntime() && !isStoreAppMode && layout !== 'mobile';
-  // [엔진 미연결·재연결 시 타 기기/잔존 사진 혼입 0% 차단]:
+  // [엔진 미연결·재연결 시 타 기기/잔존 사진 혼입 0% 차단 & 좌·우측 수치 100% 단일 SSOT]:
   // 1) 1. 귀신비서 사진 정리는 현재 내 기기 로컬 실물 사진만 대상이므로, 4. 내 기기 통합 원격 썸네일(shadow-remote-*)과 공유방 사진은 절대 섞지 않는다.
-  // 2) PC 웹에서는 Z-코어 엔진이 실제로 연결(zConnected === true)된 상태에서만 로컬 PC 정리 후보를 표시한다 (끊김·재연결 중 이전/원격 사진 및 깨진 썸네일 노출 차단).
-  const localOnlyPhotos = photos.filter((p) => !isRemoteOrSharedPhoto(p));
-  const hasAnyRealUserPhoto = localOnlyPhotos.some((p) => !isShowroomSamplePhoto(p.name));
+  // 2) PC 웹에서는 Z-코어 엔진이 실제로 연결(zConnected === true)된 상태에서만 로컬 PC 정리 후보를 표시한다.
+  const localOnlyPhotos = photos.filter((p) => !isRemoteOrSharedPhotoItem(p));
+  const hasAnyRealUserPhoto = localOnlyPhotos.some((p) => !isShowroomSamplePhotoName(p.name));
   const isRealDeviceMode = isDesktopWebMode
     ? zConnected
     : zConnected || Boolean(isStoreAppMode) || layout === 'mobile' || hasAnyRealUserPhoto;
-  const displayPhotos = isDesktopWebMode
-    ? zConnected
-      ? localOnlyPhotos.filter((p) => !isShowroomSamplePhoto(p.name))
-      : []
-    : isRealDeviceMode
-    ? localOnlyPhotos.filter((p) => !isShowroomSamplePhoto(p.name))
-    : localOnlyPhotos;
 
-  const skippedPhotoIds = React.useMemo(() => {
-    if (skippedGroupIds.size === 0) return new Set<string>();
-    const out = new Set<string>();
-    duplicateGroups.forEach((g) => {
-      if (skippedGroupIds.has(g.groupId)) {
-        g.photoIds.forEach((pid) => out.add(pid));
-      }
-    });
-    return out;
-  }, [skippedGroupIds, duplicateGroups]);
-
-  const liveActiveTrash = displayPhotos.filter(
-    (p) => p.trashCategory && !p.quarantined && !skippedPhotoIds.has(p.id)
+  const liveCleanupSummary = React.useMemo(
+    () =>
+      computeLocalPhotoCleanupSummary(photos, duplicateGroups, {
+        skippedGroupIds,
+        isDesktopWebMode,
+        zConnected,
+        isRealDeviceModeOverride: isRealDeviceMode,
+      }),
+    [photos, duplicateGroups, skippedGroupIds, isDesktopWebMode, zConnected, isRealDeviceMode]
   );
+
+  const displayPhotos = liveCleanupSummary.displayPhotos;
+  const activeLocalPhotoCount = liveCleanupSummary.totalLocalPhotoCount;
+  const liveActiveTrash = liveCleanupSummary.activeTrash;
   const activeTrash =
     isCleanupPaused && pausedSnapshot ? pausedSnapshot.activeTrash : liveActiveTrash;
-  const quarantinedPhotos = displayPhotos.filter((p) => p.quarantined);
+  const quarantinedPhotos = liveCleanupSummary.quarantinedPhotos;
   const totalTrashBytes = activeTrash.reduce((a, p) => a + p.size, 0);
 
-  const dupCount = activeTrash.filter((p) => matchesTrashTab(p, 'duplicate')).length;
-  const memoCount = activeTrash.filter((p) => matchesTrashTab(p, 'memo')).length;
-  const screenshotCount = activeTrash.filter((p) => matchesTrashTab(p, 'screenshot')).length;
-  const blurryCount = activeTrash.filter((p) => matchesTrashTab(p, 'blurry')).length;
+  const dupCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'duplicate')).length;
+  const memoCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'memo')).length;
+  const screenshotCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'screenshot')).length;
+  const blurryCount = activeTrash.filter((p) => matchesPhotoTrashTab(p, 'blurry')).length;
   const memoAndScreenCount = memoCount + screenshotCount;
 
   React.useEffect(() => {
@@ -520,7 +495,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 <>
                   정리 후보 <span className="font-bold text-teal-700">{activeTrash.length}장</span>{' '}
                   <span className="text-slate-400 font-normal text-[13.5px]">
-                    ({fmtMB(totalTrashBytes)})
+                    ({fmtMB(totalTrashBytes)}
+                    {activeLocalPhotoCount > 0 ? ` · 전체 ${activeLocalPhotoCount}장 중` : ''})
                   </span>{' '}
                   <span className="text-slate-500 font-normal text-[13.5px]">
                     · 중복·연사 {dupCount}장 · 메모·캡처 {memoAndScreenCount}장 · 흔들림 {blurryCount}장

@@ -27,6 +27,9 @@ import {
 import { transcribeAudioBlobViaCloud } from '../services/aiEngine';
 import { normalizeSpokenKoreanQuery } from '../services/voiceSearchAndAiBatonEngine';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  computeLocalPhotoCleanupSummary,
+} from '../services/mobilePhotoPicker';
 import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
 import {
   PC_MONSTER_ROLLING_PLACEHOLDERS_10,
@@ -731,6 +734,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const detail = (
         ev as CustomEvent<{
           total?: number;
+          candidates?: number;
+          dupPhotos?: number;
           dupSets?: number;
           blurry?: number;
           memoScreen?: number;
@@ -738,22 +743,29 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         }>
       ).detail;
       if (!detail) return;
-      const total = Number(detail.total ?? 0);
-      const dupSets = Number(detail.dupSets ?? 0);
-      const blurry = Number(detail.blurry ?? 0);
-      const memoScreen = Number(detail.memoScreen ?? 0);
+      const storeSnap = useSaySeeStore.getState();
+      const ssot = computeLocalPhotoCleanupSummary(storeSnap.photos || [], storeSnap.duplicateGroups || [], {
+        isDesktopWebMode: !isMobileOrStore,
+        zConnected: zCoreBridge.isConnected,
+      });
+      const total = Number(detail.total ?? ssot.totalLocalPhotoCount);
+      const candidates = Number(detail.candidates ?? ssot.totalCandidateCount);
+      const dupPhotos = Number(detail.dupPhotos ?? ssot.dupPhotoCount);
+      const dupSets = Number(detail.dupSets ?? ssot.dupSetCount);
+      const blurry = Number(detail.blurry ?? ssot.blurryCount);
+      const memoScreen = Number(detail.memoScreen ?? ssot.memoAndScreenCount);
       const remainingOldPhotos = Number(detail.remainingOldPhotos ?? 0);
       const st = loadGhostSecretaryState();
       const nickPrefix = st.nickname ? `${st.nickname}님, ` : '';
       const paneLabel = isMobileOrStore ? '아래 정리 화면에서' : '왼쪽 정리 화면에서';
       const text =
-        dupSets === 0 && blurry === 0 && memoScreen === 0
-          ? `${nickPrefix}사진 ${total}장을 확인했습니다. 중복·연사 묶음 0세트, 흐린 사진 0장으로 정리할 항목이 없습니다.`
-          : `${nickPrefix}사진 ${total}장 분석이 완료되었습니다.\n` +
-            `• 중복·연사 묶음: ${dupSets}세트\n` +
-            `• 흔들린(흐린) 사진: ${blurry}장\n` +
-            (memoScreen > 0 ? `• 메모·캡처 후보: ${memoScreen}장\n` : '') +
-            `\n임의로 삭제하지 않습니다. ${paneLabel} 한 세트씩 실사진과 추천 1장을 확인하시고 정리 여부를 선택해 주세요.`;
+        candidates === 0 && dupSets === 0 && blurry === 0 && memoScreen === 0
+          ? `${nickPrefix}사진 전체 ${total}장을 확인했습니다. 정리할 중복·연사·캡처·흔들림 후보가 없습니다(0장).`
+          : `${nickPrefix}사진 전체 ${total}장 중 **정리 후보 ${candidates}장** 분류가 완료되었습니다.\n` +
+            `• 중복·연사: ${dupPhotos}장 (${dupSets}세트)\n` +
+            `• 메모·캡처: ${memoScreen}장\n` +
+            `• 흔들림·오촬영: ${blurry}장\n` +
+            `\n임의로 삭제하지 않습니다. ${paneLabel} 직접 확인하시고 정리 여부를 선택해 주세요.`;
 
       const storeNow = useSaySeeStore.getState();
       const allowPcBridge =
@@ -1145,26 +1157,108 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       return;
     }
 
-    if (
-      /^(📱\s*)?(내\s*폰\s*사진\s*(?:불러와|자동\s*점검)|폰\s*사진\s*(?:불러와|자동\s*점검)|사진\s*(?:불러와\s*)?(?:1분\s*)?정리|폰\s*사진\s*정리\s*시작)/i.test(
+    const isExplicitPhonePhotoCmd =
+      /^(📱\s*)?(?:내\s*폰|스마트폰|휴대폰|폰)\s*사진\s*(?:불러와|자동\s*점검|점검\s*결과(?:\s*볼래)?|(?:1분\s*)?정리(?:\s*시작|\s*해\s*줘|\s*할래)?)/i.test(
         raw
-      )
-    ) {
-      void useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true });
-      const curPhotos = useSaySeeStore.getState().photos.filter((p) => !p.quarantined);
-      const curDups = useSaySeeStore.getState().duplicateGroups.length;
-      const curBlurry = curPhotos.filter((p) => p.trashCategory === 'blurry').length;
+      );
+    const isPurePhotoCleanupCmd =
+      !/바탕\s*화면|데스크탑|찾아\s*줘|검색/i.test(raw) &&
+      (/^(📸\s*|🖼️\s*|📱\s*)?(?:내\s*|pc\s*|컴퓨터\s*)?(?:(?:중복|연사|흔들린|흐린|스크린샷|캡처|영수증|주차|메모)\s*)?(?:사진|스크린샷|캡처\s*사진)\s*(?:불러와\s*)?(?:1분\s*)?(?:정리|정돈|청소)(?:\s*후보)?(?:\s*(?:시작|해\s*줘|해\s*주세요|할래|보여\s*줘|알려\s*줘|확인|몇\s*장[가-힣]*|얼마나[가-힣]*|있어|있나|있니))?[.!?~]*$/i.test(
+        raw
+      ) ||
+        /^(?:정리\s*(?:후보|할)\s*사진|(?:중복|연사|흔들린|흐린)\s*사진)\s*(?:몇\s*장[가-힣]*|얼마나[가-힣]*|있어|있나|보여\s*줘|알려\s*줘)[.!?~]*$/i.test(
+          raw
+        ));
+
+    if (isExplicitPhonePhotoCmd || isPurePhotoCleanupCmd) {
+      const storeSnap = useSaySeeStore.getState();
+      const targetTrashTab =
+        /흔들린|흐린/.test(raw)
+          ? 'blurry'
+          : /스크린샷|캡처/.test(raw)
+          ? 'screenshot'
+          : /영수증|주차|메모/.test(raw)
+          ? 'memo'
+          : /중복|연사/.test(raw)
+          ? 'duplicate'
+          : null;
+
+      if (isMobileOrStore) {
+        void storeSnap.syncMobileNativeGalleryAuto({ promptPermission: true });
+        const summary = computeLocalPhotoCleanupSummary(
+          storeSnap.photos || [],
+          storeSnap.duplicateGroups || [],
+          { isRealDeviceModeOverride: true }
+        );
+        if (targetTrashTab) {
+          storeSnap.setActiveTrashCategoryFilter(targetTrashTab);
+        }
+        const mbStr = (summary.totalCandidateBytes / 1024 / 1024).toFixed(1);
+        setSharedMonsterMessages((prev) => [
+          ...prev,
+          {
+            id: `secretary_mobile_pick_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab,
+            text:
+              summary.totalLocalPhotoCount > 0
+                ? summary.totalCandidateCount > 0
+                  ? `현재 내 폰 사진 전체 **${summary.totalLocalPhotoCount}장** 중 **정리 후보 ${summary.totalCandidateCount}장**(${mbStr} MB)이 분류되어 있습니다.\n• 중복·연사 **${summary.dupPhotoCount}장**(${summary.dupSetCount}세트) · 메모·캡처 **${summary.memoAndScreenCount}장** · 흔들림 **${summary.blurryCount}장**\n\n임의로 삭제하지 않으니 **아래 정리 탭**에서 직접 확인하고 선택해 주세요.`
+                  : `현재 내 폰 사진 **${summary.totalLocalPhotoCount}장**을 확인했으며, 정리할 중복·흔들림·캡처 후보가 없습니다(0장).`
+                : '스마트폰 사진첩을 확인하고 있습니다.\n사진 접근 권한을 허용해 주시면 기기 안에서 자동으로 분류·검색됩니다.',
+          },
+        ]);
+        setSharedMonsterBusy(false);
+        return;
+      }
+
+      // 데스크톱(PC) 환경: "내 폰 사진"으로 오안내하지 않고 좌측 사진 정리 워크스페이스와 100% 동일한 SSOT 수치를 안내
+      const pcSummary = computeLocalPhotoCleanupSummary(
+        storeSnap.photos || [],
+        storeSnap.duplicateGroups || [],
+        { isDesktopWebMode: true, zConnected: zCoreBridge.isConnected }
+      );
+      if (isExplicitPhonePhotoCmd) {
+        const pcTail =
+          zCoreBridge.isConnected && pcSummary.totalCandidateCount > 0
+            ? `\n\n참고로 현재 연결된 **내 PC 사진 전체 ${pcSummary.totalLocalPhotoCount}장** 중에는 **정리 후보 ${pcSummary.totalCandidateCount}장**(중복·연사 ${pcSummary.dupPhotoCount}장 · 메모·캡처 ${pcSummary.memoAndScreenCount}장 · 흔들림 ${pcSummary.blurryCount}장)이 왼쪽 화면에 준비되어 있습니다.`
+            : '';
+        setSharedMonsterMessages((prev) => [
+          ...prev,
+          {
+            id: `secretary_pc_phone_guide_${Date.now()}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab,
+            text: `지금은 **PC 화면**에 접속해 계십니다. 스마트폰 갤러리 사진 정리는 스마트폰의 **귀신같이 앱**에서 실행하실 수 있어요.${pcTail}`,
+          },
+        ]);
+        setSharedMonsterBusy(false);
+        return;
+      }
+
+      storeSnap.setDesktopTab('trash');
+      if (targetTrashTab) {
+        storeSnap.setActiveTrashCategoryFilter(targetTrashTab);
+      } else if (pcSummary.dupPhotoCount > 0) {
+        storeSnap.setActiveTrashCategoryFilter('duplicate');
+      } else if (pcSummary.totalCandidateCount > 0) {
+        storeSnap.setActiveTrashCategoryFilter('all');
+      }
+      const pcMbStr = (pcSummary.totalCandidateBytes / 1024 / 1024).toFixed(1);
       setSharedMonsterMessages((prev) => [
         ...prev,
         {
-          id: `secretary_mobile_pick_${Date.now()}`,
+          id: `secretary_pc_photo_cleanup_${Date.now()}`,
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab,
-          text:
-            curPhotos.length > 0
-              ? `현재 내 폰 사진 **${curPhotos.length}장** 색인이 완료되어 있습니다.\n(중복·연사 **${curDups}세트** · 흔들린 사진 **${curBlurry}장** — 아래 정리 탭에서 직접 확인하고 선택해 주세요.)`
-              : '스마트폰 사진첩을 확인하고 있습니다.\n사진 접근 권한을 허용해 주시면 기기 안에서 자동으로 분류·검색됩니다.',
+          text: !zCoreBridge.isConnected
+            ? '내 PC의 정리 후보 사진을 확인하려면 먼저 **내 컴퓨터 연결(PC 엔진)**이 필요합니다. 연결 즉시 중복·연사·캡처·흔들림 후보를 분류해 보여드릴게요.'
+            : pcSummary.totalCandidateCount > 0
+            ? `현재 내 PC 사진 전체 **${pcSummary.totalLocalPhotoCount}장** 중 **정리 후보 ${pcSummary.totalCandidateCount}장**(${pcMbStr} MB)이 준비되어 있습니다.\n• 중복·연사 **${pcSummary.dupPhotoCount}장**(${pcSummary.dupSetCount}세트) · 메모·캡처 **${pcSummary.memoAndScreenCount}장** · 흔들림 **${pcSummary.blurryCount}장**\n\n임의로 지우지 않으니 **왼쪽 사진 정리 화면**에서 직접 확인하고 선택해 주세요.`
+            : `현재 내 PC 사진 전체 **${pcSummary.totalLocalPhotoCount}장**을 확인했으며, 정리할 중복·캡처·흔들림 후보가 없습니다(0장).`,
         },
       ]);
       setSharedMonsterBusy(false);

@@ -27,6 +27,7 @@ import {
   buildStudioSupportJumpUrl,
 } from './merlin-hub-sdk/Support/blackbox';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { computeLocalPhotoCleanupSummary } from './mobilePhotoPicker';
 import { validateClubSignboardName } from '../components/PricingModal';
 import { dispatchGhostCastLiveCommand } from '../components/GhostCastAndLiveSystem';
 import { executeRealOsAction, buildSetupDiagnosisPlan } from './setupMonsterEngine';
@@ -4346,21 +4347,21 @@ export async function processUnifiedMonsterChatQuery(params: {
             }
           }
 
-          const storePhotos = useSaySeeStore.getState().photos || [];
-          const photoCleanupCnt = storePhotos.filter(
-            (p: any) =>
-              p &&
-              !p.isTrashed &&
-              !p.isVaultDocument &&
-              !/^s:[\\/]/i.test(String(p.filePath || p.url || '')) &&
-              (p.cleanupTag === 'duplicate' ||
-                p.cleanupTag === 'parking_receipt' ||
-                p.cleanupTag === 'screenshot' ||
-                p.cleanupTag === 'blurry')
-          ).length;
+          const curStore = useSaySeeStore.getState();
+          const isDesktopWebCare =
+            !isCapacitorNativeMobileRuntime() && !curStore.isStoreAppMode && curStore.layout !== 'mobile';
+          const photoSummary = computeLocalPhotoCleanupSummary(
+            curStore.photos || [],
+            curStore.duplicateGroups || [],
+            {
+              isDesktopWebMode: isDesktopWebCare,
+              zConnected: zCoreBridge.isConnected,
+            }
+          );
+          const photoCleanupCnt = photoSummary.totalCandidateCount;
           if (agentIntent.preferredBucket === 'DESKTOP' && photoCleanupCnt > 0) {
             extraTopLines.push(
-              `• **사진 정돈 후보**: 왼쪽 사진 정리 화면에도 중복·흔들린·스크린샷 후보 **${photoCleanupCnt}장**이 준비되어 있어요!`
+              `• **사진 정돈 후보**: 왼쪽 사진 정리 화면에도 전체 ${photoSummary.totalLocalPhotoCount}장 중 **정리 후보 ${photoCleanupCnt}장**(중복·연사 ${photoSummary.dupPhotoCount}장 · 메모·캡처 ${photoSummary.memoAndScreenCount}장 · 흔들림 ${photoSummary.blurryCount}장)이 준비되어 있어요!`
             );
           }
 
