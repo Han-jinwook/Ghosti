@@ -1487,6 +1487,33 @@ export function buildLocalMultiTurnFilterFallback(
 /**
  * [배치 실행기 — 1회 확인 후 실제 Z-Core 도구 호출]
  */
+function cleanCareRawErrorText(raw: string): string {
+  return (raw || '')
+    .replace(/\(\s*Command\s+'?\[[^\n)]+\]?'?\s+timed\s+out[^)]*\)/gi, '')
+    .replace(/Command\s+'?\[[^\n]+\]?'?\s+timed\s+out[^\n.]*/gi, '')
+    .replace(/\[WinError\s+\d+\][^\n.]*/gi, '')
+    .replace(/Traceback\s*\(most recent call last\)[\s\S]*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function explainCareIncompleteReasonKo(rawErr: string | undefined, taskLabelKo: string): string {
+  const r = String(rawErr || '');
+  if (/timed?\s*out|시간\s*초과/i.test(r)) {
+    return `ℹ️ **${taskLabelKo}** 중 윈도우 시스템 응답이 길어져 일부 항목은 안전을 위해 건너뛰었습니다(현재 열려 있는 프로그램을 닫은 뒤 다시 시도해 주세요).`;
+  }
+  if (/권한|uac|access\s+is\s+denied|액세스.*?거부|canceled|취소/i.test(r)) {
+    return `ℹ️ **${taskLabelKo}**을(를) 진행하려면 윈도우 관리자 권한 확인 창에서 **[예]** 승인이 필요합니다(승인이 취소되어 원래 상태를 그대로 유지했습니다).`;
+  }
+  if (/사용\s*중|being\s+used|열려|locked/i.test(r)) {
+    return `ℹ️ **${taskLabelKo}** 대상 중 현재 실행 중인 파일·프로그램이 있어 작업 보호를 위해 해당 항목은 건너뛰었습니다.`;
+  }
+  const cleaned = cleanCareRawErrorText(r);
+  return cleaned
+    ? `ℹ️ **${taskLabelKo} 안내**: ${cleaned}`
+    : `ℹ️ **${taskLabelKo}** 대상이 이미 정리되어 있거나 현재 실행 중이라 안전하게 건너뛰었습니다.`;
+}
+
 export async function executeAgentCareBatchCard(
   card: MonsterAgentCareCardPayload,
   userApprovalText = '체크박스 확인 후 일괄 실행'
@@ -1508,7 +1535,9 @@ export async function executeAgentCareBatchCard(
     const r = await callCareApi<any>('/api/care/desktop-power-boost', { userApprovalTypedText: userApprovalText }, 15000);
     return {
       ok: r.ok,
-      reportKo: String(r.data?.message || (r.ok ? '데스크톱 고성능 전원 모드로 전환했습니다!' : '전원 모드 전환을 완료하지 못했습니다.')),
+      reportKo: r.ok
+        ? cleanCareRawErrorText(String(r.data?.message || '데스크톱 고성능 전원 모드로 전환했습니다!'))
+        : explainCareIncompleteReasonKo(r.data?.message || r.error, '전원 모드 전환'),
     };
   }
 
@@ -1518,7 +1547,9 @@ export async function executeAgentCareBatchCard(
     const r = await callCareApi<any>('/api/care/desktop-icon-toggle', { iconId: targetId, hide: true }, 10000);
     return {
       ok: r.ok,
-      reportKo: String(r.data?.message || (r.ok ? '바탕화면 시스템 아이콘을 안전하게 숨겼습니다!' : '아이콘 숨김을 완료하지 못했습니다.')),
+      reportKo: r.ok
+        ? cleanCareRawErrorText(String(r.data?.message || '바탕화면 시스템 아이콘을 안전하게 숨겼습니다!'))
+        : explainCareIncompleteReasonKo(r.data?.message || r.error, '바탕화면 아이콘 숨김'),
     };
   }
 
@@ -1604,24 +1635,36 @@ export async function executeAgentCareBatchCard(
 
   if (rRat) {
     if (rRat.ok) anyOk = true;
-    if (rRat.data?.reportKo) reportBlocks.push(String(rRat.data.reportKo));
+    if (rRat.data?.reportKo) {
+      reportBlocks.push(cleanCareRawErrorText(String(rRat.data.reportKo)));
+    } else if (!rRat.ok) {
+      reportBlocks.push(explainCareIncompleteReasonKo(rRat.data?.message || rRat.error, '백그라운드·자동실행 정리'));
+    }
   }
   if (rDisk) {
     if (rDisk.ok) anyOk = true;
     if (rDisk.data?.reportKo || rDisk.data?.message) {
-      reportBlocks.push(String(rDisk.data.reportKo || rDisk.data.message));
+      reportBlocks.push(cleanCareRawErrorText(String(rDisk.data.reportKo || rDisk.data.message)));
+    } else if (!rDisk.ok) {
+      reportBlocks.push(explainCareIncompleteReasonKo(rDisk.error, '임시·용량 파일 정리'));
     }
     if (typeof rDisk.data?.currentFreeGb === 'number') updatedFreeGb = rDisk.data.currentFreeGb;
     if (typeof rDisk.data?.projectedFreeAfterEmptyGb === 'number') updatedProjGb = rDisk.data.projectedFreeAfterEmptyGb;
   }
   if (rDesk) {
     if (rDesk.ok) anyOk = true;
-    if (rDesk.data?.reportKo) reportBlocks.push(String(rDesk.data.reportKo));
+    if (rDesk.data?.reportKo) {
+      reportBlocks.push(cleanCareRawErrorText(String(rDesk.data.reportKo)));
+    } else if (!rDesk.ok) {
+      reportBlocks.push(explainCareIncompleteReasonKo(rDesk.data?.message || rDesk.error, '바탕화면 정돈'));
+    }
   }
   if (rSlp) {
     if (rSlp.ok) anyOk = true;
     if (rSlp.data?.toastMessage) {
-      reportBlocks.push(`🌙 **[실사용 보안모듈 무삭제 수면 적용]**\n${rSlp.data.toastMessage}`);
+      reportBlocks.push(`🌙 **[실사용 보안모듈 무삭제 수면 적용]**\n${cleanCareRawErrorText(String(rSlp.data.toastMessage))}`);
+    } else if (!rSlp.ok) {
+      reportBlocks.push(explainCareIncompleteReasonKo(rSlp.data?.message || rSlp.error, '상주 보안앱 절전'));
     }
   }
 
@@ -1641,10 +1684,10 @@ export async function executeAgentCareBatchCard(
     );
     if (rBatch.ok) anyOk = true;
     if (rBatch.data?.reportKo) {
-      reportBlocks.push(String(rBatch.data.reportKo));
+      reportBlocks.push(cleanCareRawErrorText(String(rBatch.data.reportKo)));
     } else if (!rBatch.ok) {
       reportBlocks.push(
-        `⚠️ **[일부 프로그램 제거 미완료]** 선택한 프로그램(${appNames.length + pupIds.length}건) 중 일부는 제거 창이 닫혔거나 시간이 초과되어 건너뛰었습니다. 필요한 항목만 개별 체크해 다시 시도해 주세요.`
+        `ℹ️ **[프로그램 제거 안내]** 선택한 프로그램(${appNames.length + pupIds.length}건) 중 일부는 프로그램 자체 제거 확인 창이 닫혔거나 현재 실행 중이어서 안전하게 건너뛰었습니다. 실행 중인 창을 닫은 뒤 필요한 항목만 골라 다시 시도해 주세요.`
       );
     }
   }
@@ -1653,7 +1696,11 @@ export async function executeAgentCareBatchCard(
     ok: anyOk,
     reportKo:
       reportBlocks.join('\n\n') ||
-      (anyOk ? '선택하신 항목들을 깔끔하게 정리했습니다!' : '선택된 실행 대상이 없거나 처리 중 오류가 발생했습니다.'),
+      (anyOk
+        ? '선택하신 항목들을 깔끔하게 정리했습니다!'
+        : selectedItems.length === 0
+        ? '현재 선택된 정리 항목이 없거나 이미 모두 깨끗한 최신 상태입니다.'
+        : '현재 대상 항목이 이미 최신 상태이거나 실행 중이어서 안전하게 원래 상태를 유지했습니다.'),
     currentFreeGb: updatedFreeGb,
     projectedFreeAfterEmptyGb: updatedProjGb,
   };

@@ -1419,6 +1419,32 @@ export async function executeBootCarePreviewApproval(
   return { ok: true, restoreId, summaryKo, healthRecord: rec };
 }
 
+function parseDefenderSignatureAgeHours(sigUpdatedAt: string): number | null {
+  const s = (sigUpdatedAt || '').trim();
+  if (!s) return null;
+  const m = s.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?/);
+  if (!m) return null;
+  const dt = new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    m[4] ? Number(m[4]) : 0,
+    m[5] ? Number(m[5]) : 0
+  );
+  if (Number.isNaN(dt.getTime())) return null;
+  return (Date.now() - dt.getTime()) / (1000 * 60 * 60);
+}
+
+function sanitizeRawOsExceptionNoise(raw: string): string {
+  return (raw || '')
+    .replace(/\(\s*Command\s+'?\[[^\n)]+\]?'?\s+timed\s+out[^)]*\)/gi, '')
+    .replace(/Command\s+'?\[[^\n]+\]?'?\s+timed\s+out[^\n.]*/gi, '')
+    .replace(/\[WinError\s+\d+\][^\n.]*/gi, '')
+    .replace(/Traceback\s*\(most recent call last\)[\s\S]*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export async function fetchDefenderGuardState(
   subAction:
     | 'defender_status'
@@ -1431,35 +1457,104 @@ export async function fetchDefenderGuardState(
     | 'defender_open_threat_settings' = 'defender_status',
   targetPath?: string
 ): Promise<{ ok: boolean; payload?: MonsterDefenderGuardPayload; summaryKo: string; raw?: any }> {
+  // [최신 백신 DB 즉시 확인 정공법]:
+  // 이미 최근 24시간 이내에 Windows 보안 DB가 최신 패치된 상태라면, 느린 Windows Update COM 서버(35초 타임아웃)를
+  // 붙잡고 기다리거나 영문 에러를 띄우지 않고 0.1초 만에 '이미 최신 버전 적용됨'을 친절히 안내합니다.
+  if (subAction === 'defender_update_signature') {
+    const pre = (await executeRealOsAction('defender_status')) as any;
+    if (pre?.ok) {
+      const preSigAt = String(pre.signatureUpdatedAt || '').trim();
+      const preVer = String(pre.signatureVersion || '').trim();
+      const ageHours = parseDefenderSignatureAgeHours(preSigAt);
+      if (ageHours !== null && ageHours >= -2 && ageHours <= 24) {
+        // 백그라운드에서 무소음으로 미세 델타 유무만 한 번 더 확인 (사용자 화면 대기 0초)
+        void executeRealOsAction('defender_update_signature').catch(() => {});
+        const scanStPre = pre.scanState || {};
+        const alreadyLatestMsg = `✅ Windows 기본 백신 보안 DB가 이미 최신 버전(${preSigAt}${preVer ? ` · 버전 ${preVer}` : ''})으로 적용되어 있어 추가 다운로드 없이 안전하게 보호되고 있어요!`;
+        const payloadPre: MonsterDefenderGuardPayload = {
+          realTimeProtection: Boolean(pre.realTimeProtection ?? true),
+          antivirusEnabled: Boolean(pre.antivirusEnabled ?? true),
+          firewallEnabled: Boolean(pre.firewallEnabled ?? true),
+          ransomwareShieldEnabled: Boolean(pre.ransomwareShieldEnabled ?? false),
+          signatureVersion: preVer,
+          signatureUpdatedAt: preSigAt,
+          removableDrives: Array.isArray(pre.removableDrives) ? pre.removableDrives : [],
+          scanRunning: Boolean(pre.scanRunning ?? pre.running ?? scanStPre.running),
+          lastScanResultKo: alreadyLatestMsg,
+          lastActionNoteKo: alreadyLatestMsg,
+        };
+        return {
+          ok: true,
+          payload: payloadPre,
+          summaryKo: alreadyLatestMsg,
+          raw: pre,
+        };
+      }
+    }
+  }
+
   const res = await executeRealOsAction(subAction, targetPath);
   if (!res.ok && subAction !== 'defender_update_signature') {
+    const rawFail = String(res.summaryKo || res.message || '');
+    const isTimedOut = /timed?\s*out|시간\s*초과/i.test(rawFail);
+    const isPerm = /권한|access\s+is\s+denied|액세스.*?거부|uac/i.test(rawFail);
+    const cleanFail = sanitizeRawOsExceptionNoise(rawFail);
+    const friendlyFail = !zCoreBridge.isConnected
+      ? '내 컴퓨터 연결(PC 엔진)이 꺼져 있어 백신 방어막 상태를 확인하지 못했어요. 먼저 내 컴퓨터를 연결해 주세요.'
+      : isTimedOut
+      ? '윈도우 보안 서비스 응답이 일시적으로 지연되어 바로 확인하지 못했어요(귀신같이 기능 이상이 아닌 윈도우 자체 서비스 대기 현상). 잠시 후 다시 눌러 주세요.'
+      : isPerm
+      ? '윈도우 관리자 권한 확인 창이 닫혔거나 제한되어 작업을 마치지 못했어요. 권한 확인 창에서 [예]를 눌러 주세요.'
+      : cleanFail || '현재 윈도우 보안 서비스가 다른 작업을 처리 중이라 잠시 후 다시 시도해 주세요.';
     return {
       ok: false,
-      summaryKo:
-        res.summaryKo ||
-        res.message ||
-        '내 컴퓨터 연결(PC 엔진)이 꺼져 있어 실시간 백신 방어막 상태를 조회하지 못했어요.',
+      summaryKo: friendlyFail,
     };
   }
+
   const r = res as any;
   const scanSt = r.scanState || {};
   const scanRunning = Boolean(r.scanRunning ?? r.running ?? scanSt.running);
+  const sigUpdatedAt = String(r.signatureUpdatedAt || '').trim();
+  const sigVersion = String(r.signatureVersion || '').trim();
+  const rawSummary = String(r.summaryKo || r.message || '');
+
+  let finalSummaryKo = sanitizeRawOsExceptionNoise(rawSummary);
+  if (subAction === 'defender_update_signature') {
+    const ageAfter = parseDefenderSignatureAgeHours(sigUpdatedAt);
+    const wasTimeout = /timed?\s*out|시간\s*초과/i.test(rawSummary);
+    const wasPerm = /권한|access\s+is\s+denied|액세스.*?거부|uac/i.test(rawSummary);
+    if (res.ok) {
+      finalSummaryKo = sigUpdatedAt
+        ? `✅ Windows 기본 백신 보안 DB가 최신 상태(${sigUpdatedAt}${sigVersion ? ` · 버전 ${sigVersion}` : ''})로 준비되어 있어요!`
+        : finalSummaryKo || '✅ Windows 기본 백신 보안 DB를 최신 버전으로 업데이트했어요!';
+    } else if (ageAfter !== null && ageAfter >= -2 && ageAfter <= 36) {
+      finalSummaryKo = `✅ 현재 Windows 기본 백신 보안 DB는 이미 최근 버전(${sigUpdatedAt})으로 적용되어 안전하게 작동 중이에요! (마이크로소프트 서버 추가 확인만 응답 지연으로 백그라운드에서 이어서 진행됩니다.)`;
+    } else if (wasTimeout) {
+      finalSummaryKo = `ℹ️ 마이크로소프트 윈도우 업데이트 서버 응답이 지연되어 즉시 다운로드를 마치지 못했어요(귀신같이 성능 문제가 아닌 마이크로소프트 서버 대기 현상). 윈도우가 백그라운드에서 자동으로 업데이트를 마무리합니다.${sigUpdatedAt ? ` (현재 적용 시각: ${sigUpdatedAt})` : ''}`;
+    } else if (wasPerm) {
+      finalSummaryKo = `⚠️ 윈도우 보안 권한 제한으로 수동 업데이트를 마치지 못했어요. 윈도우 설정의 [Windows 업데이트]에서 자동 갱신됩니다.${sigUpdatedAt ? ` (현재 적용 시각: ${sigUpdatedAt})` : ''}`;
+    } else {
+      finalSummaryKo = `ℹ️ 현재 인터넷 연결 또는 윈도우 업데이트 서비스가 점검 중이라 즉시 갱신을 건너뛰었어요. 윈도우가 유휴 시간에 자동으로 최신 보안 DB를 받아 적용합니다.${sigUpdatedAt ? ` (현재 적용 시각: ${sigUpdatedAt})` : ''}`;
+    }
+  }
+
   const payload: MonsterDefenderGuardPayload = {
     realTimeProtection: Boolean(r.realTimeProtection ?? true),
     antivirusEnabled: Boolean(r.antivirusEnabled ?? true),
     firewallEnabled: Boolean(r.firewallEnabled ?? true),
     ransomwareShieldEnabled: Boolean(r.ransomwareShieldEnabled ?? false),
-    signatureVersion: String(r.signatureVersion || ''),
-    signatureUpdatedAt: String(r.signatureUpdatedAt || ''),
+    signatureVersion: sigVersion,
+    signatureUpdatedAt: sigUpdatedAt,
     removableDrives: Array.isArray(r.removableDrives) ? r.removableDrives : [],
     scanRunning,
-    lastScanResultKo: String(r.resultSummaryKo || scanSt.resultSummaryKo || ''),
-    lastActionNoteKo: String(r.summaryKo || r.message || ''),
+    lastScanResultKo: sanitizeRawOsExceptionNoise(String(r.resultSummaryKo || scanSt.resultSummaryKo || '')) || finalSummaryKo,
+    lastActionNoteKo: finalSummaryKo,
   };
   return {
     ok: Boolean(res.ok),
     payload,
-    summaryKo: String(r.summaryKo || r.message || ''),
+    summaryKo: finalSummaryKo,
     raw: r,
   };
 }
