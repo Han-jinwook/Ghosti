@@ -58,16 +58,17 @@
 
 # 🟠 `[3귀신]` 세션 인계장 (`SESSION_HANDOVER_3.md` — 사진 공유 · 내 기기 통합 · 모바일 앱)
 
-- **최종 갱신 일시**: 2026-11-26 13:26 (KST)
+- **최종 갱신 일시**: 2026-11-26 13:33 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정)
-- **최신 배포 버전**: **`Merlin Z-Core v2.9.20`** (1~6호기 전 클러스터 반영 완료) · 양대 스토어 **`v1.0.112 (112)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
-- **세션 창 제목**: `3귀신 재연결·v1.0.112`
+- **최신 배포 버전**: **`Merlin Z-Core v2.9.20`** (1~6호기 전 클러스터 반영 완료) · 양대 스토어 **`v1.0.114 (114)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
+- **세션 창 제목**: `3귀신 방관리·v1.0.114`
 
 ## 완료 내역 (2026-11-25 ~ 11-26)
-1. **사진 공유 `[방 관리]` 정식 서버 브릿지 멤버 목록(`photo_list_room_members` · `photo_kick_room_member`) 직결 연동 + 허브 닉네임 정합화 & 동명이인 이메일 구분 표시 (카드 `424f9ffd` `'재테스트 대기'`) (2026-11-26)**
+1. **사진 공유 `[방 관리]` 정식 서버 브릿지 멤버 목록(`photo_list_room_members` · `photo_kick_room_member`) 직결 연동 + 허브 닉네임 정합화 & 동명이인 이메일 구분 표시 + 양대 스토어 `v1.0.114 (114)` 배포 (카드 `424f9ffd` `'재테스트 대기'`) (2026-11-26)**
    - 1차 클라이언트 직접 `ghosti_lounge_members` 조회가 RLS(`ghosti_is_room_member`) 환경에서 방장 외 참여 회원을 누락하던 근본 원인을 `workAndDeviceBridgeOps.mjs` `photo_list_room_members`·`photo_kick_room_member` 서버 브릿지로 전환해 해결.
    - 2차 재제보(`'디자이너' 2명 중복 표시`) 근본 처치: `photo_list_room_members`에서 과거 합류 시점 잔상(`room_persona_nickname`)보다 매 로그인 동기화되는 허브 최신 닉네임(`public.users.nickname`)을 1순위로 우선하고 타 계정 정식 닉네임을 복제하는 오염 스냅샷을 차단, 실제 동명이인 계정 2명 이상 시 `[방 관리]` 칩에 이메일 식별자(`닉네임 (email)`)를 자동 병기하고 `photo_kick_room_member`가 중복 방 전체에서 일괄 강퇴하도록 완결.
+   - 3차 모바일 앱 재제보(`PC 정상, 모바일 1명 표시`): 설치형 앱(`v1.0.113`)에 구 `dist/` 번들이 내장되어 있던 원인을 해결하기 위해 `LoungeCustomSettingsHeader.tsx`에 로그인 동기화(`ghostiSupabaseUserSynced`)·포그라운드 복귀(`visibilitychange`) 자동 재조회까지 보강하고 양대 스토어 `v1.0.114 (114)` 정식 동시 출시 완료.
 2. **아이폰·안드로이드 기기 연결 해제 시 `[다시 연결]` 미노출 & 상단 `연결된 기기 2대` 거짓 표시 근본 해결 및 양대 스토어 `v1.0.112 (112)` 배포 (카드 `422f9ffd` `'재테스트 대기'`) (2026-11-26)**
    - 아이폰에서 PC 기기를 `[연결 해제]`했을 때 PC 화면에만 `[다시 연결]`이 뜨고 아이폰 화면에는 안 보이던 문제와, 폰 1대만 남았는데 `pcAgentPairedMobile = hasMobile || devices.length >= 2` 조건으로 상단에 `연결된 기기 2대`가 잘못 표시되던 버그를 동시 해결.
    - 서버 `workAndDeviceBridgeOps.mjs`에 `device_reconnect_device` 추가 + `deviceIntegrationService.ts`(`reconnectConnectedDevice` + Realtime 브로드캐스트) + `paidDeviceSyncSlice.ts`(`lastRevokedPeerDevice` · `reconnectPeerDevice` · `hasMobile && devices.length >= 2`) + `CrossDeviceClipboardAndPairingBar.tsx`/`MobileAppView.tsx` 수정으로 아이폰에서 PC를 해제하든 본인 기기를 해제하든 어느 쪽이든 즉시 `[다시 연결]` 버튼이 노출되어 2~3초 내 양쪽 기기가 자동 복구되도록 완결.

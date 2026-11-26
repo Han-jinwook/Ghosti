@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
 import type { FamilyRoomId, LoungeType } from '../../types/saysee';
@@ -87,6 +87,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [resolvedSettingsRoomId, setResolvedSettingsRoomId] = useState<string | null>(null);
   const [serverRoomMembers, setServerRoomMembers] = useState<SharedPhotoRoomMemberInfo[]>([]);
   const [hasLoadedServerMembers, setHasLoadedServerMembers] = useState(false);
+  const [memberRefreshTick, setMemberRefreshTick] = useState(0);
+  const lastMemberScopeKeyRef = useRef<string>('');
 
   useEffect(() => {
     setIsZCoreConnected(zCoreBridge.isConnected);
@@ -94,6 +96,20 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     void zCoreBridge.checkHealth();
     return () => {
       unsub();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const bumpRefresh = () => setMemberRefreshTick((n) => n + 1);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') bumpRefresh();
+    };
+    window.addEventListener('ghostiSupabaseUserSynced', bumpRefresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('ghostiSupabaseUserSynced', bumpRefresh);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
@@ -106,14 +122,19 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     const isSharedPhotoRoom =
       activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student';
     if (!isSharedPhotoRoom || !isLoggedInUser) {
+      lastMemberScopeKeyRef.current = '';
       setResolvedSettingsRoomId(null);
       setServerRoomMembers([]);
       setHasLoadedServerMembers(false);
       return;
     }
     let cancelled = false;
-    setServerRoomMembers([]);
-    setHasLoadedServerMembers(false);
+    const scopeKey = `${activeLoungeType}:${activeFamilyRoom}:${activeJoinedRoomMeta?.roomId || activeSharedRoomId || ''}:${(merlinAuth?.email || '').trim().toLowerCase()}`;
+    if (lastMemberScopeKeyRef.current !== scopeKey) {
+      lastMemberScopeKeyRef.current = scopeKey;
+      setServerRoomMembers([]);
+      setHasLoadedServerMembers(false);
+    }
 
     const loadRealMembers = async () => {
       let targetRoomId =
@@ -159,6 +180,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     activeJoinedRoomMeta?.roomId,
     isLoggedInUser,
     merlinAuth?.email,
+    memberRefreshTick,
   ]);
   const isMainPcConnected = isLoggedInUser && isZCoreConnected;
   const isMobileConnected = isLoggedInUser && Boolean(pcAgentPairedMobile);
