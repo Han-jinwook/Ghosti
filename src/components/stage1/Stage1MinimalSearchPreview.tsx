@@ -922,12 +922,12 @@ export const Stage1MinimalSearchPreview: React.FC<{
                               maskSensitiveDocText(
                                 hasExecutedUserSearch && activeQuery
                                   ? buildDocPreviewSnippet(
-                                      doc.extractedText,
+                                      doc.extractedText || '',
                                       activeQuery,
                                       180,
                                       doc.matchedQueryTokens
                                     )
-                                  : doc.extractedText.slice(0, 220)
+                                  : String(doc.extractedText || '').slice(0, 220)
                               ),
                               hasExecutedUserSearch ? activeQuery : '',
                               doc.matchedQueryTokens
@@ -1014,13 +1014,13 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           <div className="min-w-0 flex-1">
                             <p className="text-[13px] font-semibold text-slate-900 truncate">{vp.name}</p>
                             <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">
-                              {maskSensitiveDocText(vp.captionKo || vp.tags.join(' '))}
+                              {maskSensitiveDocText(vp.captionKo || (vp.tags || []).join(' '))}
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-100">
                           <span className="text-[11px] text-slate-400">
-                            {vp.date.split(' ')[0]}
+                            {String(vp.date || '').split(' ')[0]}
                           </span>
                           <div className="flex items-center gap-1.5">
                             <GhostLabelerActionButton variant="vault_photo" photo={vp} forceSampleOnly={forceSampleOnly} />
@@ -1154,11 +1154,11 @@ export const Stage1MinimalSearchPreview: React.FC<{
 
                           <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[40px] px-2.5 pb-2 pt-4 bg-gradient-to-t from-black/85 via-black/45 to-transparent flex items-end justify-between gap-2 pointer-events-none">
                             <span className="text-[11px] font-medium text-white whitespace-nowrap shrink-0">
-                              {item.photo.date.split(' ')[0]}
+                              {String(item.photo.date || '').split(' ')[0]}
                             </span>
-                            {item.photo.tags[0] && (
+                            {(item.photo.tags || [])[0] && (
                               <span className="text-[11px] text-zinc-200 truncate">
-                                {item.photo.tags[0]}
+                                {(item.photo.tags || [])[0]}
                               </span>
                             )}
                           </div>

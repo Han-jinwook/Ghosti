@@ -119,6 +119,25 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// [배포 직후 열린 귀신검색창·탭 구 청크(vite:preloadError) 무오류 자동 갱신 가드]:
+// 백그라운드 재배포 이후 아직 열려 있던 창에서 지연 청크를 처음 호출할 때 에러 바운더리('일시적인 화면 표시 오류') 대신
+// 현재 URL(검색어·창 모드 포함)을 그대로 보존한 채 1회 즉시 최신 번들로 무소음 전환합니다.
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    try {
+      const guardKey = 'ghosti_chunk_reload_ts_v1';
+      const lastTs = Number(sessionStorage.getItem(guardKey) || 0);
+      if (Date.now() - lastTs > 15_000) {
+        sessionStorage.setItem(guardKey, String(Date.now()));
+        window.location.reload();
+      }
+    } catch {
+      window.location.reload();
+    }
+  });
+}
+
 // Register PWA Service Worker with immediate update check (prevents stale HTML/JS cache)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

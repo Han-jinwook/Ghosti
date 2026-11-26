@@ -73,23 +73,30 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           const mySeq = ++_latestGhostLabelerSeq;
           void verifyGate(doc.path || doc.fileName).then(async (allowed) => {
             if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
-            const cleanDocName = stripCollisionKeySuffix(doc.fileName);
-            const existingDocNames = useSaySeeStore
-              .getState()
-              .localDocuments.map((d) => d.fileName);
-            const newLabel = formatQuickKoreanLabelForFile(
-              cleanDocName,
-              doc.date,
-              [doc.title, (doc.extractedText || '').slice(0, 120)],
-              { existingNames: existingDocNames }
-            );
-            if (mySeq !== _latestGhostLabelerSeq) return;
-            await copyTextSafeToClipboard(newLabel);
-            if (mySeq !== _latestGhostLabelerSeq) return;
-            markGhostDojoStep('labeler');
-            useSaySeeStore.setState({
-              lastQuarantineToast: `파일명 생성 완료: ${newLabel} (복사됨)`,
-            });
+            try {
+              const cleanDocName = stripCollisionKeySuffix(doc.fileName || doc.title || '문서.txt');
+              const existingDocNames = (useSaySeeStore.getState().localDocuments || [])
+                .map((d) => d?.fileName || '')
+                .filter(Boolean);
+              const newLabel = formatQuickKoreanLabelForFile(
+                cleanDocName,
+                doc.date || '',
+                [doc.title || '', String(doc.extractedText || '').slice(0, 120)],
+                { existingNames: existingDocNames }
+              );
+              if (mySeq !== _latestGhostLabelerSeq) return;
+              await copyTextSafeToClipboard(newLabel);
+              if (mySeq !== _latestGhostLabelerSeq) return;
+              markGhostDojoStep('labeler');
+              useSaySeeStore.setState({
+                lastQuarantineToast: `파일명 생성 완료: ${newLabel} (복사됨)`,
+              });
+            } catch {
+              if (mySeq !== _latestGhostLabelerSeq) return;
+              useSaySeeStore.setState({
+                lastQuarantineToast: '파일명 생성 중 일시 지연이 발생했습니다. 다시 한 번 눌러주세요.',
+              });
+            }
           });
         }}
         className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer"
@@ -224,11 +231,10 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
               lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
               ...(res.enrichedTags.length > 0
                 ? {
-                    photos: st.photos.map(patchPhoto),
-                    searchResults: st.searchResults.map((sr) => ({
-                      ...sr,
-                      photo: patchPhoto(sr.photo),
-                    })),
+                    photos: (st.photos || []).map(patchPhoto),
+                    searchResults: (st.searchResults || []).map((sr) =>
+                      sr?.photo ? { ...sr, photo: patchPhoto(sr.photo) } : sr
+                    ),
                   }
                 : {}),
             }));

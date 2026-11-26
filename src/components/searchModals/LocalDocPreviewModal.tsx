@@ -63,10 +63,11 @@ export const LocalDocPreviewModal: React.FC = () => {
 
   if (!selectedDocModal) return null;
 
-  const displayDocText = hydratedFullText ?? selectedDocModal.extractedText;
+  const safeKeywords = Array.isArray(selectedDocModal.keywords) ? selectedDocModal.keywords : [];
+  const displayDocText = String(hydratedFullText ?? selectedDocModal.extractedText ?? '');
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
   const isSpeakingNow = getIsTtsSpeaking();
-  const fallbackDocVoiceText = `${selectedDocModal.title}. ${displayDocText}`;
+  const fallbackDocVoiceText = `${selectedDocModal.title || selectedDocModal.fileName || ''}. ${displayDocText}`;
 
   const handleCloseModal = () => {
     stopSetupMonsterTts();
@@ -109,13 +110,13 @@ export const LocalDocPreviewModal: React.FC = () => {
             </div>
             <h3 className="text-[16.5px] sm:text-[18px] text-slate-900 font-bold mt-0.5 break-words leading-snug">
               {renderHighlightedDocText(
-                selectedDocModal.title,
+                selectedDocModal.title || selectedDocModal.fileName || '',
                 effectiveQuery,
-                selectedDocModal.keywords.slice(0, 3)
+                safeKeywords.slice(0, 3)
               )}
             </h3>
             <p className="text-[11.5px] text-slate-500 truncate">
-              {selectedDocModal.fileName} · {selectedDocModal.date} · {(selectedDocModal.sizeKB / 1024).toFixed(2)} MB
+              {selectedDocModal.fileName} · {selectedDocModal.date} · {((selectedDocModal.sizeKB || 0) / 1024).toFixed(2)} MB
             </p>
           </div>
 
@@ -145,12 +146,12 @@ export const LocalDocPreviewModal: React.FC = () => {
               {renderHighlightedDocText(
                 displayDocText,
                 effectiveQuery,
-                selectedDocModal.keywords.slice(0, 4)
+                safeKeywords.slice(0, 4)
               )}
             </p>
-            {selectedDocModal.keywords.length > 0 && (
+            {safeKeywords.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {selectedDocModal.keywords.map((kw) => (
+                {safeKeywords.map((kw) => (
                   <span
                     key={kw}
                     className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 text-[11px] font-medium"

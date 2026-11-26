@@ -24,62 +24,109 @@ import { GhostSecretaryFirstModal } from './components/GhostSecretaryFirstGuard'
 import { useDashboardNavStore } from './domains/shared/dashboardNavState';
 import { resolveViewportLayout, storeSharedRefs } from './store/slices/storeSharedRefs';
 
-// [F5 초기 번들 경량화]: 현재 화면에서 즉시 보이지 않는 쇼룸 대문·모바일 앱·대형 모달을 비동기 청크로 분리해 구형 CPU 파싱 시간을 대폭 단축합니다.
-const GhostiShowroomLanding = lazy(() =>
+// [F5 초기 번들 경량화 + 백그라운드 배포 시 구 해시 청크 로드 실패(ChunkLoadError) 원천 방어]:
+// 귀신검색창(?ghostSearchWindow=...)을 열어 둔 상태에서 새 버전이 배포되어 구 지연 청크가 교체되었을 때
+// '일시적인 화면 표시 오류' 화면으로 튕기지 않고 1회 재시도 후 최신 번들로 즉시 무소음 전환합니다.
+const EMPTY_FALLBACK_COMPONENT: React.FC<any> = () => null;
+
+function isDynamicChunkLoadError(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message || err || '').toLowerCase();
+  return (
+    msg.includes('failed to fetch dynamically imported module') ||
+    msg.includes('importing a module script failed') ||
+    msg.includes('error loading dynamically imported module') ||
+    msg.includes('unable to preload css') ||
+    msg.includes('chunkloaderror') ||
+    msg.includes('mime type')
+  );
+}
+
+function lazyWithChunkRecovery<T extends React.ComponentType<any>>(
+  loader: () => Promise<{ default: T }>
+): React.LazyExoticComponent<T> {
+  return lazy(async () => {
+    try {
+      return await loader();
+    } catch (firstErr) {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      try {
+        return await loader();
+      } catch (secondErr) {
+        if (typeof window !== 'undefined' && isDynamicChunkLoadError(secondErr)) {
+          try {
+            const guardKey = 'ghosti_chunk_reload_ts_v1';
+            const lastTs = Number(sessionStorage.getItem(guardKey) || 0);
+            if (Date.now() - lastTs > 15_000) {
+              sessionStorage.setItem(guardKey, String(Date.now()));
+              window.location.reload();
+              return { default: EMPTY_FALLBACK_COMPONENT as unknown as T };
+            }
+          } catch {
+            window.location.reload();
+            return { default: EMPTY_FALLBACK_COMPONENT as unknown as T };
+          }
+        }
+        throw secondErr;
+      }
+    }
+  });
+}
+
+const GhostiShowroomLanding = lazyWithChunkRecovery(() =>
   import('./components/GhostiShowroomLanding').then((m) => ({ default: m.GhostiShowroomLanding }))
 );
-const MobileAppView = lazy(() =>
+const MobileAppView = lazyWithChunkRecovery(() =>
   import('./components/MobileAppView').then((m) => ({ default: m.MobileAppView }))
 );
-const OnboardingModal = lazy(() =>
+const OnboardingModal = lazyWithChunkRecovery(() =>
   import('./components/OnboardingModal').then((m) => ({ default: m.OnboardingModal }))
 );
-const PhotoDetailModal = lazy(() =>
+const PhotoDetailModal = lazyWithChunkRecovery(() =>
   import('./components/PhotoDetailModal').then((m) => ({ default: m.PhotoDetailModal }))
 );
-const PricingModal = lazy(() =>
+const PricingModal = lazyWithChunkRecovery(() =>
   import('./components/PricingModal').then((m) => ({ default: m.PricingModal }))
 );
-const MobileMasterPcIntroModal = lazy(() =>
+const MobileMasterPcIntroModal = lazyWithChunkRecovery(() =>
   import('./components/PricingModal').then((m) => ({ default: m.MobileMasterPcIntroModal }))
 );
-const LocalDocPreviewModal = lazy(() =>
+const LocalDocPreviewModal = lazyWithChunkRecovery(() =>
   import('./components/PricingModal').then((m) => ({ default: m.LocalDocPreviewModal }))
 );
-const VideoScenePreviewModal = lazy(() =>
+const VideoScenePreviewModal = lazyWithChunkRecovery(() =>
   import('./components/PricingModal').then((m) => ({ default: m.VideoScenePreviewModal }))
 );
-const FaceMemberRegistryModal = lazy(() =>
+const FaceMemberRegistryModal = lazyWithChunkRecovery(() =>
   import('./components/FaceMemberRegistryModal').then((m) => ({ default: m.FaceMemberRegistryModal }))
 );
-const PassportDoorplateStyleModal = lazy(() =>
+const PassportDoorplateStyleModal = lazyWithChunkRecovery(() =>
   import('./components/FaceMemberRegistryModal').then((m) => ({ default: m.PassportDoorplateStyleModal }))
 );
-const SetupFloatingOverlayGuide = lazy(() =>
+const SetupFloatingOverlayGuide = lazyWithChunkRecovery(() =>
   import('./components/SetupMonsterModal').then((m) => ({ default: m.SetupFloatingOverlayGuide }))
 );
-const GhostCastAndLiveGlobalOverlay = lazy(() =>
+const GhostCastAndLiveGlobalOverlay = lazyWithChunkRecovery(() =>
   import('./components/GhostCastAndLiveSystem').then((m) => ({ default: m.GhostCastAndLiveGlobalOverlay }))
 );
-const FreePhotoShareOverlays = lazy(() =>
+const FreePhotoShareOverlays = lazyWithChunkRecovery(() =>
   import('./domains/free_photo_share/FreePhotoShareOverlays').then((m) => ({ default: m.FreePhotoShareOverlays }))
 );
-const MobileShareInviteBridgeOverlay = lazy(() =>
+const MobileShareInviteBridgeOverlay = lazyWithChunkRecovery(() =>
   import('./domains/free_photo_share/MobileShareInviteBridgeOverlay').then((m) => ({
     default: m.MobileShareInviteBridgeOverlay,
   }))
 );
-const MobileQrPairBridgeOverlay = lazy(() =>
+const MobileQrPairBridgeOverlay = lazyWithChunkRecovery(() =>
   import('./domains/paid_device_sync/MobileQrPairBridgeOverlay').then((m) => ({
     default: m.MobileQrPairBridgeOverlay,
   }))
 );
-const MobileWorkInviteBridgeOverlay = lazy(() =>
+const MobileWorkInviteBridgeOverlay = lazyWithChunkRecovery(() =>
   import('./domains/paid_work_share/MobileWorkInviteBridgeOverlay').then((m) => ({
     default: m.MobileWorkInviteBridgeOverlay,
   }))
 );
-const GhostPhotoOcrTeleportModal = lazy(() =>
+const GhostPhotoOcrTeleportModal = lazyWithChunkRecovery(() =>
   import('./components/GhostPhotoOcrTeleportModal').then((m) => ({ default: m.GhostPhotoOcrTeleportModal }))
 );
 

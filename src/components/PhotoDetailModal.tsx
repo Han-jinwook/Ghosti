@@ -421,7 +421,7 @@ export const PhotoDetailModal: React.FC = () => {
 
   if (!selectedPhoto) return null;
 
-  const dayString = selectedPhoto.date.split(' ')[0];
+  const dayString = String(selectedPhoto.date || '').split(' ')[0];
   const hasBurstGroup = resolvedBurstPhotos.length >= 2;
 
   const currentStripPhotos =
