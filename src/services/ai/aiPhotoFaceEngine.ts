@@ -442,6 +442,10 @@ export function wasLastPhotoDatasetFetchOk(): boolean {
   return lastPhotoDatasetFetchOk;
 }
 
+export function resetLastPhotoDatasetFetchFlag(): void {
+  lastPhotoDatasetFetchOk = false;
+}
+
 export async function loadInitialPhotoDataset(): Promise<{
   photos: PhotoItem[];
   duplicateGroups: DuplicateGroup[];
@@ -469,18 +473,19 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   try {
     if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
-      const fetchWithTimeout = () => {
+      const fetchWithTimeout = (timeoutMs = 25000) => {
         const ctrl = new AbortController();
-        const tid = typeof window !== 'undefined' ? window.setTimeout(() => ctrl.abort(), 4500) : null;
+        const tid = typeof window !== 'undefined' ? window.setTimeout(() => ctrl.abort(), timeoutMs) : null;
         return fetch(getZCoreUrl('/__photos/list'), { cache: 'no-store', signal: ctrl.signal }).finally(() => {
           if (tid !== null) window.clearTimeout(tid);
         });
       };
-      // [F5 연속 새로고침 '응답 없는 페이지' 원천 차단]:
-      // 부팅 0ms 시점에 수십 MB 규모의 IndexedDB 768D 벡터·썸네일 전체 역직렬화(getAll)를 발사하면
-      // 렌더러 메인스레드 IPC 역직렬화가 중첩되어 브라우저 행(Page Unresponsive)을 유발하므로,
-      // 실제 검색 실행 시점 또는 Stage 3 유휴 백그라운드에서만 청크 커서 방식으로 복원합니다.
-      const res = await fetchWithTimeout().catch(() => fetchWithTimeout());
+      // [F5 연속 새로고침 '응답 없는 페이지' 원천 차단 & 다중 폴더 콜드 스캔 타임아웃 방지]:
+      // 300개+ 하위 폴더 및 클라우드 마운트 드라이브 첫 스캔 시 8초 제한으로 조기 중단되어 0장으로 굳는 현상을 막기 위해 25초 여유를 부여합니다.
+      const res = await fetchWithTimeout(25000).catch(async () => {
+        await new Promise((r) => setTimeout(r, 800));
+        return fetchWithTimeout(25000);
+      });
       if (res.ok) {
         const json = await res.json();
         fileList = json.files ?? [];

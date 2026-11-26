@@ -2053,7 +2053,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         } finally {
           setSharedMonsterBusy(false);
         }
-      }, 320);
+      }, 1100);
     };
 
     const onZCoreConnectedBackup = () => {

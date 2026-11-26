@@ -84,12 +84,13 @@ let activeInitAppPromise: Promise<void> | null = null;
 let activeInitAppStartedConnected = false;
 let lastCompletedConnectedInitDone = false;
 let pendingQueuedForceInit = false;
+let connectedPhotoRetryCount = 0;
 let pcBackgroundStageEpoch = 0;
 let userManuallySelectedTrashTab = false;
 
 export function hasCompletedOrRunningConnectedInitApp(): boolean {
   if (activeInitAppPromise && activeInitAppStartedConnected) return true;
-  return lastCompletedConnectedInitDone && zCoreBridge.isConnected;
+  return lastCompletedConnectedInitDone && zCoreBridge.isConnected && wasLastPhotoDatasetFetchOk();
 }
 
 if (typeof window !== 'undefined') {
@@ -97,8 +98,14 @@ if (typeof window !== 'undefined') {
     pcBackgroundStageEpoch += 1;
     pendingQueuedForceInit = false;
   };
+  const resetConnectedInitOnDisconnect = () => {
+    lastCompletedConnectedInitDone = false;
+    connectedPhotoRetryCount = 0;
+    resetLastPhotoDatasetFetchFlag();
+  };
   window.addEventListener('pagehide', cancelBgStagesOnUnload);
   window.addEventListener('beforeunload', cancelBgStagesOnUnload);
+  window.addEventListener('zCoreDisconnected', resetConnectedInitOnDisconnect);
 }
 import {
   INITIAL_PROACTIVE_HINTS,
@@ -134,11 +141,13 @@ import {
   isTextQueryEncoderReady,
   normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
+  resetLastPhotoDatasetFetchFlag,
   runOnboardingIndexingPipeline,
   searchLocalDocumentFilesAsync,
   searchVideoSceneItemsAsync,
   startSilentRealMediaVisionIndexing,
   updateFaceClusterRegistry,
+  wasLastPhotoDatasetFetchOk,
 } from '../../services/aiEngine';
 import {
   LocalSentenceChip,
@@ -591,9 +600,14 @@ export const createAssistantOnboardingSlice: StateCreator<
   initApp: async (force?: boolean) => {
     if (!force && (get().initialized || get().initializing)) return;
     if (activeInitAppPromise) {
-      // 이미 Z-코어 연결 상태로 진행 중인 initApp이 있으면 중복 병렬 실행(App + HubBridge 3중 경합)을 막고 하나로 합류!
-      // 단, 시작 시점에는 미연결이었다가 도중에 Z-코어가 연결되어 force 재호출된 경우에만 종료 직후 1회 재실행합니다.
-      if (force && !activeInitAppStartedConnected && zCoreBridge.isConnected) {
+      // 이미 로그인+Z-코어 연결 상태로 진행 중인 initApp이 있으면 중복 병렬 실행을 막고 하나로 합류!
+      // 단, 시작 시점에는 미연결 또는 비로그인 상태였다가 도중에 연결·로그인 완료로 force 재호출된 경우에는 종료 직후 1회 재실행합니다.
+      if (
+        force &&
+        !activeInitAppStartedConnected &&
+        zCoreBridge.isConnected &&
+        hasActiveGhostiLoginSession()
+      ) {
         pendingQueuedForceInit = true;
       }
       await activeInitAppPromise;
@@ -601,7 +615,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
 
     const runSingleInitApp = async (): Promise<void> => {
-      activeInitAppStartedConnected = zCoreBridge.isConnected;
+      activeInitAppStartedConnected = zCoreBridge.isConnected && hasActiveGhostiLoginSession();
       set({ initializing: true });
 
     const isStandaloneSearchWin =
@@ -1375,8 +1389,32 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     activeInitAppPromise = runSingleInitApp()
       .then(() => {
-        if (activeInitAppStartedConnected && zCoreBridge.isConnected) {
+        if (zCoreBridge.isConnected && hasActiveGhostiLoginSession() && wasLastPhotoDatasetFetchOk()) {
           lastCompletedConnectedInitDone = true;
+          connectedPhotoRetryCount = 0;
+        } else {
+          lastCompletedConnectedInitDone = false;
+          // Z-코어가 연결되어 있는데 첫 콜드 스캔 지연·데몬 자동 업데이트 등으로 /__photos/list 응답을 못 받은 경우 자동 1~2회 복구 재시도
+          if (
+            !isCapacitorNativeMobileRuntime() &&
+            zCoreBridge.isConnected &&
+            hasActiveGhostiLoginSession() &&
+            !wasLastPhotoDatasetFetchOk() &&
+            connectedPhotoRetryCount < 2 &&
+            typeof window !== 'undefined'
+          ) {
+            connectedPhotoRetryCount += 1;
+            window.setTimeout(() => {
+              if (
+                zCoreBridge.isConnected &&
+                hasActiveGhostiLoginSession() &&
+                !wasLastPhotoDatasetFetchOk() &&
+                !activeInitAppPromise
+              ) {
+                void get().initApp(true);
+              }
+            }, 2200);
+          }
         }
       })
       .finally(() => {

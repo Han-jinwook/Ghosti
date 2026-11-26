@@ -12,10 +12,12 @@ import {
 } from '../../services/mobilePhotoPicker';
 import {
   zCoreBridge,
+  hasActiveGhostiLoginSession,
   isZCoreOutdated,
   LATEST_Z_CORE_VERSION,
   Z_CORE_ZIP_URL,
 } from '../../services/zCoreBridge';
+import { wasLastPhotoDatasetFetchOk } from '../../services/aiEngine';
 import {
   isCapacitorIosRuntime,
   isCapacitorNativeMobileRuntime,
@@ -190,6 +192,44 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const isRealDeviceMode = isDesktopWebMode
     ? zConnected
     : zConnected || Boolean(isStoreAppMode) || layout === 'mobile' || hasAnyRealUserPhoto;
+
+  // [엔진 연결 직후 왼쪽 0장 고착 원천 차단]:
+  // PC에서 엔진이 연결되었으나 초기 로그인/헬스체크 타이밍 차이나 첫 폴더 스캔 지연으로 아직 /__photos/list 실측이 완료되지 않았다면,
+  // 성급하게 '정리할 사진 후보가 없습니다'로 굳히지 않고 로딩 안내를 유지하며 즉시 재동기화(initApp(true))합니다.
+  const zeroPhotoSyncAttemptRef = React.useRef(0);
+  React.useEffect(() => {
+    if (!zConnected || localOnlyPhotos.length > 0) {
+      zeroPhotoSyncAttemptRef.current = 0;
+    }
+  }, [zConnected, localOnlyPhotos.length]);
+
+  const isAwaitingConnectedPcPhotoSync =
+    isDesktopWebMode &&
+    zConnected &&
+    hasActiveGhostiLoginSession() &&
+    localOnlyPhotos.length === 0 &&
+    !wasLastPhotoDatasetFetchOk() &&
+    zeroPhotoSyncAttemptRef.current < 2;
+
+  React.useEffect(() => {
+    if (
+      !isDesktopWebMode ||
+      !zConnected ||
+      !hasActiveGhostiLoginSession() ||
+      !initialized ||
+      initializing ||
+      localOnlyPhotos.length > 0 ||
+      wasLastPhotoDatasetFetchOk() ||
+      zeroPhotoSyncAttemptRef.current >= 2
+    ) {
+      return;
+    }
+    const tid = window.setTimeout(() => {
+      zeroPhotoSyncAttemptRef.current += 1;
+      void useSaySeeStore.getState().initApp(true);
+    }, 550);
+    return () => window.clearTimeout(tid);
+  }, [isDesktopWebMode, zConnected, initialized, initializing, localOnlyPhotos.length]);
 
   const liveCleanupSummary = React.useMemo(
     () =>
@@ -518,7 +558,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 <span className="text-slate-600 font-medium text-[13.5px]">
                   오른쪽 귀신비서에서 내 컴퓨터를 연결하면 내 PC의 정리 후보 사진을 확인할 수 있습니다.
                 </span>
-              ) : isPcBootLoading && quarantinedPhotos.length === 0 ? (
+              ) : (isPcBootLoading || isAwaitingConnectedPcPhotoSync) && quarantinedPhotos.length === 0 ? (
                 <span className="text-slate-600 font-medium text-[13.5px]">
                   내 PC의 정리 후보 사진(중복·연사·캡처·흔들림)을 불러오고 있습니다...
                 </span>
