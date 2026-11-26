@@ -1030,9 +1030,9 @@ export async function handleAuthedWorkAndDeviceAction({
       );
     } else if (
       existingMember &&
-      isGenericPlaceholderWorkNick(existingMember.room_persona_nickname) &&
       actorNick &&
-      !isGenericPlaceholderWorkNick(actorNick)
+      !isGenericPlaceholderWorkNick(actorNick) &&
+      existingMember.room_persona_nickname !== actorNick
     ) {
       existingMember.room_persona_nickname = actorNick;
       await fetch(
@@ -1123,6 +1123,25 @@ export async function handleAuthedWorkAndDeviceAction({
       for (const rm of allRoomMemRows) {
         const rid = String(rm?.room_id || '').trim();
         if (!rid) continue;
+        if (
+          String(rm?.member_email || '').trim().toLowerCase() === email &&
+          actorNick &&
+          !isGenericPlaceholderWorkNick(actorNick) &&
+          rm.room_persona_nickname !== actorNick
+        ) {
+          rm.room_persona_nickname = actorNick;
+          fetch(
+            `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(rid)}&member_email=eq.${encodeURIComponent(email)}`,
+            {
+              method: 'PATCH',
+              headers: srvHeaders(serviceKey, {
+                'Content-Type': 'application/json',
+                Prefer: 'return=minimal',
+              }),
+              body: JSON.stringify({ room_persona_nickname: actorNick }),
+            }
+          ).catch(() => null);
+        }
         const arr = membersByRoomId.get(rid) || [];
         arr.push(rm);
         membersByRoomId.set(rid, arr);
@@ -1273,9 +1292,9 @@ export async function handleAuthedWorkAndDeviceAction({
       : null;
     if (
       myMemberRow &&
-      isGenericPlaceholderWorkNick(myMemberRow.room_persona_nickname) &&
       actorNick &&
-      !isGenericPlaceholderWorkNick(actorNick)
+      !isGenericPlaceholderWorkNick(actorNick) &&
+      myMemberRow.room_persona_nickname !== actorNick
     ) {
       myMemberRow.room_persona_nickname = actorNick;
       fetch(

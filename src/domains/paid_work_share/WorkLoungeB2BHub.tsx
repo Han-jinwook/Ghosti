@@ -94,6 +94,23 @@ function areWorkServerMembersEqual(
   return true;
 }
 
+function areWorkDocsEqual(a: WorkLoungeDocDto[], b: WorkLoungeDocDto[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      a[i].relPath !== b[i].relPath ||
+      a[i].byteSize !== b[i].byteSize ||
+      a[i].fileMtimeIso !== b[i].fileMtimeIso ||
+      a[i].sha256 !== b[i].sha256 ||
+      (a[i].lockedBy || '') !== (b[i].lockedBy || '')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function isSameJoinedWorkRoomSummary(
   a: JoinedWorkRoomSummary | null,
   b: JoinedWorkRoomSummary | null
@@ -426,15 +443,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
     [deviceEntitlement, isOwnWorkUnlocked, merlinAuth?.email, showToast]
   );
 
-  // 로그인 직후 허브 토큰·Supabase 세션 동기화 완료 시 지연 없이 소속 방·팀원 목록 즉시 조회 트리거
+  // 로그인 직후 허브 토큰·Supabase 세션·프로필/귀신비서 별명 동기화 완료 시 지연 없이 소속 방·팀원 목록 즉시 조회 트리거
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
     const onAuthSynced = () => setAuthSyncTick((v) => v + 1);
     window.addEventListener('ghostiSupabaseUserSynced', onAuthSynced);
     window.addEventListener('merlinLoggedIn', onAuthSynced);
+    window.addEventListener('profileUpdated', onAuthSynced);
+    window.addEventListener('ghosti_ghost_secretary_state_updated', onAuthSynced);
     return () => {
       window.removeEventListener('ghostiSupabaseUserSynced', onAuthSynced);
       window.removeEventListener('merlinLoggedIn', onAuthSynced);
+      window.removeEventListener('profileUpdated', onAuthSynced);
+      window.removeEventListener('ghosti_ghost_secretary_state_updated', onAuthSynced);
     };
   }, []);
 
@@ -496,6 +517,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
             delete next[rp];
             delete next[rp.toLowerCase()];
           }
+        }
+        const prevKeys = Object.keys(prev).sort();
+        const nextKeys = Object.keys(next).sort();
+        if (
+          prevKeys.length === nextKeys.length &&
+          prevKeys.every(
+            (k, idx) =>
+              k === nextKeys[idx] && prev[k]?.deletedAt === next[k]?.deletedAt
+          )
+        ) {
+          return prev;
         }
         deletedTombstonesRef.current = next;
         if (activeWorkRoomId) {
@@ -577,6 +609,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (invitedRoom.deletedTombstones && Object.keys(invitedRoom.deletedTombstones).length > 0) {
           mergeAndPersistTombstones(invitedRoom.deletedTombstones);
         }
+        setHasAuthoritativeRemoteState(true);
         if (invitedRoom.hostTunnel?.masterServerName) {
           setMasterWorkPcName(invitedRoom.hostTunnel.masterServerName);
         }
@@ -589,7 +622,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             invitedRoom.hostTunnel.accessKey
           ).then((fromTunnel) => {
             if (!cancelled && fromTunnel.ok) {
-              setRemoteDocs(fromTunnel.docs);
+              setRemoteDocs((prev) => (areWorkDocsEqual(prev, fromTunnel.docs) ? prev : fromTunnel.docs));
               mergeAndPersistTombstones(fromTunnel.deletedTombstones);
               void cacheWorkRoomPreviewLocally(
                 invitedRoom.roomId,
@@ -648,7 +681,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             hostedRoom.hostTunnel.accessKey
           ).then((fromTunnel) => {
             if (!cancelled && fromTunnel.ok) {
-              setRemoteDocs(fromTunnel.docs);
+              setRemoteDocs((prev) => (areWorkDocsEqual(prev, fromTunnel.docs) ? prev : fromTunnel.docs));
               mergeAndPersistTombstones(fromTunnel.deletedTombstones);
               void cacheWorkRoomPreviewLocally(
                 hostedRoom.roomId,
@@ -838,7 +871,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
       setDriveTargetPath((prev) => (prev === res.targetDir ? prev : res.targetDir!));
     }
     if (res.localDeletedTombstones && Object.keys(res.localDeletedTombstones).length > 0) {
-      mergeAndPersistTombstones(res.localDeletedTombstones);
+      const curTombs = deletedTombstonesRef.current;
+      const hasTombDiff = Object.entries(res.localDeletedTombstones).some(([k, v]) => {
+        const low = k.replace(/\\/g, '/').replace(/^\/+/, '').trim().toLowerCase();
+        return !curTombs[low] || curTombs[low]?.deletedAt !== v?.deletedAt;
+      });
+      if (hasTombDiff) {
+        mergeAndPersistTombstones(res.localDeletedTombstones);
+      }
     }
     if (res.unchanged) {
       return;
@@ -849,7 +889,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
     const activeLocalDocs = res.docs.filter((d) => !inFlightDeletesRef.current.has(d.relPath));
     localDocsRef.current = activeLocalDocs;
-    setLocalDocs(activeLocalDocs);
+    setLocalDocs((prev) => (areWorkDocsEqual(prev, activeLocalDocs) ? prev : activeLocalDocs));
 
     setRemoteDocs((prev) => {
       if (prev.length === 0) return prev;
@@ -933,6 +973,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         .map((d) => `${d.relPath}:${d.byteSize}:${d.fileMtimeIso}:${d.sha256}:${d.lockedBy || ''}`)
         .join('|');
       if (cloudSig !== prevCloudUpsertSigRef.current) {
+        prevCloudUpsertSigRef.current = cloudSig;
         realtimeRef.current?.broadcastSnapshot(uploadableDocs);
         void cacheWorkRoomPreviewLocally(
           activeWorkRoomId,
@@ -945,8 +986,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
           actorNickname,
           isHost: !isJoinedInvitedMember && myRoomRole === 'host',
         }).then((upRes) => {
-          if (upRes.ok) {
-            prevCloudUpsertSigRef.current = cloudSig;
+          if (!upRes.ok) {
+            prevCloudUpsertSigRef.current = '';
           }
           if (upRes.deletedTombstones) {
             mergeAndPersistTombstones(upRes.deletedTombstones);
@@ -995,16 +1036,22 @@ export const WorkLoungeB2BHub: React.FC = () => {
           return d.lockedBy === nextLock ? d : { ...d, lockedBy: nextLock };
         });
         localDocsRef.current = updatedLocal;
-        setLocalDocs(updatedLocal);
-        setRemoteDocs((prev) =>
-          prev.map((rd) => {
+        setLocalDocs((prev) => (areWorkDocsEqual(prev, updatedLocal) ? prev : updatedLocal));
+        setRemoteDocs((prev) => {
+          let changed = false;
+          const next = prev.map((rd) => {
             const nextLock = fast.locks[rd.relPath] ?? null;
-            return rd.lockedBy !== nextLock &&
+            if (
+              rd.lockedBy !== nextLock &&
               localDocsRef.current.some((l) => l.relPath === rd.relPath)
-              ? { ...rd, lockedBy: nextLock }
-              : rd;
-          })
-        );
+            ) {
+              changed = true;
+              return { ...rd, lockedBy: nextLock };
+            }
+            return rd;
+          });
+          return changed ? next : prev;
+        });
         if (isWorkUnlocked) {
           realtimeRef.current?.broadcastLocks(fast.locks);
         }
@@ -1012,12 +1059,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
 
-    // 외부 팀원/모바일: 대장 PC 상시 아웃바운드 HTTPS 직통 터널에서 1초 잠금 상태 직접 조회
+    // 외부 팀원/모바일: 대장 PC 상시 아웃바운드 HTTPS 직통 터널에서 잠금 상태 직접 조회
     const tunnel = getActiveHostTunnelSession();
     if (tunnel?.tunnelUrl && isWorkUnlocked) {
       const tLocks = await fetchWorkLocksFromHostTunnel(tunnel.tunnelUrl, tunnel.accessKey);
       if (tLocks.ok) {
-        setRemoteLocksByRelPath(tLocks.locks);
+        setRemoteLocksByRelPath((prev) =>
+          JSON.stringify(prev) === JSON.stringify(tLocks.locks) ? prev : tLocks.locks
+        );
       }
     }
   }, [isZCoreConnected, actorNickname, isWorkUnlocked, syncRealWorkFiles]);
@@ -1301,6 +1350,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (accepted.deletedTombstones && Object.keys(accepted.deletedTombstones).length > 0) {
           mergeAndPersistTombstones(accepted.deletedTombstones);
         }
+        setHasAuthoritativeRemoteState(true);
         if (accepted.hostTunnel?.masterServerName) {
           setMasterWorkPcName(accepted.hostTunnel.masterServerName);
         }
@@ -1313,7 +1363,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             accepted.hostTunnel.accessKey
           ).then((fromTunnel) => {
             if (!cancelled && fromTunnel.ok && targetRoomId) {
-              setRemoteDocs(fromTunnel.docs);
+              setRemoteDocs((prev) => (areWorkDocsEqual(prev, fromTunnel.docs) ? prev : fromTunnel.docs));
               mergeAndPersistTombstones(fromTunnel.deletedTombstones);
               void cacheWorkRoomPreviewLocally(
                 targetRoomId,
@@ -1395,6 +1445,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
               activeWorkRoomId,
               joinedInvitedRoomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
             );
+          } else if (
+            authed.reason === 'NOT_A_WORK_ROOM_MEMBER' &&
+            inviteMeta.hasWorkInvite &&
+            inviteMeta.inviteToken &&
+            !isAcceptingInviteRef.current
+          ) {
+            acceptedInviteTokenRef.current = '';
+            setWorkInviteTick((v) => v + 1);
           }
           return;
         }
@@ -1462,7 +1520,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             authed.hostTunnel.accessKey
           ).then((fromTunnel) => {
             if (cancelled || !fromTunnel.ok) return;
-            setRemoteDocs(fromTunnel.docs);
+            setRemoteDocs((prev) => (areWorkDocsEqual(prev, fromTunnel.docs) ? prev : fromTunnel.docs));
             mergeAndPersistTombstones(fromTunnel.deletedTombstones);
             void cacheWorkRoomPreviewLocally(
               activeWorkRoomId,
@@ -1532,6 +1590,161 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const serverMembersRef = useRef<WorkRoomServerMemberDto[]>(serverMembers);
   serverMembersRef.current = serverMembers;
 
+  const onWorkRoomEventsRef = useRef<{
+    onRemoteSnapshot: (incomingDocs: WorkLoungeDocDto[]) => void;
+    onRemoteFileDeleted: (relPath: string, deletedAt: string) => void;
+    onRemoteLockMap: (locks: Record<string, string | null>) => void;
+    onPresenceMembers: (members: WorkRoomPresenceMember[]) => void;
+    onRemoteTunnelEndpoint: (ep: {
+      tunnelUrl: string;
+      accessKey: string;
+      masterServerName?: string;
+      backupServers?: WorkBackupServerNodeDto[];
+    }) => void;
+    onRemoteMembersUpdated: (incomingMembers: WorkRoomServerMemberDto[]) => void;
+  }>({
+    onRemoteSnapshot: () => {},
+    onRemoteFileDeleted: () => {},
+    onRemoteLockMap: () => {},
+    onPresenceMembers: () => {},
+    onRemoteTunnelEndpoint: () => {},
+    onRemoteMembersUpdated: () => {},
+  });
+
+  onWorkRoomEventsRef.current = {
+    onRemoteSnapshot: (incomingDocs) => {
+      const curTombs = deletedTombstonesRef.current;
+      const cleaned = incomingDocs.filter((d) => {
+        if (inFlightDeletesRef.current.has(d.relPath)) return false;
+        const tomb = lookupWorkTombstone(curTombs, d.relPath);
+        if (tomb?.deletedAt) {
+          const delTs = Date.parse(tomb.deletedAt) || 0;
+          const dTs = Date.parse(d.fileMtimeIso) || 0;
+          if (delTs <= 0 || dTs <= delTs + 5000) return false;
+        }
+        return true;
+      });
+      setRemoteDocs((prev) => (areWorkDocsEqual(prev, cleaned) ? prev : cleaned));
+      if (activeWorkRoomId && cleaned.length > 0) {
+        void cacheWorkRoomPreviewLocally(
+          activeWorkRoomId,
+          cleaned,
+          merlinAuth?.email || undefined
+        );
+      }
+    },
+    onRemoteFileDeleted: (relPath, deletedAt) => {
+      mergeAndPersistTombstones({ [relPath.toLowerCase()]: { relPath, deletedAt } });
+      const nextRemote = remoteDocsRef.current.filter(
+        (d) => d.relPath.toLowerCase() !== relPath.toLowerCase()
+      );
+      setRemoteDocs(nextRemote);
+      if (activeWorkRoomId) {
+        void cacheWorkRoomPreviewLocally(
+          activeWorkRoomId,
+          nextRemote,
+          merlinAuth?.email || undefined
+        );
+      }
+      setLocalDocs((prev) =>
+        prev.filter((d) => d.relPath.toLowerCase() !== relPath.toLowerCase())
+      );
+      if (zCoreBridge.isConnected && activeWorkRoomId) {
+        void deleteWorkFileShared({
+          roomId: activeWorkRoomId,
+          relPath,
+          deletedAt,
+        });
+      }
+    },
+    onRemoteLockMap: (locks) => {
+      const sanitized: Record<string, string | null> = {};
+      for (const [k, v] of Object.entries(locks || {})) {
+        sanitized[k] = sanitizeWorkLockOwner(v, '팀원');
+      }
+      setRemoteLocksByRelPath((prev) =>
+        JSON.stringify(prev) === JSON.stringify(sanitized) ? prev : sanitized
+      );
+    },
+    onPresenceMembers: (members) => {
+      setPresencePeers((prev) =>
+        JSON.stringify(prev) === JSON.stringify(members) ? prev : members
+      );
+    },
+    onRemoteTunnelEndpoint: (ep) => {
+      if (ep.masterServerName) setMasterWorkPcName(ep.masterServerName);
+      if (Array.isArray(ep.backupServers)) {
+        setBackupServers((prev) =>
+          JSON.stringify(prev) === JSON.stringify(ep.backupServers) ? prev : ep.backupServers!
+        );
+      }
+      if (!isZCoreConnected || myRoomRole !== 'host' || isJoinedInvitedMember) {
+        void fetchWorkFilesFromHostTunnel(ep.tunnelUrl, ep.accessKey).then((fromTunnel) => {
+          if (fromTunnel.ok) {
+            setRemoteDocs((prev) => (areWorkDocsEqual(prev, fromTunnel.docs) ? prev : fromTunnel.docs));
+            mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+            if (activeWorkRoomId) {
+              void cacheWorkRoomPreviewLocally(
+                activeWorkRoomId,
+                fromTunnel.docs,
+                merlinAuth?.email || undefined
+              );
+            }
+          }
+        });
+      }
+    },
+    onRemoteMembersUpdated: (incomingMembers) => {
+      const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(incomingMembers));
+      const cleanMyEmail = (merlinAuth?.email || '').trim().toLowerCase();
+      if (cleanMyEmail && sorted.length > 0) {
+        const myRow = sorted.find((m) => m.email.toLowerCase() === cleanMyEmail);
+        if (
+          !myRow &&
+          !isAcceptingInviteRef.current &&
+          !inviteMeta.hasWorkInvite &&
+          (myRoomRole !== 'host' || hasJoinedInvitedRoom || !isOwnWorkUnlocked)
+        ) {
+          // 방장이 나를 내보낸 경우 즉시 초대 세션·업무방 화면·S: 마운트·로컬 캐시 일괄 해제!
+          performKickedOrRemovedCleanup(
+            activeWorkRoomId,
+            joinedInvitedRoomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
+          );
+          return;
+        }
+        if (myRow) {
+          clearPendingKickedWorkRoomNotice(cleanMyEmail);
+          setKickedFromRoomTitle(null);
+          const nextRole: 'host' | 'editor' | 'viewer' =
+            myRow.role === 'master' ? 'host' : myRow.role;
+          setMyRoomRole(nextRole);
+          if (nextRole !== 'host') {
+            setJoinedInvitedRoom((prev) => {
+              const nextJoined: JoinedWorkRoomSummary = {
+                roomId: activeWorkRoomId,
+                roomTitle: prev?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)',
+                hostEmail: prev?.hostEmail || '',
+                hostNickname: prev?.hostNickname || inviteMeta.hostNickname || '방장',
+                isHost: false,
+                role: nextRole,
+                ownerUnlocked: true,
+                seatLimit: prev?.seatLimit || roomSeatLimit || 5,
+                lockReason: null,
+              };
+              if (isSameJoinedWorkRoomSummary(prev, nextJoined)) {
+                return prev;
+              }
+              saveCachedJoinedWorkRoomMeta(nextJoined, cleanMyEmail);
+              return nextJoined;
+            });
+          }
+        }
+      }
+      setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
+      saveCachedServerMembers(activeWorkRoomId, sorted, merlinAuth?.email || undefined);
+    },
+  };
+
   // 방장 ↔ 팀원 실시간 신호·잠금·삭제 Tombstone·터널 주소·팀원 권한 중매 채널 연결 (서버 파일 저장 0 Byte)
   useEffect(() => {
     if (!activeWorkRoomId || !isWorkUnlocked || !hasAuthenticatedHubAccountSession()) {
@@ -1540,6 +1753,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const handle = connectWorkRoomRealtimeChannel({
       roomId: activeWorkRoomId,
       peerId: peerIdRef.current,
+      email: merlinAuth?.email || undefined,
       nickname: actorNickname,
       role: myRoomRole,
       getLocalDocs: () => localDocsRef.current,
@@ -1550,129 +1764,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
           pendingMembersBroadcastRef.current = null;
         }
       },
-      onRemoteSnapshot: (incomingDocs) => {
-        const curTombs = deletedTombstonesRef.current;
-        const cleaned = incomingDocs.filter((d) => {
-          if (inFlightDeletesRef.current.has(d.relPath)) return false;
-          const tomb = lookupWorkTombstone(curTombs, d.relPath);
-          if (tomb?.deletedAt) {
-            const delTs = Date.parse(tomb.deletedAt) || 0;
-            const dTs = Date.parse(d.fileMtimeIso) || 0;
-            if (delTs <= 0 || dTs <= delTs + 5000) return false;
-          }
-          return true;
-        });
-        setRemoteDocs(cleaned);
-        if (activeWorkRoomId && cleaned.length > 0) {
-          void cacheWorkRoomPreviewLocally(
-            activeWorkRoomId,
-            cleaned,
-            merlinAuth?.email || undefined
-          );
-        }
-      },
-      onRemoteFileDeleted: (relPath, deletedAt) => {
-        mergeAndPersistTombstones({ [relPath.toLowerCase()]: { relPath, deletedAt } });
-        const nextRemote = remoteDocsRef.current.filter(
-          (d) => d.relPath.toLowerCase() !== relPath.toLowerCase()
-        );
-        setRemoteDocs(nextRemote);
-        if (activeWorkRoomId) {
-          void cacheWorkRoomPreviewLocally(
-            activeWorkRoomId,
-            nextRemote,
-            merlinAuth?.email || undefined
-          );
-        }
-        setLocalDocs((prev) =>
-          prev.filter((d) => d.relPath.toLowerCase() !== relPath.toLowerCase())
-        );
-        if (zCoreBridge.isConnected && activeWorkRoomId) {
-          void deleteWorkFileShared({
-            roomId: activeWorkRoomId,
-            relPath,
-            deletedAt,
-          });
-        }
-      },
-      onRemoteLockMap: (locks) => {
-        const sanitized: Record<string, string | null> = {};
-        for (const [k, v] of Object.entries(locks || {})) {
-          sanitized[k] = sanitizeWorkLockOwner(v, '팀원');
-        }
-        setRemoteLocksByRelPath(sanitized);
-      },
-      onPresenceMembers: (members) => {
-        setPresencePeers(members);
-      },
-      onRemoteTunnelEndpoint: (ep) => {
-        if (ep.masterServerName) setMasterWorkPcName(ep.masterServerName);
-        if (Array.isArray(ep.backupServers)) setBackupServers(ep.backupServers);
-        if (!isZCoreConnected || myRoomRole !== 'host' || isJoinedInvitedMember) {
-          void fetchWorkFilesFromHostTunnel(ep.tunnelUrl, ep.accessKey).then((fromTunnel) => {
-            if (fromTunnel.ok) {
-              setRemoteDocs(fromTunnel.docs);
-              mergeAndPersistTombstones(fromTunnel.deletedTombstones);
-              if (activeWorkRoomId) {
-                void cacheWorkRoomPreviewLocally(
-                  activeWorkRoomId,
-                  fromTunnel.docs,
-                  merlinAuth?.email || undefined
-                );
-              }
-            }
-          });
-        }
-      },
-      onRemoteMembersUpdated: (incomingMembers) => {
-        const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(incomingMembers));
-        const cleanMyEmail = (merlinAuth?.email || '').trim().toLowerCase();
-        if (cleanMyEmail && sorted.length > 0) {
-          const myRow = sorted.find((m) => m.email.toLowerCase() === cleanMyEmail);
-          if (
-            !myRow &&
-            !isAcceptingInviteRef.current &&
-            !inviteMeta.hasWorkInvite &&
-            (myRoomRole !== 'host' || hasJoinedInvitedRoom || !isOwnWorkUnlocked)
-          ) {
-            // 방장이 나를 내보낸 경우 즉시 초대 세션·업무방 화면·S: 마운트·로컬 캐시 일괄 해제!
-            performKickedOrRemovedCleanup(
-              activeWorkRoomId,
-              joinedInvitedRoomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
-            );
-            return;
-          }
-          if (myRow) {
-            clearPendingKickedWorkRoomNotice(cleanMyEmail);
-            setKickedFromRoomTitle(null);
-            const nextRole: 'host' | 'editor' | 'viewer' =
-              myRow.role === 'master' ? 'host' : myRow.role;
-            setMyRoomRole(nextRole);
-            if (nextRole !== 'host') {
-              setJoinedInvitedRoom((prev) => {
-                const nextJoined: JoinedWorkRoomSummary = {
-                  roomId: activeWorkRoomId,
-                  roomTitle: prev?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)',
-                  hostEmail: prev?.hostEmail || '',
-                  hostNickname: prev?.hostNickname || inviteMeta.hostNickname || '방장',
-                  isHost: false,
-                  role: nextRole,
-                  ownerUnlocked: true,
-                  seatLimit: prev?.seatLimit || roomSeatLimit || 5,
-                  lockReason: null,
-                };
-                if (isSameJoinedWorkRoomSummary(prev, nextJoined)) {
-                  return prev;
-                }
-                saveCachedJoinedWorkRoomMeta(nextJoined, cleanMyEmail);
-                return nextJoined;
-              });
-            }
-          }
-        }
-        setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
-        saveCachedServerMembers(activeWorkRoomId, sorted, merlinAuth?.email || undefined);
-      },
+      onRemoteSnapshot: (incomingDocs) => onWorkRoomEventsRef.current.onRemoteSnapshot(incomingDocs),
+      onRemoteFileDeleted: (relPath, deletedAt) =>
+        onWorkRoomEventsRef.current.onRemoteFileDeleted(relPath, deletedAt),
+      onRemoteLockMap: (locks) => onWorkRoomEventsRef.current.onRemoteLockMap(locks),
+      onPresenceMembers: (members) => onWorkRoomEventsRef.current.onPresenceMembers(members),
+      onRemoteTunnelEndpoint: (ep) => onWorkRoomEventsRef.current.onRemoteTunnelEndpoint(ep),
+      onRemoteMembersUpdated: (incomingMembers) =>
+        onWorkRoomEventsRef.current.onRemoteMembersUpdated(incomingMembers),
     });
     realtimeRef.current = handle;
     return () => {
@@ -1681,23 +1780,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
   }, [
     activeWorkRoomId,
-    hasJoinedInvitedRoom,
-    joinedInvitedRoomTitle,
     isWorkUnlocked,
-    isOwnWorkUnlocked,
-    roomSeatLimit,
     actorNickname,
     myRoomRole,
-    isZCoreConnected,
-    isJoinedInvitedMember,
-    inviteMeta.hasWorkInvite,
-    inviteMeta.roomTitle,
-    inviteMeta.hostNickname,
     merlinAuth?.email,
-    filterOutRecentlyKicked,
-    performKickedOrRemovedCleanup,
-    saveCachedServerMembers,
-    mergeAndPersistTombstones,
   ]);
 
   // 팀원(및 방장) PC에서 PC 엔진이 켜져 있을 때 실제 원격 파일 목록이 변경된 경우에만 내 S:\ 폴더로 동기화 (6초 폴링 시 중복 다운로드·숫자 무한 누적 원천 차단)
@@ -1743,7 +1829,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
             `공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`
           );
         }
-        void syncRealWorkFiles(true);
+        // 새로 동기화된 파일만 반영하기 위해 knownSig 캐시는 초기화하되, forceRefresh=true 대신 시그니처 기반으로 1회만 갱신
+        lastWorkFilesSigRef.current = '';
+        void syncRealWorkFiles(false);
       }
     });
   }, [
@@ -1856,18 +1944,32 @@ export const WorkLoungeB2BHub: React.FC = () => {
     // 1순위 방장(master) ➔ 2순위 합류 시각 오름차순 ➔ 3순위 이메일 사전순 고정 정렬로 F5·권한 변경 시 카드 순서 불변 보장
     const validServerMembers = sortWorkRoomServerMembers(serverMembers);
     if (validServerMembers.length > 0) {
+      const nickCountMap = new Map<string, number>();
+      for (const m of validServerMembers) {
+        const key = m.nickname.trim().toLowerCase();
+        nickCountMap.set(key, (nickCountMap.get(key) || 0) + 1);
+      }
+      const cleanMyEmail = (merlinAuth?.email || '').trim().toLowerCase();
       return validServerMembers.map((m) => {
         const isHost = m.role === 'master';
-        const isOnline = presencePeers.some(
-          (p) => p.nickname.toLowerCase() === m.nickname.toLowerCase()
+        const isMe = Boolean(cleanMyEmail && m.email.toLowerCase() === cleanMyEmail);
+        const isDuplicateNick = (nickCountMap.get(m.nickname.trim().toLowerCase()) || 0) > 1;
+        const emailPrefix = m.email.split('@')[0] || m.email;
+        // 본인 카드에는 최신 내 별명(actorNickname)을 우선 반영하며, 동일 별명을 쓰는 서로 다른 팀원이 2명 이상이면 (이메일앞자리)를 병기해 카드 중복 착시를 원천 차단
+        const baseNick = isMe && actorNickname ? actorNickname : m.nickname;
+        const disambiguatedNick =
+          isDuplicateNick && baseNick.toLowerCase() !== emailPrefix.toLowerCase()
+            ? `${baseNick} (${emailPrefix})`
+            : baseNick;
+        const isOnline = presencePeers.some((p) =>
+          p.email
+            ? p.email.toLowerCase() === m.email.toLowerCase()
+            : p.nickname.toLowerCase() === m.nickname.toLowerCase()
         );
         return {
           id: m.email,
           email: m.email,
-          name:
-            merlinAuth?.email && m.email === merlinAuth.email.toLowerCase()
-              ? `${m.nickname} (나)`
-              : m.nickname,
+          name: isMe ? `${disambiguatedNick} (나)` : disambiguatedNick,
           dept: isHost
             ? '대장 PC (S: 서버 관리자)'
             : isOnline

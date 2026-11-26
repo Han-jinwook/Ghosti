@@ -43,6 +43,7 @@ export interface WorkRoomInviteMeta {
 
 export interface WorkRoomPresenceMember {
   peerId: string;
+  email?: string;
   nickname: string;
   role: 'host' | 'editor' | 'viewer';
   sDriveConnected: boolean;
@@ -103,18 +104,54 @@ export function resolveCleanWorkClientNickname(
   if (cand && !isGenericWorkPlaceholderNickname(cand)) {
     return cand.slice(0, 32);
   }
+  const resolvedEmail = String(
+    explicitEmail ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem('merlin_hub_user_email') ||
+          localStorage.getItem('ghosti_hub_user_email') ||
+          localStorage.getItem('userEmail') ||
+          ''
+        : '')
+  )
+    .trim()
+    .toLowerCase();
   if (typeof window !== 'undefined') {
     try {
+      // 1순위: 귀신비서(ghost_secretary_state_v1)에 현재 로그인 이메일 소유로 저장된 최신 별명
+      const rawSec = localStorage.getItem('ghosti_ghost_secretary_state_v1');
+      if (rawSec) {
+        const parsedSec = JSON.parse(rawSec) as { ownerEmail?: string; nickname?: string };
+        const secOwner = String(parsedSec?.ownerEmail || '').trim().toLowerCase();
+        const secNick = String(parsedSec?.nickname || '').trim();
+        if (
+          secNick &&
+          !isGenericWorkPlaceholderNickname(secNick) &&
+          (!resolvedEmail || !secOwner || secOwner === resolvedEmail)
+        ) {
+          return secNick.slice(0, 32);
+        }
+      }
+      // 2순위: 현재 계정의 프로필/허브 닉네임
+      const savedHubEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase();
       const savedHubNick = (localStorage.getItem('ghosti_hub_user_nickname') || '').trim();
-      if (savedHubNick && !isGenericWorkPlaceholderNickname(savedHubNick)) {
+      if (
+        savedHubNick &&
+        !isGenericWorkPlaceholderNickname(savedHubNick) &&
+        (!resolvedEmail || !savedHubEmail || savedHubEmail === resolvedEmail)
+      ) {
         return savedHubNick.slice(0, 32);
       }
       const rawUser =
         localStorage.getItem('merlin_hub_user') || localStorage.getItem('merlin_cached_user');
       if (rawUser) {
         const parsed = JSON.parse(rawUser) as { nickname?: string; email?: string };
+        const cachedEmail = String(parsed?.email || '').trim().toLowerCase();
         const userNick = String(parsed?.nickname || '').trim();
-        if (userNick && !isGenericWorkPlaceholderNickname(userNick)) {
+        if (
+          userNick &&
+          !isGenericWorkPlaceholderNickname(userNick) &&
+          (!resolvedEmail || !cachedEmail || cachedEmail === resolvedEmail)
+        ) {
           return userNick.slice(0, 32);
         }
       }
@@ -122,16 +159,6 @@ export function resolveCleanWorkClientNickname(
       /* ignore */
     }
   }
-  const resolvedEmail = String(
-    explicitEmail ||
-      (typeof window !== 'undefined'
-        ? localStorage.getItem('merlin_hub_user_email') ||
-          localStorage.getItem('ghosti_hub_user_email') ||
-          ''
-        : '')
-  )
-    .trim()
-    .toLowerCase();
   if (resolvedEmail && resolvedEmail.includes('@') && resolvedEmail !== 'anonymous') {
     return resolvedEmail.split('@')[0].slice(0, 32);
   }
@@ -734,7 +761,9 @@ export async function fetchMyJoinedWorkRooms(): Promise<{
   }
   const res = await callGhostiServerBridge<{
     rooms?: JoinedWorkRoomSummary[];
-  }>('work_list_my_rooms', {});
+  }>('work_list_my_rooms', {
+    nickname: resolveCleanWorkClientNickname(),
+  });
   if (!res.ok || !Array.isArray(res.rooms)) {
     return { ok: false, rooms: [] };
   }
@@ -2039,7 +2068,11 @@ export async function fetchWorkRoomAuthedState(
     deletedTombstones?: WorkDeletedTombstoneMap;
     reason?: string;
     message?: string;
-  }>('work_get_room_state', { roomId, inviteToken: inviteToken || '' });
+  }>('work_get_room_state', {
+    roomId,
+    inviteToken: inviteToken || '',
+    nickname: resolveCleanWorkClientNickname(),
+  });
 
   if (!res.ok) {
     return {
@@ -2118,6 +2151,7 @@ export async function upsertWorkFilesToSupabase(opts: {
 export function connectWorkRoomRealtimeChannel(opts: {
   roomId: string;
   peerId: string;
+  email?: string;
   nickname: string;
   role: 'host' | 'editor' | 'viewer';
   getLocalDocs: () => WorkLoungeDocDto[];
@@ -2253,6 +2287,7 @@ export function connectWorkRoomRealtimeChannel(opts: {
         if (status !== 'SUBSCRIBED' || !channel || disposed) return;
         await channel.track({
           peerId: opts.peerId,
+          email: (opts.email || '').trim().toLowerCase() || undefined,
           nickname: opts.nickname,
           role: opts.role,
           sDriveConnected: zCoreBridge.isConnected,
