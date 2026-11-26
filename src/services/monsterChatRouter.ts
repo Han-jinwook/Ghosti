@@ -880,7 +880,7 @@ export async function callMonsterLowCostLlmJson(params: {
     '    "action": "실행할 코어 액션 요약 영문 코드",',
     '    "params": { "keyword": "추출 키워드(선택)", "siteName": "사이트명(선택)", "targetUrl": "https://...(선택)", "repairSymptom": "수리 증상(선택)" }',
     '  },',
-    '  "followUpSuggestions": ["유저 입장의 자연스러운 반말 버튼 문구 1 (~해줘, ~보여줘, ~볼래, ~까? — 존댓말 금지)", "유저 입장의 반말 버튼 문구 2", "유저 입장의 반말 버튼 문구 3"]',
+    '  "followUpSuggestions": ["귀신비서가 실제로 즉시 실행할 수 있는 손보기·순정백신·복원기록·귀신검색 반말 버튼 문구 1~2개 (~해줘, ~보여줘 — 사설 백신 추천·쇼핑몰 링크 추천 등 정책 외 문구 생성 절대 금지)"]',
     '}',
   ].join('\n');
 
@@ -3968,6 +3968,23 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
+  // 0-0C-PRE) [전용 결정론 핸들러 선행 실행: 스튜디오 접수 · 보안절전/기상/실적 · 앱 설정 제어 · 귀신같이 FAQ 인포데스크]
+  // 추천 칩('은행·관공서 보안절전', '보안프로그램 즉시 깨우기', '편의 기능 두 가지 알려줘', '귀신검색 알려줘' 등)을 눌렀을 때
+  // 범용 스캔 에이전트가 중간에 가로채 동문서답하는 일이 없도록 전용 핸들러를 먼저 실행합니다.
+  if (!isSelectingRestoreNumberNow) {
+    const studioSupportReplyEarly = await handleStudioSupportProxyIfMatched(clean, sourceTab, speak);
+    if (studioSupportReplyEarly) return studioSupportReplyEarly;
+
+    const careBriefingReplyEarly = await handleSecretaryCareBriefingAndSuperpowersIfMatched(clean, sourceTab, speak);
+    if (careBriefingReplyEarly) return careBriefingReplyEarly;
+
+    const settingsControlReplyEarly = await handleAppSettingsControlIfMatched(clean, sourceTab, speak);
+    if (settingsControlReplyEarly) return settingsControlReplyEarly;
+
+    const infoDeskReplyEarly = handleGhostiInfoDeskIfMatched(clean, sourceTab, speak);
+    if (infoDeskReplyEarly) return infoDeskReplyEarly;
+  }
+
   // 0-0C) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 트랙 (2026-11-24 Ghosti × MerlinHub 합의 5대 기둥)]
   // - C드라이브 대용량 공간 도둑 3초 스캔 / 보안모듈·애드웨어 2분류 / 바탕화면 상세 분석 & WD 시스템 아이콘 안전 숨김
   // - 직전 스캔 원장(lastCareScanContext)을 60개·5키로 Gemini에 주입해 "예스파일·오캠 빼고 나머지 다 지워", "큰 폴더는 D:로 옮겨줘" 멀티턴 지령 수행!
@@ -4067,6 +4084,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         // [안전 캐시만 요청 정밀 가드]: 실제 스캔에 안전 캐시가 0건인데 프로그램 제거 15건이 대신 체크되는 오작동 원천 차단
         const wantsSafeCacheOnlyTurn = /(?:안전\s*)?캐시만/i.test(clean);
         const wantsRedSafeOnlyTurn = /(빨간색|삭제\s*안전|차단\s*권장|100%\s*삭제)/i.test(clean);
+        const wantsAlsoSleepBankTurn = /(잠재|재워|수면)/i.test(clean);
         if (wantsSafeCacheOnlyTurn) {
           const safeCacheOnlyItems = curScanCtx.items.filter(
             (it) => !it.isProtected && (it.cat === 'SAFE_CACHE' || it.cat === 'DESKTOP_HIBERFIL')
@@ -4114,7 +4132,14 @@ export async function processUnifiedMonsterChatQuery(params: {
           const isExcludedItem = (it: typeof curScanCtx.items[number]) => {
             if (it.isProtected) return true;
             if (wantsSafeCacheOnlyTurn && it.cat !== 'SAFE_CACHE' && it.cat !== 'DESKTOP_HIBERFIL') return true;
-            if (wantsRedSafeOnlyTurn && it.safetyBadge !== 'DANGER_DELETE' && it.safetyBadge !== 'SAFE_DELETE') return true;
+            if (
+              wantsRedSafeOnlyTurn &&
+              it.safetyBadge !== 'DANGER_DELETE' &&
+              it.safetyBadge !== 'SAFE_DELETE' &&
+              !(wantsAlsoSleepBankTurn && it.safetyBadge === 'SLEEP_RECOMMEND')
+            ) {
+              return true;
+            }
             const idL = it.id.toLowerCase();
             const nmL = it.name.toLowerCase();
             const noS = String(it.no);
@@ -5016,6 +5041,10 @@ export async function processUnifiedMonsterChatQuery(params: {
         '스마트폰에서는 상단 **[유료결제 유도 악성 클리너 구출]** 기능으로 광고·결제 유도 앱을 안전하게 찾아 삭제하실 수 있어요!'
       );
     }
+    const isAskingExtraAntivirusRecommendation =
+      /(?:다른|무료|사설|별도|추가|좋은|유료)?\s*백신.*?(?:추천|깔아|설치|필요|뭐\s*써|있나|있어)|알약.*?(?:깔아|설치|대신|추천)/i.test(
+        clean
+      );
     const wantsUpdate = /업데이트|패치|최신\s*db/i.test(clean);
     const wantsScan = /검사|스캔/i.test(clean);
     const subDef = wantsUpdate
@@ -5024,9 +5053,14 @@ export async function processUnifiedMonsterChatQuery(params: {
       ? 'defender_quick_scan'
       : 'defender_status';
     const defWrap = await fetchDefenderGuardState(subDef);
-    const summaryText =
+    const baseSummaryText =
       defWrap.summaryKo ||
       '윈도우 순정 바이러스·랜섬웨어 방어막(Microsoft Defender) 상태를 점검했습니다.';
+    const summaryText = isAskingExtraAntivirusRecommendation
+      ? `🛡️ **별도의 사설 무료 백신(알약·어베스트 등)은 추가로 설치하지 않으시는 것을 권장해요!**\n` +
+        `사설 백신은 잦은 광고 팝업과 상주 메모리 점유로 오히려 PC 속도를 늦춥니다. Windows에 기본 내장된 **순정 백신(Microsoft Defender)** 하나만 켜두셔도 실시간 바이러스·랜섬웨어 방어력이 충분하며 광고도 전혀 없어요!\n\n` +
+        baseSummaryText
+      : baseSummaryText;
     speak(summaryText);
     return reply(sourceTab, summaryText, {
       cardKind: defWrap.payload ? 'DEFENDER_GUARD_CARD' : undefined,

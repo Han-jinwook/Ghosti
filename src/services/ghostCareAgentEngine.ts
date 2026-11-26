@@ -1669,17 +1669,31 @@ export async function explainCareItemsWithGemini(params: {
   scanContext: AgentCareScanContext;
 }): Promise<{ replyKo: string; followUpSuggestions: string[] }> {
   const { query, scanContext } = params;
-  const compactScan = serializeCompactScanContext(scanContext);
+  const matchedNums = Array.from(query.matchAll(/#?(\d+)\s*번?/g)).map((m) => Number(m[1]));
+  const pickedByNumOrName =
+    matchedNums.length > 0
+      ? scanContext.items.filter((it) => matchedNums.includes(it.no))
+      : scanContext.items.filter((it) => {
+          const baseNm = it.name
+            .replace(/\[.*?\]|\(.*?\)/g, ' ')
+            .trim()
+            .toLowerCase();
+          return baseNm.length >= 2 && query.toLowerCase().includes(baseNm);
+        });
+  const scopedCtx: AgentCareScanContext =
+    pickedByNumOrName.length > 0
+      ? { ...scanContext, items: pickedByNumOrName.slice(0, 6) }
+      : scanContext;
+  const compactScan = serializeCompactScanContext(scopedCtx);
 
   const prompt = [
-    '당신은 컴퓨터를 잘 모르는 일반인도 1초 만에 안심하고 결정할 수 있게 설명해 주는 『귀신같이』의 친절한 귀신비서입니다.',
-    '아래 [스캔 목록]을 보고 유저가 궁금해하는 항목(또는 전체 중 꼭 지워도 되는 것 / 남겨야 할 것)을 쉬운 일상어로 친절하게 설명해 주세요.',
+    '당신은 컴퓨터를 잘 모르는 일반인도 1초 만에 안심하고 결정할 수 있게 설명해 주는 『귀신같이』의 귀신비서입니다.',
+    '아래 [질문 대상 항목]을 보고 유저가 물어본 항목만 콕 집어 쉬운 일상어로 간결하게 설명해 주세요.',
     '',
     '[설명 절대 원칙]:',
-    '1. 개발/IT 전문용어(프로세스, 스케줄러, 레지스트리, DLL 등)를 쓰지 말고, "컴퓨터 켤 때마다 몰래 켜지는 광고 앱", "은행 들어갈 때만 필요한 보안 프로그램"처럼 초보자 일상어로 설명하세요.',
-    '2. 각 항목마다 ① 이게 뭐 하는 프로그램인지, ② 지워도 내 문서/업무에 지장 없는지, ③ [삭제 추천 / 안 지우고 재우기 추천 / 쓰시면 유지] 중 무엇을 권하는지 명확히 짚어주세요.',
-    '3. 다정하고 신뢰감 있는 귀신비서 해요체(~예요!, ~하셔도 안전해요!)로 핵심만 보기 좋게 글머리(•)로 정리해 주세요.',
-    '4. 마지막 줄에는 "원하시는 대로 \'3번이랑 오캠은 빼고 다 지워줘\'처럼 편하게 말씀해 주시면 바로 정리해 드릴게요!"라고 안내하세요.',
+    '1. "안녕하세요! 컴퓨터를 귀신같이 잘 아는 친절한 비서예요", "지금부터 하나하나 설명해 드릴게요" 같은 자기소개·인사치레를 절대 쓰지 말고 첫 줄부터 바로 핵심 답변을 시작하세요.',
+    '2. 유저가 특정 번호(예: 1번)나 특정 이름을 물어봤으면 오직 그 항목만 설명하고, 묻지 않은 다른 번호 항목들은 절대 나열하지 마세요.',
+    '3. 개발/IT 전문용어(프로세스, 스케줄러, 레지스트리, DLL 등) 대신 초보자 일상어로 ① 무엇인지, ② 지워도 내 문서/업무에 안전한지, ③ [삭제 추천 / 안 지우고 재우기 추천 / 쓰시면 유지] 중 무엇이 좋은지 짧게 글머리(•)로 정리하세요.',
     '',
     compactScan,
     '',
@@ -1731,17 +1745,7 @@ export async function explainCareItemsWithGemini(params: {
   }
 
   // 오프라인/타임아웃 폴백: 로컬 초보자 번역 사전으로 즉시 100% 친절 답변!
-  const matchedNums = Array.from(query.matchAll(/#?(\d+)\s*번?/g)).map((m) => Number(m[1]));
-  const picked =
-    matchedNums.length > 0
-      ? scanContext.items.filter((it) => matchedNums.includes(it.no))
-      : scanContext.items.filter((it) =>
-          query
-            .toLowerCase()
-            .split(/\s+/)
-            .some((w) => w.length >= 2 && it.name.toLowerCase().includes(w))
-        );
-  const targetList = picked.length > 0 ? picked.slice(0, 6) : scanContext.items.slice(0, 6);
+  const targetList = pickedByNumOrName.length > 0 ? pickedByNumOrName.slice(0, 6) : scanContext.items.slice(0, 6);
   const lines = [
     '궁금하신 항목들을 알기 쉽게 정리해 드릴게요!',
     ...targetList.map((it) => {
@@ -1802,8 +1806,13 @@ export function detectAgentCareIntent(
     return emptyNoMatch;
   }
   if (
-    !/애드웨어|보안\s*(?:모듈|프로그램|앱)|광고|그리드|지워|삭제|제거/i.test(clean) &&
-    /(순정\s*백신|디펜더|defender|바이러스\s*검사|랜섬웨어\s*(?:방어|보호|검사)|백신\s*(?:검사|상태|업데이트|켜)|usb.*?검사)/i.test(
+    !/애드웨어|그리드/i.test(clean) &&
+    /(백신|디펜더|defender|바이러스|랜섬웨어|알약|어베스트|avast|v3\s*lite|usb.*?검사)/i.test(clean)
+  ) {
+    return emptyNoMatch;
+  }
+  if (
+    /(보안\s*절전|즉시\s*(?:깨우|깨워)|알아서\s*재우고|안\s*지우고\s*(?:잠재우|재워)|은행\s*업무.*?(?:깨우|깨워)|보안\s*프로그램\s*(?:상태|확인|몇\s*개|원래대로|원복|복구|절전\s*해제)|안\s*쓰는\s*보안\s*(?:앱|프로그램|모듈)\s*완전\s*삭제|편의\s*기능\s*두\s*가지|비서\s*실적|실적\s*보고서|1초\s*압축\s*풀기|기본\s*압축\s*앱)/i.test(
       clean
     )
   ) {
@@ -1817,20 +1826,37 @@ export function detectAgentCareIntent(
     scanContext && scanContext.items.length > 0 && Date.now() - scanContext.updatedAt < 25 * 60 * 1000
   );
 
-  // 1) 직전 스캔 목록을 보고 "3번 뭐야?", "이거 지워도 돼?", "이게 뭐 하는 프로그램이야?", "꼭 남겨야 할 거 알려줘" 되묻는 경우
+  // 1) 직전 스캔 목록의 실제 항목(#번호 / 항목명 / '이 중에 남겨야 할 거')을 물어볼 때만 설명 모드로 분기!
+  //    ("다른 백신도 추천해 줘", "귀신검색이 뭐야?" 같은 일반 질문이 직전 바탕화면/스캔 목록 설명으로 잘못 빠지는 동문서답 100% 원천 차단!)
   const isQuestChipOrCpuRamAsk =
     clean === '좋아, 알려줘' ||
     clean === '좋아, 예쁘게 바꿔줘' ||
     /(?:cpu|메모리|램|ram).*(?:제일\s*많이|가장\s*많이|많이\s*쓰는|점유|먹는)/i.test(clean);
+  const matchesAnyScannedItemName = Boolean(
+    scanContext?.items.some((it) => {
+      const baseNm = it.name
+        .replace(/\[.*?\]|\(.*?\)/g, ' ')
+        .trim()
+        .toLowerCase();
+      return baseNm.length >= 2 && clean.toLowerCase().includes(baseNm);
+    })
+  );
+  const referencesScanListOrItem =
+    /#?\d+\s*번/i.test(clean) ||
+    matchesAnyScannedItemName ||
+    /(?:이\s*중|위\s*목록|방금\s*목록|스캔\s*목록|이\s*항목|이\s*프로그램|이\s*앱|저거|이거|(?:꼭\s*)?(?:남겨야|놔둬야|지울\s*거|지워야\s*할\s*거|어떻게\s*골라))/i.test(
+      clean
+    );
   const isExplainQuestionText =
     !isQuestChipOrCpuRamAsk &&
-    /(뭐야|뭔데|뭔가요|뭐예요|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더|기능|설정)|궁금|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|없애도\s*(돼|되|괜찮)|꺼도\s*(돼|되|괜찮)|치워도\s*(돼|되|괜찮)|설명해|(?:이거|이\s*항목|#?\d+\s*번|남겨야|지워야|뭐\s*지우|어떻게\s*골라).*?알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
+    /(뭐야|뭔데|뭔가요|뭐예요|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더|기능|설정)|궁금|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|없애도\s*(돼|되|괜찮)|꺼도\s*(돼|되|괜찮)|치워도\s*(돼|되|괜찮)|설명해|알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|어떻게\s*골라|멘붕|모르겠)/i.test(
       clean
     ) &&
     !/(빼고|제외하고|나머지\s*다|일괄\s*삭제|다\s*지워|옮겨\s*줘)/i.test(clean);
   const isPowerExplainQuestion =
     isExplainQuestionText && /(전원\s*(옵션|모드)|고성능\s*(모드|전원|전환))/i.test(clean);
-  const isAskingExplain = (hasRecentScan && isExplainQuestionText) || isPowerExplainQuestion;
+  const isAskingExplain =
+    (hasRecentScan && referencesScanListOrItem && isExplainQuestionText) || isPowerExplainQuestion;
 
   const isSystemIconQuery =
     /(wd\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|지워도|뭐야)|바탕화면\s*(시스템|특수)\s*아이콘)/i.test(
@@ -1839,25 +1865,18 @@ export function detectAgentCareIntent(
   const isPowerBoostQuery =
     !isExplainQuestionText && /(전원\s*(옵션|모드).*?(고성능|바꿔|전환)|고성능\s*(모드|전원))/i.test(clean);
 
-  // 직전 스캔 목록의 특정 항목 이름을 직접 부르며 지우거나 정리하라고 한 경우("오캠 지워줘", "고클린 삭제해") 멀티턴 필터로 연결
   const mentionsScannedItemForAction =
     hasRecentScan &&
     !isAskingExplain &&
+    !isSystemIconQuery &&
     /(지워|삭제|제거|정리|치워|꺼|숨겨|옮겨|골라)/i.test(clean) &&
-    Boolean(
-      scanContext?.items.some((it) => {
-        const baseNm = it.name
-          .replace(/\[.*?\]|\(.*?\)/g, ' ')
-          .trim()
-          .toLowerCase();
-        return baseNm.length >= 2 && clean.toLowerCase().includes(baseNm);
-      })
-    );
+    matchesAnyScannedItemName;
 
   // 2) 직전 스캔 컨텍스트가 살아있고 유저가 취사선택·제외 필터("빼고", "놔두고", "나머지 다", "빨간색만 지워", "옮겨줘", "#3번", "오래 안 쓴 앱만 골라줘")를 말하는 경우
   const isMultiTurnFilter =
     hasRecentScan &&
     !isAskingExplain &&
+    !isSystemIconQuery &&
     (mentionsScannedItemForAction ||
       /(빼고|제외|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(?:다|전부|모두)?|빨간색|차단\s*권장|삭제\s*안전|안전\s*캐시만|수동\s*(?:전환|으로)|[d-zD-Z]\s*:?\s*드라이브|옮겨\s*(?:줘|주세요|라)?|이사\s*(?:해|시켜)?|#\d+|\d+\s*번|(?:만|골라서)\s*(?:지워|삭제|제거|정리|꺼|치워|숨겨|골라)|(?:오래\s*(?:동안\s*)?(?:안\s*쓴|안쓴|안\s*쓰는|안쓰는)|묵은)\s*(?:프로그램|앱|어플)\s*(?:만|다)\s*(?:골라|지워|삭제|정리)|체크(?:한|된)\s*(?:것|거|항목|프로그램|앱))/i.test(
         clean
