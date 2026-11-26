@@ -3184,23 +3184,27 @@ export async function processUnifiedMonsterChatQuery(params: {
   const isNegationOrRollback =
     !isPendingMissingFileRestoreApprove &&
     /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
-  const isNewIndependentTopicInConsent =
-    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램|재부팅|보안\s*쓰레기|보안\s*모듈|보안\s*앱|보안\s*프로그램|보안\s*절전|은행|관공서|홈택스|애드웨어|설치\s*파일|다운로드\s*폴더|숨은\s*편의 기능|편의 기능|실적\s*보고|보고서|알려\s*줘|알려\s*주세요|보여\s*줘|보여\s*주세요|설명해|여권|이름\s*등록/i.test(
-      clean
-    );
   const isPronounNePrefix = /^네\s+(숨은|편의 기능|능력|기능|이름|정체|실적)/i.test(clean);
+  // [근본 방어 SSOT] 순수 동의/실행 어휘만 제거했을 때 '바탕화면', '애드웨어', '고클린', '오캠', '3번' 같은
+  // 새로운 주제·대상 명사가 단 1글자라도 남아 있으면 이전 카드에 대한 맹목적 승인("응 진행해")으로 절대 오인하지 않습니다!
+  const strippedConsentResidual = clean
+    .replace(
+      /\b(ok|okay)\b|응|네|넹|예|그래|좋아|좋아요|오케이|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|바로|당장|지금|일단|전부|다|모두|선택한\s*(?:거|것|항목)|체크한\s*(?:거|것|항목)|체크된\s*(?:거|것|항목)|골라\s*준\s*(?:거|것)|추천\s*항목|안전하게|안전\s*정리|불필요\s*항목|상주\s*항목|손봐|정리|치워|지워|삭제|제거|적출|꺼|끄|고쳐|해결|최적화|복구|복원|만들어|옮겨|부탁|해|할래|할게|하자|줄래|주세요|줘|라|요|[.!~,\s]/gi,
+      ''
+    )
+    .trim();
+  const isPureShortConsent =
+    strippedConsentResidual.length === 0 &&
+    clean.length <= 45 &&
+    (/^(응|네|넹|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|당장|바로|선택한|체크한|체크된|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
+      clean
+    ) ||
+      /^(?:그대로\s*)?(?:진행|실행|승인|동의|정리|치워|옮겨|만들어|복구|복원|꺼|고쳐|해결|최적화|적출|삭제|지워)(?:해\s*)?(?:줘|주세요|라|할래)?[.!~]*$/i.test(
+        clean
+      ));
   const isNaturalAffirmativeConsent =
     isPendingMissingFileRestoreApprove ||
-    (!isNegationOrRollback &&
-      !isNewIndependentTopicInConsent &&
-      !isPronounNePrefix &&
-      clean.length <= 60 &&
-      (/^(응|네|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|부탁|당장|바로|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
-        clean
-      ) ||
-        /진행해|실행해|승인할|동의할|그대로\s*(해|진행|실행|부탁)|정리해\s*(줘|주세요|라)?|치워\s*(줘|주세요|라)?|옮겨\s*(줘|주세요|라)?|만들어\s*(줘|주세요|라)?|복구해\s*(줘|주세요|라)?|복원해\s*(줘|주세요|라)?|꺼\s*(줘|주세요|라)?|고쳐\s*(줘|주세요|라)?|해결해\s*(줘|주세요|라)?|최적화해\s*(줘|주세요|라)?|적출해\s*(줘|주세요|라)?|삭제해\s*(줘|주세요|라)?|지워\s*(줘|주세요|라)?|뽑아\s*(줘|주세요|라)?/i.test(
-          clean
-        )));
+    (!isNegationOrRollback && !isPronounNePrefix && isPureShortConsent);
 
   if (pendingApprovalMsg && isNaturalAffirmativeConsent) {
     if (pendingApprovalMsg.cleanupPreview && !pendingApprovalMsg.cleanupPreview.approved) {
@@ -4122,6 +4126,9 @@ export async function processUnifiedMonsterChatQuery(params: {
           const isExplicitForceAllApps =
             curScanCtx.scanKind === 'INSTALLED_APPS' &&
             /(설치된\s*(?:프로그램|앱)\s*(?:전부|모두|싹\s*다)|전부\s*다\s*삭제)/i.test(clean);
+          const wantsStaleAppsTurn =
+            /(?:오래\s*(?:동안\s*)?(?:안\s*쓴|안쓴|안\s*쓰는|안쓰는)|묵은)\s*(?:프로그램|앱|어플)/i.test(clean);
+          const wantsDesktopTurn = /바탕\s*화면/i.test(clean);
 
           const excludedNames: string[] = [];
           const selectedIds: string[] = [];
@@ -4134,11 +4141,18 @@ export async function processUnifiedMonsterChatQuery(params: {
             const nmL = it.name.toLowerCase();
             const noS = String(it.no);
             const hashNo = `#${it.no}`;
-            // [P0-5] incIdSet이 비어 있을 때는 USER_CHECK(쓰시면 유지·확인 후 선택)까지 폭발하지 않고,
-            // 원래 안전 권장(defaultSelected=true && safetyBadge !== 'USER_CHECK') 항목만 기본 모수로 선택합니다!
+            const isStaleAppItem =
+              it.cat === 'INSTALLED_APP' &&
+              (it.lastUsedStatus === 'DORMANT' ||
+                it.lastUsedStatus === 'STALE' ||
+                it.lastUsedStatus === 'UNUSED_SINCE_INSTALL');
             const explicitlyIncluded =
               incIdSet.size === 0
-                ? (Boolean(it.defaultSelected) && it.safetyBadge !== 'USER_CHECK') || isExplicitForceAllApps
+                ? wantsStaleAppsTurn
+                  ? isStaleAppItem
+                  : wantsDesktopTurn
+                  ? it.cat.startsWith('DESKTOP_')
+                  : (Boolean(it.defaultSelected) && it.safetyBadge !== 'USER_CHECK') || isExplicitForceAllApps
                 : incIdSet.has(idL) ||
                   incIdSet.has(noS) ||
                   incIdSet.has(hashNo) ||
@@ -4148,9 +4162,17 @@ export async function processUnifiedMonsterChatQuery(params: {
             }
           }
 
+          const selLookup = new Set(selectedIds);
+          const excLookup = new Set(excludedNames);
+          const orderedConfirmItems = [...curScanCtx.items].sort((a, b) => {
+            const rankA = selLookup.has(a.id) ? 0 : excLookup.has(a.name) ? 1 : 2;
+            const rankB = selLookup.has(b.id) ? 0 : excLookup.has(b.name) ? 1 : 2;
+            return rankA - rankB;
+          });
+
           const totalSelMb = Math.round(
             curScanCtx.items
-              .filter((it) => selectedIds.includes(it.id))
+              .filter((it) => selLookup.has(it.id))
               .reduce((acc, it) => acc + (it.sizeMb || 0), 0)
           );
           const confirmCard: MonsterAgentCareCardPayload = {
@@ -4166,7 +4188,7 @@ export async function processUnifiedMonsterChatQuery(params: {
                 : '🟢 필수 시스템·하드웨어 드라이버·개인 데이터 자동 보호됨',
             ],
             action: mp.action,
-            items: curScanCtx.items.slice(0, 50),
+            items: orderedConfirmItems.slice(0, 60),
             selectedIds,
             excludedNames,
             moveDestinationDrive: mp.moveDestinationDrive || '',
@@ -4197,15 +4219,19 @@ export async function processUnifiedMonsterChatQuery(params: {
         }
       }
 
-      // Case D: Read-Only 조회 도구 1~4개 1턴 병렬 즉시 실행 (승인 게이트 없이 바로 스캔·브리핑)
+      // Case D: Read-Only 조회 도구 병렬 즉시 실행 (승인 게이트 없이 바로 4칸 요약 성적표 + 해당 칸 펼침 브리핑)
       if (agentIntent.immediateReadTools.length > 0) {
-        // 느려짐/점검 질문 시 20초 과거 캐시 대신 방금 시점의 실시간 CPU·메모리·상위 점유 앱을 새로 실측합니다.
         cachedPcContext = null;
         const [readRes, livePcCtx] = await Promise.all([
-          runAgentCareReadTools(agentIntent.immediateReadTools),
+          runAgentCareReadTools(agentIntent.immediateReadTools, {
+            preferredBucket: agentIntent.preferredBucket,
+            subFocus: agentIntent.subFocus,
+          }),
           fetchRealtimePcContextForLlm().catch(() => null),
         ]);
         if (readRes.ok) {
+          const isSpeedOrFullCheckupTopic =
+            !agentIntent.preferredBucket || agentIntent.preferredBucket === 'SPEED';
           const isWebReloadSlowQuery =
             /(새로고침|로딩|웹\s*페이지|브라우저|크롬|귀신같이)/i.test(clean) &&
             /(느려|느린|길어|오래|버벅|안\s*열|먹통|멈)/i.test(clean);
@@ -4228,75 +4254,73 @@ export async function processUnifiedMonsterChatQuery(params: {
             .filter((it) => it.ratKind === 'HIGH_MEM_PROCESS' && (it.sizeMb || 0) >= 80)
             .sort((a, b) => (b.sizeMb || 0) - (a.sizeMb || 0));
 
+          // [동문서답 원천 차단]: CPU·메모리·크롬 탭 속도 브리핑은 유저가 '① 속도/느려짐' 또는 '전체 점검'을 물어봤을 때만 상단에 덧붙이고,
+          // '묵은 앱', '광고/보안앱', '바탕화면/사진 정돈'을 콕 집어 물어봤을 때는 해당 주제 답변만 깔끔하게 제시합니다!
           const extraTopLines: string[] = [];
-          const cpuCoreLabel = cpuModel
-            ? ` (${cpuModel.replace(/\(R\)|\(TM\)|CPU/gi, '').replace(/\s+/g, ' ').trim()}${cpuCores ? ` · ${cpuCores}코어` : ''})`
-            : '';
-          if (cpuPct != null || ramPct !== undefined) {
-            extraTopLines.push(
-              `• **실시간 PC 상태**: ${cpuPct != null ? `CPU 부하 **${cpuPct}%**` : 'CPU 정상'}${cpuCoreLabel}` +
-                `${ramPct !== undefined ? ` · 메모리 **${ramPct}%** 사용 중${ramGb ? ` (총 ${ramGb}GB${ramFreeGb !== undefined ? ` · 여유 ${ramFreeGb}GB` : ''})` : ''}` : ''}`
-            );
-          }
+          if (isSpeedOrFullCheckupTopic) {
+            const cpuCoreLabel = cpuModel
+              ? ` (${cpuModel.replace(/\(R\)|\(TM\)|CPU/gi, '').replace(/\s+/g, ' ').trim()}${cpuCores ? ` · ${cpuCores}코어` : ''})`
+              : '';
+            if (cpuPct != null || ramPct !== undefined) {
+              extraTopLines.push(
+                `• **실시간 PC 상태**: ${cpuPct != null ? `CPU 부하 **${cpuPct}%**` : 'CPU 정상'}${cpuCoreLabel}` +
+                  `${ramPct !== undefined ? ` · 메모리 **${ramPct}%** 사용 중${ramGb ? ` (총 ${ramGb}GB${ramFreeGb !== undefined ? ` · 여유 ${ramFreeGb}GB` : ''})` : ''}` : ''}`
+              );
+            }
 
-          // 실제 메모리·CPU를 가장 많이 차지 중인 상위 앱 실측 목록 구성 (브라우저 + GUI 앱 + 고메모리 프로세스)
-          const topHogParts: string[] = [];
-          const seenAppKeys = new Set<string>();
-          if (browserBn?.browserName && Number(browserBn.browserMemoryGb || 0) >= 0.4) {
-            seenAppKeys.add(String(browserBn.browserName).toLowerCase());
-            seenAppKeys.add('chrome');
-            seenAppKeys.add('msedge');
-            seenAppKeys.add('whale');
-            topHogParts.push(
-              `**${browserBn.browserName}** ${browserBn.browserMemoryGb}GB (${browserBn.processCount ?? '?'}개 프로세스${browserBn.browserSharePercent ? ` · 전체 RAM의 ${browserBn.browserSharePercent}%` : ''})`
-            );
-          }
-          for (const g of runningGuiApps) {
-            const nm = String(g?.name || '').trim();
-            const mb = Number(g?.memoryMb || 0);
-            if (!nm || mb < 120 || seenAppKeys.has(nm.toLowerCase())) continue;
-            seenAppKeys.add(nm.toLowerCase());
-            const memLabel = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
-            topHogParts.push(`${nm} ${memLabel}${g.count && g.count > 1 ? ` (${g.count}개)` : ''}`);
-            if (topHogParts.length >= 4) break;
-          }
-          for (const hm of highMemRats) {
-            const cleanNm = hm.name.replace(/^\[메모리\s*과점유\]\s*/i, '').trim();
-            const keyLow = cleanNm.split(/\s+/)[0].toLowerCase();
-            if (!cleanNm || seenAppKeys.has(keyLow)) continue;
-            seenAppKeys.add(keyLow);
-            const mb = Number(hm.sizeMb || 0);
-            const memLabel = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
-            topHogParts.push(`${cleanNm} ${memLabel}`);
-            if (topHogParts.length >= 4) break;
-          }
-          if (topHogParts.length > 0) {
-            extraTopLines.push(`• **현재 가장 많이 점유 중인 앱**: ${topHogParts.join(', ')}`);
-          }
+            const topHogParts: string[] = [];
+            const seenAppKeys = new Set<string>();
+            if (browserBn?.browserName && Number(browserBn.browserMemoryGb || 0) >= 0.4) {
+              seenAppKeys.add(String(browserBn.browserName).toLowerCase());
+              seenAppKeys.add('chrome');
+              seenAppKeys.add('msedge');
+              seenAppKeys.add('whale');
+              topHogParts.push(
+                `**${browserBn.browserName}** ${browserBn.browserMemoryGb}GB (${browserBn.processCount ?? '?'}개 프로세스${browserBn.browserSharePercent ? ` · 전체 RAM의 ${browserBn.browserSharePercent}%` : ''})`
+              );
+            }
+            for (const g of runningGuiApps) {
+              const nm = String(g?.name || '').trim();
+              const mb = Number(g?.memoryMb || 0);
+              if (!nm || mb < 120 || seenAppKeys.has(nm.toLowerCase())) continue;
+              seenAppKeys.add(nm.toLowerCase());
+              const memLabel = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
+              topHogParts.push(`${nm} ${memLabel}${g.count && g.count > 1 ? ` (${g.count}개)` : ''}`);
+              if (topHogParts.length >= 4) break;
+            }
+            for (const hm of highMemRats) {
+              const cleanNm = hm.name.replace(/^\[메모리\s*과점유\]\s*/i, '').trim();
+              const keyLow = cleanNm.split(/\s+/)[0].toLowerCase();
+              if (!cleanNm || seenAppKeys.has(keyLow)) continue;
+              seenAppKeys.add(keyLow);
+              const mb = Number(hm.sizeMb || 0);
+              const memLabel = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
+              topHogParts.push(`${cleanNm} ${memLabel}`);
+              if (topHogParts.length >= 4) break;
+            }
+            if (topHogParts.length > 0) {
+              extraTopLines.push(`• **현재 가장 많이 점유 중인 앱**: ${topHogParts.join(', ')}`);
+            }
 
-          // 진짜 체감되는 우선순위 처방 정직 안내
-          const actionOrder: string[] = [];
-          if (browserBn?.detected) {
+            const actionOrder: string[] = [];
+            if (browserBn?.detected) {
+              actionOrder.push(
+                `① **${browserBn.browserName}(${browserBn.browserMemoryGb}GB · ${browserBn.processCount}개)**에서 안 쓰는 탭을 닫고 브라우저를 한 번 재시작`
+              );
+            } else if (isWebReloadSlowQuery) {
+              actionOrder.push('① 열려 있는 브라우저 탭 중 안 쓰는 탭을 닫고 창을 한 번 재시작');
+            }
+            if (readRes.context.isDesktop && !readRes.context.isHighPerformance) {
+              actionOrder.push('② 아래 **[⚡ 고성능 전원 전환]** 버튼 클릭');
+            }
             actionOrder.push(
-              `① **${browserBn.browserName}(${browserBn.browserMemoryGb}GB · ${browserBn.processCount}개)**에서 안 쓰는 탭을 닫고 브라우저를 한 번 재시작`
+              `${actionOrder.length + 1 === 2 ? '②' : '③'} 아래 목록에서 **빨간색(100% 안전)** 백그라운드 항목만 골라 정리`
             );
-          } else if (isWebReloadSlowQuery) {
-            actionOrder.push('① 열려 있는 브라우저 탭 중 안 쓰는 탭을 닫고 창을 한 번 재시작');
-          }
-          if (readRes.context.isDesktop && !readRes.context.isHighPerformance) {
-            actionOrder.push('② 아래 **[⚡ 고성능 전원 전환]** 버튼 클릭');
-          }
-          actionOrder.push(
-            `${actionOrder.length + 1 === 2 ? '②' : '③'} 아래 목록에서 **빨간색(100% 안전)** 백그라운드 항목만 골라 정리`
-          );
-          if (isWebReloadSlowQuery || browserBn?.detected || (typeof cpuCores === 'number' && cpuCores <= 4)) {
-            extraTopLines.push(`• **체감 속도 회복 우선순위**: ${actionOrder.join(' ➔ ')}`);
+            if (isWebReloadSlowQuery || browserBn?.detected || (typeof cpuCores === 'number' && cpuCores <= 4)) {
+              extraTopLines.push(`• **체감 속도 회복 우선순위**: ${actionOrder.join(' ➔ ')}`);
+            }
           }
 
-          const finalBriefing =
-            extraTopLines.length > 0
-              ? `${extraTopLines.join('\n')}\n\n${readRes.briefingKo}`
-              : readRes.briefingKo;
           const storePhotos = useSaySeeStore.getState().photos || [];
           const photoCleanupCnt = storePhotos.filter(
             (p: any) =>
@@ -4309,6 +4333,16 @@ export async function processUnifiedMonsterChatQuery(params: {
                 p.cleanupTag === 'screenshot' ||
                 p.cleanupTag === 'blurry')
           ).length;
+          if (agentIntent.preferredBucket === 'DESKTOP' && photoCleanupCnt > 0) {
+            extraTopLines.push(
+              `• **사진 정돈 후보**: 왼쪽 사진 정리 화면에도 중복·흔들린·스크린샷 후보 **${photoCleanupCnt}장**이 준비되어 있어요!`
+            );
+          }
+
+          const finalBriefing =
+            extraTopLines.length > 0
+              ? `${extraTopLines.join('\n')}\n\n${readRes.briefingKo}`
+              : readRes.briefingKo;
           const rebuilt4Plus1 =
             agentIntent.immediateReadTools.length > 1
               ? buildCareFourBucketSummaries({
@@ -4322,6 +4356,7 @@ export async function processUnifiedMonsterChatQuery(params: {
                   liveRamPct: typeof ramPct === 'number' ? ramPct : null,
                   photoCleanupCandidateCount: photoCleanupCnt,
                   visibleSystemIconsCount: (readRes.context.visibleSystemIcons || []).length,
+                  preferredBucket: agentIntent.preferredBucket,
                 })
               : null;
           const enrichedCard: MonsterAgentCareCardPayload = {

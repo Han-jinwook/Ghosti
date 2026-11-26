@@ -28,6 +28,23 @@ export type AgentCareMutatingAction =
 
 export type CareNormalizedBucketId = 'SPEED' | 'SECURITY' | 'STORAGE' | 'DESKTOP';
 
+export type CareSubFocus =
+  | 'UNUSED_APPS'
+  | 'DISK_SPACE'
+  | 'ADWARE_SECURITY'
+  | 'SPEED_SLOW'
+  | 'DESKTOP_CLEAN'
+  | 'PHOTO_CLEANUP'
+  | 'FULL_CHECKUP';
+
+export const ALL_FOUR_PLUS_ONE_READ_TOOLS: AgentCareReadTool[] = [
+  'disk_hog_scan',
+  'security_2tier_scan',
+  'hidden_rats_scan',
+  'installed_apps_list',
+  'desktop_detail_scan',
+];
+
 export interface CareFourBucketSummary {
   bucketId: CareNormalizedBucketId;
   stepNo: string;
@@ -178,6 +195,7 @@ export function buildCareFourBucketSummaries(params: {
   liveRamPct?: number | null;
   photoCleanupCandidateCount?: number;
   visibleSystemIconsCount?: number;
+  preferredBucket?: CareNormalizedBucketId;
 }): {
   summaries: CareFourBucketSummary[];
   defaultActiveBucket: CareNormalizedBucketId;
@@ -193,6 +211,7 @@ export function buildCareFourBucketSummaries(params: {
     liveRamPct,
     photoCleanupCandidateCount = 0,
     visibleSystemIconsCount = 0,
+    preferredBucket,
   } = params;
   const selSet = new Set(selectedIds);
   const byBucket: Record<CareNormalizedBucketId, AgentCareScanItem[]> = {
@@ -349,11 +368,11 @@ export function buildCareFourBucketSummaries(params: {
     },
   ];
 
-  // 가장 시급하거나 실제 항목이 가장 많은 칸을 기본 펼침 탭으로 자동 선택
+  // 유저가 특정 영역(①~④)을 콕 집어 질문했으면 해당 칸을 최우선 펼침 탭으로 선택하고, 전체 점검일 때만 시급한 칸 자동 선택
   const alertHit = summaries.find((s) => s.statusTone === 'ALERT' && s.itemCount > 0);
   const nonEmptyHit = summaries.find((s) => s.itemCount > 0);
   const defaultActiveBucket: CareNormalizedBucketId =
-    alertHit?.bucketId || nonEmptyHit?.bucketId || 'STORAGE';
+    preferredBucket || alertHit?.bucketId || nonEmptyHit?.bucketId || 'STORAGE';
 
   return { summaries, defaultActiveBucket };
 }
@@ -567,15 +586,22 @@ async function callCareApi<T = any>(
 }
 
 /**
- * [경량 직렬화] 허브 AI 게이트웨이 토큰·타임아웃 방어 (최대 60개 × 5키: {no, id, name, cat, mb})
+ * [경량 직렬화] 허브 AI 게이트웨이 토큰·타임아웃 방어 (최대 120개 × 압축 키 — 4+1 전 영역 항목 누락 방지)
  */
 export function serializeCompactScanContext(ctx: AgentCareScanContext | null): string {
   if (!ctx || !ctx.items.length) return '';
-  const compactItems = ctx.items.slice(0, 60).map((it) => ({
+  const compactItems = ctx.items.slice(0, 120).map((it) => ({
     no: it.no,
     id: it.id,
     name: it.name.slice(0, 48),
     cat: it.cat,
+    bk: it.bucketId || classifyCareItemBucket(it),
+    stale:
+      it.lastUsedStatus === 'DORMANT' ||
+      it.lastUsedStatus === 'STALE' ||
+      it.lastUsedStatus === 'UNUSED_SINCE_INSTALL'
+        ? 1
+        : undefined,
     mb: Math.round(it.sizeMb || 0),
   }));
   const header = [
@@ -685,7 +711,13 @@ async function enrichUnknownRatsWithGemini(unknownItems: AgentCareScanItem[]): P
  * [Read-Only 도구 병렬 실행기] 승인 게이트 없이 1턴에 복수 조회 도구를 병렬 실행하고
  * lastCareScanContext를 최신화합니다.
  */
-export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise<{
+export async function runAgentCareReadTools(
+  tools: AgentCareReadTool[],
+  options?: {
+    preferredBucket?: CareNormalizedBucketId;
+    subFocus?: CareSubFocus;
+  }
+): Promise<{
   ok: boolean;
   context: AgentCareScanContext;
   card: MonsterAgentCareCardPayload;
@@ -821,7 +853,7 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
           ? ` · 특수 시스템 아이콘 ${visibleSysIcons.length}개 표시 중(${visibleSysIcons.map((i) => i.label).join(', ')})`
           : '')
     );
-    for (const di of (dk.items || []).slice(0, 35)) {
+    for (const di of (dk.items || []).slice(0, 30)) {
       items.push({
         no: idx++,
         id: String(di.id),
@@ -851,7 +883,7 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
         (staleCnt > 0 ? ` (오래 안 쓴 묵은 앱 ${staleCnt}개 발견)` : '') +
         ` — 용도와 마지막 사용 시점을 보고 골라 지우실 수 있어요`
     );
-    const appSliceLimit = uniqueTools.length > 1 ? 25 : 50;
+    const appSliceLimit = uniqueTools.length > 1 ? 35 : 50;
     for (const a of (ap.items || []).slice(0, appSliceLimit)) {
       const roleKo = String(a.plainRoleKo || '').trim();
       const lastUsedKo = String(a.lastUsedLabelKo || '').trim();
@@ -917,7 +949,7 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
       return false;
     };
 
-    for (const ri of (rt.items || []).slice(0, 45)) {
+    for (const ri of (rt.items || []).slice(0, 35)) {
       const rName = String(ri.name || '');
       const rKey = String(ri.targetKey || '');
       if (isDuplicateOfSecScan(rName, rKey)) continue;
@@ -947,11 +979,6 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     }
   }
 
-  // 번호 재정렬 (중복 제거 후 1..N 연속 번호 유지)
-  items.forEach((it, i) => {
-    it.no = i + 1;
-  });
-
   // 🌟 모든 스캔 항목에 초보자 친절 1줄 설명 & 안전도 배지 자동 부착 + 카탈로그에 없는 미등록 쥐새끼는 제미니로 즉시 정체 해석!
   // [안전 체크 원칙]: '쓰시면 유지 / 확인 후 선택(USER_CHECK)' 및 '안 지우고 재우기 추천(SLEEP_RECOMMEND)' 항목은
   // 실수로 삭제 창이 뜨지 않도록 절대 기본 자동 체크(defaultSelected=true)하지 않습니다.
@@ -959,7 +986,6 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     const exp = explainCareItemForBeginner(it);
     it.safetyBadge = exp.safetyBadge;
     it.safetyBadgeLabel = exp.safetyBadgeLabel;
-    // 설치 앱에 Z-코어 실측 용도/마지막 사용 시점 힌트가 있고 기본 문구가 범용 폴백일 때는 3대 안심 힌트 문장으로 더 선명하게 보강!
     if (
       it.cat === 'INSTALLED_APP' &&
       it.plainRoleKo &&
@@ -990,6 +1016,42 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     }
   }
 
+  // 유저가 '안 쓴 프로그램 / 설치된 앱'을 물어봤을 때는 ③ 용량·묵은 앱 칸에서 오래 안 쓴 설치 앱이 맨 위에 바로 보이도록 정렬!
+  if (options?.subFocus === 'UNUSED_APPS') {
+    const isStaleApp = (x: AgentCareScanItem) =>
+      x.cat === 'INSTALLED_APP' &&
+      (x.lastUsedStatus === 'DORMANT' ||
+        x.lastUsedStatus === 'STALE' ||
+        x.lastUsedStatus === 'UNUSED_SINCE_INSTALL');
+    items.sort((a, b) => {
+      if (a.bucketId === 'STORAGE' && b.bucketId === 'STORAGE') {
+        const rankA = isStaleApp(a) ? 0 : a.cat === 'INSTALLED_APP' ? 1 : 2;
+        const rankB = isStaleApp(b) ? 0 : b.cat === 'INSTALLED_APP' ? 1 : 2;
+        if (rankA !== rankB) return rankA - rankB;
+        return (b.sizeMb || 0) - (a.sizeMb || 0);
+      }
+      return 0;
+    });
+  }
+
+  // 번호 재정렬 (중복 제거 및 정렬 후 1..N 연속 번호 유지)
+  items.forEach((it, i) => {
+    it.no = i + 1;
+  });
+
+  // [영역별 안전 기본 체크 가드]: 유저가 특정 영역(예: 바탕화면, 묵은 앱, 광고앱)만 물어봤을 때
+  // 다른 탭(자동실행·캐시 등) 항목이 몰래 함께 체크되어 엉뚱한 정리가 실행되는 현상을 원천 차단합니다!
+  const prefBucket = options?.preferredBucket;
+  const subFocus = options?.subFocus;
+  for (const it of items) {
+    if (prefBucket && it.bucketId !== prefBucket) {
+      it.defaultSelected = false;
+    }
+    if (subFocus === 'UNUSED_APPS' || prefBucket === 'DESKTOP') {
+      it.defaultSelected = false;
+    }
+  }
+
   const ctx: AgentCareScanContext = {
     updatedAt: Date.now(),
     scanKind,
@@ -1016,12 +1078,27 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
           isDesktop,
           isHighPerformance,
           visibleSystemIconsCount: visibleSysIcons.length,
+          preferredBucket: prefBucket,
         })
       : { summaries: undefined, defaultActiveBucket: undefined };
 
   if (uniqueTools.length > 1) {
-    primaryTitle = '🩺 내 PC 한눈에 4대 진단 리포트';
+    primaryTitle =
+      subFocus === 'UNUSED_APPS'
+        ? '🩺 PC 4대 진단 · 오랫동안 안 쓴 프로그램 점검'
+        : subFocus === 'DISK_SPACE'
+        ? '🩺 PC 4대 진단 · 용량 확보 & 묵은 앱 점검'
+        : subFocus === 'ADWARE_SECURITY'
+        ? '🩺 PC 4대 진단 · 광고·보안앱 집중 점검'
+        : subFocus === 'DESKTOP_CLEAN' || subFocus === 'PHOTO_CLEANUP'
+        ? '🩺 PC 4대 진단 · 바탕화면·사진 정돈'
+        : subFocus === 'SPEED_SLOW'
+        ? '🩺 PC 4대 진단 · 속도 높이기 집중 점검'
+        : '🩺 내 PC 한눈에 4대 진단 리포트';
     primaryBadge = '칸을 누르면 세부 내역이 펼쳐집니다';
+    if (prefBucket === 'DESKTOP') primaryAction = 'desktop_batch_action';
+    else if (prefBucket === 'SPEED') primaryAction = 'hidden_rats_apply';
+    else if (prefBucket === 'SECURITY' || subFocus === 'UNUSED_APPS') primaryAction = 'batch_deep_uninstall';
   }
 
   const card: MonsterAgentCareCardPayload = {
@@ -1032,7 +1109,7 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     fourBucketSummaries,
     defaultActiveBucket,
     action: primaryAction,
-    items: items.slice(0, 85),
+    items: items.slice(0, 150),
     selectedIds: defaultSelectedIds,
     excludedNames: [],
     availableMoveDrives: availMoveDrives,
@@ -1043,19 +1120,77 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     isHighPerformance,
   };
 
-  const briefingParts = [
-    `내 PC를 정밀 스캔해 **${items.length}개 항목**을 실측해 왔어요!`,
-    ...summaryLines.map((l) => `• ${l}`),
-    `아래 카드에서 체크박스를 골라 누르시거나, 채팅창에 **"오캠이랑 4번은 빼고 나머지 다 지워줘"**, **"다운로드 큰 폴더는 D드라이브로 옮겨줘"**처럼 편하게 말씀해 주세요! (모든 정리는 영구 삭제 없이 안전하게 **Windows 휴지통**으로만 이동합니다)`,
-  ];
+  const installedTotal = Number(appsRes?.data?.totalCount ?? items.filter((i) => i.cat === 'INSTALLED_APP').length);
+  const staleAppsCnt = items.filter(
+    (i) =>
+      i.cat === 'INSTALLED_APP' &&
+      (i.lastUsedStatus === 'DORMANT' || i.lastUsedStatus === 'STALE' || i.lastUsedStatus === 'UNUSED_SINCE_INSTALL')
+  ).length;
+  const deskCnt = items.filter((i) => i.bucketId === 'DESKTOP').length;
+  const deskMb = Number(deskRes?.data?.totalMb ?? 0);
+  const secDangerCnt = items.filter(
+    (i) => i.bucketId === 'SECURITY' && (i.safetyBadge === 'DANGER_DELETE' || i.safetyBadge === 'SAFE_DELETE')
+  ).length;
+  const secSleepCnt = items.filter(
+    (i) => i.bucketId === 'SECURITY' && i.safetyBadge === 'SLEEP_RECOMMEND'
+  ).length;
+
+  let briefingParts: string[];
+  if (subFocus === 'UNUSED_APPS') {
+    briefingParts = [
+      `설치된 프로그램 **총 ${installedTotal}개**를 살펴보니, 오랫동안 쓰지 않은 **묵은 앱 ${staleAppsCnt}개**가 확인됐어요!`,
+      `• 아래 4칸 요약표 중 **[③ 💾 용량 · 묵은 앱]** 칸을 바로 펼쳐 두었습니다. 각 앱의 **📌 용도 · 🕒 마지막 사용 시점 · 안전 배지**를 보시고 골라 지우실 수 있어요.`,
+      `• 체크박스로 고르시거나 채팅창에 **"오캠은 빼고 안 쓰는 앱 지워줘"**, **"1번이 뭐 하는 프로그램이야?"**처럼 편하게 말씀해 주세요!`,
+    ];
+  } else if (subFocus === 'DISK_SPACE') {
+    briefingParts = [
+      `현재 **C: 드라이브 여유 공간은 ${cFreeGb ?? '?'}GB (사용률 ${cUsedPct ?? '?'}%)**예요!`,
+      `• 아래 4칸 요약표 중 **[③ 💾 용량 · 묵은 앱]** 칸에 바로 비울 수 있는 안전 임시 캐시와 오래 안 쓴 프로그램(${staleAppsCnt}개)을 펼쳐 두었어요.`,
+      `• 체크박스로 선택하시거나 **"안전 캐시만 정리해줘"**, **"큰 폴더는 D드라이브로 옮겨줘"**처럼 말씀해 주세요!`,
+    ];
+  } else if (subFocus === 'ADWARE_SECURITY') {
+    briefingParts = [
+      `광고·애드웨어와 은행·관공서 보안프로그램을 정밀 점검해 **삭제 권장 ${secDangerCnt}건 · 잠재우기 권장 ${secSleepCnt}건**을 분류했어요!`,
+      `• 아래 4칸 요약표 중 **[② 🛡️ 광고 · 보안앱]** 칸을 바로 펼쳐 두었습니다.`,
+      `• **"빨간색 광고앱만 지우고 은행 보안앱은 잠재워줘"**처럼 말씀하시거나 원하는 항목만 체크해 실행해 보세요!`,
+    ];
+  } else if (subFocus === 'DESKTOP_CLEAN' || subFocus === 'PHOTO_CLEANUP') {
+    briefingParts = [
+      `바탕화면 항목 **총 ${deskCnt}개(${deskMb}MB)**를 분석해 **[④ 🗂️ 바탕화면 · 사진]** 칸에 바로 펼쳐 두었어요!`,
+      `• 임의로 아무것도 지우지 않았습니다. 아래 목록에서 정리할 파일·폴더만 체크하시거나 **"설치파일만 지워줘"**, **"중요 폴더 빼고 정리해줘"**처럼 편하게 말씀해 주세요! (모든 파일은 영구 삭제 없이 **Windows 휴지통** 또는 여유 드라이브로 안전 이동하며 1초 되돌리기가 보장됩니다)`,
+    ];
+  } else if (subFocus === 'SPEED_SLOW') {
+    const speedCnt = items.filter((i) => i.bucketId === 'SPEED' && !i.isProtected).length;
+    briefingParts = [
+      `속도를 늦추는 백그라운드 상주 서비스·자동실행 항목 **${speedCnt}건**과 4대 영역을 함께 점검했어요!`,
+      `• 아래 4칸 요약표 중 **[① ⚡ 속도 높이기]** 칸을 바로 펼쳐 두었으니, 원하시는 항목만 체크하거나 **"빨간색 안전 항목만 정리해줘"**처럼 말씀해 주세요!`,
+    ];
+  } else {
+    briefingParts = [
+      `내 PC의 **4대 영역(①속도 · ②광고/보안앱 · ③용량/묵은앱 · ④바탕화면/사진)**에서 총 **${items.length}개 항목**을 실측해 왔어요!`,
+      ...summaryLines.map((l) => `• ${l}`),
+      `상단 **4칸 성적표**를 눌러 영역별 세부 내역을 보시고, 체크박스로 고르시거나 **"오캠이랑 4번은 빼고 정리해줘"**처럼 편하게 말씀해 주세요!`,
+    ];
+  }
 
   const hasSafeCacheItems = items.some(
     (it) => it.cat === 'SAFE_CACHE' || it.cat === 'DESKTOP_HIBERFIL'
   );
   const followUps: string[] = [];
-  if (scanKind === 'DISK_HOG' || uniqueTools.includes('disk_hog_scan')) {
+  if (subFocus === 'UNUSED_APPS') {
+    followUps.push('1번 프로그램이 뭐 하는 건지 알려줘');
+    followUps.push('오래 안 쓴 프로그램만 골라줘');
+  } else if (subFocus === 'ADWARE_SECURITY' || scanKind === 'SECURITY_2TIER') {
+    followUps.push('빨간색 애드웨어만 지우고 은행 보안앱은 잠재워줘');
+    followUps.push('윈도우 순정 백신 검사해줘');
+  } else if (subFocus === 'DESKTOP_CLEAN' || subFocus === 'PHOTO_CLEANUP' || scanKind === 'DESKTOP_DETAIL') {
+    if (visibleSysIcons.length > 0) {
+      followUps.push('바탕화면 특수 아이콘만 안전하게 숨겨줘');
+    }
+    followUps.push('1번 항목이 뭔지 설명해줘');
+  } else if (scanKind === 'DISK_HOG' || subFocus === 'DISK_SPACE' || uniqueTools.includes('disk_hog_scan')) {
     if (hasSafeCacheItems) {
-      followUps.push('체크된 안전 캐시만 지금 다 정리해줘');
+      followUps.push('안전 캐시만 지금 정리해줘');
     } else {
       followUps.push('빨간색(삭제·차단 안전) 항목만 정리해줘');
     }
@@ -1063,21 +1198,8 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
       followUps.push(`다운로드 큰 파일은 ${availMoveDrives[0].drive} 드라이브로 옮겨줘`);
     }
     followUps.push('지금 CPU·메모리 제일 많이 쓰는 앱 알려줘');
-  } else if (scanKind === 'SECURITY_2TIER') {
-    followUps.push('빨간색 애드웨어·그리드만 다 지우고, 은행 보안모듈은 잠재워줘');
-    followUps.push('C드라이브 대용량 공간 도둑도 스캔해줘');
-  } else if (scanKind === 'HIDDEN_RATS') {
-    followUps.push('빨간색(차단 권장) 항목만 다 끄고, 서비스는 수동으로 바꿔줘');
-    followUps.push('이 중에서 뭐가 제일 느리게 만드는 놈이야?');
-    followUps.push('C드라이브 대용량 공간 도둑도 같이 찾아줘');
-  } else if (scanKind === 'DESKTOP_DETAIL') {
-    if (visibleSysIcons.length > 0) {
-      followUps.push('바탕화면 이상한 사용자 폴더 아이콘만 안전하게 숨겨줘');
-    }
-    followUps.push('안 쓰는 바로가기랑 큰 폴더 선택해서 정리할래');
   } else {
-    followUps.push('체크한 프로그램들 한 번에 다 지워줘');
-    followUps.push('C드라이브 용량 잡아먹는 주범도 찾아줘');
+    followUps.push('체크한 항목들 안전하게 정리해줘');
   }
 
   return {
@@ -1255,6 +1377,8 @@ export function buildLocalMultiTurnFilterFallback(
   const includeIds: string[] = [];
   const wantsSafeCacheOnly = /(?:안전\s*)?캐시만/i.test(q);
   const wantsRedSafeOnly = /(빨간색|삭제\s*안전|차단\s*권장|100%\s*삭제)/i.test(q);
+  const wantsStaleAppsOnly = /(?:오래\s*(?:동안\s*)?(?:안\s*쓴|안쓴|안\s*쓰는|안쓰는)|묵은)\s*(?:프로그램|앱|어플)/i.test(q);
+  const wantsDesktopItems = /바탕화면/i.test(q);
   if (!excClauseMatch) {
     for (const nm of q.matchAll(/#?(\d+)\s*번?/g)) {
       includeIds.push(`#${nm[1]}`);
@@ -1274,10 +1398,59 @@ export function buildLocalMultiTurnFilterFallback(
           includeIds.push(it.id);
         }
       }
+    } else if (wantsStaleAppsOnly) {
+      for (const it of scanContext.items) {
+        if (
+          !it.isProtected &&
+          it.cat === 'INSTALLED_APP' &&
+          (it.lastUsedStatus === 'DORMANT' ||
+            it.lastUsedStatus === 'STALE' ||
+            it.lastUsedStatus === 'UNUSED_SINCE_INSTALL')
+        ) {
+          includeIds.push(it.id);
+        }
+      }
+    } else if (wantsDesktopItems && /다\s*(?:지워|치워|정리|삭제)/i.test(q)) {
+      for (const it of scanContext.items) {
+        if (!it.isProtected && it.cat.startsWith('DESKTOP_')) {
+          includeIds.push(it.id);
+        }
+      }
+    } else {
+      // 번호 없이 항목 이름을 직접 말한 경우("고클린 지워줘", "스크린샷 정리해줘") 스캔 목록에서 직접 매칭
+      const qLow = q
+        .replace(/(?:만|도|은|는|이|가|을|를)?\s*(?:다\s*)?(?:지워|삭제|제거|정리|치워|꺼|숨겨|골라).*$/i, '')
+        .trim()
+        .toLowerCase();
+      if (qLow.length >= 2) {
+        for (const it of scanContext.items) {
+          if (!it.isProtected && it.name.toLowerCase().includes(qLow)) {
+            includeIds.push(it.id);
+          }
+        }
+      }
     }
     if (moveDrive && /다운로드/.test(q)) {
       const dl = scanContext.items.find((i) => /다운로드|download/i.test(i.name));
       if (dl) includeIds.push(dl.id);
+    }
+  } else if (wantsStaleAppsOnly) {
+    for (const it of scanContext.items) {
+      if (
+        !it.isProtected &&
+        it.cat === 'INSTALLED_APP' &&
+        (it.lastUsedStatus === 'DORMANT' ||
+          it.lastUsedStatus === 'STALE' ||
+          it.lastUsedStatus === 'UNUSED_SINCE_INSTALL')
+      ) {
+        includeIds.push(it.id);
+      }
+    }
+  } else if (wantsDesktopItems) {
+    for (const it of scanContext.items) {
+      if (!it.isProtected && it.cat.startsWith('DESKTOP_')) {
+        includeIds.push(it.id);
+      }
     }
   }
 
@@ -1593,21 +1766,51 @@ export function detectAgentCareIntent(
 ): {
   matched: boolean;
   immediateReadTools: AgentCareReadTool[];
+  preferredBucket?: CareNormalizedBucketId;
+  subFocus?: CareSubFocus;
   needsGeminiMultiTurnFilter: boolean;
   needsGeminiExplainOnly: boolean;
   isSystemIconQuery: boolean;
   isPowerBoostQuery: boolean;
 } {
-  // [P1-1] 복원 기록 조회·원복 발화는 절대 스캔/삭제 에이전트가 가로채지 않도록 즉시 양보!
-  if (/(복원\s*기록|복원\s*지점|되돌려|되돌리|원복|원래대로|(?:방금|아까|최근|이전).*?(?:취소|복원|복구|되돌))/i.test(clean)) {
-    return {
-      matched: false,
-      immediateReadTools: [],
-      needsGeminiMultiTurnFilter: false,
-      needsGeminiExplainOnly: false,
-      isSystemIconQuery: false,
-      isPowerBoostQuery: false,
-    };
+  const emptyNoMatch = {
+    matched: false,
+    immediateReadTools: [] as AgentCareReadTool[],
+    needsGeminiMultiTurnFilter: false,
+    needsGeminiExplainOnly: false,
+    isSystemIconQuery: false,
+    isPowerBoostQuery: false,
+  };
+
+  // [P1-1] 복원 기록 조회·원복·실종 파일 구출·바탕화면 바로가기 생성·개별 시작프로그램 스위치·순정 백신 단독 검사는 전용 핸들러로 즉시 양보!
+  if (
+    /(복원\s*기록|복원\s*지점|히스토리|되돌려|되돌리|원복|원래대로|다시\s*켜\s*줘|(?:방금|아까|최근|이전|어제).*?(?:취소|복원|복구|되돌|지운|삭제한|사라진|없어진)|(?:사라진|없어진|날아간|방금\s*지운)\s*(?:파일|문서|사진))/i.test(
+      clean
+    )
+  ) {
+    return emptyNoMatch;
+  }
+  if (/바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(?:카페|사이트|유튜브|은행)/i.test(clean)) {
+    return emptyNoMatch;
+  }
+  if (
+    !/정리|치워|꺼|끄|줄여|최적화|느려|버벅|속도/i.test(clean) &&
+    /(시작\s*프로그램\s*(?:목록|리스트|스위치|보여|열어)|자동\s*실행\s*목록|부팅.*?(?:켜지는|실행되는)\s*(?:시작\s*)?프로그램\s*목록)/i.test(
+      clean
+    )
+  ) {
+    return emptyNoMatch;
+  }
+  if (
+    !/애드웨어|보안\s*(?:모듈|프로그램|앱)|광고|그리드|지워|삭제|제거/i.test(clean) &&
+    /(순정\s*백신|디펜더|defender|바이러스\s*검사|랜섬웨어\s*(?:방어|보호|검사)|백신\s*(?:검사|상태|업데이트|켜)|usb.*?검사)/i.test(
+      clean
+    )
+  ) {
+    return emptyNoMatch;
+  }
+  if (/(임시\s*쓰레기|temp\s*폴더|temp\s*파일|크래시\s*덤프)/i.test(clean) && !/용량|c\s*드라이브/i.test(clean)) {
+    return emptyNoMatch;
   }
 
   const hasRecentScan = Boolean(
@@ -1615,14 +1818,13 @@ export function detectAgentCareIntent(
   );
 
   // 1) 직전 스캔 목록을 보고 "3번 뭐야?", "이거 지워도 돼?", "이게 뭐 하는 프로그램이야?", "꼭 남겨야 할 거 알려줘" 되묻는 경우
-  // (주의: "좋아, 알려줘" 퀘스트 수락 칩이나 "지금 CPU·메모리 제일 많이 쓰는 앱 알려줘" 같은 실시간 점유 조회는 절대 가로채지 않음!)
   const isQuestChipOrCpuRamAsk =
     clean === '좋아, 알려줘' ||
     clean === '좋아, 예쁘게 바꿔줘' ||
     /(?:cpu|메모리|램|ram).*(?:제일\s*많이|가장\s*많이|많이\s*쓰는|점유|먹는)/i.test(clean);
   const isExplainQuestionText =
     !isQuestChipOrCpuRamAsk &&
-    /(뭐야|뭔데|뭔가요|뭐예요|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더|기능|설정)|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|설명해|(?:이거|이\s*항목|#?\d+\s*번|남겨야|지워야|뭐\s*지우|어떻게\s*골라).*?알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
+    /(뭐야|뭔데|뭔가요|뭐예요|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더|기능|설정)|궁금|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|없애도\s*(돼|되|괜찮)|꺼도\s*(돼|되|괜찮)|치워도\s*(돼|되|괜찮)|설명해|(?:이거|이\s*항목|#?\d+\s*번|남겨야|지워야|뭐\s*지우|어떻게\s*골라).*?알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
       clean
     ) &&
     !/(빼고|제외하고|나머지\s*다|일괄\s*삭제|다\s*지워|옮겨\s*줘)/i.test(clean);
@@ -1630,84 +1832,129 @@ export function detectAgentCareIntent(
     isExplainQuestionText && /(전원\s*(옵션|모드)|고성능\s*(모드|전원|전환))/i.test(clean);
   const isAskingExplain = (hasRecentScan && isExplainQuestionText) || isPowerExplainQuestion;
 
-  // 2) 일반 사무직원 비전문용어 종합 점검 불만어 (조사 이/가/은/는/도 허용 + 답답/이상한 창·팝업/버벅대/멈칫 전면 포괄)
-  const isCasualFullCheckup =
-    /(?:컴퓨터|컴터|피씨|pc|노트북|컴|화면|마우스|창|업무).*?(?:버벅|느려|느린|무거워|무겁|답답|렉\s*걸|먹통|멈칫|이상해|가볍게|청소\s*(?:좀|하자|해)|정리\s*좀|손\s*좀\s*보|손보자|점검\s*좀|상태\s*좀|봐\s*줘|봐\s*주세요)/i.test(
-      clean
-    ) ||
-    /(?:왜\s*이리|왜\s*이렇게|너무|자꾸|요즘|갑자기)\s*(?:버벅|느려|무거워|답답|렉\s*걸|멈칫|멈춰|끊겨)/i.test(clean) ||
-    /(?:이상한|모르는|수상한|광고)\s*(?:창|팝업|배너|알림|메시지|화면|거|게|앱|프로그램)(?:이|가|은|는|들)?.*?(?:떠|뜨|나와|열려|돌아|켜져|깔렸|있|봐\s*줘|없애|치워)?/i.test(
-      clean
-    ) ||
-    /(?:창|팝업|광고|배너|뭐)(?:이|가)?\s*자꾸\s*(?:떠|뜨|나와|열려|돌아|켜져)|자꾸.*?(?:창|팝업|광고|배너|이상한).*?(?:떠|뜨|나와|켜져)|쓸데없는\s*(?:거|게|앱|프로그램)|뭐\s*(?:지우면|삭제하면|정리하면)\s*(?:돼|좋아|될까)/i.test(
-      clean
-    );
-
-  // 조사(이/가/은/는/도) 허용 C드라이브·저장공간 부족 발화 ("저장 공간이 모자라서 파일이 안 받아져", "용량이 부족해")
-  const isDiskHog =
-    /(?:[c-zC-Z]\s*드라이브|(?:저장\s*)?(?:용량|공간|하드|디스크|ssd)(?:이|가|은|는|도)?\s*(?:너무\s*|자꾸\s*|많이\s*|다\s*)?(?:부족|모자라|꽉|없|줄|찼|차서|안\s*남|확보|도둑|주범|정리|스캔|분석|체크|늘려)|파일(?:이|가)?\s*안\s*(?:받아|열려|깔려|저장)|대용량\s*(?:폴더|파일|캐시|스캔|찾아)|캐시\s*(?:정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|npm|크롬\s*캐시)/i.test(
-      clean
-    );
-  const isSecurity2Tier =
-    /(보안\s*모듈|보안\s*프로그램|그리드|애드웨어|악성\s*앱|쓸데없는\s*앱|안\s*쓰는\s*프로그램|프로그램\s*(전수|전체|다|모두)?\s*(조사|스캔|분석|찾아|정리)).*(분류|수면|잠재|삭제|지워|골라|조사|스캔|분석)/i.test(
-      clean
-    ) || /(보안\s*모듈.*?(필요한\s*것만|불필요한|골라|2분류|수면))/i.test(clean);
-  const isDesktopDetail =
-    /(바탕화면.*?(분석|보고|상세|구성|뭐\s*있|스캔|정리|용량|지저분|어지러)|wd\s*(폴더|아이콘)|이상한\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|뭐야))/i.test(
-      clean
-    );
-  const isAppsSurvey =
-    /(설치된\s*(프로그램|앱)|안\s*쓰는\s*(프로그램|앱)|쓸데없는\s*(프로그램|앱)).*(전수|전체|조사|스캔|다\s*보여|골라|지워|삭제|제거|알려)/i.test(
-      clean
-    );
   const isSystemIconQuery =
-    /(wd\s*(폴더|아이콘)|이상한\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|지워도|뭐야)|바탕화면\s*(시스템|특수)\s*아이콘)/i.test(
+    /(wd\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|지워도|뭐야)|바탕화면\s*(시스템|특수)\s*아이콘)/i.test(
       clean
     );
   const isPowerBoostQuery =
     !isExplainQuestionText && /(전원\s*(옵션|모드).*?(고성능|바꿔|전환)|고성능\s*(모드|전원))/i.test(clean);
 
-  // 3) 직전 스캔 컨텍스트가 살아있고 유저가 취사선택·제외 필터("빼고", "놔두고", "나머지 다", "빨간색만 지워", "옮겨줘", "D드라이브", "#3번")를 말하는 경우
+  // 직전 스캔 목록의 특정 항목 이름을 직접 부르며 지우거나 정리하라고 한 경우("오캠 지워줘", "고클린 삭제해") 멀티턴 필터로 연결
+  const mentionsScannedItemForAction =
+    hasRecentScan &&
+    !isAskingExplain &&
+    /(지워|삭제|제거|정리|치워|꺼|숨겨|옮겨|골라)/i.test(clean) &&
+    Boolean(
+      scanContext?.items.some((it) => {
+        const baseNm = it.name
+          .replace(/\[.*?\]|\(.*?\)/g, ' ')
+          .trim()
+          .toLowerCase();
+        return baseNm.length >= 2 && clean.toLowerCase().includes(baseNm);
+      })
+    );
+
+  // 2) 직전 스캔 컨텍스트가 살아있고 유저가 취사선택·제외 필터("빼고", "놔두고", "나머지 다", "빨간색만 지워", "옮겨줘", "#3번", "오래 안 쓴 앱만 골라줘")를 말하는 경우
   const isMultiTurnFilter =
     hasRecentScan &&
     !isAskingExplain &&
-    /(빼고|제외|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(?:다|전부|모두)?|빨간색|차단\s*권장|삭제\s*안전|안전\s*캐시만|수동\s*(?:전환|으로)|다\s*(?:지워|삭제|제거|정리|치워|꺼)|[d-zD-Z]\s*:?\s*드라이브|옮겨\s*(?:줘|주세요|라)?|이사\s*(?:해|시켜)?|#\d+|\d+\s*번|만\s*(?:지워|삭제|정리|꺼|치워|숨겨))/i.test(
+    (mentionsScannedItemForAction ||
+      /(빼고|제외|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(?:다|전부|모두)?|빨간색|차단\s*권장|삭제\s*안전|안전\s*캐시만|수동\s*(?:전환|으로)|[d-zD-Z]\s*:?\s*드라이브|옮겨\s*(?:줘|주세요|라)?|이사\s*(?:해|시켜)?|#\d+|\d+\s*번|(?:만|골라서)\s*(?:지워|삭제|제거|정리|꺼|치워|숨겨|골라)|(?:오래\s*(?:동안\s*)?(?:안\s*쓴|안쓴|안\s*쓰는|안쓰는)|묵은)\s*(?:프로그램|앱|어플)\s*(?:만|다)\s*(?:골라|지워|삭제|정리)|체크(?:한|된)\s*(?:것|거|항목|프로그램|앱))/i.test(
+        clean
+      ));
+
+  // 3) 『PC 손보기 4 + 1 정규 카테고리』 일상 자연어 매칭 (정해진 문구 없이 평소 말투로 말해도 100% 찰떡 인식!)
+  // ③-A) 잊고 있던·오랫동안 안 쓴 프로그램 / 설치된 앱 조회·정리
+  const isUnusedOrInstalledApps =
+    /(?:오래\s*동안|오랫\s*동안|오래|한참|예전에|깔아\s*(?:놓고|두고)|묵은|잊고\s*있던|방치된|안\s*쓰고).*?(?:안\s*쓴|안쓴|안\s*쓰는|안쓰는|사용\s*안\s*(?:한|하는)|쓰지\s*않는|안\s*건드린)?\s*(?:프로그램|앱|어플|소프트웨어|거)/i.test(
+      clean
+    ) ||
+    /(?:안\s*쓴|안쓴|안\s*쓰는|안쓰는|사용\s*안\s*(?:한|하는)|쓰지\s*않는|불필요한|쓸데없는|묵은)\s*(?:프로그램|앱|어플|소프트웨어)/i.test(
+      clean
+    ) ||
+    /(?:설치된|설치돼\s*있는|깔린|깔려\s*있는)\s*(?:프로그램|앱|어플|소프트웨어)/i.test(clean);
+
+  // ③-B) 저장공간·C드라이브·캐시 용량 확보
+  const isDiskHog =
+    /(?:[c-zC-Z]\s*드라이브|(?:저장\s*)?(?:용량|공간|하드|디스크|ssd)(?:이|가|은|는|도|을|를)?\s*(?:너무\s*|자꾸\s*|많이\s*|다\s*|좀\s*)?(?:부족|모자라|꽉|없|줄|찼|차서|안\s*남|확보|도둑|주범|정리|스캔|분석|체크|점검|확인|늘려|비워|청소|차지)|파일(?:이|가)?\s*안\s*(?:받아|열려|깔려|저장)|대용량\s*(?:폴더|파일|캐시|스캔|찾아|프로그램|앱)|캐시\s*(?:정리|청소|삭제|지워|스캔|비워)|최대\s*절전|hiberfil|크롬\s*캐시)/i.test(
       clean
     );
 
-  const isHiddenRats =
-    /(쥐새끼|스파이웨어|몰래\s*(도|돌|켜|숨|깔)|숨은\s*(앱|프로그램|서비스|스케줄러|프로세스|악성|광고)|백그라운드.*?(전수|수색|조사|찾아|스캔|뭐\s*돌)|수동\s*(전환|으로\s*바꿔)|예스파일|mspcmanager|edgeautolaunch)/i.test(
+  // ② 광고·애드웨어·은행/관공서 보안앱 점검·정리 ("애드웨어 체크해줘", "이상한 광고창 떠", "은행 보안앱 정리" 등 전면 포괄)
+  const isSecurity2Tier =
+    /(?:애드웨어|스파이웨어|그리드|구라\s*제거|악성\s*(?:앱|프로그램)|광고\s*(?:프로그램|앱|어플|창|팝업|배너)|(?:이상한|모르는|수상한)\s*(?:창|팝업|광고|배너|앱|프로그램)|(?:은행|관공서|홈택스|키보드|웹)?\s*보안\s*(?:프로그램|모듈|앱|어플|서비스|쓰레기))/i.test(
       clean
     );
 
-  const readTools: AgentCareReadTool[] = [];
-  if (isDiskHog) readTools.push('disk_hog_scan');
-  if (isSecurity2Tier) readTools.push('security_2tier_scan');
-  if (isDesktopDetail) readTools.push('desktop_detail_scan');
-  if (isAppsSurvey) readTools.push('installed_apps_list');
-  if (isHiddenRats) readTools.push('hidden_rats_scan');
+  // ④ 바탕화면·사진 정돈 ("바탕화면 정리해줘", "바탕화면 사진 정리", "중복 사진 정리" 등 전면 포괄)
+  const isPhotoCleanupPhrase =
+    /(?:바탕화면\s*사진|(?:중복|연사|흔들린|흐린|어질러진|스크린샷|캡처|영수증)\s*사진|사진\s*(?:정돈|정리|청소))/i.test(
+      clean
+    ) && !/찾아\s*줘|보여\s*줘|검색/i.test(clean);
+  const isDesktopDetail =
+    isPhotoCleanupPhrase ||
+    /(?:바탕\s*화면|데스크탑\s*화면).*?(?:분석|보고|상세|구성|뭐\s*있|있나|있어|스캔|점검|체크|확인|정리|정돈|치워|청소|용량|지저분|어지러|더러|복잡|아이콘|파일|폴더|사진)/i.test(
+      clean
+    ) ||
+    /^(?:바탕\s*화면|내\s*바탕\s*화면)\s*(?:좀\s*)?(?:봐\s*줘|정리|정돈|치워)?[.!?~]*$/i.test(clean);
 
-  // 비전문용어 일상 불만어("컴이 왜 이리 버벅거려 / 이상한 거 깔렸나 / 컴퓨터 손 좀 봐줘 / 정리하자") ➔ 『4+1 정규 카테고리』 5대 조회 도구 일괄 병렬 스캔!
-  if (readTools.length === 0 && !isAskingExplain && !isMultiTurnFilter && isCasualFullCheckup) {
-    readTools.push(
-      'disk_hog_scan',
-      'security_2tier_scan',
-      'hidden_rats_scan',
-      'installed_apps_list',
-      'desktop_detail_scan'
+  // ① 속도 높이기 (느려진 속도·메모리·부팅 자동실행·숨은 백그라운드)
+  const isHiddenRatsOrSpeed =
+    /(?:쥐새끼|몰래\s*(?:도|돌|켜|숨|깔)|숨은\s*(?:앱|프로그램|서비스|스케줄러|프로세스|악성|광고)|백그라운드.*?(?:전수|수색|조사|찾아|스캔|뭐\s*돌|정리|점검|체크)|수동\s*(?:전환|으로\s*바꿔)|예스파일|mspcmanager|edgeautolaunch)/i.test(
+      clean
+    ) ||
+    /(?:속도|부팅|컴퓨터|컴터|피씨|pc|노트북|컴|화면|마우스|창).*?(?:느려|느린|느리|버벅|렉|무거워|무겁|답답|먹통|멈칫|빨라지|빠르게|속도\s*(?:높|올|개선|최적화))/i.test(
+      clean
+    ) ||
+    /(?:왜\s*이리|왜\s*이렇게|너무|자꾸|요즘|갑자기)\s*(?:버벅|느려|무거워|답답|렉\s*걸|멈칫|멈춰|끊겨)/i.test(clean) ||
+    /(?:메모리|램|ram|자동\s*실행|시작\s*프로그램|상주\s*(?:프로그램|앱|서비스)).*?(?:정리|줄여|비워|최적화|치워|꺼|끄|점검|체크|많이\s*(?:먹|쓰|차지))/i.test(
+      clean
     );
-  } else if (
-    isDiskHog &&
-    !readTools.includes('installed_apps_list') &&
-    /(프로그램|앱|정리|늘려|확보|부족|꽉)/i.test(clean)
-  ) {
-    // 저장공간 확보 요청 시 잊고 있던 대용량 미사용 앱도 함께 볼 수 있도록 동시 스캔
-    readTools.push('installed_apps_list');
+
+  // 종합 점검 ("정기 점검", "내 PC 점검해줘", "컴퓨터 손 좀 봐줘", "전체 청소하자")
+  const isCasualFullCheckup =
+    /^(?:정기\s*점검|전체\s*점검|종합\s*점검|pc\s*점검|컴퓨터\s*점검|1초\s*건강\s*검진|건강\s*검진)/i.test(clean) ||
+    /(?:컴퓨터|컴터|피씨|pc|노트북|컴).*?(?:가볍게|청소\s*(?:좀|하자|해)|정리\s*(?:좀|하자|해\s*줘)|손\s*좀\s*보|손보자|손봐|점검\s*(?:좀|해)|상태\s*(?:좀|봐)|전체.*?봐\s*줘)/i.test(
+      clean
+    ) ||
+    /(?:창|팝업|광고|배너|뭐)(?:이|가)?\s*자꾸\s*(?:떠|뜨|나와|열려|돌아|켜져)|뭐\s*(?:지우면|삭제하면|정리하면)\s*(?:돼|좋아|될까)/i.test(
+      clean
+    );
+
+  let preferredBucket: CareNormalizedBucketId | undefined;
+  let subFocus: CareSubFocus | undefined;
+
+  if (!isAskingExplain && !isMultiTurnFilter && !isSystemIconQuery && !isPowerBoostQuery) {
+    if (isDesktopDetail) {
+      preferredBucket = 'DESKTOP';
+      subFocus = isPhotoCleanupPhrase ? 'PHOTO_CLEANUP' : 'DESKTOP_CLEAN';
+    } else if (isUnusedOrInstalledApps) {
+      preferredBucket = 'STORAGE';
+      subFocus = 'UNUSED_APPS';
+    } else if (isDiskHog) {
+      preferredBucket = 'STORAGE';
+      subFocus = 'DISK_SPACE';
+    } else if (isSecurity2Tier) {
+      preferredBucket = 'SECURITY';
+      subFocus = 'ADWARE_SECURITY';
+    } else if (isHiddenRatsOrSpeed) {
+      preferredBucket = 'SPEED';
+      subFocus = 'SPEED_SLOW';
+    } else if (isCasualFullCheckup) {
+      preferredBucket = undefined;
+      subFocus = 'FULL_CHECKUP';
+    }
   }
+
+  // 『PC 손보기 4 + 1 정규 카테고리』 표준: 4대 영역 중 어느 것을 평소 말투로 시켜도
+  // 5대 Read-Only 스캔을 병렬 실측해 상단 '4칸 요약 성적표'와 해당 칸 세부 내역(3대 안심 힌트 포함)을 한 번에 띄웁니다!
+  const readTools: AgentCareReadTool[] = subFocus ? [...ALL_FOUR_PLUS_ONE_READ_TOOLS] : [];
 
   return {
     matched: readTools.length > 0 || isMultiTurnFilter || isAskingExplain || isSystemIconQuery || isPowerBoostQuery,
     immediateReadTools: readTools,
+    preferredBucket,
+    subFocus,
     needsGeminiMultiTurnFilter: isMultiTurnFilter,
     needsGeminiExplainOnly: isAskingExplain,
     isSystemIconQuery,

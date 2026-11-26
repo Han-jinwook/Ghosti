@@ -2179,6 +2179,12 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </div>
             )}
 
+            {hasFourGrid && currentBucket === 'DESKTOP' && (card.photoCleanupCandidateCount || 0) > 0 && visibleItems.length > 0 && (
+              <div className="rounded-lg bg-teal-50/70 border border-teal-200 px-2.5 py-1.5 text-[11px] text-teal-900">
+                📸 왼쪽 사진 정리 탭에도 중복·흔들린·스크린샷 후보 <strong>{card.photoCleanupCandidateCount}장</strong>이 준비되어 있어요!
+              </div>
+            )}
+
             {hasFourGrid && currentBucket && visibleItems.length === 0 && (
               <div className="rounded-lg bg-white border border-slate-200 p-3 text-[11.5px] text-slate-600 flex items-center justify-between gap-2 flex-wrap">
                 <span>
