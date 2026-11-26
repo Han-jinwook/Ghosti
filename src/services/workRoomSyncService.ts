@@ -981,11 +981,13 @@ import {
   releaseLocalPcAccountOwner,
 } from './pcSingleAccountGuard';
 
-export function clearWorkRoomLocalCachesOnLogout(): void {
-  const prevEmail = resolveCurrentWorkAccountEmail();
+export function clearWorkRoomLocalCachesOnLogout(explicitPrevEmail?: string): void {
+  const cleanExplicit = (explicitPrevEmail || '').trim().toLowerCase();
+  const prevEmail = cleanExplicit || resolveCurrentWorkAccountEmail();
+  const wasBlocked = isLocalPcBlockedByOtherAccount();
   activeHostTunnelSession = null;
   if (typeof window === 'undefined') return;
-  if (prevEmail && prevEmail !== 'anonymous') {
+  if (prevEmail && prevEmail !== 'anonymous' && !wasBlocked) {
     void releaseLocalPcAccountOwner(prevEmail);
   }
   try {

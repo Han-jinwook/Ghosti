@@ -19,6 +19,8 @@ import {
 } from '../services/merlin-hub-sdk/react';
 import {
   claimOrHeartbeatLocalPcAccountOwner,
+  isLocalPcBlockedByOtherAccount,
+  releaseLocalPcAccountOwner,
   releaseLocalPcTabSessionOnUnload,
   setLocalPcOwnershipBlockedState,
 } from '../services/pcSingleAccountGuard';
@@ -227,13 +229,30 @@ const GhostiHubGlobalModals: React.FC = () => {
     pendingLogoutWipeRef.current = null;
   }, []);
 
-  const performGhostiCleanLogout = useCallback(() => {
+  const performGhostiCleanLogout = useCallback((opts?: { skipPcOwnerRelease?: boolean }) => {
     logoutInProgressRef.current = true;
+    const curState = useSaySeeStore.getState();
+    // [근본 수정] purgeAllGhostiLocalAuthArtifacts가 localStorage 이메일을 지우기 전에
+    // 이전 로그인 계정 이메일을 선확보하여 Z-코어 1PC 1계정 점유를 즉시 해제해야,
+    // 단일 창에서 로그아웃 후 타 계정 로그인 시 '이미 다른 계정이 연결됨' 오경고가 뜨지 않음
+    const prevAuthedEmail = (
+      lastAuthedEmailRef.current ||
+      curState.merlinAuth.email ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+        : '')
+    )
+      .trim()
+      .toLowerCase();
+    const shouldReleasePcOwner =
+      !opts?.skipPcOwnerRelease && Boolean(prevAuthedEmail) && !isLocalPcBlockedByOtherAccount();
     wasLoggedInRef.current = false;
     lastAuthedEmailRef.current = '';
     setIsProfileOpen(false);
-    const curState = useSaySeeStore.getState();
     const hasUrlInviteToken = Boolean(readActiveInviteToken());
+    if (shouldReleasePcOwner) {
+      void releaseLocalPcAccountOwner(prevAuthedEmail);
+    }
     if (typeof window !== 'undefined') {
       try {
         const preLogoutToken = (localStorage.getItem('merlin_session_token') || '').trim();
@@ -258,7 +277,7 @@ const GhostiHubGlobalModals: React.FC = () => {
       }
     }
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
-    clearWorkRoomLocalCachesOnLogout();
+    clearWorkRoomLocalCachesOnLogout('');
     if (typeof window !== 'undefined') {
       try {
         const curParams = new URLSearchParams(window.location.search);
@@ -555,13 +574,19 @@ const GhostiHubGlobalModals: React.FC = () => {
         });
       }
     } else if (!isLoggedIn) {
+      const prevLoggedInEmail = lastAuthedEmailRef.current.trim().toLowerCase();
+      const wasBlocked = isLocalPcBlockedByOtherAccount();
       setPcAccountConflict(null);
       setLocalPcOwnershipBlockedState(false);
       const hasUrlInviteToken = Boolean(readActiveInviteToken());
       const isMarkedLoggedOut =
         typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1';
       if (wasLoggedInRef.current || isMarkedLoggedOut) {
+        if (prevLoggedInEmail && !wasBlocked) {
+          void releaseLocalPcAccountOwner(prevLoggedInEmail);
+        }
         wasLoggedInRef.current = false;
+        lastAuthedEmailRef.current = '';
         clearGhostiSupabaseSession();
         clearGhostSecretaryAccountNicknameOnLogout();
         resetSharedMonsterChatToWelcome();
@@ -928,6 +953,7 @@ const GhostiHubGlobalModals: React.FC = () => {
         switching={switchingPcOwner}
         setSwitching={setSwitchingPcOwner}
         onPerformLogout={() => {
+          const hadConflict = Boolean(pcAccountConflict) || isLocalPcBlockedByOtherAccount();
           setPcAccountConflict(null);
           setLocalPcOwnershipBlockedState(false);
           try {
@@ -935,7 +961,7 @@ const GhostiHubGlobalModals: React.FC = () => {
           } catch {
             /* ignore */
           }
-          performGhostiCleanLogout();
+          performGhostiCleanLogout({ skipPcOwnerRelease: hadConflict });
         }}
       />
 

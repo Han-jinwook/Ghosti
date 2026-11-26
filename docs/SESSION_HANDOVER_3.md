@@ -1,13 +1,16 @@
 # 🟠 `[3귀신]` 세션 인계장 (`SESSION_HANDOVER_3.md` — 사진 공유 · 내 기기 통합 · 모바일 앱)
 
-- **최종 갱신 일시**: 2026-11-26 13:45 (KST)
+- **최종 갱신 일시**: 2026-11-26 13:58 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정)
 - **최신 배포 버전**: **`Merlin Z-Core v2.9.20`** (1~6호기 전 클러스터 반영 완료) · 양대 스토어 **`v1.0.115 (115)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
-- **세션 창 제목**: `3귀신 방관리·v1.0.115`
+- **세션 창 제목**: `3귀신 1PC1계정로그아웃해제`
 
 ## 완료 내역 (2026-11-25 ~ 11-26)
-1. **사진 공유 `[방 관리]` 정식 서버 브릿지 멤버 목록(`photo_list_room_members` · `photo_kick_room_member`) 직결 연동 + `0ms` SWR 선행 예열·콜드 로딩 `"1명"` 오표시 차단 + 양대 스토어 `v1.0.115 (115)` 배포 (카드 `424f9ffd` `'재테스트 대기'`) (2026-11-26)**
+1. **단일 탭 로그아웃 후 다른 계정 로그인 시 `1 PC 1계정 보호` 충돌 안내창 오표시 근본 해결 (카드 `424f9ffd-2c1d-8061-961f-ced769e4c909` `'재테스트 대기'`) (2026-11-26)**
+   - `GhostiHubInfraBridge.tsx`의 `performGhostiCleanLogout`에서 `purgeAllGhostiLocalAuthArtifacts()`로 로컬 이메일을 먼저 삭제한 직후 `clearWorkRoomLocalCachesOnLogout()`을 호출해 이전 계정 이메일이 `'anonymous'`로 판별되어 Z-코어 PC 점유 해제(`releaseLocalPcAccountOwner`)가 전혀 전송되지 않던 순서 역전 버그를 규명·수정.
+   - 로그아웃 최상단에서 이전 이메일을 선확보해 Z-코어 `/__merlin/account-owner` `release`를 즉시 전송하고(`skipPcOwnerRelease`로 차단된 2번 탭의 로그아웃이 1번 탭 점유를 풀지 않게 보호), `pcSingleAccountGuard.ts`에서 `claim` 호출 전 진행 중인 `pendingReleasePromise` 완료를 직렬 대기시켜 단일 창 순차 교대 로그인 시 오경고 0% 보장.
+2. **사진 공유 `[방 관리]` 정식 서버 브릿지 멤버 목록(`photo_list_room_members` · `photo_kick_room_member`) 직결 연동 + `0ms` SWR 선행 예열·콜드 로딩 `"1명"` 오표시 차단 + 양대 스토어 `v1.0.115 (115)` 배포 (카드 `424f9ffd` `'재테스트 대기'`) (2026-11-26)**
    - 1~3차: 서버 브릿지 `photo_list_room_members`·`photo_kick_room_member` 직결, 허브 최신 닉네임(`public.users.nickname`) 1순위 정합화, 동명이인 이메일 병기, 모바일 앱 번들 반영(`v1.0.114`).
    - 4차 UX 개선(`처음 3초간 썬드림(방장) 1명만 보이다가 뒤늦게 참여 멤버 표시`): `sharedPhotoRoomSupabase.ts`에 계정·방 단위 `0ms` SWR 캐시(`getCachedSharedPhotoRoomMembersSync`) 및 사진 공유 진입 즉시 가족·동호회·동창회 백그라운드 선행 예열(`prewarmMySharedPhotoRoomMembers`)을 추가하고, `LoungeCustomSettingsHeader.tsx`의 불필요한 직렬 방 생성 대기(`ensureMyRoomAndInviteToken`)를 제거해 `0ms` 즉시 조회로 단축하며 콜드 로딩 중에는 거짓 `(1명)` 대신 `불러오는 중...` 안내를 표시하도록 개선 후 양대 스토어 `v1.0.115 (115)` 동시 출시 완료.
 2. **아이폰·안드로이드 기기 연결 해제 시 `[다시 연결]` 미노출 & 상단 `연결된 기기 2대` 거짓 표시 근본 해결 및 양대 스토어 `v1.0.112 (112)` 배포 (카드 `422f9ffd` `'재테스트 대기'`) (2026-11-26)**

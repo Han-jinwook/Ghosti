@@ -12,6 +12,7 @@ const TAB_SESSION_STORAGE_KEY = 'ghosti_pc_tab_session_id_v1';
 
 let localPcOwnershipBlocked = false;
 let blockedByMaskedEmail = '';
+let pendingReleasePromise: Promise<void> | null = null;
 
 export interface PcAccountOwnerResponse {
   ok: boolean;
@@ -66,6 +67,13 @@ export async function claimOrHeartbeatLocalPcAccountOwner(opts: {
   if (typeof window === 'undefined' || !cleanEmail || !zCoreBridge.isConnected) {
     return { ok: true, activeEmail: cleanEmail };
   }
+  if (pendingReleasePromise) {
+    try {
+      await pendingReleasePromise;
+    } catch {
+      /* ignore */
+    }
+  }
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), 2500) : null;
   try {
@@ -103,21 +111,41 @@ export async function claimOrHeartbeatLocalPcAccountOwner(opts: {
 
 export async function releaseLocalPcAccountOwner(email?: string): Promise<void> {
   setLocalPcOwnershipBlockedState(false);
-  if (typeof window === 'undefined' || !zCoreBridge.isConnected) return;
+  if (typeof window === 'undefined') return;
+  const isNativeMobile = Boolean(
+    (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+  );
+  if (isNativeMobile) return;
   const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return;
+  const releaseTask = (async () => {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 2500) : null;
+    try {
+      await fetch(getZCoreUrl('/__merlin/account-owner'), {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'release',
+          email: cleanEmail,
+          sessionId: getPcTabSessionId(),
+        }),
+        ...(ctrl ? { signal: ctrl.signal } : {}),
+      });
+    } catch {
+      /* ignore */
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  })();
+  pendingReleasePromise = releaseTask;
   try {
-    await fetch(getZCoreUrl('/__merlin/account-owner'), {
-      method: 'POST',
-      keepalive: true,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'release',
-        email: cleanEmail,
-        sessionId: getPcTabSessionId(),
-      }),
-    });
-  } catch {
-    /* ignore */
+    await releaseTask;
+  } finally {
+    if (pendingReleasePromise === releaseTask) {
+      pendingReleasePromise = null;
+    }
   }
 }
 
