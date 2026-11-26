@@ -3178,10 +3178,10 @@ public class GhostiMobileCarePlugin extends Plugin {
             final TextView fwd10Btn = new TextView(activity);
             fwd10Btn.setText("+10초 ↻");
             fwd10Btn.setTextColor(Color.parseColor("#E2E8F0"));
-            fwd10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+            fwd10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
             fwd10Btn.setTypeface(Typeface.DEFAULT_BOLD);
             fwd10Btn.setGravity(Gravity.CENTER);
-            fwd10Btn.setPadding(dpToPx(activity, 14), dpToPx(activity, 8), dpToPx(activity, 14), dpToPx(activity, 8));
+            fwd10Btn.setPadding(dpToPx(activity, 12), dpToPx(activity, 8), dpToPx(activity, 12), dpToPx(activity, 8));
             GradientDrawable fwdBtnBg = new GradientDrawable();
             fwdBtnBg.setColor(Color.parseColor("#1E293B"));
             fwdBtnBg.setCornerRadius(dpToPx(activity, 18));
@@ -3189,8 +3189,62 @@ public class GhostiMobileCarePlugin extends Plugin {
             fwd10Btn.setBackground(fwdBtnBg);
             btnRow.addView(fwd10Btn);
 
+            final float[] speedSteps = new float[] { 1.0f, 1.25f, 1.5f, 2.0f, 0.5f };
+            final String[] speedLabels = new String[] { "1.0x", "1.25x", "1.5x", "2.0x", "0.5x" };
+            final int[] speedIdxHolder = new int[] { 0 };
+
+            final TextView speedBtn = new TextView(activity);
+            speedBtn.setText("1.0x");
+            speedBtn.setTextColor(Color.parseColor("#5EEAD4"));
+            speedBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+            speedBtn.setTypeface(Typeface.DEFAULT_BOLD);
+            speedBtn.setGravity(Gravity.CENTER);
+            speedBtn.setPadding(dpToPx(activity, 11), dpToPx(activity, 8), dpToPx(activity, 11), dpToPx(activity, 8));
+            final GradientDrawable speedBtnBg = new GradientDrawable();
+            speedBtnBg.setColor(Color.parseColor("#1E293B"));
+            speedBtnBg.setCornerRadius(dpToPx(activity, 18));
+            speedBtnBg.setStroke(dpToPx(activity, 1), Color.parseColor("#2DD4BF"));
+            speedBtn.setBackground(speedBtnBg);
+            LinearLayout.LayoutParams spdLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            spdLp.leftMargin = dpToPx(activity, 8);
+            speedBtn.setLayoutParams(spdLp);
+            btnRow.addView(speedBtn);
+
             ctrlCard.addView(btnRow);
             root.addView(ctrlCard);
+
+            final Runnable applyCurrentPlaybackSpeed = () -> {
+                float spd = speedSteps[speedIdxHolder[0]];
+                String lbl = speedLabels[speedIdxHolder[0]];
+                speedBtn.setText(lbl);
+                if (spd != 1.0f) {
+                    speedBtnBg.setColor(Color.parseColor("#0F766E"));
+                    speedBtn.setTextColor(Color.WHITE);
+                } else {
+                    speedBtnBg.setColor(Color.parseColor("#1E293B"));
+                    speedBtn.setTextColor(Color.parseColor("#5EEAD4"));
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && mpHolder[0] != null) {
+                    try {
+                        boolean wasPlaying = videoView.isPlaying();
+                        android.media.PlaybackParams params = mpHolder[0].getPlaybackParams();
+                        params.setSpeed(spd);
+                        mpHolder[0].setPlaybackParams(params);
+                        if (!wasPlaying && videoView.isPlaying()) {
+                            videoView.pause();
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            };
+
+            speedBtn.setOnClickListener(v -> {
+                speedIdxHolder[0] = (speedIdxHolder[0] + 1) % speedSteps.length;
+                applyCurrentPlaybackSpeed.run();
+                showSeekHud.accept("⚡ 재생 속도 " + speedLabels[speedIdxHolder[0]]);
+            });
 
             final Runnable syncPlayPauseUi = () -> {
                 try {
@@ -3460,6 +3514,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                             curTimeTv.setText(formatMmSs(item.seekSec));
                         }
                         videoView.start();
+                        applyCurrentPlaybackSpeed.run();
                         syncPlayPauseUi.run();
                     } catch (Throwable ignored) {
                     }

@@ -1320,6 +1320,10 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
     private var didInvokeDismiss = false
 
     private let playerVC = AVPlayerViewController()
+    private let speedButton = UIButton(type: .system)
+    private let speedSteps: [Float] = [1.0, 1.25, 1.5, 2.0, 0.5]
+    private let speedLabels: [String] = ["1.0x", "1.25x", "1.5x", "2.0x", "0.5x"]
+    private var speedIndex: Int = 0
     private let ocrTitleLabel = UILabel()
     private let copyAllButton = UIButton(type: .system)
     private let linesStack = UIStackView()
@@ -1401,7 +1405,20 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
         closeBtn.setContentCompressionResistancePriority(.required, for: .horizontal)
         closeBtn.addTarget(self, action: #selector(handleCloseTapped), for: .touchUpInside)
 
+        speedButton.setTitle("1.0x", for: .normal)
+        speedButton.setTitleColor(UIColor(red: 94.0 / 255.0, green: 234.0 / 255.0, blue: 212.0 / 255.0, alpha: 1.0), for: .normal)
+        speedButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 12.5)
+        speedButton.backgroundColor = UIColor(red: 30.0 / 255.0, green: 41.0 / 255.0, blue: 59.0 / 255.0, alpha: 1.0)
+        speedButton.layer.cornerRadius = 16
+        speedButton.layer.borderWidth = 1
+        speedButton.layer.borderColor = UIColor(red: 45.0 / 255.0, green: 212.0 / 255.0, blue: 191.0 / 255.0, alpha: 1.0).cgColor
+        speedButton.contentEdgeInsets = UIEdgeInsets(top: 7, left: 11, bottom: 7, right: 11)
+        speedButton.setContentHuggingPriority(.required, for: .horizontal)
+        speedButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        speedButton.addTarget(self, action: #selector(handleSpeedTapped), for: .touchUpInside)
+
         headerStack.addArrangedSubview(titleStack)
+        headerStack.addArrangedSubview(speedButton)
         headerStack.addArrangedSubview(closeBtn)
         view.addSubview(headerStack)
 
@@ -1622,6 +1639,28 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
         }
         UIPasteboard.general.string = txt
         ocrTitleLabel.text = "✅ 구간 이동 및 문장 복사 완료!"
+    }
+
+    @objc private func handleSpeedTapped() {
+        speedIndex = (speedIndex + 1) % speedSteps.count
+        let spd = speedSteps[speedIndex]
+        let lbl = speedLabels[speedIndex]
+        speedButton.setTitle(lbl, for: .normal)
+        if spd != 1.0 {
+            speedButton.backgroundColor = UIColor(red: 15.0 / 255.0, green: 118.0 / 255.0, blue: 110.0 / 255.0, alpha: 1.0)
+            speedButton.setTitleColor(.white, for: .normal)
+        } else {
+            speedButton.backgroundColor = UIColor(red: 30.0 / 255.0, green: 41.0 / 255.0, blue: 59.0 / 255.0, alpha: 1.0)
+            speedButton.setTitleColor(UIColor(red: 94.0 / 255.0, green: 234.0 / 255.0, blue: 212.0 / 255.0, alpha: 1.0), for: .normal)
+        }
+        if let player = playerVC.player {
+            if #available(iOS 16.0, *) {
+                player.defaultRate = spd
+            }
+            if player.timeControlStatus == .playing || player.rate > 0 {
+                player.rate = spd
+            }
+        }
     }
 
     @objc private func handleCopyAllTapped() {

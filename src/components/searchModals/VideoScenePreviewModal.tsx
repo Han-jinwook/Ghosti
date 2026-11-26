@@ -35,6 +35,7 @@ export const VideoScenePreviewModal: React.FC = () => {
   const [isPortraitVideo, setIsPortraitVideo] = useState<boolean>(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
   const [isAutoMuted, setIsAutoMuted] = useState<boolean>(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [seekHudText, setSeekHudText] = useState<string>('');
   const [isOcrExtracting, setIsOcrExtracting] = useState<boolean>(false);
   const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
@@ -552,6 +553,28 @@ export const VideoScenePreviewModal: React.FC = () => {
                   {currentVideoIdx + 1} / {videoNavList.length}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  const steps = [1, 1.25, 1.5, 2, 0.5];
+                  const nextSpd = steps[(steps.indexOf(playbackSpeed) + 1) % steps.length] ?? 1;
+                  setPlaybackSpeed(nextSpd);
+                  if (videoRef.current) {
+                    videoRef.current.playbackRate = nextSpd;
+                  }
+                  setSeekHudText(`⚡ 재생 속도 ${nextSpd}x`);
+                  if (seekHudTimerRef.current) window.clearTimeout(seekHudTimerRef.current);
+                  seekHudTimerRef.current = window.setTimeout(() => setSeekHudText(''), 900);
+                }}
+                title="재생 속도 변경 (1.0x ➔ 1.25x ➔ 1.5x ➔ 2.0x ➔ 0.5x)"
+                className={`px-2 py-0.5 rounded font-semibold tabular-nums cursor-pointer transition-colors ${
+                  playbackSpeed !== 1
+                    ? 'bg-teal-600 text-white'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                {playbackSpeed === 1 ? '1.0x' : `${playbackSpeed}x`}
+              </button>
               {selectedVideoModal.locationKo && (
                 <>
                   <span>·</span>
@@ -602,6 +625,9 @@ export const VideoScenePreviewModal: React.FC = () => {
                   preload="auto"
                   onPlay={(e) => {
                     setIsVideoPlaying(true);
+                    if (e.currentTarget.playbackRate !== playbackSpeed) {
+                      e.currentTarget.playbackRate = playbackSpeed;
+                    }
                     if (pendingSeekSecRef.current !== null && pendingSeekSecRef.current > 0) {
                       applyPendingSeekOnce(e.currentTarget);
                     }
