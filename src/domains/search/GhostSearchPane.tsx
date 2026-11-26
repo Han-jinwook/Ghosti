@@ -7,7 +7,6 @@ import {
   groupBurstSearchResults,
   resolveVideoCardThumbUrl,
 } from '../../services/aiEngine';
-import { executeRealOsAction } from '../../services/setupMonsterEngine';
 import { VoiceHeroStage } from '../../components/VoiceHeroStage';
 import { Stage1MinimalSearchPreview } from '../../components/Stage1MinimalPreview';
 import {
@@ -19,6 +18,7 @@ import {
   renderHighlightedDocText,
   maskSensitiveDocText,
 } from '../../components/PricingModal';
+import { openLocalDocWithMissingGuard } from '../../components/searchModals/docAndVideoFormatUtils';
 import { GhostSearchTrainingPage } from '../../components/ghostDojo/GhostSearchTrainingPage';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
 import { useDashboardNavStore } from '../shared/dashboardNavState';
@@ -92,7 +92,7 @@ export const GhostSearchPane: React.FC<{
       }
       try {
         const ctrl = new AbortController();
-        const tid = window.setTimeout(() => ctrl.abort(), 1200);
+        const tid = window.setTimeout(() => ctrl.abort(), 3500);
         const res = await fetch(getZCoreUrl('/__zcore/watch-sig'), {
           cache: 'no-store',
           signal: ctrl.signal,
@@ -124,7 +124,7 @@ export const GhostSearchPane: React.FC<{
     });
     const intervalId = window.setInterval(() => {
       void probeWatchSig();
-    }, 1200);
+    }, 900);
     const onFocus = () => {
       void probeWatchSig();
     };
@@ -556,11 +556,7 @@ export const GhostSearchPane: React.FC<{
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
-                                              useSaySeeStore.setState({
-                                                lastQuarantineToast: res.summaryKo || `[${doc.fileName}] 파일을 열었습니다.`,
-                                              });
-                                            });
+                                            void openLocalDocWithMissingGuard(doc);
                                           }}
                                           className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-medium transition-colors cursor-pointer"
                                         >

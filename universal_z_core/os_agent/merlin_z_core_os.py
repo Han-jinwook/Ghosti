@@ -2851,7 +2851,7 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 "summaryKo": "윈도우 휴지통 폴더를 열었습니다.",
             }
         p = Path(target_path)
-        if not p.exists():
+        if not p.exists() and not p.is_absolute():
             fname = p.name
             search_dirs = [
                 USERPROFILE / "Desktop",
@@ -2860,24 +2860,21 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 USERPROFILE / "Downloads",
                 USERPROFILE / "Pictures",
                 USERPROFILE / "Videos",
-                USERPROFILE / "OneDrive",
                 Path("C:/Users/Public/Documents"),
             ]
             for cand_dir in search_dirs:
                 try:
-                    if not cand_dir.exists():
-                        continue
-                    if (cand_dir / fname).exists():
+                    if cand_dir.exists() and (cand_dir / fname).is_file():
                         p = cand_dir / fname
-                        break
-                    for sub_match in cand_dir.rglob(fname):
-                        if sub_match.is_file():
-                            p = sub_match
-                            break
-                    if p.exists():
                         break
                 except Exception:
                     pass
+        if not p.exists():
+            return {
+                "ok": False,
+                "missingFile": True,
+                "error": f"파일이 존재하지 않습니다: {target_path}",
+            }
         if p.exists() and p.name.startswith("~$"):
             real_cand = p.with_name(p.name[2:])
             if real_cand.exists():

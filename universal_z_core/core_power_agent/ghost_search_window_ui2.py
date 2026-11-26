@@ -516,10 +516,33 @@ def build_ui2_search_window(
     get_target_ime_korean = ctx.get("get_target_ime_korean")
     report_ui2_ime_korean = ctx.get("report_ui2_ime_korean")
 
+    _ui2_live_exists_cache: dict[str, tuple[float, bool]] = {}
+
+    def _fast_ui2_file_exists(fp_chk: str) -> bool:
+        if not fp_chk:
+            return False
+        now_e = time.monotonic()
+        hit_e = _ui2_live_exists_cache.get(fp_chk)
+        if hit_e is not None and (now_e - hit_e[0]) < 0.9:
+            return hit_e[1]
+        ok_e = os.path.exists(fp_chk)
+        if len(_ui2_live_exists_cache) > 256:
+            _ui2_live_exists_cache.clear()
+        _ui2_live_exists_cache[fp_chk] = (now_e, ok_e)
+        return ok_e
+
     def _open_file_in_os(fpath: str) -> str:
         abs_fp = os.path.abspath(fpath) if fpath else ""
         if not abs_fp or not os.path.exists(abs_fp):
-            toast_queue.put(("⚠️ 원본 파일을 찾을 수 없습니다.", 2000))
+            _ui2_live_exists_cache[fpath] = (time.monotonic(), False)
+            _ui2_live_exists_cache[abs_fp] = (time.monotonic(), False)
+            if callable(refresh_lightweight_local_files_async):
+                refresh_lightweight_local_files_async(
+                    lambda: st_state.update({"bg_ui_dirty": True}),
+                    force=True,
+                )
+            st_state["bg_ui_dirty"] = True
+            toast_queue.put(("⚠️ 이미 삭제되었거나 이동된 파일이라 목록에서 정리했습니다.", 2200))
             return "break"
 
         def _launch_worker(target_p: str) -> None:
@@ -1307,8 +1330,8 @@ def build_ui2_search_window(
 
         pool: list[dict] = []
         seen_fpaths: set[str] = set()
-        # [탐색기·바탕화면 선택 파일 [1]번 최상단 고정]: 창 열기 시 1회 캐싱한 레코드를 즉시 편입(매 렌더링 디스크 stat 0회)
-        if pinned_sel_rec is not None and pinned_sel_file:
+        # [탐색기·바탕화면 선택 파일 [1]번 최상단 고정]: 창 열기 시 1회 캐싱한 레코드를 즉시 편입하되 삭제된 파일은 즉시 제외
+        if pinned_sel_rec is not None and pinned_sel_file and _fast_ui2_file_exists(pinned_sel_file):
             seen_fpaths.add(pinned_sel_file.lower())
             pool.append(pinned_sel_rec)
         local_files_ready = True
@@ -1356,6 +1379,8 @@ def build_ui2_search_window(
             if fp_hist:
                 fp_low = fp_hist.lower()
                 if fp_low in seen_fpaths:
+                    continue
+                if not _fast_ui2_file_exists(fp_hist):
                     continue
                 seen_fpaths.add(fp_low)
                 pool.append(rec)
@@ -2318,8 +2343,8 @@ def build_ui2_search_window(
                 if current_win[0] is not win or not win.winfo_exists():
                     return
                 check_local_files_changed_async(_notify_fs_changed)
-                win.after(2000, _poll_open_window_fs_changes)
+                win.after(850, _poll_open_window_fs_changes)
             except Exception:
                 pass
 
-        win.after(600, _poll_open_window_fs_changes)
+        win.after(450, _poll_open_window_fs_changes)

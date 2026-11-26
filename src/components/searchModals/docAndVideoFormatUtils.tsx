@@ -1,6 +1,8 @@
 import React from 'react';
 import { stripKoSearchParticle } from '../../services/aiEngine';
 import { formatQuickKoreanLabelCore } from '../../services/ai/aiSharedRuntime';
+import { executeRealOsAction } from '../../services/setupMonsterEngine';
+import { useSaySeeStore } from '../../store/useSaySeeStore';
 
 const DOC_SNIPPET_STOP_WORDS = new Set([
   '찾아줘',
@@ -195,4 +197,33 @@ export function formatQuickKoreanLabelForFile(
   options?: { takenAtMs?: number; mtimeMs?: number; existingNames?: string[] }
 ): string {
   return formatQuickKoreanLabelCore(fileName, dateStr, tagsOrTitle, options);
+}
+
+export async function openLocalDocWithMissingGuard(doc: {
+  id?: string;
+  fileName: string;
+  path?: string;
+}): Promise<void> {
+  const target = (doc.path || doc.fileName || '').trim();
+  const res = await executeRealOsAction('open_file_search', target);
+  if (res.ok) {
+    useSaySeeStore.setState({
+      lastQuarantineToast: res.summaryKo || `[${doc.fileName}] 파일을 열었습니다.`,
+    });
+    return;
+  }
+  const normPath = (doc.path || '').trim().toLowerCase();
+  useSaySeeStore.setState((s) => {
+    const isSameDoc = (d: { id?: string; path?: string; fileName?: string }) =>
+      (doc.id && d.id === doc.id) ||
+      (normPath && (d.path || '').trim().toLowerCase() === normPath);
+    const shouldCloseModal = s.selectedDocModal ? isSameDoc(s.selectedDocModal) : false;
+    return {
+      localDocuments: s.localDocuments.filter((d) => !isSameDoc(d)),
+      matchedLocalDocs: s.matchedLocalDocs.filter((d) => !isSameDoc(d)),
+      ...(shouldCloseModal ? { selectedDocModal: null } : {}),
+      lastQuarantineToast: `[${doc.fileName}] 파일이 이미 삭제되었거나 이동되어 목록에서 정리했습니다.`,
+    };
+  });
+  void useSaySeeStore.getState().refreshLiveLocalFilesInSearchWindow();
 }

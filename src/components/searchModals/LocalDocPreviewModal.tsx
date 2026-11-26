@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
-import { executeRealOsAction } from '../../services/setupMonsterEngine';
 import {
   stopSetupMonsterTts,
   getIsTtsSpeaking,
@@ -11,7 +10,11 @@ import {
 } from '../../services/setupMonsterTts';
 import { VoiceActorControlPill } from '../VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../../services/voiceSearchAndAiBatonEngine';
-import { renderHighlightedDocText, resolveDocExtBadge } from './docAndVideoFormatUtils';
+import {
+  openLocalDocWithMissingGuard,
+  renderHighlightedDocText,
+  resolveDocExtBadge,
+} from './docAndVideoFormatUtils';
 
 export const LocalDocPreviewModal: React.FC = () => {
   const {
@@ -191,16 +194,7 @@ export const LocalDocPreviewModal: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                void executeRealOsAction(
-                  'open_file_search',
-                  selectedDocModal.path || selectedDocModal.fileName
-                ).then((res) => {
-                  useSaySeeStore.setState({
-                    lastQuarantineToast:
-                      res.summaryKo ||
-                      `[${selectedDocModal.fileName}] 파일을 열었습니다.`,
-                  });
-                });
+                void openLocalDocWithMissingGuard(selectedDocModal);
               }}
               className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center cursor-pointer"
             >
@@ -208,7 +202,7 @@ export const LocalDocPreviewModal: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => void openLocalFolder('docs')}
+              onClick={() => void openLocalFolder('docs', selectedDocModal.path)}
               className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center gap-1 cursor-pointer"
             >
               <span>문서 폴더</span>

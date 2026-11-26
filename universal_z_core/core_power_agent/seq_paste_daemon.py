@@ -3901,6 +3901,7 @@ def _select_fair_by_drive(items: list[dict], limit: int) -> list[dict]:
 
 
 _LOCAL_FS_PROBE_INFLIGHT = False
+_NON_C_DIR_SCAN_CACHE: dict[str, tuple[float, int, list[dict]]] = {}
 
 
 def _compute_hot_user_folders_fast_sig() -> str:
@@ -3978,9 +3979,24 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
             fd_str = str(fd)
             fd_str_low = fd_str.lower()
             drv_prefix = fd_str[:2].upper() if len(fd_str) >= 2 and fd_str[1] == ":" else ""
-            if drv_prefix and drv_prefix not in ("C:", "S:") and drv_elapsed.get(drv_prefix, 0.0) > 1.6:
-                continue
+            is_non_c_drv = bool(drv_prefix and drv_prefix not in ("C:", "S:"))
+            if is_non_c_drv:
+                hit_nc = _NON_C_DIR_SCAN_CACHE.get(fd_str_low)
+                try:
+                    fd_mt_ns = int(getattr(os.stat(fd), "st_mtime_ns", 0)) if drv_elapsed.get(drv_prefix, 0.0) <= 0.35 else (hit_nc[1] if hit_nc else -1)
+                except Exception:
+                    fd_mt_ns = hit_nc[1] if hit_nc else -1
+                if hit_nc is not None and (now - hit_nc[0]) < 25.0 and hit_nc[1] == fd_mt_ns:
+                    for c_it in hit_nc[2]:
+                        n_fp = os.path.normcase(os.path.abspath(str(c_it.get("file_path") or "")))
+                        if n_fp not in seen_files:
+                            seen_files.add(n_fp)
+                            by_kind[c_it["kind"]].append(dict(c_it))
+                    continue
+                if drv_elapsed.get(drv_prefix, 0.0) > 1.6:
+                    continue
             t_drv0 = time.time()
+            nc_dir_items: list[dict] = []
             is_s_drive_item = fd_str_low.startswith("s:") or "업무공유폴더_s" in fd_str_low
             if is_s_drive_item:
                 fd_badge = (
@@ -4023,7 +4039,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                                 continue
                             seen_files.add(norm_fp)
                             st = entry.stat(follow_symlinks=False)
-                            by_kind[fkind].append({
+                            rec_fd = {
                                 "kind": fkind,
                                 "file_path": entry.path,
                                 "img_path": entry.path if fkind == "image" else "",
@@ -4034,13 +4050,23 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                                 "_ext": ext,
                                 "_badge": fd_badge,
                                 "_name": name[:120],
-                            })
+                            }
+                            by_kind[fkind].append(rec_fd)
+                            if is_non_c_drv:
+                                nc_dir_items.append(dict(rec_fd))
                         except Exception:
                             pass
             except Exception:
                 pass
             if drv_prefix:
                 drv_elapsed[drv_prefix] = drv_elapsed.get(drv_prefix, 0.0) + max(0.0, time.time() - t_drv0)
+            if is_non_c_drv:
+                try:
+                    if len(_NON_C_DIR_SCAN_CACHE) > 800:
+                        _NON_C_DIR_SCAN_CACHE.clear()
+                    _NON_C_DIR_SCAN_CACHE[fd_str_low] = (now, int(getattr(os.stat(fd), "st_mtime_ns", 0)), nc_dir_items)
+                except Exception:
+                    pass
 
         for fk in by_kind:
             by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)

@@ -7,10 +7,10 @@ import {
   resolveVideoCardThumbUrl,
   stripCollisionKeySuffix,
 } from '../../services/aiEngine';
-import { executeRealOsAction } from '../../services/setupMonsterEngine';
 import {
   buildDocPreviewSnippet,
   formatVideoCardOcrSummary,
+  openLocalDocWithMissingGuard,
   renderHighlightedDocText,
   resolveDocExtBadge,
   maskSensitiveDocText,
@@ -961,11 +961,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                                 setSelectedDocModal(doc);
                                 return;
                               }
-                              void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
-                                useSaySeeStore.setState({
-                                  lastQuarantineToast: res.summaryKo || `[${doc.fileName}] 파일을 열었습니다.`,
-                                });
-                              });
+                              void openLocalDocWithMissingGuard(doc);
                             }}
                             className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-medium transition-colors cursor-pointer"
                           >

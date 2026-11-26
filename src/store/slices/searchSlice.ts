@@ -571,8 +571,15 @@ export const createSearchSlice: StateCreator<
     const stBefore = get();
     if (isSharedPhotoLounge(stBefore.activeLoungeType)) return;
 
-    const [freshPhotoDataset, freshVideos, freshDocs] = await Promise.all([      loadInitialPhotoDataset(),
+    const videosPromise = Promise.race([
       fetchIndexedVideos(),
+      new Promise<VideoSceneItem[] | null>((resolve) =>
+        setTimeout(() => resolve(null), 4500)
+      ),
+    ]);
+
+    const [freshPhotoDataset, freshDocs] = await Promise.all([
+      loadInitialPhotoDataset(),
       fetchIndexedDocuments(),
     ]);
     const freshPhotos = freshPhotoDataset.photos;
@@ -621,47 +628,41 @@ export const createSearchSlice: StateCreator<
     );
     const nextPhotos = [...mergedPersonalPhotos, ...sharedKeptPhotos];
 
-    const existingVideoByName = new Map<string, VideoSceneItem>();
-    for (const v of cur.videoSceneItems) {
-      if (v.videoFileName) {
-        existingVideoByName.set(v.videoFileName, v);
-      }
-    }
-    const newlyAddedVideos: VideoSceneItem[] = [];
-    const nextVideos: VideoSceneItem[] = freshVideos.map((fv) => {
-      const prevV = existingVideoByName.get(fv.videoFileName);
-      if (!prevV) {
-        newlyAddedVideos.push(fv);
-        return fv;
-      }
-      const hasFreshOcr = Array.isArray(fv.ocrLines) && fv.ocrLines.length > 0;
-      return {
-        ...fv,
-        id: prevV.id,
-        thumbUrl: fv.thumbUrl || prevV.thumbUrl,
-        hasScreenOcrText: hasFreshOcr ? fv.hasScreenOcrText : (prevV.hasScreenOcrText ?? fv.hasScreenOcrText),
-        ocrLineCount: hasFreshOcr ? fv.ocrLineCount : (prevV.ocrLineCount ?? fv.ocrLineCount),
-        ocrLines: hasFreshOcr ? fv.ocrLines : (prevV.ocrLines?.length ? prevV.ocrLines : fv.ocrLines),
-        ocrFullText: hasFreshOcr ? fv.ocrFullText : (prevV.ocrFullText || fv.ocrFullText),
-        keywords: Array.from(new Set([...(fv.keywords || []), ...(prevV.keywords || [])])),
-      };
-    });
+    const freshDocPaths = new Set(
+      freshDocs
+        .map((d) => (d.path || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const freshPhotoPaths = new Set(
+      mergedPersonalPhotos
+        .map((p) => (p.fullPath || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const openDocPath = (cur.selectedDocModal?.path || '').trim().toLowerCase();
+    const shouldCloseStaleDocModal = Boolean(openDocPath && !freshDocPaths.has(openDocPath));
+    const openPhotoPath = (cur.selectedPhoto?.fullPath || '').trim().toLowerCase();
+    const shouldCloseStalePhotoModal = Boolean(
+      openPhotoPath &&
+        !String(cur.selectedPhoto?.id || '').startsWith('shared_') &&
+        !freshPhotoPaths.has(openPhotoPath)
+    );
 
     set({
       photos: nextPhotos,
-      videoSceneItems: nextVideos,
       localDocuments: freshDocs,
+      ...(shouldCloseStaleDocModal ? { selectedDocModal: null } : {}),
+      ...(shouldCloseStalePhotoModal ? { selectedPhoto: null, selectedPhotoBurstGroup: null } : {}),
     });
 
-    const afterSet = get();
-    if (afterSet.hasExecutedUserSearch && afterSet.activeQuery.trim()) {
-      await get().runTextQuery(afterSet.activeQuery);
+    const afterDocsSet = get();
+    if (afterDocsSet.hasExecutedUserSearch && afterDocsSet.activeQuery.trim()) {
+      await get().runTextQuery(afterDocsSet.activeQuery);
     } else {
       const galleryPhotos = filterVisibleGalleryPhotos(mergedPersonalPhotos).map((photo) => ({
         photo,
         score: 0.95,
         matchPercentage: 97,
-        matchedBy: 'text-direct'as const,
+        matchedBy: 'text-direct' as const,
       }));
       const vaultPhotos = mergedPersonalPhotos
         .filter((p) => !p.quarantined && p.isVaultDocument)
@@ -669,21 +670,66 @@ export const createSearchSlice: StateCreator<
           photo,
           score: 0.96,
           matchPercentage: 98,
-          matchedBy: 'text-direct'as const,
+          matchedBy: 'text-direct' as const,
         }));
-      const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+      const curVideos = afterDocsSet.videoSceneItems;
+      const totalFramesNow = curVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
       set({
         searchResults: galleryPhotos,
-        matchedVideoScenes: nextVideos,
         matchedLocalDocs: freshDocs,
         matchedVaultPhotos: vaultPhotos,
         activeQuery:
-          afterSet.searchSpace === 'video'
-            ? `동영상 ${nextVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
-            : afterSet.searchSpace === 'vault'
+          afterDocsSet.searchSpace === 'video'
+            ? `동영상 ${curVideos.length}개 전 구간(총 ${totalFramesNow}개 타임라인 프레임) 자동 해부`
+            : afterDocsSet.searchSpace === 'vault'
             ? `최근 서류 ${freshDocs.length + vaultPhotos.length}건 통합 (로컬 문서 ${freshDocs.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
             : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
       });
+    }
+
+    const freshVideos = await videosPromise;
+    const newlyAddedVideos: VideoSceneItem[] = [];
+    if (Array.isArray(freshVideos)) {
+      const curVState = get();
+      const existingVideoByName = new Map<string, VideoSceneItem>();
+      for (const v of curVState.videoSceneItems) {
+        if (v.videoFileName) {
+          existingVideoByName.set(v.videoFileName, v);
+        }
+      }
+      const nextVideos: VideoSceneItem[] = freshVideos.map((fv) => {
+        const prevV = existingVideoByName.get(fv.videoFileName);
+        if (!prevV) {
+          newlyAddedVideos.push(fv);
+          return fv;
+        }
+        const hasFreshOcr = Array.isArray(fv.ocrLines) && fv.ocrLines.length > 0;
+        return {
+          ...fv,
+          id: prevV.id,
+          thumbUrl: fv.thumbUrl || prevV.thumbUrl,
+          hasScreenOcrText: hasFreshOcr ? fv.hasScreenOcrText : (prevV.hasScreenOcrText ?? fv.hasScreenOcrText),
+          ocrLineCount: hasFreshOcr ? fv.ocrLineCount : (prevV.ocrLineCount ?? fv.ocrLineCount),
+          ocrLines: hasFreshOcr ? fv.ocrLines : (prevV.ocrLines?.length ? prevV.ocrLines : fv.ocrLines),
+          ocrFullText: hasFreshOcr ? fv.ocrFullText : (prevV.ocrFullText || fv.ocrFullText),
+          keywords: Array.from(new Set([...(fv.keywords || []), ...(prevV.keywords || [])])),
+        };
+      });
+      set({ videoSceneItems: nextVideos });
+      const afterVidSet = get();
+      if (afterVidSet.hasExecutedUserSearch && afterVidSet.activeQuery.trim()) {
+        await get().runTextQuery(afterVidSet.activeQuery);
+      } else {
+        const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+        set({
+          matchedVideoScenes: nextVideos,
+          ...(afterVidSet.searchSpace === 'video'
+            ? {
+                activeQuery: `동영상 ${nextVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
+              }
+            : {}),
+        });
+      }
     }
 
     if (newlyAddedPhotos.length > 0 || newlyAddedVideos.length > 0) {

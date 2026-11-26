@@ -717,8 +717,14 @@ export const PhotoDetailModal: React.FC = () => {
             <button
               onClick={() => {
                 if (selectedPhoto.fullPath) {
-                  void openLocalFolder('photos', selectedPhoto.fullPath);
-                  setActionNotice(`원본 위치를 열었습니다: ${selectedPhoto.fullPath}`);
+                  void openLocalFolder('photos', selectedPhoto.fullPath).then(() => {
+                    const stAfter = useSaySeeStore.getState();
+                    if (stAfter.selectedPhoto?.id === selectedPhoto.id) {
+                      setActionNotice(
+                        stAfter.lastQuarantineToast || `원본 위치를 열었습니다: ${selectedPhoto.fullPath}`
+                      );
+                    }
+                  });
                   return;
                 }
                 const isSampleOrSharedUrl =

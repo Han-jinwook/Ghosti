@@ -2906,6 +2906,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     targetPath?: string
   ) => {
     try {
+      const explicitTargetProvided = Boolean((targetPath || '').trim());
       let cleanTargetPath = (targetPath || '').trim();
       if (!cleanTargetPath && target === 'phone_backup') {
         cleanTargetPath = (get().lastPhoneBackupFolderPath || '').trim();
@@ -2968,11 +2969,40 @@ export const createAssistantOnboardingSlice: StateCreator<
         const osRes = await executeRealOsAction('open_file_location', cleanTargetPath);
         if (osRes?.ok) {
           openedOk = true;
+        } else if (explicitTargetProvided) {
+          const fileLabel = cleanTargetPath.split(/[\\/]/).pop() || cleanTargetPath;
+          const normMissing = cleanTargetPath.toLowerCase();
+          set((s) => {
+            const closeDoc =
+              (s.selectedDocModal?.path || '').trim().toLowerCase() === normMissing;
+            const closePhoto =
+              (s.selectedPhoto?.fullPath || '').trim().toLowerCase() === normMissing;
+            return {
+              localDocuments: s.localDocuments.filter(
+                (d) => (d.path || '').trim().toLowerCase() !== normMissing
+              ),
+              matchedLocalDocs: s.matchedLocalDocs.filter(
+                (d) => (d.path || '').trim().toLowerCase() !== normMissing
+              ),
+              photos: s.photos.filter(
+                (p) => (p.fullPath || '').trim().toLowerCase() !== normMissing
+              ),
+              searchResults: s.searchResults.filter(
+                (sr) => (sr.photo.fullPath || '').trim().toLowerCase() !== normMissing
+              ),
+              ...(closeDoc ? { selectedDocModal: null } : {}),
+              ...(closePhoto ? { selectedPhoto: null, selectedPhotoBurstGroup: null } : {}),
+              lastQuarantineToast: `[${fileLabel}] 파일이 이미 삭제되었거나 이동되어 목록에서 정리했습니다.`,
+            };
+          });
+          void get().refreshLiveLocalFilesInSearchWindow();
+          return;
         } else {
+          cleanTargetPath = '';
           const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target, targetPath: cleanTargetPath }),
+            body: JSON.stringify({ target }),
           });
           const j = r.ok ? await r.json().catch(() => null) : null;
           openedOk = Boolean(j?.ok);
