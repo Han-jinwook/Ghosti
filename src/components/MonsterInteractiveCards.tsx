@@ -7,6 +7,8 @@ import {
   FileSearch,
   Activity,
   Volume2,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import {
   type MonsterChatMessage,
@@ -1759,11 +1761,48 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 11-B5) 시작프로그램 관리 카드 */}
+      {/* 11-B5) 시작프로그램 관리 카드 (Windows 11 설정 · CleanMyMac 표준 미니멀 리스트 + 아이콘 토글 UX) */}
       {message.cardKind === 'STARTUP_MANAGER_CARD' && message.startupManagerPayload && (() => {
         const items = message.startupManagerPayload.items;
         const enabledCnt = items.filter((x) => x.enabled).length;
         const disabledCnt = items.filter((x) => !x.enabled).length;
+
+        const formatStartupDisplay = (rawName: string, rawCmd: string) => {
+          let title = (rawName || '').trim();
+          if (/^GoogleChromeAutoLaunch_[0-9A-Fa-f]+$/i.test(title)) {
+            title = 'Google Chrome (자동 실행)';
+          } else if (/^MicrosoftEdgeAutoLaunch_[0-9A-Fa-f]+$/i.test(title)) {
+            title = 'Microsoft Edge (자동 실행)';
+          } else if (/^BraveSoftwareAutoLaunch_[0-9A-Fa-f]+$/i.test(title)) {
+            title = 'Brave 브라우저 (자동 실행)';
+          } else {
+            title = title.replace(/_[0-9A-Fa-f]{12,}$/, '');
+          }
+
+          // 따옴표 및 실행 인자(--no-startup-window 등)를 분리해 깔끔한 실행파일명과 순수 경로만 추출
+          const quotedMatch = (rawCmd || '').match(/^"([^"]+)"/);
+          const barePathMatch = (rawCmd || '').match(/^([^\s"]+\.(?:exe|bat|cmd|vbs|lnk))/i);
+          const cleanPath = (quotedMatch?.[1] || barePathMatch?.[1] || rawCmd || '').trim();
+          const exeName = cleanPath.split(/[\\/]/).pop() || '';
+          const probe = `${title} ${exeName}`.toLowerCase();
+
+          let summary = exeName;
+          if (/chrome/.test(probe)) summary = '크롬 백그라운드 빠른 실행';
+          else if (/msedge|edge/.test(probe)) summary = '엣지 백그라운드 빠른 실행';
+          else if (/kakaotalk/.test(probe)) summary = '카카오톡 자동 시작';
+          else if (/googledrive/.test(probe)) summary = '구글 드라이브 동기화';
+          else if (/onedrive/.test(probe)) summary = '원드라이브 클라우드 동기화';
+          else if (/adobe|acrobat|collabsync/.test(probe)) summary = '어도비 PDF 동기화';
+          else if (/figma/.test(probe)) summary = '피그마 로컬 폰트 연결';
+          else if (/steam/.test(probe)) summary = '스팀 런처 자동 시작';
+          else if (/discord/.test(probe)) summary = '디스코드 자동 시작';
+          else if (/merlin|z_core|ghosti/.test(probe)) summary = '귀신같이 필수 엔진';
+          else if (/sensetalk/.test(probe)) summary = '센스톡 로컬 엔진';
+          else if (/tailscale/.test(probe)) summary = '네트워크 보안 연결';
+
+          return { title: title || exeName || '시작프로그램', summary, cleanPath };
+        };
+
         return (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-xs">
           <div className="flex items-center justify-between gap-2">
@@ -1787,11 +1826,14 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             </div>
           )}
 
-          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
             {items.map((stItem) => {
               const isBusyRow = busyId === `st_${stItem.id}`;
               const isCmdExpanded = expandedStartupIds.has(stItem.id);
-              const hasLongCommand = Boolean(stItem.command && stItem.command.length > 28);
+              const { title: dispTitle, summary: dispSummary, cleanPath } = formatStartupDisplay(
+                stItem.name,
+                stItem.command
+              );
               const toggleCmdExpand = () => {
                 setExpandedStartupIds((prev) => {
                   const next = new Set(prev);
@@ -1801,123 +1843,143 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 });
               };
               const shortLoc = !stItem.enabled
-                ? '꺼둠 · 다시 켜기 가능'
+                ? '꺼둠'
                 : stItem.requiresAdmin
-                ? '공용(관리자 권한)'
+                ? '공용'
                 : '내 계정';
               return (
               <div
                 key={stItem.id}
-                className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-start justify-between gap-2"
+                className="rounded-lg bg-white border border-slate-200 px-3 py-2 space-y-1.5"
               >
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="font-semibold text-slate-900 break-words [overflow-wrap:anywhere] leading-snug">
-                    {stItem.name}
-                  </div>
-                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
-                        !stItem.enabled
-                          ? 'bg-slate-100 text-slate-500'
-                          : stItem.requiresAdmin
-                          ? 'bg-amber-50 text-amber-700'
-                          : 'bg-sky-50 text-sky-700'
-                      }`}
-                    >
-                      {shortLoc}
-                    </span>
-                    {!isCmdExpanded && stItem.command && (
-                      <span
-                        onClick={hasLongCommand ? toggleCmdExpand : undefined}
-                        className={`text-[10.5px] text-slate-400 font-mono truncate max-w-[175px] sm:max-w-[210px] ${
-                          hasLongCommand ? 'cursor-pointer hover:text-slate-600' : ''
-                        }`}
-                        title={stItem.command}
-                      >
-                        {stItem.command}
-                      </span>
-                    )}
-                    {hasLongCommand && (
-                      <button
-                        type="button"
-                        onClick={toggleCmdExpand}
-                        className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-medium text-slate-600 shrink-0 cursor-pointer transition-colors"
-                      >
-                        {isCmdExpanded ? '▼ 접기' : '▶ 끝까지 보기'}
-                      </button>
-                    )}
-                  </div>
-                  {isCmdExpanded && stItem.command && (
-                    <div className="text-[10.5px] text-slate-600 font-mono whitespace-normal break-all leading-relaxed bg-slate-50 border border-slate-200 rounded px-2 py-1">
-                      {stItem.command}
-                    </div>
-                  )}
-                </div>
-                {stItem.isProtected ? (
-                  <span className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">
-                    필수 보호
-                  </span>
-                ) : (
+                <div className="flex items-center justify-between gap-2.5">
                   <button
                     type="button"
-                    disabled={isBusyRow}
-                    title={stItem.requiresAdmin ? '공용(PC 전체) 항목은 윈도우 관리자 허용 창이 뜰 수 있어요.' : undefined}
-                    onClick={async () => {
-                      setBusyId(`st_${stItem.id}`);
-                      const targetEnable = !stItem.enabled;
-                      const res = await toggleStartupProgramItem(stItem.id, targetEnable);
-                      const fresh = await fetchStartupManagerPayload();
-                      setBusyId(null);
-
-                      // 기존 행 순서를 그대로 유지하면서 상태만 제자리 갱신(클릭 직후 항목이 아래로 사라져 안 바뀐 것처럼 보이는 현상 방지)
-                      const prevItems = message.startupManagerPayload!.items;
-                      let nextItems = prevItems;
-                      if (fresh.payload?.items && fresh.payload.items.length > 0) {
-                        const freshById = new Map(fresh.payload.items.map((x) => [x.id.toLowerCase(), x]));
-                        const preserved = prevItems
-                          .map((old) => freshById.get(old.id.toLowerCase()))
-                          .filter((x): x is NonNullable<typeof x> => Boolean(x));
-                        const preservedIds = new Set(preserved.map((x) => x.id.toLowerCase()));
-                        const added = fresh.payload.items.filter((x) => !preservedIds.has(x.id.toLowerCase()));
-                        nextItems = [...preserved, ...added];
-                      } else if (res.ok) {
-                        nextItems = prevItems.map((it) =>
-                          it.id === stItem.id
-                            ? {
-                                ...it,
-                                enabled: targetEnable,
-                                locationLabel: targetEnable ? it.locationLabel : '꺼둠 · 다시 켜기 가능',
-                              }
-                            : it
-                        );
-                      }
-
-                      const nextEn = nextItems.filter((x) => x.enabled).length;
-                      const nextDis = nextItems.filter((x) => !x.enabled).length;
-                      const updatedText = message.text.replace(
-                        /\(켜짐\s*\d+개\s*·\s*꺼둠\s*\d+개\)/,
-                        `(켜짐 ${nextEn}개 · 꺼둠 ${nextDis}개)`
-                      );
-
-                      onUpdateMessage({
-                        ...message,
-                        text: updatedText,
-                        startupManagerPayload: {
-                          items: nextItems,
-                          lastToggleNoteKo: res.message,
-                          lastToggleOk: res.ok,
-                        },
-                      });
-                      onToast?.(res.message);
-                    }}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shrink-0 cursor-pointer border transition-colors disabled:opacity-60 ${
-                      stItem.enabled
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700'
-                        : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-800'
-                    }`}
+                    onClick={cleanPath ? toggleCmdExpand : undefined}
+                    title={cleanPath ? `${dispTitle}\n파일 위치: ${cleanPath}` : dispTitle}
+                    className="min-w-0 flex-1 text-left group cursor-pointer"
                   >
-                    {isBusyRow ? '변경 중...' : stItem.enabled ? '켜짐 (끄기)' : '꺼짐 (켜기)'}
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="font-semibold text-[12.5px] text-slate-900 break-words leading-snug group-hover:text-teal-800 transition-colors">
+                        {dispTitle}
+                      </span>
+                      {cleanPath && (
+                        <span className="text-slate-400 group-hover:text-slate-600 shrink-0">
+                          {isCmdExpanded ? (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5 min-w-0">
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded font-medium shrink-0 ${
+                          !stItem.enabled
+                            ? 'bg-slate-100 text-slate-500'
+                            : stItem.requiresAdmin
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-sky-50 text-sky-700'
+                        }`}
+                      >
+                        {shortLoc}
+                      </span>
+                      {dispSummary && (
+                        <span className="text-[11px] text-slate-500 truncate">
+                          {dispSummary}
+                        </span>
+                      )}
+                    </div>
                   </button>
+
+                  {stItem.isProtected ? (
+                    <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">
+                      필수 보호
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={stItem.enabled}
+                      disabled={isBusyRow}
+                      title={
+                        stItem.requiresAdmin
+                          ? '공용 항목입니다. 변경 시 윈도우 관리자 허용 창이 뜰 수 있습니다.'
+                          : stItem.enabled
+                          ? '클릭하여 부팅 시 자동 실행 끄기'
+                          : '클릭하여 부팅 시 자동 실행 켜기'
+                      }
+                      onClick={async () => {
+                        setBusyId(`st_${stItem.id}`);
+                        const targetEnable = !stItem.enabled;
+                        const res = await toggleStartupProgramItem(stItem.id, targetEnable);
+                        const fresh = await fetchStartupManagerPayload();
+                        setBusyId(null);
+
+                        const prevItems = message.startupManagerPayload!.items;
+                        let nextItems = prevItems;
+                        if (fresh.payload?.items && fresh.payload.items.length > 0) {
+                          const freshById = new Map(fresh.payload.items.map((x) => [x.id.toLowerCase(), x]));
+                          const preserved = prevItems
+                            .map((old) => freshById.get(old.id.toLowerCase()))
+                            .filter((x): x is NonNullable<typeof x> => Boolean(x));
+                          const preservedIds = new Set(preserved.map((x) => x.id.toLowerCase()));
+                          const added = fresh.payload.items.filter((x) => !preservedIds.has(x.id.toLowerCase()));
+                          nextItems = [...preserved, ...added];
+                        } else if (res.ok) {
+                          nextItems = prevItems.map((it) =>
+                            it.id === stItem.id
+                              ? {
+                                  ...it,
+                                  enabled: targetEnable,
+                                  locationLabel: targetEnable ? it.locationLabel : '꺼둠 · 다시 켜기 가능',
+                                }
+                              : it
+                          );
+                        }
+
+                        const nextEn = nextItems.filter((x) => x.enabled).length;
+                        const nextDis = nextItems.filter((x) => !x.enabled).length;
+                        const updatedText = message.text.replace(
+                          /\(켜짐\s*\d+개\s*·\s*꺼둠\s*\d+개\)/,
+                          `(켜짐 ${nextEn}개 · 꺼둠 ${nextDis}개)`
+                        );
+
+                        onUpdateMessage({
+                          ...message,
+                          text: updatedText,
+                          startupManagerPayload: {
+                            items: nextItems,
+                            lastToggleNoteKo: res.message,
+                            lastToggleOk: res.ok,
+                          },
+                        });
+                        onToast?.(res.message);
+                      }}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 cursor-pointer border transition-colors disabled:opacity-60 ${
+                        stItem.enabled
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                          : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 transition-colors ${
+                          stItem.enabled ? 'bg-emerald-500' : 'bg-slate-400'
+                        }`}
+                      />
+                      <span>{isBusyRow ? '변경 중' : stItem.enabled ? '켜짐' : '꺼짐'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {isCmdExpanded && cleanPath && (
+                  <div className="pt-1.5 border-t border-slate-100 text-[10.5px] text-slate-500 space-y-0.5 leading-relaxed">
+                    {dispTitle !== stItem.name && (
+                      <div className="break-all">등록 이름: {stItem.name}</div>
+                    )}
+                    <div className="font-mono break-all text-slate-600">파일 위치: {cleanPath}</div>
+                  </div>
                 )}
               </div>
               );
