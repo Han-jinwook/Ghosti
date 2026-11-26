@@ -2247,9 +2247,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         };
         const hasFourGrid = Boolean(card.fourBucketSummaries && card.fourBucketSummaries.length === 4);
         const currentBucket: CareNormalizedBucketId | null = hasFourGrid
-          ? activeCareBucket === null
-            ? card.defaultActiveBucket || 'STORAGE'
-            : (activeCareBucket as string) === 'NONE'
+          ? activeCareBucket === null || (activeCareBucket as string) === 'NONE'
             ? null
             : activeCareBucket
           : null;
