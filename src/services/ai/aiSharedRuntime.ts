@@ -1052,11 +1052,38 @@ interface StoredMediaVecRecord {
   updatedAt: number;
 }
 
+let mediaVecDbInstance: IDBDatabase | null = null;
 let mediaVecDbPromise: Promise<IDBDatabase | null> | null = null;
 let mediaCacheHydratePromise: Promise<void> | null = null;
+let isMediaRuntimeUnloading = false;
+
+if (typeof window !== 'undefined') {
+  const onMediaRuntimeUnload = () => {
+    isMediaRuntimeUnloading = true;
+    if (embWorkerInstance) {
+      try {
+        embWorkerInstance.terminate();
+      } catch {
+        /* ignore */
+      }
+      embWorkerInstance = null;
+    }
+    if (mediaVecDbInstance) {
+      try {
+        mediaVecDbInstance.close();
+      } catch {
+        /* ignore */
+      }
+      mediaVecDbInstance = null;
+      mediaVecDbPromise = null;
+    }
+  };
+  window.addEventListener('pagehide', onMediaRuntimeUnload);
+  window.addEventListener('beforeunload', onMediaRuntimeUnload);
+}
 
 function openRealMediaVecDb(): Promise<IDBDatabase | null> {
-  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (typeof indexedDB === 'undefined' || isMediaRuntimeUnloading) return Promise.resolve(null);
   if (mediaVecDbPromise) return mediaVecDbPromise;
   mediaVecDbPromise = new Promise((resolve) => {
     try {
@@ -1067,7 +1094,19 @@ function openRealMediaVecDb(): Promise<IDBDatabase | null> {
           db.createObjectStore(REAL_MEDIA_VEC_STORE, { keyPath: 'key' });
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        if (isMediaRuntimeUnloading) {
+          try {
+            req.result.close();
+          } catch {
+            /* ignore */
+          }
+          resolve(null);
+          return;
+        }
+        mediaVecDbInstance = req.result;
+        resolve(req.result);
+      };
       req.onerror = () => resolve(null);
     } catch {
       resolve(null);
@@ -1077,43 +1116,74 @@ function openRealMediaVecDb(): Promise<IDBDatabase | null> {
 }
 
 export function hydrateRealMediaVectorCacheOnce(): Promise<void> {
+  if (isMediaRuntimeUnloading) return Promise.resolve();
   if (mediaCacheHydratePromise) return mediaCacheHydratePromise;
   mediaCacheHydratePromise = (async () => {
     const db = await openRealMediaVecDb();
-    if (!db) return;
-    await new Promise<void>((resolve) => {
-      try {
-        const tx = db.transaction(REAL_MEDIA_VEC_STORE, 'readonly');
-        const store = tx.objectStore(REAL_MEDIA_VEC_STORE);
-        const req = store.getAll();
-        req.onsuccess = () => {
-          const rows = (req.result as StoredMediaVecRecord[]) || [];
-          for (const row of rows) {
-            if (!row || !row.key) continue;
-            let vec: Float32Array | null = null;
-            if (row.vecBuffer && row.vecBuffer.byteLength === DEFAULT_DIM * 4) {
-              vec = new Float32Array(row.vecBuffer);
-            }
-            if (row.key.startsWith('photo:') && vec) {
-              hydratedPhotoVecMap.set(row.key, vec);
-              if (row.semanticMeta) {
-                hydratedPhotoMetaMap.set(row.key, row.semanticMeta);
-              }
-            } else if (row.key.startsWith('vframe:')) {
-              if (vec) localVideoFrameVecMap.set(row.key, vec);
-              if (row.thumbDataUrl) localVideoFrameThumbMap.set(row.key, row.thumbDataUrl);
-            } else if (row.key.startsWith('vrep:')) {
-              if (vec) localVideoFrameVecMap.set(row.key, vec);
-              if (row.thumbDataUrl) localVideoRepThumbMap.set(row.key.slice(5), row.thumbDataUrl);
-            }
-          }
-          resolve();
-        };
-        req.onerror = () => resolve();
-      } catch {
-        resolve();
+    if (!db || isMediaRuntimeUnloading) return;
+
+    const applyHydratedRow = (row: StoredMediaVecRecord) => {
+      if (!row || !row.key) return;
+      let vec: Float32Array | null = null;
+      if (row.vecBuffer && row.vecBuffer.byteLength === DEFAULT_DIM * 4) {
+        vec = new Float32Array(row.vecBuffer);
       }
-    });
+      if (row.key.startsWith('photo:') && vec) {
+        hydratedPhotoVecMap.set(row.key, vec);
+        if (row.semanticMeta) {
+          hydratedPhotoMetaMap.set(row.key, row.semanticMeta);
+        }
+      } else if (row.key.startsWith('vframe:')) {
+        if (vec) localVideoFrameVecMap.set(row.key, vec);
+        if (row.thumbDataUrl) localVideoFrameThumbMap.set(row.key, row.thumbDataUrl);
+      } else if (row.key.startsWith('vrep:')) {
+        if (vec) localVideoFrameVecMap.set(row.key, vec);
+        if (row.thumbDataUrl) localVideoRepThumbMap.set(row.key.slice(5), row.thumbDataUrl);
+      }
+    };
+
+    // 단건 getAll()로 수십 MB를 한 프레임에 역직렬화하면 연속 F5 시 렌더러 IPC가 멈추므로,
+    // 80건 단위 키 범위 커서 슬라이싱 + 메인스레드 양보(yield)로 프레임당 부하를 3ms 이내로 제한합니다.
+    let lastKey: string | null = null;
+    const SLICE_LIMIT = 80;
+    while (!isMediaRuntimeUnloading) {
+      const batchDone = await new Promise<{ finished: boolean; nextKey: string | null }>((resolve) => {
+        try {
+          const tx = db.transaction(REAL_MEDIA_VEC_STORE, 'readonly');
+          const store = tx.objectStore(REAL_MEDIA_VEC_STORE);
+          const range = lastKey !== null ? IDBKeyRange.lowerBound(lastKey, true) : undefined;
+          const req = store.openCursor(range);
+          let count = 0;
+          let latestKey: string | null = null;
+          req.onsuccess = () => {
+            if (isMediaRuntimeUnloading) {
+              resolve({ finished: true, nextKey: null });
+              return;
+            }
+            const cursor = req.result;
+            if (!cursor) {
+              resolve({ finished: true, nextKey: null });
+              return;
+            }
+            const row = cursor.value as StoredMediaVecRecord;
+            applyHydratedRow(row);
+            latestKey = String(cursor.key);
+            count += 1;
+            if (count >= SLICE_LIMIT) {
+              resolve({ finished: false, nextKey: latestKey });
+              return;
+            }
+            cursor.continue();
+          };
+          req.onerror = () => resolve({ finished: true, nextKey: null });
+        } catch {
+          resolve({ finished: true, nextKey: null });
+        }
+      });
+      if (batchDone.finished || !batchDone.nextKey) break;
+      lastKey = batchDone.nextKey;
+      await new Promise<void>((r) => setTimeout(r, 0));
+    }
   })();
   return mediaCacheHydratePromise;
 }

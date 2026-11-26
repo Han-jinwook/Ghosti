@@ -109,31 +109,69 @@ function buildPhotosFingerprint(photos: PhotoItem[]): string {
   return `v12:${real.length}:${head}:${tail}`;
 }
 
+let cachedFaceClustersMem: {
+  latestCorpusYear: number;
+  clusters: FaceMemberCluster[];
+  fingerprint: string;
+} | null = null;
+let activeFacePassportWorker: Worker | null = null;
+let isFacePassportPageUnloading = false;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (ev) => {
+    if (!ev.key || ev.key === ONDEVICE_FACE_CACHE_KEY) {
+      cachedFaceClustersMem = null;
+    }
+  });
+  const onFacePassportUnload = () => {
+    isFacePassportPageUnloading = true;
+    if (activeFacePassportWorker) {
+      try {
+        activeFacePassportWorker.terminate();
+      } catch {
+        /* ignore */
+      }
+      activeFacePassportWorker = null;
+    }
+  };
+  window.addEventListener('pagehide', onFacePassportUnload);
+  window.addEventListener('beforeunload', onFacePassportUnload);
+}
+
 export function loadCachedOnDeviceFaceClusters(): {
   latestCorpusYear: number;
   clusters: FaceMemberCluster[];
   fingerprint: string;
 } {
+  if (cachedFaceClustersMem) {
+    return cachedFaceClustersMem;
+  }
   try {
     const raw = localStorage.getItem(ONDEVICE_FACE_CACHE_KEY);
-    if (!raw) return { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+    if (!raw) {
+      cachedFaceClustersMem = { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+      return cachedFaceClustersMem;
+    }
     const parsed = JSON.parse(raw) as CachedFaceStore;
     if (!parsed || !Array.isArray(parsed.clusters)) {
-      return { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+      cachedFaceClustersMem = { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+      return cachedFaceClustersMem;
     }
     // 중복 clusterId 오염 캐시 방어 검증
     const seenIds = new Set<string>();
     for (const c of parsed.clusters) {
       if (!c?.clusterId || seenIds.has(c.clusterId)) {
-        return { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+        cachedFaceClustersMem = { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+        return cachedFaceClustersMem;
       }
       seenIds.add(c.clusterId);
     }
-    return {
+    cachedFaceClustersMem = {
       latestCorpusYear: Number(parsed.latestCorpusYear) || new Date().getFullYear(),
       clusters: parsed.clusters,
       fingerprint: String(parsed.fingerprint || ''),
     };
+    return cachedFaceClustersMem;
   } catch {
     return { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
   }
@@ -146,11 +184,17 @@ export function saveCachedOnDeviceFaceClusters(
 ): void {
   try {
     const prev = loadCachedOnDeviceFaceClusters();
+    const nextFp = fingerprint ?? prev.fingerprint;
     const payload: CachedFaceStore = {
-      fingerprint: fingerprint ?? prev.fingerprint,
+      fingerprint: nextFp,
       updatedAt: Date.now(),
       latestCorpusYear,
       clusters,
+    };
+    cachedFaceClustersMem = {
+      latestCorpusYear,
+      clusters,
+      fingerprint: nextFp,
     };
     localStorage.setItem(ONDEVICE_FACE_CACHE_KEY, JSON.stringify(payload));
   } catch {
@@ -1055,12 +1099,17 @@ export async function runOnDeviceFacePassportScan(
     return { clusters: existingClusters, latestCorpusYear: new Date().getFullYear() };
   }
 
+  if (isFacePassportPageUnloading) {
+    return { clusters: existingClusters, latestCorpusYear: new Date().getFullYear() };
+  }
+
   let latestYearOut = new Date().getFullYear();
 
   activeScanPromise = (async () => {
     const worker = new Worker(new URL('./facePassportWorker.ts', import.meta.url), {
       type: 'module',
     });
+    activeFacePassportWorker = worker;
     let reqSeq = 1;
     const pending = new Map<
       number,
@@ -1134,6 +1183,7 @@ export async function runOnDeviceFacePassportScan(
       if (!inputCtx || !rotCtx || !cropCtx || !featCtx) return existingClusters;
 
       for (let i = 0; i < candidates.length; i++) {
+        if (isFacePassportPageUnloading) break;
         // 백그라운드 탭에서도 스캔이 중단되지 않고 저부하로 끝까지 완주되도록 짧은 슬립만 부여
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
           await new Promise<void>((r) => window.setTimeout(r, 40));

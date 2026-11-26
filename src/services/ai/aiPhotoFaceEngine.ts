@@ -469,9 +469,10 @@ export async function loadInitialPhotoDataset(): Promise<{
           if (tid !== null) window.clearTimeout(tid);
         });
       };
-      // [F5 새로고침 0.2초 즉시 렌더]: 메인 웹과 독립 검색창 모두 IndexedDB 768D 벡터 역직렬화를 기다리지 않고
-      // 파일 목록부터 즉시 표시한 뒤 벡터 캐시는 백그라운드(Stage 3)에서 무중단 복원합니다.
-      void hydrateRealMediaVectorCacheOnce();
+      // [F5 연속 새로고침 '응답 없는 페이지' 원천 차단]:
+      // 부팅 0ms 시점에 수십 MB 규모의 IndexedDB 768D 벡터·썸네일 전체 역직렬화(getAll)를 발사하면
+      // 렌더러 메인스레드 IPC 역직렬화가 중첩되어 브라우저 행(Page Unresponsive)을 유발하므로,
+      // 실제 검색 실행 시점 또는 Stage 3 유휴 백그라운드에서만 청크 커서 방식으로 복원합니다.
       const res = await fetchWithTimeout().catch(() => fetchWithTimeout());
       const json = await res.json();
       fileList = json.files ?? [];

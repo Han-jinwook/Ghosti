@@ -23,6 +23,7 @@ import {
   setLocalPcOwnershipBlockedState,
 } from '../services/pcSingleAccountGuard';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { hasCompletedOrRunningConnectedInitApp } from '../store/slices/assistantOnboardingSlice';
 import { storeSharedRefs } from '../store/slices/storeSharedRefs';
 import { zCoreBridge } from '../services/zCoreBridge';
 import {
@@ -513,7 +514,10 @@ const GhostiHubGlobalModals: React.FC = () => {
             return;
           }
           setPcAccountConflict(null);
-          void useSaySeeStore.getState().initApp(true);
+          // App 마운트에서 이미 Z-코어 연결 상태로 initApp을 진행 중이거나 완료했다면 중복 재실행(1,200장+ 재파싱·재클러스터링)을 생략
+          if (didSwitchAccountDirectly || !hasCompletedOrRunningConnectedInitApp()) {
+            void useSaySeeStore.getState().initApp(true);
+          }
 
           const joined = await fetchMyJoinedWorkRooms();
           if (!joined.ok || joined.rooms.length === 0) return;
@@ -545,7 +549,7 @@ const GhostiHubGlobalModals: React.FC = () => {
         });
       } else {
         void zCoreBridge.checkHealth(false).then((alive) => {
-          if (alive) {
+          if (alive && (didSwitchAccountDirectly || !hasCompletedOrRunningConnectedInitApp())) {
             void useSaySeeStore.getState().initApp(true);
           }
         });
@@ -605,7 +609,21 @@ const GhostiHubGlobalModals: React.FC = () => {
       }
     }
     wasLoggedInRef.current = isLoggedIn;
-  }, [isLoggedIn, user?.id, user?.email, user?.nickname, balance]);
+  }, [isLoggedIn, user?.id, user?.email, user?.nickname]);
+
+  useEffect(() => {
+    if (!isLoggedIn || typeof balance !== 'number') return;
+    useSaySeeStore.setState((state) =>
+      state.merlinAuth.coinBalance === balance
+        ? state
+        : {
+            merlinAuth: {
+              ...state.merlinAuth,
+              coinBalance: balance,
+            },
+          }
+    );
+  }, [isLoggedIn, balance]);
 
   useEffect(() => {
     if (hideCoin || !isLoggedIn || typeof window === 'undefined') return;

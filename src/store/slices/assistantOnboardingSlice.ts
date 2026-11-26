@@ -82,9 +82,24 @@ import type {
 
 let activeInitAppPromise: Promise<void> | null = null;
 let activeInitAppStartedConnected = false;
+let lastCompletedConnectedInitDone = false;
 let pendingQueuedForceInit = false;
 let pcBackgroundStageEpoch = 0;
 let userManuallySelectedTrashTab = false;
+
+export function hasCompletedOrRunningConnectedInitApp(): boolean {
+  if (activeInitAppPromise && activeInitAppStartedConnected) return true;
+  return lastCompletedConnectedInitDone && zCoreBridge.isConnected;
+}
+
+if (typeof window !== 'undefined') {
+  const cancelBgStagesOnUnload = () => {
+    pcBackgroundStageEpoch += 1;
+    pendingQueuedForceInit = false;
+  };
+  window.addEventListener('pagehide', cancelBgStagesOnUnload);
+  window.addEventListener('beforeunload', cancelBgStagesOnUnload);
+}
 import {
   INITIAL_PROACTIVE_HINTS,
   buildSetupDiagnosisPlan,
@@ -1343,13 +1358,19 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
     };
 
-    activeInitAppPromise = runSingleInitApp().finally(() => {
-      activeInitAppPromise = null;
-      if (pendingQueuedForceInit) {
-        pendingQueuedForceInit = false;
-        void get().initApp(true);
-      }
-    });
+    activeInitAppPromise = runSingleInitApp()
+      .then(() => {
+        if (activeInitAppStartedConnected && zCoreBridge.isConnected) {
+          lastCompletedConnectedInitDone = true;
+        }
+      })
+      .finally(() => {
+        activeInitAppPromise = null;
+        if (pendingQueuedForceInit) {
+          pendingQueuedForceInit = false;
+          void get().initApp(true);
+        }
+      });
     await activeInitAppPromise;
   },
 
