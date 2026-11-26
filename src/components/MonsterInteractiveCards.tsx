@@ -2121,18 +2121,18 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             (hasFourGrid && (currentBucket === 'STORAGE' || currentBucket === 'DESKTOP')));
 
         return (
-          <div className="rounded-xl border border-teal-200 bg-slate-50 p-3.5 space-y-2.5 text-xs overflow-hidden shadow-xs">
+          <div className="rounded-xl border border-teal-200 bg-slate-50 p-3.5 space-y-2.5 text-xs overflow-hidden shadow-xs break-keep">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="font-bold text-slate-900 text-[13px]">{card.title}</div>
-              <span className="px-2 py-0.5 rounded bg-teal-50 border border-teal-200 text-teal-800 text-[10.5px] font-semibold">
+              <div className="font-bold text-slate-900 text-[13px] break-keep">{card.title}</div>
+              <span className="px-2 py-0.5 rounded bg-teal-50 border border-teal-200 text-teal-800 text-[10.5px] font-semibold break-keep">
                 🕰️ 1초 되돌리기 보장 · {card.badgeText}
               </span>
             </div>
 
-            {/* 🏆 『PC 손보기 4 + 1 정규 카테고리』 상단 2×2 동적 요약 성적표 그리드 */}
+            {/* 🏆 『PC 손보기 4 + 1 정규 카테고리』 상단 동적 요약 성적표 그리드 (좁은 채팅폭 1열 가로정렬 ↔ 넓은 폭 2×2 그리드 자동 전환) */}
             {hasFourGrid ? (
               <div className="space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid [grid-template-columns:repeat(auto-fit,minmax(215px,1fr))] gap-2">
                   {card.fourBucketSummaries!.map((bk) => {
                     const isOpen = currentBucket === bk.bucketId;
                     const bucketSelCnt = card.items.filter(
@@ -2157,32 +2157,32 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                             return eff === bk.bucketId ? ('NONE' as any) : bk.bucketId;
                           })
                         }
-                        className={`text-left rounded-xl border p-2.5 transition-all cursor-pointer ${
+                        className={`text-left rounded-xl border p-2.5 transition-all cursor-pointer break-keep ${
                           isOpen
                             ? 'bg-white border-teal-500 ring-2 ring-teal-500/20 shadow-xs'
                             : 'bg-white/90 hover:bg-white border-slate-200 hover:border-teal-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span className="font-bold text-[12.5px] text-slate-900">
+                        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                          <span className="font-bold text-[12.5px] text-slate-900 whitespace-nowrap">
                             <span className="text-teal-700 mr-1">{bk.stepNo}</span>
                             {bk.titleKo}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold shrink-0 ${toneChip}`}>
+                          <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold whitespace-nowrap shrink-0 ${toneChip}`}>
                             {card.executed && bucketSelCnt > 0 ? '🟢 정리 완료' : bk.statusBadgeKo}
                           </span>
                         </div>
-                        <div className="mt-1 text-[11px] font-medium text-slate-700 leading-snug break-words">
+                        <div className="mt-1 text-[11px] font-medium text-slate-700 leading-snug break-keep">
                           {bk.headlineMetricKo}
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between text-[10.5px] text-slate-500">
-                          <span>
+                        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10.5px] text-slate-500">
+                          <span className="break-keep">
                             {bk.subtitleKo}
                             {bucketSelCnt > 0 && !card.executed ? (
-                              <strong className="ml-1 text-teal-700">· 선택 {bucketSelCnt}건</strong>
+                              <strong className="ml-1 text-teal-700 whitespace-nowrap">· 선택 {bucketSelCnt}건</strong>
                             ) : null}
                           </span>
-                          <span className="font-semibold text-teal-700 shrink-0">
+                          <span className="font-semibold text-teal-700 whitespace-nowrap shrink-0 ml-auto">
                             {isOpen ? '접기 ▲' : `상세(${bk.itemCount}) ▾`}
                           </span>
                         </div>
@@ -2194,9 +2194,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             ) : (
               card.summaryLines &&
               card.summaryLines.length > 0 && (
-                <div className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1 text-[11.5px] text-slate-700">
+                <div className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1 text-[11.5px] text-slate-700 break-keep">
                   {card.summaryLines.map((ln, i) => (
-                    <div key={i} className="leading-snug">
+                    <div key={i} className="leading-snug break-keep">
                       {ln}
                     </div>
                   ))}
@@ -2205,15 +2205,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             )}
 
             {card.excludedNames && card.excludedNames.length > 0 && (
-              <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11.5px] text-emerald-900 font-medium">
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11.5px] text-emerald-900 font-medium break-keep">
                 🟢 보존 확정(제외됨): {card.excludedNames.join(', ')}
               </div>
             )}
 
             {/* 선택된 칸의 세부 내역 아코디언 펼침 영역 */}
             {hasFourGrid && activeBucketMeta && (
-              <div className="flex items-center justify-between gap-2 px-1 pt-0.5">
-                <div className="font-bold text-[12px] text-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
+                <div className="font-bold text-[12px] text-slate-800 break-keep">
                   ▼ [{activeBucketMeta.stepNo} {activeBucketMeta.titleKo}] 세부 내역 ({visibleItems.length}건)
                 </div>
                 {currentBucket === 'SPEED' && !card.executed && (
@@ -2294,7 +2294,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                           <div className="font-semibold text-slate-900 flex items-center justify-between gap-1.5 flex-wrap">
                             <span
                               onClick={() => toggleItem(it.id)}
-                              className="cursor-pointer break-words [overflow-wrap:anywhere]"
+                              className="cursor-pointer break-keep [overflow-wrap:break-word]"
                             >
                               <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
                               {it.name}
