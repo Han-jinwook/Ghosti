@@ -2220,14 +2220,40 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         const executedSet = new Set(executedIdList);
         const activeSelectedIds = card.executed && !card.executedIds ? [] : card.selectedIds || [];
         const selectedSet = new Set(activeSelectedIds.filter((id) => !executedSet.has(id)));
-        const selectedCount = card.items.filter(
+        const selectedItemsList = card.items.filter(
           (it) => selectedSet.has(it.id) && !it.isProtected && !executedSet.has(it.id)
-        ).length;
-        const selectedTotalMb = Math.round(
-          card.items
-            .filter((it) => selectedSet.has(it.id) && !it.isProtected && !executedSet.has(it.id))
-            .reduce((acc, it) => acc + (it.sizeMb || 0), 0)
         );
+        const selectedCount = selectedItemsList.length;
+        const selectedTotalMb = Math.round(
+          selectedItemsList.reduce((acc, it) => acc + (it.sizeMb || 0), 0)
+        );
+        const allSelectedAreFileOrCache =
+          selectedItemsList.length > 0 &&
+          selectedItemsList.every(
+            (it) =>
+              it.cat.startsWith('DESKTOP_') ||
+              it.cat === 'SAFE_CACHE' ||
+              it.cat === 'USER_FOLDER' ||
+              it.cat === 'APP_DATA_HOG' ||
+              it.cat === 'USER_LARGE_ITEM'
+          );
+        const allSelectedAreRats =
+          selectedItemsList.length > 0 &&
+          selectedItemsList.every((it) => Boolean(it.ratKind) || it.actionType === 'SECURITY_SLEEP');
+        const allSelectedAreApps =
+          selectedItemsList.length > 0 &&
+          !allSelectedAreFileOrCache &&
+          !allSelectedAreRats &&
+          selectedItemsList.every(
+            (it) =>
+              !it.ratKind &&
+              !it.cat.startsWith('DESKTOP_') &&
+              it.cat !== 'SAFE_CACHE' &&
+              it.cat !== 'USER_FOLDER' &&
+              it.cat !== 'APP_DATA_HOG' &&
+              it.cat !== 'USER_LARGE_ITEM' &&
+              it.actionType !== 'SECURITY_SLEEP'
+          );
         const toggleItem = (id: string) => {
           if (executedSet.has(id)) return;
           const next = new Set(selectedSet);
@@ -2723,8 +2749,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             )}
 
             {(card.executed || Boolean(card.executionReportKo)) && (() => {
-              const reportText = card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.';
+              const rawReportText = card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.';
+              const reportText = rawReportText.replace(/\*\*/g, '');
               const isWarnReport = !card.executed || reportText.startsWith('⚠️') || reportText.startsWith('ℹ️');
+              const showEmptyRecycleBtn = card.action !== 'hidden_rats_apply' || reportText.includes('휴지통');
               return (
                 <div className="space-y-2">
                   <div
@@ -2738,7 +2766,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   </div>
                   {card.executed && (
                     <div className="flex flex-wrap gap-1.5">
-                      {card.action !== 'hidden_rats_apply' && (
+                      {showEmptyRecycleBtn && (
                         <button
                           type="button"
                           onClick={() => void submitExternalMonsterChatQuery('휴지통 비워줘', message.sourceTab || 'trash')}
@@ -2805,15 +2833,33 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     }}
                     className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-[12px] font-bold cursor-pointer shrink-0"
                   >
-                    {busyId === 'agent_batch_exec'
-                      ? '안전 정리 실행 중...'
-                      : card.action === 'desktop_power_boost'
-                      ? '⚡ 고성능 전원 즉시 전환'
-                      : card.action === 'desktop_system_icon_toggle'
-                      ? '✨ 시스템 아이콘 안전 숨김'
-                      : card.action === 'hidden_rats_apply'
-                      ? `✅ ${selectedCount}건 안전 차단·수동전환 실행 (1초 원복 보장)`
-                      : `✅ ${selectedCount}건 ${card.executed ? '추가 정리 실행' : '일괄 실행'}${selectedTotalMb > 0 ? ` (${selectedTotalMb >= 1024 ? `${(selectedTotalMb / 1024).toFixed(1)}GB` : `${selectedTotalMb}MB`})` : ''} (휴지통 안전 보관)`}
+                    {(() => {
+                      const sizeLabel =
+                        selectedTotalMb > 0
+                          ? ` (${selectedTotalMb >= 1024 ? `${(selectedTotalMb / 1024).toFixed(1)}GB` : `${selectedTotalMb}MB`})`
+                          : '';
+                      if (busyId === 'agent_batch_exec') return '안전 정리 실행 중...';
+                      if (card.action === 'desktop_power_boost' && selectedCount === 0) return '⚡ 고성능 전원 즉시 전환';
+                      if (card.action === 'desktop_system_icon_toggle' && selectedCount === 0) return '✨ 시스템 아이콘 안전 숨김';
+                      if (selectedCount === 0) {
+                        return currentBucket === 'DESKTOP' || currentBucket === 'STORAGE' || card.action === 'desktop_batch_action' || card.action === 'disk_hog_clean'
+                          ? '🗑️ 정리할 파일·폴더를 선택해 주세요'
+                          : '✅ 정리할 항목을 선택해 주세요';
+                      }
+                      if (card.moveDestinationDrive && allSelectedAreFileOrCache) {
+                        return `📦 ${selectedCount}건 ${card.moveDestinationDrive} 보관함으로 안전 이사${sizeLabel}`;
+                      }
+                      if (allSelectedAreFileOrCache) {
+                        return `🗑️ ${selectedCount}건 ${card.executed ? '추가 삭제·정리' : '삭제·정리 실행'}${sizeLabel} (휴지통 이동)`;
+                      }
+                      if (allSelectedAreApps) {
+                        return `🧹 ${selectedCount}건 선택 프로그램 삭제·정리${sizeLabel}`;
+                      }
+                      if (allSelectedAreRats) {
+                        return `✅ ${selectedCount}건 자동실행·백그라운드 정리 (1초 원복 보장)`;
+                      }
+                      return `✅ ${selectedCount}건 ${card.executed ? '추가 정리 실행' : '선택 항목 정리 실행'}${sizeLabel} (휴지통·복원 보장)`;
+                    })()}
                   </button>
                 </div>
               </div>
