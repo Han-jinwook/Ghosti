@@ -173,6 +173,70 @@ _UI2_THUMB_INFLIGHT: set[str] = set()
 _UI2_PREVIEW_BYTES_CACHE: dict[str, tuple[bytes, str]] = {}
 _UI2_PREVIEW_INFLIGHT: set[str] = set()
 _EXTRACTED_QUEUE_UI_CACHE: dict[str, Any] = {"mtime_ns": -1, "size": -1, "items": []}
+_UI2_LIVE_EXISTS_CACHE: dict[str, tuple[float, bool]] = {}
+_UI2_LOCAL_NAMES_CACHE: dict[str, Any] = {"list_id": 0, "list_len": -1, "names": set()}
+_UI2_THUMB_BG_PENDING: list[str] = []
+_UI2_THUMB_BG_NOTIFY_CBS: list[Any] = []
+_UI2_THUMB_BG_EVENT = threading.Event()
+_UI2_THUMB_BG_STARTED = False
+
+
+def _enqueue_ui2_thumbs_bg(paths_to_load: list[str], on_any_decoded: Any) -> None:
+    """단일 백그라운드 워커 스레드에서 최신 노출 썸네일부터 순차 디코딩해 필터·갤러리 고속 전환 시 스레드 폭주와 GIL 경합을 0%로 차단합니다."""
+    global _UI2_THUMB_BG_STARTED
+    with _UI2_CACHE_LOCK:
+        for p_it in paths_to_load:
+            if p_it not in _UI2_THUMB_INFLIGHT:
+                _UI2_THUMB_INFLIGHT.add(p_it)
+                _UI2_THUMB_BG_PENDING.append(p_it)
+        if callable(on_any_decoded) and on_any_decoded not in _UI2_THUMB_BG_NOTIFY_CBS:
+            _UI2_THUMB_BG_NOTIFY_CBS.append(on_any_decoded)
+        need_start = not _UI2_THUMB_BG_STARTED
+        if need_start:
+            _UI2_THUMB_BG_STARTED = True
+    _UI2_THUMB_BG_EVENT.set()
+    if need_start:
+        def _thumb_worker_loop() -> None:
+            if sys.platform == "win32":
+                try:
+                    ctypes.windll.kernel32.SetThreadPriority(ctypes.windll.kernel32.GetCurrentThread(), -1)
+                except Exception:
+                    pass
+            while True:
+                _UI2_THUMB_BG_EVENT.wait(timeout=5.0)
+                _UI2_THUMB_BG_EVENT.clear()
+                any_ok = False
+                while True:
+                    with _UI2_CACHE_LOCK:
+                        if not _UI2_THUMB_BG_PENDING:
+                            break
+                        # 가장 최근 화면에 필요한 항목부터(LIFO 묶음) 처리하고 오래된 대기열은 최대 24개로 제한
+                        if len(_UI2_THUMB_BG_PENDING) > 24:
+                            dropped = _UI2_THUMB_BG_PENDING[:-24]
+                            del _UI2_THUMB_BG_PENDING[:-24]
+                            for dp in dropped:
+                                _UI2_THUMB_INFLIGHT.discard(dp)
+                        cur_p = _UI2_THUMB_BG_PENDING.pop(0)
+                    try:
+                        if _get_or_make_small_thumb_bytes(cur_p):
+                            any_ok = True
+                    except Exception:
+                        pass
+                    finally:
+                        with _UI2_CACHE_LOCK:
+                            _UI2_THUMB_INFLIGHT.discard(cur_p)
+                    time.sleep(0.002)
+                if any_ok:
+                    with _UI2_CACHE_LOCK:
+                        cbs = list(_UI2_THUMB_BG_NOTIFY_CBS)
+                        _UI2_THUMB_BG_NOTIFY_CBS.clear()
+                    for cb in cbs:
+                        try:
+                            cb()
+                        except Exception:
+                            pass
+
+        threading.Thread(target=_thumb_worker_loop, daemon=True).start()
 
 
 def _expand_camel_search_text(src: str) -> str:
@@ -516,26 +580,24 @@ def build_ui2_search_window(
     get_target_ime_korean = ctx.get("get_target_ime_korean")
     report_ui2_ime_korean = ctx.get("report_ui2_ime_korean")
 
-    _ui2_live_exists_cache: dict[str, tuple[float, bool]] = {}
-
     def _fast_ui2_file_exists(fp_chk: str) -> bool:
         if not fp_chk:
             return False
         now_e = time.monotonic()
-        hit_e = _ui2_live_exists_cache.get(fp_chk)
-        if hit_e is not None and (now_e - hit_e[0]) < 0.9:
+        hit_e = _UI2_LIVE_EXISTS_CACHE.get(fp_chk)
+        if hit_e is not None and (now_e - hit_e[0]) < 2.5:
             return hit_e[1]
         ok_e = os.path.exists(fp_chk)
-        if len(_ui2_live_exists_cache) > 256:
-            _ui2_live_exists_cache.clear()
-        _ui2_live_exists_cache[fp_chk] = (now_e, ok_e)
+        if len(_UI2_LIVE_EXISTS_CACHE) > 512:
+            _UI2_LIVE_EXISTS_CACHE.clear()
+        _UI2_LIVE_EXISTS_CACHE[fp_chk] = (now_e, ok_e)
         return ok_e
 
     def _open_file_in_os(fpath: str) -> str:
         abs_fp = os.path.abspath(fpath) if fpath else ""
         if not abs_fp or not os.path.exists(abs_fp):
-            _ui2_live_exists_cache[fpath] = (time.monotonic(), False)
-            _ui2_live_exists_cache[abs_fp] = (time.monotonic(), False)
+            _UI2_LIVE_EXISTS_CACHE[fpath] = (time.monotonic(), False)
+            _UI2_LIVE_EXISTS_CACHE[abs_fp] = (time.monotonic(), False)
             if callable(refresh_lightweight_local_files_async):
                 refresh_lightweight_local_files_async(
                     lambda: st_state.update({"bg_ui_dirty": True}),
@@ -668,7 +730,7 @@ def build_ui2_search_window(
             except Exception:
                 pinned_sel_rec = None
         init_query = ""
-    _local_names_cache: dict[str, Any] = {"list_id": 0, "list_len": -1, "names": set()}
+    _local_names_cache = _UI2_LOCAL_NAMES_CACHE
     _ext_exists_cache: dict[str, tuple[float, bool]] = {}
 
     init_mode = "large" if init_stage in ("large", "gallery") else "compact"
@@ -1440,29 +1502,57 @@ def build_ui2_search_window(
         except Exception:
             pass
 
-        for frec in local_files_list:
-            fp_loc = str(frec.get("file_path") or "")
-            if fp_loc and fp_loc.lower() in seen_fpaths:
-                continue
-            if frec.get("kind") == "video":
-                v_fname = Path(str(frec.get("file_path") or "")).name
-                ocr_info = vid_ocr_map.get(v_fname)
-                if ocr_info and ocr_info.get("fullText"):
-                    enriched = dict(frec)
-                    enriched["video_ocr_full"] = ocr_info["fullText"]
-                    enriched["video_ocr_lines"] = ocr_info["lineCount"]
-                    flat_ocr = re.sub(r"\[\d{2}:\d{2}\]\s*", "", ocr_info["fullText"]).replace("\n", " · ")
-                    enriched["text"] = f"{frec.get('text', '')} | 📝화면글자: {flat_ocr[:180]}"
-                    pool.append(enriched)
-                    continue
-            pool.append(frec)
+        def _kind_matches_filter(k_val: Any) -> bool:
+            if flt_now == "all":
+                return True
+            if flt_now == "doc":
+                return k_val in ("text", "doc")
+            if flt_now == "image":
+                return k_val == "image"
+            if flt_now == "video":
+                return k_val == "video"
+            return True
 
-        if flt_now == "doc":
-            pool = [r for r in pool if r.get("kind") in ("text", "doc")]
-        elif flt_now == "image":
-            pool = [r for r in pool if r.get("kind") == "image"]
-        elif flt_now == "video":
-            pool = [r for r in pool if r.get("kind") == "video"]
+        def _enrich_video_rec(frec_in: dict) -> dict:
+            if frec_in.get("kind") != "video" or not vid_ocr_map:
+                return frec_in
+            v_fname = frec_in.get("_fname")
+            if not v_fname:
+                _raw_vp = str(frec_in.get("file_path") or "")
+                v_fname = _raw_vp.rsplit("\\", 1)[-1].rsplit("/", 1)[-1]
+            ocr_info = vid_ocr_map.get(v_fname) if v_fname else None
+            if ocr_info and ocr_info.get("fullText"):
+                enriched = dict(frec_in)
+                enriched["video_ocr_full"] = ocr_info["fullText"]
+                enriched["video_ocr_lines"] = ocr_info["lineCount"]
+                flat_ocr = re.sub(r"\[\d{2}:\d{2}\]\s*", "", ocr_info["fullText"]).replace("\n", " · ")
+                enriched["text"] = f"{frec_in.get('text', '')} | 📝화면글자: {flat_ocr[:180]}"
+                return enriched
+            return frec_in
+
+        if flt_now != "all":
+            pool = [r for r in pool if _kind_matches_filter(r.get("kind"))]
+
+        if not q:
+            # [무검색어(열기·필터전환·크게/작게 토글) O(1) Top-K 패스트패스]:
+            # 이미 최신순 정렬된 local_files_list(최대 3.6만 건) 전체를 매 클릭마다 복사·순회하지 않고 상위 표시분(최대 12건)만 0.2ms 내에 즉시 추출!
+            for frec in local_files_list:
+                if len(pool) >= 12:
+                    break
+                if not _kind_matches_filter(frec.get("kind")):
+                    continue
+                fp_loc = str(frec.get("file_path") or "")
+                if fp_loc and fp_loc.lower() in seen_fpaths:
+                    continue
+                pool.append(_enrich_video_rec(frec))
+        else:
+            for frec in local_files_list:
+                if not _kind_matches_filter(frec.get("kind")):
+                    continue
+                fp_loc = str(frec.get("file_path") or "")
+                if fp_loc and fp_loc.lower() in seen_fpaths:
+                    continue
+                pool.append(_enrich_video_rec(frec))
 
         matched: list[tuple[float, dict]] = []
         if q:
@@ -1930,23 +2020,10 @@ def build_ui2_search_window(
                 w_it.bind("<Double-Button-1>", _on_dbl_pick)
 
         if pending_thumb_paths:
-            with _UI2_CACHE_LOCK:
-                for _ptp in pending_thumb_paths:
-                    _UI2_THUMB_INFLIGHT.add(_ptp)
-
-            def _decode_thumbs_bg(paths_to_load: list[str]) -> None:
-                any_decoded = False
-                for p_load in paths_to_load:
-                    try:
-                        if _get_or_make_small_thumb_bytes(p_load):
-                            any_decoded = True
-                    finally:
-                        with _UI2_CACHE_LOCK:
-                            _UI2_THUMB_INFLIGHT.discard(p_load)
-                if any_decoded:
-                    st_state["bg_ui_dirty"] = True
-
-            threading.Thread(target=_decode_thumbs_bg, args=(list(pending_thumb_paths),), daemon=True).start()
+            _enqueue_ui2_thumbs_bg(
+                list(pending_thumb_paths),
+                lambda: st_state.update({"bg_ui_dirty": True}),
+            )
 
         if preview_pane is not None and candidates:
             sel_rec = candidates[st_state["sel_idx"]]

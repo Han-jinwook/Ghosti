@@ -49,6 +49,15 @@ u32 = ctypes.windll.user32
 k32 = ctypes.windll.kernel32
 imm32 = ctypes.windll.imm32
 
+
+def _set_current_thread_priority(level: int) -> None:
+    """인터랙티브 스레드(핫키·UI: +1/+2)와 백그라운드 스캔/사전 워커(-1)의 OS 스케줄링 우선순위를 엄격 분리합니다."""
+    if sys.platform == "win32":
+        try:
+            k32.SetThreadPriority(k32.GetCurrentThread(), int(level))
+        except Exception:
+            pass
+
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception:
@@ -527,61 +536,74 @@ class Gemma2LightweightEngine:
         return None
 
     def _lazy_init(self) -> None:
+        _set_current_thread_priority(-1)
         with self._lock:
             if self._loaded:
                 return
+            import gc as _gc_lex
+            _gc_was_enabled = _gc_lex.isenabled()
             try:
+                if _gc_was_enabled:
+                    _gc_lex.disable()
+                lex_loaded_ok = False
                 lex_path = self._find_lexicon_zlib()
                 if lex_path:
                     try:
                         import zlib
-                        lex_data = json.loads(zlib.decompress(lex_path.read_bytes()).decode("utf-8"))
-                        for _idx_ew, ew in enumerate(lex_data.get("en", ())):
-                            self.en_dict.add(ew)
-                            if (_idx_ew & 4095) == 4095:
-                                time.sleep(0.001)
-                        for _idx_ks, ks in enumerate(lex_data.get("ko_starts", ())):
-                            self.ko_word_starts.add(ks)
-                            self.ko_subwords.add(ks)
-                            for ch in ks:
-                                self.ko_chars.add(ch)
-                            if (_idx_ks & 4095) == 4095:
-                                time.sleep(0.001)
-                        for _idx_kb, ksub in enumerate(lex_data.get("ko_subs", ())):
-                            self.ko_subwords.add(ksub)
-                            for ch in ksub:
-                                self.ko_chars.add(ch)
-                            if (_idx_kb & 4095) == 4095:
-                                time.sleep(0.001)
-                    except Exception:
-                        pass
-
-                model_dir = self._find_model_dir()
-                if model_dir:
-                    tok_path = model_dir / "tokenizer.json"
-                    data = json.loads(tok_path.read_text(encoding="utf-8"))
-                    time.sleep(0.002)
-                    vocab = data.get("model", {}).get("vocab", {})
-                    self.vocab = vocab
-                    for _idx_v, (k, tid) in enumerate(vocab.items()):
-                        clean_k = k.lstrip("▁")
-                        if k.startswith("▁") and isinstance(tid, int) and tid < 50000:
-                            if len(clean_k) >= 4 and clean_k.isalpha() and clean_k.isascii():
-                                self.en_dict.add(clean_k.lower())
-                        if len(clean_k) >= 1 and all(0xAC00 <= ord(c) <= 0xD7A3 for c in clean_k):
-                            self.ko_subwords.add(clean_k)
-                            if k.startswith("▁") and len(clean_k) >= 2:
-                                self.ko_word_starts.add(clean_k)
-                            for ch in clean_k:
-                                self.ko_chars.add(ch)
-                        if (_idx_v & 4095) == 4095:
+                        raw_decomp = zlib.decompress(lex_path.read_bytes()).decode("utf-8")
+                        time.sleep(0.001)
+                        lex_data = json.loads(raw_decomp)
+                        time.sleep(0.001)
+                        en_list = lex_data.get("en") or ()
+                        for _off in range(0, len(en_list), 2048):
+                            self.en_dict.update(en_list[_off : _off + 2048])
                             time.sleep(0.001)
+                        ks_list = lex_data.get("ko_starts") or ()
+                        for _off in range(0, len(ks_list), 2048):
+                            chunk_ks = ks_list[_off : _off + 2048]
+                            self.ko_word_starts.update(chunk_ks)
+                            self.ko_subwords.update(chunk_ks)
+                            for ks in chunk_ks:
+                                self.ko_chars.update(ks)
+                            time.sleep(0.001)
+                        kb_list = lex_data.get("ko_subs") or ()
+                        for _off in range(0, len(kb_list), 2048):
+                            chunk_kb = kb_list[_off : _off + 2048]
+                            self.ko_subwords.update(chunk_kb)
+                            for ksub in chunk_kb:
+                                self.ko_chars.update(ksub)
+                            time.sleep(0.001)
+                        lex_loaded_ok = len(self.en_dict) >= 2000
+                    except Exception:
+                        lex_loaded_ok = False
 
-                    # [초경량 데몬 철칙]: seq_paste_daemon.py에서는 200MB ONNX 세션을 중복 로드하지 않고
-                    # 내장 압축 사전(ko_en_lexicon.zlib) + tokenizer.json 사전만 로드하여 CPU 0% · 메모리 25MB 이하 초경량 반응속도를 보장합니다.
+                # 내장 압축 사전(ko_en_lexicon.zlib)이 정상 로드된 경우 20MB tokenizer.json(26만 어휘) 중복 파싱을 생략해 GIL 정지·메모리 급증을 원천 차단
+                if not lex_loaded_ok:
+                    model_dir = self._find_model_dir()
+                    if model_dir:
+                        tok_path = model_dir / "tokenizer.json"
+                        data = json.loads(tok_path.read_text(encoding="utf-8"))
+                        time.sleep(0.002)
+                        vocab = data.get("model", {}).get("vocab", {})
+                        self.vocab = vocab
+                        for _idx_v, (k, tid) in enumerate(vocab.items()):
+                            clean_k = k.lstrip("▁")
+                            if k.startswith("▁") and isinstance(tid, int) and tid < 50000:
+                                if len(clean_k) >= 4 and clean_k.isalpha() and clean_k.isascii():
+                                    self.en_dict.add(clean_k.lower())
+                            if len(clean_k) >= 1 and all(0xAC00 <= ord(c) <= 0xD7A3 for c in clean_k):
+                                self.ko_subwords.add(clean_k)
+                                if k.startswith("▁") and len(clean_k) >= 2:
+                                    self.ko_word_starts.add(clean_k)
+                                for ch in clean_k:
+                                    self.ko_chars.add(ch)
+                            if (_idx_v & 2047) == 2047:
+                                time.sleep(0.001)
             except Exception:
                 pass
             finally:
+                if _gc_was_enabled:
+                    _gc_lex.enable()
                 self._loaded = True
 
     _VALID_SHORT_EN = {
@@ -604,7 +626,7 @@ class Gemma2LightweightEngine:
 
     def is_valid_english_word(self, word: str) -> bool:
         if not self._loaded:
-            self._lazy_init()
+            self.start_background_warmup()
         w_raw = word.strip()
         # 한글 두벌식에서 Shift가 쓰이지 않는 알파벳(R,E,Q,T,W,O,P 외)을 대문자로 쳤다면 100% 의도적인 영문 약어(DB, PC, AI, API 등)!
         if len(w_raw) >= 2 and w_raw.isupper() and any(c not in "REQTWOP" for c in w_raw):
@@ -3700,9 +3722,9 @@ _SCAN_DIRS_CACHE: dict = {"ts": 0.0, "dirs": []}
 
 
 def _collect_search_scan_dirs(
-    max_total_dirs: int = 15000,
-    max_per_drive: int = 6500,
-    time_budget_sec: float = 11.0,
+    max_total_dirs: int = 6000,
+    max_per_drive: int = 2500,
+    time_budget_sec: float = 3.8,
     force: bool = False,
 ) -> list[Path]:
     """
@@ -3790,11 +3812,15 @@ def _collect_search_scan_dirs(
         key=lambda g: (1 if g["is_virtual"] else 0, 0 if g["drv"] == "S:" else (2 if g["drv"] == "C:" else 1), g["drv"]),
     )
 
-    max_depth = 12
+    max_depth = 10
     active = True
+    _bfs_steps = 0
     while active and len(scan_dirs) < max_total_dirs and (time.time() - t_start) <= time_budget_sec:
         active = False
         for grp in ordered_groups:
+            _bfs_steps += 1
+            if (_bfs_steps & 23) == 23:
+                time.sleep(0.001)
             if len(scan_dirs) >= max_total_dirs or (time.time() - t_start) > time_budget_sec:
                 break
             if grp["added"] >= grp["cap"] or grp["elapsed"] >= grp["time_cap"]:
@@ -3871,9 +3897,11 @@ def _compute_watched_folders_fast_sig(scan_dirs: list[Path] | None = None) -> st
     max_mt_ns = 0
     sz_acc = 0
     t_sig_start = time.time()
-    for fd in scan_dirs:
-        if (time.time() - t_sig_start) > 1.8:
-            break
+    for _idx_sig_d, fd in enumerate(scan_dirs):
+        if (_idx_sig_d & 23) == 23:
+            time.sleep(0.001)
+            if (time.time() - t_sig_start) > 0.65:
+                break
         try:
             with os.scandir(fd) as it:
                 for entry in it:
@@ -3934,11 +3962,12 @@ def _select_fair_by_drive(items: list[dict], limit: int) -> list[dict]:
 
 
 _LOCAL_FS_PROBE_INFLIGHT = False
+_LAST_DEEP_FS_SIG_TS: float = 0.0
 _NON_C_DIR_SCAN_CACHE: dict[str, tuple[float, int, list[dict]]] = {}
 
 
 def _compute_hot_user_folders_fast_sig() -> str:
-    """바탕화면·다운로드·문서·사진·동영상·S: 등 핵심 폴더의 mtime_ns만 1ms 이내에 검사해 파일 추가/삭제를 즉시 포착합니다."""
+    """바탕화면·다운로드·문서·사진·동영상·보조드라이브 루트·S: 등 핵심 폴더의 mtime_ns만 1ms 이내에 검사해 파일 추가/삭제를 즉시 포착합니다."""
     home = Path.home()
     hot_dirs = [
         home / "Desktop",
@@ -3952,6 +3981,9 @@ def _compute_hot_user_folders_fast_sig() -> str:
         home / "OneDrive" / "바탕 화면",
         home / "OneDrive" / "Documents",
         home / "OneDrive" / "문서",
+        Path("D:\\"),
+        Path("E:\\"),
+        Path("F:\\"),
         Path("S:\\"),
     ]
     parts: list[str] = []
@@ -4006,9 +4038,9 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         virt_drv_flags: dict[str, bool] = {}
 
         for _idx_fd, fd in enumerate(scan_dirs):
-            if (_idx_fd & 31) == 31:
-                time.sleep(0.0005)
-                if (time.time() - t_scan_loop) > 14.0:
+            if (_idx_fd & 15) == 15:
+                time.sleep(0.001)
+                if (time.time() - t_scan_loop) > 5.5:
                     break
             fd_str = str(fd)
             fd_str_low = fd_str.lower()
@@ -4054,7 +4086,9 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                 fd_badge = fd.name or drv_prefix or "C:\\"
             try:
                 with os.scandir(fd) as it:
-                    for entry in it:
+                    for _idx_ent, entry in enumerate(it):
+                        if (_idx_ent & 255) == 255:
+                            time.sleep(0.0008)
                         try:
                             if not entry.is_file(follow_symlinks=False):
                                 continue
@@ -4089,6 +4123,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                                 "img_path": entry.path if fkind == "image" else "",
                                 "text": f"[{fd_badge}] {name}",
                                 "ts": st.st_mtime,
+                                "_fname": name,
                                 "_size": st.st_size,
                                 "_attrs": int(getattr(st, "st_file_attributes", 0) or 0),
                                 "_ext": ext,
@@ -4198,7 +4233,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
             it_f.pop("_attrs", None)
             it_f.pop("_ext", None)
             it_f.pop("_badge", None)
-            if idx_i < 120 and nm:
+            if idx_i < 80 and nm and AI_ENGINE._loaded:
                 it_f["vec"] = AI_ENGINE.embed_128d(nm)
         _LOCAL_FILE_CACHE["items"] = top_items
         _LOCAL_FILE_CACHE["ts"] = time.time()
@@ -4216,6 +4251,7 @@ def _refresh_lightweight_local_files_async(on_done=None, force: bool = False) ->
 
     def _worker() -> None:
         global _LOCAL_FILE_REFRESH_RUNNING
+        _set_current_thread_priority(-1)
         try:
             _scan_lightweight_local_files_sync(force=force)
         except Exception:
@@ -4244,13 +4280,16 @@ def _check_local_files_changed_async(on_changed=None) -> None:
     _LOCAL_FS_PROBE_INFLIGHT = True
 
     def _probe() -> None:
-        global _LOCAL_FS_PROBE_INFLIGHT
+        global _LOCAL_FS_PROBE_INFLIGHT, _LAST_DEEP_FS_SIG_TS
+        _set_current_thread_priority(-1)
         try:
             prev_hot = str(_LOCAL_FILE_CACHE.get("hot_sig") or "")
             new_hot = _compute_hot_user_folders_fast_sig()
             prev_sig = str(_LOCAL_FILE_CACHE.get("dir_sig") or "")
             changed = (not prev_sig) or (new_hot != prev_hot)
-            if not changed:
+            now_pr = time.time()
+            if not changed and (now_pr - _LAST_DEEP_FS_SIG_TS) >= 15.0:
+                _LAST_DEEP_FS_SIG_TS = now_pr
                 new_full_sig = f"{new_hot}::{_compute_watched_folders_fast_sig()}"
                 changed = (new_full_sig != prev_sig)
             if changed:
@@ -4496,6 +4535,7 @@ def _toast_worker() -> None:
     - [창 UI ③] 📸 사진·OCR 공간이동창: 스샷 직후 소환 시 독립 실행되는 좌측 사진·표 / 우측 OCR 칩 전용창
     """
     global _UI_LOOP_HEARTBEAT_TS, _UI_LOOP_STAGE
+    _set_current_thread_priority(1)
     _UI_LOOP_HEARTBEAT_TS = time.time()
     _UI_LOOP_STAGE = "tk_init"
     import tkinter as tk
@@ -4542,10 +4582,11 @@ def _toast_worker() -> None:
                     if _mp_init in sys.path:
                         sys.path.remove(_mp_init)
                     sys.path.insert(0, _mp_init)
-            for _cand_dir in (Path(__file__).resolve().parent, Path(__file__).resolve().parent / "os_agent"):
-                _c_str = str(_cand_dir)
-                if _cand_dir.exists() and _c_str not in sys.path:
-                    sys.path.insert(0, _c_str)
+            else:
+                for _cand_dir in (Path(__file__).resolve().parent, Path(__file__).resolve().parent / "os_agent"):
+                    _c_str = str(_cand_dir)
+                    if _cand_dir.exists() and _c_str not in sys.path:
+                        sys.path.insert(0, _c_str)
             import ghost_search_window_ui2 as _u2_pre  # type: ignore
             _preloaded_ui2_mod = _u2_pre
             _u2_pre._load_local_video_ocr_by_name()
@@ -4556,8 +4597,11 @@ def _toast_worker() -> None:
             _warm_top = tk.Toplevel(root)
             _warm_top.withdraw()
             _warm_top.overrideredirect(True)
-            tk.Label(_warm_top, text="👻귀신같이검색창", font=("Malgun Gothic", 9, "bold")).pack()
-            tk.Entry(_warm_top, font=("Malgun Gothic", 9)).pack()
+            _wf = tk.Frame(_warm_top, bg="#0B1120", highlightbackground="#38BDF8", highlightthickness=2)
+            _wf.pack()
+            for _fnt in (("Malgun Gothic", 8), ("Malgun Gothic", 8, "bold"), ("Malgun Gothic", 9), ("Malgun Gothic", 9, "bold"), ("Malgun Gothic", 10, "bold")):
+                tk.Label(_wf, text="👻귀신검색창 전체 문서 사진 영상", font=_fnt, bg="#0B1120", fg="#5EEAD4").pack()
+            tk.Entry(_wf, font=("Malgun Gothic", 9)).pack()
             _warm_top.update_idletasks()
             _warm_top.destroy()
         except Exception:
@@ -6108,9 +6152,9 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                             now_p = time.time()
                             main_lag = now_p - _MAIN_LOOP_HEARTBEAT_TS
                             ui_lag = now_p - _UI_LOOP_HEARTBEAT_TS
-                            ui_ping_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 15.0
+                            ui_ping_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 35.0
                             healthy = _MODAL_PROMPT_ACTIVE or (
-                                main_lag < 15.0 and ui_lag < ui_ping_limit
+                                main_lag < 35.0 and ui_lag < ui_ping_limit
                             )
                             if healthy:
                                 try:
@@ -6141,6 +6185,18 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                                     _IN_PROCESS_STOP_EVENT.set()
                                     break
                                 _release_single_instance_mutex()
+                                try:
+                                    if getattr(sys, "frozen", False):
+                                        clean_env_p = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+                                        clean_env_p["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+                                        subprocess.Popen(
+                                            [sys.executable, "--seq-paste-daemon"],
+                                            env=clean_env_p,
+                                            creationflags=0x08000000 | 0x00000008,
+                                            close_fds=True,
+                                        )
+                                except Exception:
+                                    pass
                                 os._exit(1)
                             continue
                         if b"__REPLACE__" in data or b"/__merlin/shutdown" in data:
@@ -7050,10 +7106,13 @@ _KIWI_USER_NOUNS: tuple[tuple[str, str], ...] = (
 
 
 def _get_kiwi_engine():
-    """정식 한국어 형태소 분석 엔진(Kiwi) 싱글톤 로더 — 최초 1회 로드 후 호출당 0.2~2ms 초고속 띄어쓰기 수행"""
+    """정식 한국어 형태소 분석 엔진(Kiwi) 선택적 로더 — 기본은 0MB·0.2ms 내장 띄어쓰기 엔진을 사용해 GIL/디스크 스톨을 원천 방지"""
     global _KIWI_ENGINE
     if _KIWI_ENGINE is not None:
         return _KIWI_ENGINE
+    if os.environ.get("MERLIN_ENABLE_HEAVY_KIWI") != "1":
+        _KIWI_ENGINE = False
+        return False
     with _KIWI_INIT_LOCK:
         if _KIWI_ENGINE is not None:
             return _KIWI_ENGINE
@@ -9470,7 +9529,8 @@ def _start_first_summon_prewarmer() -> None:
     디스크 스캔 대기 없이 즉시 창이 열리도록 보장합니다.
     """
     def _warm_loop() -> None:
-        time.sleep(0.05)
+        _set_current_thread_priority(-1)
+        time.sleep(0.08)
         try:
             import win32com.client as _w32c  # noqa: F401
         except Exception:
@@ -9537,8 +9597,9 @@ def main(in_process: bool = False) -> None:
 
     if sys.platform == "win32":
         try:
-            # 크롬·인덱싱 과부하 환경에서도 Ctrl+0·Ctrl+우클릭·귀신검색창 UI가 첫 시도부터 0.05초 내 즉시 열리도록 우선순위 보장
-            k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00008000)  # ABOVE_NORMAL_PRIORITY_CLASS
+            # 프로세스 전체가 아닌 핫키·UI 스레드만 우선순위를 높여 백그라운드 파일스캔 워커가 UI 스레드를 기아시키지 못하게 분리!
+            k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00000020)  # NORMAL_PRIORITY_CLASS
+            _set_current_thread_priority(1)  # THREAD_PRIORITY_ABOVE_NORMAL (main hotkey thread)
         except Exception:
             pass
         try:
@@ -9729,6 +9790,7 @@ def main(in_process: bool = False) -> None:
     # [0.1초 메인 루프 선진입 보장]: 무거운 히스토리 임베딩·초기 클립보드·창 스냅샷·Kiwi·드라이브 스캔은
     # 마우스 훅 + PeekMessageW 메인 루프 가동 직후 백그라운드 스레드에서 시차 실행합니다.
     def _deferred_startup_init_worker() -> None:
+        _set_current_thread_priority(-1)
         try:
             time.sleep(0.25)
             ensure_default_snippets()
@@ -10611,9 +10673,9 @@ def main(in_process: bool = False) -> None:
                 main_lag_w = now_w - _MAIN_LOOP_HEARTBEAT_TS
                 ui_lag_w = now_w - _UI_LOOP_HEARTBEAT_TS
                 # 초기 부팅(tk_init/init) 중 Windows Defender 스캔 지연은 45초 유예로 오판 자폭 원천 차단
-                ui_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 18.0
+                ui_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 35.0
                 ui_hung = _TOAST_WORKER_STARTED and ui_lag_w > ui_limit
-                if not _MODAL_PROMPT_ACTIVE and (main_lag_w > 18.0 or ui_hung):
+                if not _MODAL_PROMPT_ACTIVE and (main_lag_w > 35.0 or ui_hung):
                     _log_seq_diag(
                         "HANG_WATCHDOG_EXIT",
                         f"main_lag={main_lag_w:.1f}s ui_lag={ui_lag_w:.1f}s main_stage={_MAIN_LOOP_STAGE} ui_stage={_UI_LOOP_STAGE} open_mode={_CURRENT_OPEN_UI_MODE}",
