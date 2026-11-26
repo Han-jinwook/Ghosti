@@ -76,6 +76,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const [customScanPath, setCustomScanPath] = useState('');
   const [appFilterQuery, setAppFilterQuery] = useState('');
   const [activeCareBucket, setActiveCareBucket] = useState<CareNormalizedBucketId | null>(null);
+  const [expandedStartupIds, setExpandedStartupIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (message.cardKind !== 'DEFENDER_GUARD_CARD' || !message.defenderGuardPayload?.scanRunning) {
@@ -1789,6 +1790,16 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
             {items.map((stItem) => {
               const isBusyRow = busyId === `st_${stItem.id}`;
+              const isCmdExpanded = expandedStartupIds.has(stItem.id);
+              const hasLongCommand = Boolean(stItem.command && stItem.command.length > 28);
+              const toggleCmdExpand = () => {
+                setExpandedStartupIds((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(stItem.id)) next.delete(stItem.id);
+                  else next.add(stItem.id);
+                  return next;
+                });
+              };
               const shortLoc = !stItem.enabled
                 ? '꺼둠 · 다시 켜기 가능'
                 : stItem.requiresAdmin
@@ -1797,13 +1808,13 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               return (
               <div
                 key={stItem.id}
-                className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-center justify-between gap-2"
+                className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-start justify-between gap-2"
               >
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="font-semibold text-slate-900 truncate" title={stItem.name}>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="font-semibold text-slate-900 break-words [overflow-wrap:anywhere] leading-snug">
                     {stItem.name}
                   </div>
-                  <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
                         !stItem.enabled
@@ -1815,10 +1826,32 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     >
                       {shortLoc}
                     </span>
-                    <span className="text-[10.5px] text-slate-400 font-mono truncate" title={stItem.command}>
-                      {stItem.command}
-                    </span>
+                    {!isCmdExpanded && stItem.command && (
+                      <span
+                        onClick={hasLongCommand ? toggleCmdExpand : undefined}
+                        className={`text-[10.5px] text-slate-400 font-mono truncate max-w-[175px] sm:max-w-[210px] ${
+                          hasLongCommand ? 'cursor-pointer hover:text-slate-600' : ''
+                        }`}
+                        title={stItem.command}
+                      >
+                        {stItem.command}
+                      </span>
+                    )}
+                    {hasLongCommand && (
+                      <button
+                        type="button"
+                        onClick={toggleCmdExpand}
+                        className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-[10px] font-medium text-slate-600 shrink-0 cursor-pointer transition-colors"
+                      >
+                        {isCmdExpanded ? '▼ 접기' : '▶ 끝까지 보기'}
+                      </button>
+                    )}
                   </div>
+                  {isCmdExpanded && stItem.command && (
+                    <div className="text-[10.5px] text-slate-600 font-mono whitespace-normal break-all leading-relaxed bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                      {stItem.command}
+                    </div>
+                  )}
                 </div>
                 {stItem.isProtected ? (
                   <span className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">

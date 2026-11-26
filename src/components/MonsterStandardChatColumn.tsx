@@ -1952,8 +1952,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     >
       {/* 상단 헤더 */}
       <div
-        title={careScheduleSummary}
-        className="px-3.5 py-2.5 bg-white border-b border-slate-200 flex items-center justify-between gap-2"
+        className="px-3.5 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
       >
         <div className="flex items-center gap-2 shrink-0">
           <img
@@ -1969,11 +1968,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             실행 취소 지원
           </span>
         </div>
-        <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center justify-end gap-1.5 min-w-0">
           {isMobileOrStore ? (
             <VoiceActorControlPill compact />
           ) : (
-            <span className="text-[11px] font-medium text-slate-500 truncate">
+            <span className="text-[11px] font-medium text-slate-500 whitespace-normal break-keep leading-snug">
               {careScheduleSummary}
             </span>
           )}
@@ -2261,8 +2260,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       {/* 공유방 복귀 바 */}
       {pendingReturnShareRoom && (
         <div className="px-3.5 py-2.5 border-t border-slate-200 bg-slate-50 flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-semibold text-slate-800 truncate">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[12px] font-semibold text-slate-800 break-words leading-snug">
               『{pendingReturnShareRoom.roomTitle}』 사진 추가 대기 중
             </span>
             {!isZCoreLive && (
@@ -2299,13 +2298,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             unlockMobileAudioOnUserGesture();
             void handleSend(undefined, 'text');
           }}
-          className="flex items-center gap-1.5 sm:gap-2 w-full min-w-0"
+          className="flex items-end gap-1.5 sm:gap-2 w-full min-w-0"
         >
-          <input
+          <textarea
             id="ghosti-secretary-chat-input"
-            type="text"
+            rows={2}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (busy || !inputText.trim()) return;
+                unlockMobileAudioOnUserGesture();
+                void handleSend(undefined, 'text');
+              }
+            }}
             onFocus={() => {
               if (
                 isMobileOrStore &&
@@ -2327,7 +2334,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 ? currentRollingPlaceholder
                 : `예) ${currentRollingPlaceholder}`
             }
-            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] text-slate-900 placeholder:text-slate-400 transition-colors"
+            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] leading-snug text-slate-900 placeholder:text-slate-400 resize-none transition-colors"
           />
           {isMobileOrStore && (
             <button
