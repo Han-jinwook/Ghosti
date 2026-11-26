@@ -181,7 +181,12 @@ def ensure_superpower_daemon_running() -> bool:
             try:
                 import core_win32 as _cw32
 
-                target_exe = _cw32.ensure_persistent_frozen_install()
+                persist_exe = _cw32.get_persistent_zcore_exe_path()
+                cur_exe_abs = os.path.abspath(sys.executable)
+                if os.path.normcase(cur_exe_abs) == os.path.normcase(persist_exe) and os.path.exists(persist_exe):
+                    target_exe = persist_exe
+                else:
+                    target_exe = cur_exe_abs if os.path.exists(cur_exe_abs) else _cw32.ensure_persistent_frozen_install()
                 _LAST_SPAWNED_PROC = subprocess.Popen(
                     [target_exe, "--seq-paste-daemon"],
                     env=clean_env,

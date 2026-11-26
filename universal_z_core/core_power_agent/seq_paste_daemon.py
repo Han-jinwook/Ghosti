@@ -485,8 +485,15 @@ class Gemma2LightweightEngine:
         self.session = None
         self.np = None
         self._loaded = False
+        self._warmup_started = False
         self._lock = threading.Lock()
-        # 백그라운드 비동기 초기화 (데몬 부팅 속도 0.01초 보장)
+        # [기동 0.1초 즉시 응답 철칙]: import 시점에 26만 어휘 사전을 파싱하면 RegisterHotKey·WH_MOUSE_LL·Tkinter 초기화를
+        # GIL 경합으로 3~12초 지연시키므로, 메인 루프·귀신검색창 UI 준비 완료 직후 start_background_warmup()으로 기동합니다.
+
+    def start_background_warmup(self) -> None:
+        if self._loaded or self._warmup_started:
+            return
+        self._warmup_started = True
         threading.Thread(target=self._lazy_init, daemon=True).start()
 
     def _find_model_dir(self) -> Path | None:
@@ -529,17 +536,23 @@ class Gemma2LightweightEngine:
                     try:
                         import zlib
                         lex_data = json.loads(zlib.decompress(lex_path.read_bytes()).decode("utf-8"))
-                        for ew in lex_data.get("en", ()):
+                        for _idx_ew, ew in enumerate(lex_data.get("en", ())):
                             self.en_dict.add(ew)
-                        for ks in lex_data.get("ko_starts", ()):
+                            if (_idx_ew & 4095) == 4095:
+                                time.sleep(0.001)
+                        for _idx_ks, ks in enumerate(lex_data.get("ko_starts", ())):
                             self.ko_word_starts.add(ks)
                             self.ko_subwords.add(ks)
                             for ch in ks:
                                 self.ko_chars.add(ch)
-                        for ksub in lex_data.get("ko_subs", ()):
+                            if (_idx_ks & 4095) == 4095:
+                                time.sleep(0.001)
+                        for _idx_kb, ksub in enumerate(lex_data.get("ko_subs", ())):
                             self.ko_subwords.add(ksub)
                             for ch in ksub:
                                 self.ko_chars.add(ch)
+                            if (_idx_kb & 4095) == 4095:
+                                time.sleep(0.001)
                     except Exception:
                         pass
 
@@ -547,9 +560,10 @@ class Gemma2LightweightEngine:
                 if model_dir:
                     tok_path = model_dir / "tokenizer.json"
                     data = json.loads(tok_path.read_text(encoding="utf-8"))
+                    time.sleep(0.002)
                     vocab = data.get("model", {}).get("vocab", {})
                     self.vocab = vocab
-                    for k, tid in vocab.items():
+                    for _idx_v, (k, tid) in enumerate(vocab.items()):
                         clean_k = k.lstrip("▁")
                         if k.startswith("▁") and isinstance(tid, int) and tid < 50000:
                             if len(clean_k) >= 4 and clean_k.isalpha() and clean_k.isascii():
@@ -560,6 +574,8 @@ class Gemma2LightweightEngine:
                                 self.ko_word_starts.add(clean_k)
                             for ch in clean_k:
                                 self.ko_chars.add(ch)
+                        if (_idx_v & 4095) == 4095:
+                            time.sleep(0.001)
 
                     # [초경량 데몬 철칙]: seq_paste_daemon.py에서는 200MB ONNX 세션을 중복 로드하지 않고
                     # 내장 압축 사전(ko_en_lexicon.zlib) + tokenizer.json 사전만 로드하여 CPU 0% · 메모리 25MB 이하 초경량 반응속도를 보장합니다.
@@ -3626,6 +3642,12 @@ def _get_known_user_folders_for_search(include_internal_secondary_drives: bool =
 
 
 def _load_doc_body_cache_fast() -> dict[str, str]:
+    """
+    [5.5MB+ 대용량 문서 캐시 무블로킹 프리슬라이싱 로더]:
+    - doc_text_cache_v1.json(건당 최대 50,000자)이 갱신되었을 때만 로드하되,
+      매 스캔마다 6,000건 × 50,000자에 re.sub를 돌려 GIL이 수 초간 멈추지 않도록
+      로드 시점에 앞 2,400자만 선절삭·공백정규화(1,600자)하여 메모리에 경량 보관합니다.
+    """
     try:
         local_app_c = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
         doc_cache_p = local_app_c / "Merlin" / "doc_text_cache_v1.json"
@@ -3638,14 +3660,24 @@ def _load_doc_body_cache_fast() -> dict[str, str]:
             and isinstance(_DOC_BODY_MEM_CACHE["data"], dict)
         ):
             return _DOC_BODY_MEM_CACHE["data"]
-        raw_dc = json.loads(doc_cache_p.read_text(encoding="utf-8", errors="ignore"))
+        raw_bytes = doc_cache_p.read_bytes()
+        time.sleep(0.001)
+        raw_dc = json.loads(raw_bytes.decode("utf-8", errors="ignore"))
+        time.sleep(0.001)
         if isinstance(raw_dc, dict):
+            slim_dc: dict[str, str] = {}
+            for _idx_dc, (k_dc, v_dc) in enumerate(raw_dc.items()):
+                if v_dc:
+                    slim_dc[k_dc] = re.sub(r"\s+", " ", str(v_dc)[:2400]).strip()[:1600]
+                if (_idx_dc & 127) == 127:
+                    time.sleep(0.001)
             _DOC_BODY_MEM_CACHE["mtime_ns"] = int(st_dc.st_mtime_ns)
             _DOC_BODY_MEM_CACHE["size"] = int(st_dc.st_size)
-            _DOC_BODY_MEM_CACHE["data"] = raw_dc
-            return raw_dc
+            _DOC_BODY_MEM_CACHE["data"] = slim_dc
+            return slim_dc
     except Exception:
-        pass
+        if isinstance(_DOC_BODY_MEM_CACHE.get("data"), dict):
+            return _DOC_BODY_MEM_CACHE["data"]
     return {}
 
 
@@ -3868,21 +3900,62 @@ def _select_fair_by_drive(items: list[dict], limit: int) -> list[dict]:
     return selected[:limit]
 
 
+_LOCAL_FS_PROBE_INFLIGHT = False
+
+
+def _compute_hot_user_folders_fast_sig() -> str:
+    """바탕화면·다운로드·문서·사진·동영상·S: 등 핵심 폴더의 mtime_ns만 1ms 이내에 검사해 파일 추가/삭제를 즉시 포착합니다."""
+    home = Path.home()
+    hot_dirs = [
+        home / "Desktop",
+        home / "Downloads",
+        home / "Documents",
+        home / "Pictures",
+        home / "Videos",
+        home / "Documents" / "카카오톡 받은 파일",
+        home / "Downloads" / "카카오톡 받은 파일",
+        home / "OneDrive" / "Desktop",
+        home / "OneDrive" / "바탕 화면",
+        home / "OneDrive" / "Documents",
+        home / "OneDrive" / "문서",
+        Path("S:\\"),
+    ]
+    parts: list[str] = []
+    for hd in hot_dirs:
+        try:
+            st_h = os.stat(hd)
+            parts.append(f"{st_h.st_mtime_ns}")
+        except Exception:
+            pass
+    return "|".join(parts)
+
+
 def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
     """
-    [초고속 전 하드 드라이브 로컬 파일 스캐너 — UI 스레드 블로킹 0%]:
+    [초고속 전 하드 드라이브 로컬 파일 스캐너 — UI·단축키 스레드 GIL 블로킹 0%]:
     1) C드라이브 KnownFolders뿐 아니라 D:/E:/F:/G:/I:/S: 등 모든 고정·이동식 하드 드라이브를 라운드-로빈 os.scandir로 누락 없이 스캔합니다.
-    2) 드라이브별 공정 쿼터 + 최신순 문서 2,500건 + 사진 2,500건 + 영상 800건(최대 5,800건)을 인덱싱하여 보조 드라이브 파일이 C: 파일에 밀려 잘리지 않게 보장합니다.
-    3) OneDrive 미동기화 클라우드 전용 파일은 원격 다운로드를 유발하지 않도록 스킵합니다.
+    2) 드라이브별 공정 쿼터 + 최신순 문서 6,000건 + 사진 6,000건 + 영상 2,000건을 인덱싱하여 보조 드라이브 파일이 C: 파일에 밀려 잘리지 않게 보장합니다.
+    3) 가상 클라우드 드라이브(G: Google Drive 등) 독립 시간 예산(1.5s) 및 주기적 GIL 양보(sleep 0.5ms)로 UI 프리징·Watchdog 자폭을 원천 차단합니다.
     """
     with _LOCAL_FILE_SCAN_LOCK:
         now = time.time()
+        last_ts = float(_LOCAL_FILE_CACHE.get("ts") or 0.0)
+        # 연속 중복 force 스캔 폭주 방어: 직전 1.0초 이내에 이미 스캔이 끝났고 핫 폴더 시그니처가 동일하면 즉시 재사용
+        hot_sig = _compute_hot_user_folders_fast_sig()
+        if (
+            last_ts > 0.0
+            and (now - last_ts) < 1.0
+            and hot_sig == _LOCAL_FILE_CACHE.get("hot_sig")
+            and _LOCAL_FILE_CACHE.get("items")
+        ):
+            return _LOCAL_FILE_CACHE["items"]
+
         scan_dirs = _collect_search_scan_dirs(force=force)
-        cur_sig = _compute_watched_folders_fast_sig(scan_dirs=scan_dirs)
+        cur_sig = f"{hot_sig}::{_compute_watched_folders_fast_sig(scan_dirs=scan_dirs)}"
         if (
             not force
-            and _LOCAL_FILE_CACHE["ts"] > 0.0
-            and (now - float(_LOCAL_FILE_CACHE["ts"])) < 55.0
+            and last_ts > 0.0
+            and (now - last_ts) < 115.0
             and cur_sig == _LOCAL_FILE_CACHE.get("dir_sig")
         ):
             return _LOCAL_FILE_CACHE["items"]
@@ -3894,11 +3967,20 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
         seen_files: set[str] = set()
         CLOUD_UNHYDRATED_MASK = 0x00400000 | 0x00001000  # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_OFFLINE
+        t_scan_loop = time.time()
+        drv_elapsed: dict[str, float] = {}
 
-        for fd in scan_dirs:
+        for _idx_fd, fd in enumerate(scan_dirs):
+            if (_idx_fd & 31) == 31:
+                time.sleep(0.0005)
+                if (time.time() - t_scan_loop) > 4.5:
+                    break
             fd_str = str(fd)
             fd_str_low = fd_str.lower()
             drv_prefix = fd_str[:2].upper() if len(fd_str) >= 2 and fd_str[1] == ":" else ""
+            if drv_prefix and drv_prefix not in ("C:", "S:") and drv_elapsed.get(drv_prefix, 0.0) > 1.6:
+                continue
+            t_drv0 = time.time()
             is_s_drive_item = fd_str_low.startswith("s:") or "업무공유폴더_s" in fd_str_low
             if is_s_drive_item:
                 fd_badge = (
@@ -3957,14 +4039,19 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                             pass
             except Exception:
                 pass
+            if drv_prefix:
+                drv_elapsed[drv_prefix] = drv_elapsed.get(drv_prefix, 0.0) + max(0.0, time.time() - t_drv0)
 
         for fk in by_kind:
             by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+            time.sleep(0.0005)
 
         top_docs = _select_fair_by_drive(by_kind["doc"], 6000)
         if top_docs:
             doc_body_cache = _load_doc_body_cache_fast()
             for idx_d, d_it in enumerate(top_docs):
+                if (idx_d & 255) == 255:
+                    time.sleep(0.0005)
                 try:
                     fp_str = d_it["file_path"]
                     st_sz = int(d_it.get("_size") or 0)
@@ -3982,7 +4069,8 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                             except Exception:
                                 pass
                         if cached_txt:
-                            body_snip = re.sub(r"\s+", " ", str(cached_txt)).strip()[:1600]
+                            # _load_doc_body_cache_fast()에서 이미 1,600자로 선절삭·정규화 완료됨
+                            body_snip = str(cached_txt)
                     if (
                         not body_snip
                         and idx_d < 80
@@ -4044,6 +4132,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                 it_f["vec"] = AI_ENGINE.embed_128d(nm)
         _LOCAL_FILE_CACHE["items"] = top_items
         _LOCAL_FILE_CACHE["ts"] = time.time()
+        _LOCAL_FILE_CACHE["hot_sig"] = hot_sig
         _LOCAL_FILE_CACHE["dir_sig"] = cur_sig
         return _LOCAL_FILE_CACHE["items"]
 
@@ -4073,17 +4162,35 @@ def _refresh_lightweight_local_files_async(on_done=None, force: bool = False) ->
 
 
 def _check_local_files_changed_async(on_changed=None) -> None:
-    """열려 있는 귀신검색창에서 1ms 시그니처 변화 감지 시에만 백그라운드 재스캔 후 UI 갱신 콜백을 호출합니다."""
+    """
+    [Single-Flight 파일 변경 감지기 — 중복 스캔 폭주 0%]:
+    1) 이미 감시 프로브가 실행 중이면 중복 스레드를 띄우지 않고 즉시 반환합니다.
+    2) 핵심 사용자 폴더(바탕화면·다운로드·문서·사진·영상·S:) mtime을 1ms 내에 최우선 대조하여
+       파일 저장·삭제 즉시 재스캔하고, 미변경 시 보조 폴더 시그니처를 대조합니다.
+    """
+    global _LOCAL_FS_PROBE_INFLIGHT
+    if _LOCAL_FS_PROBE_INFLIGHT or _LOCAL_FILE_REFRESH_RUNNING:
+        return
+    _LOCAL_FS_PROBE_INFLIGHT = True
+
     def _probe() -> None:
+        global _LOCAL_FS_PROBE_INFLIGHT
         try:
+            prev_hot = str(_LOCAL_FILE_CACHE.get("hot_sig") or "")
+            new_hot = _compute_hot_user_folders_fast_sig()
             prev_sig = str(_LOCAL_FILE_CACHE.get("dir_sig") or "")
-            new_sig = _compute_watched_folders_fast_sig()
-            if not prev_sig or new_sig != prev_sig:
+            changed = (not prev_sig) or (new_hot != prev_hot)
+            if not changed:
+                new_full_sig = f"{new_hot}::{_compute_watched_folders_fast_sig()}"
+                changed = (new_full_sig != prev_sig)
+            if changed:
                 _scan_lightweight_local_files_sync(force=True)
                 if callable(on_changed):
                     on_changed()
         except Exception:
             pass
+        finally:
+            _LOCAL_FS_PROBE_INFLIGHT = False
 
     threading.Thread(target=_probe, daemon=True).start()
 
@@ -4332,13 +4439,26 @@ def _toast_worker() -> None:
     root.withdraw()
     _UI_LOOP_HEARTBEAT_TS = time.time()
     _UI_LOOP_STAGE = "tk_ready"
+    _TOAST_WORKER_READY.set()
 
-    # [부팅 중 ui_stage=init 19초 오판 자폭 원천 차단]:
-    # ghost_search_window_ui2 선행 로드·폰트 워밍업·로고 PNG 리사이즈는
-    # root.mainloop()와 _poll_queue() 박동이 즉시 시작된 뒤(80ms 후) 비차단으로 실행합니다.
+    # [부팅 중 ui_stage=init 오판 자폭 원천 차단 + 장시간 유휴 후 첫 실행 Page-Out 방지]:
+    # ghost_search_window_ui2 선행 로드·폰트 워밍업·로고 PNG 리사이즈를 15ms 후 비차단 실행하고,
+    # 25초 주기로 가볍게 UI 모듈/위젯 메모리를 터치해 크롬 대용량 메모리 점유 시에도 첫 실행이 0.05초 내에 열리게 유지합니다.
     _preloaded_ui2_mod = None
     ghost_symbol_photo = None
     ghost_wordmark_photo = None
+
+    def _keep_ui_pages_warm() -> None:
+        try:
+            _ = root.winfo_exists()
+            if _preloaded_ui2_mod is not None:
+                _ = getattr(_preloaded_ui2_mod, "build_ui2_search_window", None)
+        except Exception:
+            pass
+        try:
+            root.after(25000, _keep_ui_pages_warm)
+        except Exception:
+            pass
 
     def _post_init_ui_assets_warmup() -> None:
         nonlocal _preloaded_ui2_mod, ghost_symbol_photo, ghost_wordmark_photo
@@ -4358,6 +4478,7 @@ def _toast_worker() -> None:
                     sys.path.insert(0, _c_str)
             import ghost_search_window_ui2 as _u2_pre  # type: ignore
             _preloaded_ui2_mod = _u2_pre
+            _u2_pre._load_local_video_ocr_by_name()
         except Exception:
             _preloaded_ui2_mod = None
         _UI_LOOP_HEARTBEAT_TS = time.time()
@@ -4414,8 +4535,9 @@ def _toast_worker() -> None:
             pass
         _UI_LOOP_HEARTBEAT_TS = time.time()
         _UI_LOOP_STAGE = "poll_idle"
+        root.after(25000, _keep_ui_pages_warm)
 
-    root.after(80, _post_init_ui_assets_warmup)
+    root.after(15, _post_init_ui_assets_warmup)
 
     current_win: list[tk.Toplevel | None] = [None]
     detail_win: list[tk.Toplevel | None] = [None]
@@ -4519,14 +4641,14 @@ def _toast_worker() -> None:
                 ex_st = u32.GetWindowLongW(hwnd_t, GWL_EXSTYLE)
                 SWP_FRAMECHANGED = 0x0020
                 if activate:
-                    # [AttachThreadInput·win.update() 영구 배제]:
-                    # Ctrl+우클릭 중 타 앱 스레드에 AttachThreadInput을 붙이거나 win.update()를 재귀 호출하면
-                    # Win32 입력 큐 교착 및 Tkinter 재진입으로 창이 멈추고 닫히지 않는 버그가 발생합니다.
-                    # 순수 비차단 Topmost + AllowSetForegroundWindow + SetForegroundWindow만 안전하게 수행합니다.
+                    # [AttachThreadInput·win.update() 영구 배제 + 비할당 더미 키업 포커스 잠금 해제]:
+                    # WH_MOUSE_LL(Ctrl+우클릭)이나 장시간 유휴 직후 첫 호출 시 Windows Foreground Lock으로
+                    # SetForegroundWindow가 거부되는 현상을 부작용 0%(비할당 VK 0x0E KEYUP)으로 해제합니다.
                     u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (ex_st & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
                     u32.ShowWindow(hwnd_t, 5)  # SW_SHOW
                     u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_FRAMECHANGED | SWP_SHOWWINDOW)
                     try:
+                        u32.keybd_event(0x0E, 0, KEYEVENTF_KEYUP, 0)
                         u32.AllowSetForegroundWindow(os.getpid())
                     except Exception:
                         pass
@@ -5290,7 +5412,9 @@ def _toast_worker() -> None:
                     m_left, m_top, m_right, m_bottom = work_area
 
                     win = tk.Toplevel(root)
+                    win.withdraw()
                     current_win[0] = win
+                    t_ui_build0 = time.perf_counter()
                     opened_at[0] = time.time()
                     _LAST_UI_OPENED_TS = opened_at[0]
                     was_mouse_down[0] = True
@@ -5305,6 +5429,10 @@ def _toast_worker() -> None:
                         st_arg = parts[1] if len(parts) > 1 else "small"
                         q_arg = parts[2] if len(parts) > 2 else ""
                         _build_ui2_search_window(win, st_arg, q_arg, pt.x, pt.y, work_area)
+                        _log_seq_diag(
+                            "UI2_SHOWN",
+                            f"stage={st_arg} build_ms={(time.perf_counter()-t_ui_build0)*1000:.1f} hwnd={_CURRENT_OPEN_WIN_HWND}",
+                        )
                     # ── 분기 3: [창 UI ③] 📸 사진·OCR 공간이동창 (독립 창, 외부클릭/ESC까지 유지 · 유료 티어 잠금 검증 필수) ──
                     elif message.startswith("__UI3_OCR__|"):
                         img_arg = message.split("|", 1)[1] if "|" in message else ""
@@ -5729,12 +5857,13 @@ def _toast_worker() -> None:
             except Exception:
                 pass
         finally:
+            _UI_LOOP_STAGE = "poll_idle"
             try:
-                root.after(12, _poll_queue)
+                root.after(10, _poll_queue)
             except Exception:
                 pass
 
-    root.after(12, _poll_queue)
+    root.after(10, _poll_queue)
     while True:
         try:
             root.mainloop()
@@ -5746,6 +5875,7 @@ def _toast_worker() -> None:
 _TOAST_WORKER_STARTED = False
 _TOAST_WORKER_THREAD: threading.Thread | None = None
 _TOAST_WORKER_LOCK = threading.Lock()
+_TOAST_WORKER_READY = threading.Event()
 
 
 def _ensure_toast_worker() -> None:
@@ -9312,7 +9442,7 @@ def _start_first_summon_prewarmer() -> None:
             pass
 
         while True:
-            time.sleep(55.0)
+            time.sleep(120.0)
             try:
                 _scan_lightweight_local_files_sync()
             except Exception:
@@ -9337,13 +9467,18 @@ def main(in_process: bool = False) -> None:
 
     if sys.platform == "win32":
         try:
+            # 크롬·인덱싱 과부하 환경에서도 Ctrl+0·Ctrl+우클릭·귀신검색창 UI가 첫 시도부터 0.05초 내 즉시 열리도록 우선순위 보장
+            k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00008000)  # ABOVE_NORMAL_PRIORITY_CLASS
+        except Exception:
+            pass
+        try:
             ctypes.windll.ole32.CoInitialize(None)
         except Exception:
             pass
 
-    # [최우선 0.05초 단축키·UI 선등록]: 무거운 히스토리/드라이브스캔/Kiwi 워밍업은
-    # 메인 이벤트 루프와 WH_MOUSE_LL 훅이 완전히 살아난 뒤 백그라운드로 지연 실행하여
-    # 재기동 직후 9초 먹통을 0.1초 이내로 원천 제거합니다!
+    # [최우선 0.05초 단축키·UI 선등록]: 무거운 히스토리/드라이브스캔/사전/Kiwi 워밍업은
+    # 메인 이벤트 루프와 WH_MOUSE_LL 훅, Tkinter UI 루프가 완전히 살아난 뒤 백그라운드로 지연 실행하여
+    # 재기동 직후 첫 실행 지연을 0.1초 이내로 원천 제거합니다!
     _hk1_ok = bool(u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0))
     _hk1_err = int(k32.GetLastError()) if not _hk1_ok else 0
     _hk2_ok = bool(u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0))
@@ -9355,6 +9490,7 @@ def main(in_process: bool = False) -> None:
     )
 
     _ensure_toast_worker()
+    _TOAST_WORKER_READY.wait(timeout=0.45)
 
     seq_mode: bool = False
     pasting_started: bool = False
@@ -9548,9 +9684,11 @@ def main(in_process: bool = False) -> None:
         except Exception:
             pass
         try:
-            time.sleep(0.6)
+            time.sleep(0.35)
             _start_first_summon_prewarmer()
-            time.sleep(0.6)
+            time.sleep(0.8)
+            AI_ENGINE.start_background_warmup()
+            time.sleep(0.4)
             _ensure_kiwi_warmup_async()
             _log_seq_diag("DEFERRED_WARMUP_SCHEDULED", f"history={len(GLOBAL_AI_HISTORY)}")
         except Exception:
@@ -10634,6 +10772,9 @@ def main(in_process: bool = False) -> None:
                 _CACHED_RCLICK_BYPASS[0] = _should_bypass_rclick_hook(u32.GetForegroundWindow())
                 if _RBTN_HOLD_STATE.get("summon_requested"):
                     _RBTN_HOLD_STATE["summon_requested"] = False
+                    _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = True
+                    _release_target_rbutton_stuck(_RBTN_HOLD_STATE.get("target_hwnd"))
+                    _dismiss_native_context_menu_after_rbtn_up(_RBTN_HOLD_STATE.get("target_hwnd"))
                     if (now - last_summon_ts) > 0.16:
                         last_summon_ts = now
                         was_key_down[0x9901] = True

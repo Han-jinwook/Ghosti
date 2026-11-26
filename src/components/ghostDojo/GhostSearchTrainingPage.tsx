@@ -151,13 +151,13 @@ export async function openRealGhostSearchWindowViaDaemon(
     return true;
   }
   _openGhostSearchInflight = true;
-  _lastOpenGhostSearchTs = now;
   _lastGhostSearchWasReused = false;
 
   try {
     // 2차 싱글톤 방어: 이미 열려 있는 귀신검색창이 BroadcastChannel 응답을 주면 중복 실행하지 않고 전면 포커스만 수행
-    const alreadyOpenInBrowser = await probeOpenGhostSearchWindowAlive(300);
+    const alreadyOpenInBrowser = await probeOpenGhostSearchWindowAlive(260);
     if (alreadyOpenInBrowser) {
+      _lastOpenGhostSearchTs = Date.now();
       _lastGhostSearchWasReused = true;
       bringRealGhostSearchPopupToFront(stage, query);
       return true;
@@ -166,43 +166,43 @@ export async function openRealGhostSearchWindowViaDaemon(
     const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
     const q = (query || '').trim();
     const wasZCoreConnected = zCoreBridge.isConnected;
-    const reqStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     try {
       const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
-        signal: AbortSignal.timeout(wasZCoreConnected ? 4500 : 650),
+        signal: AbortSignal.timeout(wasZCoreConnected ? 4500 : 1800),
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data && data.ok !== false && data.launched !== false) {
+          _lastOpenGhostSearchTs = Date.now();
           _lastGhostSearchWasReused = Boolean(data.reused || data.deduped);
           return true;
         }
       } else if (res.status === 404 || res.status === 405) {
         const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
         const resGet = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
-          signal: AbortSignal.timeout(wasZCoreConnected ? 4500 : 650),
+          signal: AbortSignal.timeout(wasZCoreConnected ? 4500 : 1800),
         });
         if (resGet.ok) {
           const dataGet = await resGet.json().catch(() => ({}));
           if (dataGet?.ok !== false && dataGet?.launched !== false) {
+            _lastOpenGhostSearchTs = Date.now();
             _lastGhostSearchWasReused = Boolean(dataGet.reused || dataGet.deduped);
             return true;
           }
         }
       }
     } catch (err) {
-      const elapsed =
-        (typeof performance !== 'undefined' ? performance.now() : Date.now()) - reqStartedAt;
       const errName = (err as { name?: string } | null)?.name || '';
-      if (
-        wasZCoreConnected &&
-        (errName === 'TimeoutError' || errName === 'AbortError' || elapsed >= 350)
-      ) {
-        return true;
+      if (wasZCoreConnected && (errName === 'TimeoutError' || errName === 'AbortError')) {
+        const openedAfterTimeout = await probeOpenGhostSearchWindowAlive(320);
+        if (openedAfterTimeout) {
+          _lastOpenGhostSearchTs = Date.now();
+          return true;
+        }
       }
     }
 
@@ -222,6 +222,7 @@ export async function openRealGhostSearchWindowViaDaemon(
         );
         const features = `popup=yes,width=${rect.width},height=${rect.height},left=${rect.x},top=${rect.y},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
         if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
+          _lastOpenGhostSearchTs = Date.now();
           _lastGhostSearchWasReused = true;
           if (q) {
             _activeRealGhostSearchPopup.location.href = targetUrl;
@@ -231,6 +232,7 @@ export async function openRealGhostSearchWindowViaDaemon(
         }
         const win = window.open(targetUrl, 'ghosti_real_search_window', features);
         if (win) {
+          _lastOpenGhostSearchTs = Date.now();
           _activeRealGhostSearchPopup = win;
           win.focus();
           return true;

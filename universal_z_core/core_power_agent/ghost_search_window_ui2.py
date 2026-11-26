@@ -164,7 +164,8 @@ def _extract_win32_shell_pil_image(file_path_str: str, max_px: int = 360) -> Any
     except Exception:
         return None
 
-_VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
+_VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "mtime_sig": "", "loading": False, "by_name": {}}
+_VIDEO_OCR_LOCK = threading.Lock()
 _UI2_CACHE_LOCK = threading.Lock()
 _UI2_SMALL_THUMB_CACHE: dict[str, bytes] = {}
 _UI2_SMALL_THUMB_BY_PATH: dict[str, bytes] = {}
@@ -352,8 +353,13 @@ def _load_extracted_queue_fast() -> list[dict[str, Any]]:
         return []
 
 
-def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
-    """로컬 video_scene_ocr_cache_v2.json을 15초 주기로 초경량 조회하여 파일명별 화면 글자 데이터를 반환합니다."""
+def _load_local_video_ocr_by_name(on_async_updated: Any = None) -> dict[str, dict[str, Any]]:
+    """
+    [UI 스레드 0.00ms 무블로킹 조회 + mtime 기반 백그라운드 갱신]:
+    - 장시간 유휴 후 첫 귀신검색창 호출 시에도 Tkinter UI 스레드에서 1MB+ video_scene_ocr_cache_v2.json을
+      동기 디스크 오픈·JSON 파싱하지 않고 즉시 메모리 캐시를 반환합니다.
+    - 실제 파일 mtime/size가 바뀐 경우에만 백그라운드 워커 스레드에서 파싱 후 UI를 갱신합니다.
+    """
     now = time.time()
     if float(_VIDEO_OCR_UI_CACHE["ts"]) > 0.0 and (now - float(_VIDEO_OCR_UI_CACHE["ts"])) < 15.0:
         return _VIDEO_OCR_UI_CACHE["by_name"]
@@ -365,41 +371,79 @@ def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
         local_appdata / "Programs" / "MerlinFamily" / "video_scene_ocr_cache_v2.json",
         Path.home() / ".merlin_z_core" / "video_scene_ocr_cache_v2.json",
     ]
-    by_name: dict[str, dict[str, Any]] = {}
+    sig_parts: list[str] = []
+    existing_paths: list[Path] = []
     for p in candidates:
-        if not p.exists():
-            continue
         try:
-            raw = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
-            if isinstance(raw, dict):
-                for sig_key, val in raw.items():
-                    if not isinstance(val, dict):
-                        continue
-                    fname = str(val.get("videoFileName") or sig_key.split("|", 1)[0]).strip()
-                    if not fname or fname in by_name:
-                        continue
-                    frames = val.get("frames") if isinstance(val.get("frames"), list) else []
-                    full_txt = str(val.get("fullText") or "").strip()
-                    if not full_txt and frames:
-                        parts = []
-                        for fr in frames:
-                            t_str = str(fr.get("ocrText") or "").strip()
-                            if t_str:
-                                s_v = int(fr.get("timeSec") or 0)
-                                parts.append(f"[{s_v // 60:02d}:{s_v % 60:02d}] {t_str}")
-                        full_txt = "\n".join(parts)
-                    if full_txt:
-                        by_name[fname] = {
-                            "fullText": full_txt,
-                            "lineCount": int(val.get("lineCount") or len(full_txt.splitlines())),
-                            "keywords": val.get("keywords") or [],
-                        }
+            if p.exists():
+                st_p = p.stat()
+                sig_parts.append(f"{p}:{st_p.st_mtime_ns}:{st_p.st_size}")
+                existing_paths.append(p)
         except Exception:
             pass
+    cur_sig = "|".join(sig_parts)
+    if cur_sig == _VIDEO_OCR_UI_CACHE.get("mtime_sig") and float(_VIDEO_OCR_UI_CACHE["ts"]) > 0.0:
+        _VIDEO_OCR_UI_CACHE["ts"] = now
+        return _VIDEO_OCR_UI_CACHE["by_name"]
 
-    _VIDEO_OCR_UI_CACHE["ts"] = now
-    _VIDEO_OCR_UI_CACHE["by_name"] = by_name
-    return by_name
+    if not existing_paths:
+        _VIDEO_OCR_UI_CACHE["ts"] = now
+        _VIDEO_OCR_UI_CACHE["mtime_sig"] = ""
+        _VIDEO_OCR_UI_CACHE["by_name"] = {}
+        return _VIDEO_OCR_UI_CACHE["by_name"]
+
+    with _VIDEO_OCR_LOCK:
+        if _VIDEO_OCR_UI_CACHE.get("loading"):
+            return _VIDEO_OCR_UI_CACHE["by_name"]
+        _VIDEO_OCR_UI_CACHE["loading"] = True
+
+    def _bg_load_video_ocr() -> None:
+        by_name: dict[str, dict[str, Any]] = {}
+        try:
+            for p in existing_paths:
+                try:
+                    raw = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
+                    if isinstance(raw, dict):
+                        for _idx_v, (sig_key, val) in enumerate(raw.items()):
+                            if not isinstance(val, dict):
+                                continue
+                            fname = str(val.get("videoFileName") or sig_key.split("|", 1)[0]).strip()
+                            if not fname or fname in by_name:
+                                continue
+                            frames = val.get("frames") if isinstance(val.get("frames"), list) else []
+                            full_txt = str(val.get("fullText") or "").strip()
+                            if not full_txt and frames:
+                                parts = []
+                                for fr in frames:
+                                    t_str = str(fr.get("ocrText") or "").strip()
+                                    if t_str:
+                                        s_v = int(fr.get("timeSec") or 0)
+                                        parts.append(f"[{s_v // 60:02d}:{s_v % 60:02d}] {t_str}")
+                                full_txt = "\n".join(parts)
+                            if full_txt:
+                                by_name[fname] = {
+                                    "fullText": full_txt,
+                                    "lineCount": int(val.get("lineCount") or len(full_txt.splitlines())),
+                                    "keywords": val.get("keywords") or [],
+                                }
+                            if (_idx_v & 63) == 63:
+                                time.sleep(0.001)
+                except Exception:
+                    pass
+            _VIDEO_OCR_UI_CACHE["by_name"] = by_name
+            _VIDEO_OCR_UI_CACHE["mtime_sig"] = cur_sig
+            _VIDEO_OCR_UI_CACHE["ts"] = time.time()
+            if callable(on_async_updated):
+                try:
+                    on_async_updated()
+                except Exception:
+                    pass
+        finally:
+            with _VIDEO_OCR_LOCK:
+                _VIDEO_OCR_UI_CACHE["loading"] = False
+
+    threading.Thread(target=_bg_load_video_ocr, daemon=True).start()
+    return _VIDEO_OCR_UI_CACHE["by_name"]
 
 
 def _fetch_video_ocr_from_zcore(file_path_or_name: str) -> dict[str, Any]:
@@ -1257,7 +1301,9 @@ def build_ui2_search_window(
             return
 
         q = _get_live_entry_query().strip()
-        vid_ocr_map = _load_local_video_ocr_by_name()
+        vid_ocr_map = _load_local_video_ocr_by_name(
+            on_async_updated=lambda: st_state.update({"bg_ui_dirty": True})
+        )
 
         pool: list[dict] = []
         seen_fpaths: set[str] = set()
@@ -1651,7 +1697,7 @@ def build_ui2_search_window(
                 font=("Malgun Gothic", 8, "bold"),
             ).pack(side="left")
 
-        if (prev_stage != st_now or prev_h != cur_h) and current_win[0] is win:
+        if st_state.get("initial_mapped") and (prev_stage != st_now or prev_h != cur_h) and current_win[0] is win:
             _resize_for_stage(activate=False)
 
         st_state["items"] = candidates
@@ -2195,8 +2241,12 @@ def build_ui2_search_window(
         lambda _e: None if (time.time() - get_last_rbtn_dismiss_esc_ts()) < 0.45 else close_win(),
     )
 
-    # [즉시 표시 보장]: 창 위치·포커스를 먼저 즉시 노출한 뒤 결과를 그려 체감 초기 오픈 지연 0ms 달성
+    # [원자적 페인팅 & 첫 실행 0.05초 즉시 오픈]:
+    # withdraw 상태에서 메모리 캐시 기반 결과 위젯을 먼저 조립한 뒤(_render_search_results < 1ms)
+    # _resize_for_stage(activate=True)로 ShowWindow + SetForegroundWindow를 한 번에 수행해 빈 창 깜빡임과 포커스 누락을 원천 차단합니다.
+    _render_search_results()
     _resize_for_stage(activate=True)
+    st_state["initial_mapped"] = True
     # 소환 직전 사용자가 설정해 둔 키보드 한/영 상태를 검색 입력창에 즉시 동기화 (영타 강제 초기화 차단)
     _want_ime_kor = get_target_ime_korean() if callable(get_target_ime_korean) else None
     if _want_ime_kor is not None:
@@ -2213,7 +2263,6 @@ def build_ui2_search_window(
             win.after(28, _reverify_initial_ime)
         except Exception:
             pass
-    _render_search_results()
 
     # [열려 있는 동안 파일 추가·변경·백그라운드 썸네일 디코딩 실시간 자동 반영 (메인 스레드 폴링으로 Tcl 스레드 충돌 0%, 닫혀 있을 때는 타이머 0개로 CPU 0.00%)]
     last_ext_banner_sig = [""]
@@ -2273,5 +2322,4 @@ def build_ui2_search_window(
             except Exception:
                 pass
 
-        win.bind("<FocusIn>", lambda _e: check_local_files_changed_async(_notify_fs_changed), add="+")
-        win.after(400, _poll_open_window_fs_changes)
+        win.after(600, _poll_open_window_fs_changes)
