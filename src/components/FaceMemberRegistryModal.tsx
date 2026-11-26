@@ -16,11 +16,14 @@ import {
 import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 import type { FaceMemberCluster, RoomPersonaMap, YearlyFaceBestCut } from '../types/saysee';
 import {
+  PASSPORT_MANUAL_UPLOAD_EVENT,
   PASSPORT_REG_STATE_EVENT,
   cutKey,
   deletePassportCut,
   getConfirmedSelfPassportView,
+  triggerGlobalPassportFileInputClick,
   updateSelfPassportRealName,
+  type PassportManualUploadEventDetail,
 } from '../services/passportRegistrationFlow';
 
 /**
@@ -1201,6 +1204,8 @@ export const PassportDoorplateStyleModal: React.FC = () => {
   const [nickname, setNickname] = useState<string>('');
   const [regTick, setRegTick] = useState(0);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const [manualUploadBusy, setManualUploadBusy] = useState<boolean>(false);
+  const [manualUploadNotice, setManualUploadNotice] = useState<string | null>(null);
   const backdropMouseDownRef = React.useRef(false);
 
   useEffect(() => {
@@ -1218,6 +1223,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     setRealNameInput(real);
     setNickname((secSt.nickname || book.self?.nickname || storedNick || '').trim());
     setPendingDeleteKey(null);
+    setManualUploadNotice(null);
   }, [doorplatePickerClusterId]);
 
   useEffect(() => {
@@ -1236,11 +1242,28 @@ export const PassportDoorplateStyleModal: React.FC = () => {
       syncNick();
       setRegTick((n) => n + 1);
     };
+    const onManualUpload = (ev: Event) => {
+      const detail = (ev as CustomEvent<PassportManualUploadEventDetail>).detail;
+      if (!detail) return;
+      if (detail.phase === 'busy') {
+        setManualUploadBusy(true);
+        setManualUploadNotice('선택하신 사진에서 얼굴을 확인하고 있어요...');
+      } else if (detail.phase === 'done') {
+        setManualUploadBusy(false);
+        setManualUploadNotice(`✅ ${detail.message || '새 사진이 여권에 추가되었어요.'}`);
+        setRegTick((n) => n + 1);
+      } else if (detail.phase === 'error') {
+        setManualUploadBusy(false);
+        setManualUploadNotice(`⚠️ ${detail.message || '얼굴을 찾지 못했어요.'}`);
+      }
+    };
     window.addEventListener(PASSPORT_REG_STATE_EVENT, onState);
+    window.addEventListener(PASSPORT_MANUAL_UPLOAD_EVENT, onManualUpload);
     window.addEventListener('profileUpdated', onState);
     window.addEventListener('ghosti_ghost_secretary_state_updated', onState);
     return () => {
       window.removeEventListener(PASSPORT_REG_STATE_EVENT, onState);
+      window.removeEventListener(PASSPORT_MANUAL_UPLOAD_EVENT, onManualUpload);
       window.removeEventListener('profileUpdated', onState);
       window.removeEventListener('ghosti_ghost_secretary_state_updated', onState);
     };
@@ -1326,7 +1349,25 @@ export const PassportDoorplateStyleModal: React.FC = () => {
             )}
           </form>
 
-          {/* 시기별 사진 — 보기 + 지우기(🗑)만 */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <span className="text-[12px] font-bold text-zinc-400">등록된 내 여권 사진</span>
+            <button
+              type="button"
+              disabled={manualUploadBusy}
+              onClick={() => triggerGlobalPassportFileInputClick(realNameInput || savedRealName)}
+              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container text-[12px] font-bold cursor-pointer disabled:opacity-50"
+            >
+              {manualUploadBusy ? '얼굴 확인 중...' : '+ 내 기기에서 사진 1장 추가·변경'}
+            </button>
+          </div>
+
+          {manualUploadNotice && (
+            <div className="px-3 py-2 rounded-xl bg-zinc-900/90 border border-white/10 text-[12px] text-zinc-200 break-keep">
+              {manualUploadNotice}
+            </div>
+          )}
+
+          {/* 시기별 사진 — 보기 + 지우기(🗑) + 직접 1장 추가·변경 */}
           {cuts.length > 0 ? (
             <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
               {cuts.map((cut) => {
@@ -1368,7 +1409,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
             </div>
           ) : (
             <p className="text-[12.5px] text-zinc-500 leading-relaxed break-keep">
-              아직 등록된 사진이 없어요. 사진 불러오기가 끝나면 귀신비서가 내 얼굴을 먼저 찾아 안내해 드려요.
+              아직 등록된 사진이 없어요. 위 <strong>[+ 내 기기에서 사진 1장 추가·변경]</strong>을 눌러 내 얼굴 사진 1장을 직접 골라 등록하거나, 사진 불러오기가 끝난 뒤 귀신비서 안내로 등록하실 수 있어요.
             </p>
           )}
         </div>

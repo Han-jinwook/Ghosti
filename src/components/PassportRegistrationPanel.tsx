@@ -4,15 +4,18 @@ import { AutonomousCanvasFaceAvatar } from './FaceMemberRegistryModal';
 import { loadGhostPassportBook, loadGhostSecretaryState } from '../services/ghostSecretaryEngine';
 import type { FaceMemberCluster, YearlyFaceBestCut } from '../types/saysee';
 import {
+  PASSPORT_MANUAL_UPLOAD_EVENT,
   PASSPORT_REG_OPEN_EVENT,
   PASSPORT_REG_STATE_EVENT,
   clearSelfClusterPick,
   confirmedCutsFor,
+  consumeForceManualPassportOpen,
   consumePendingPassportOpen,
   cutKey,
   dismissFamilyCandidateImmediately,
   familyCandidates,
   findSelfCluster,
+  getConfirmedSelfPassportView,
   loadPassportRegState,
   mergeFamilyCandidateImmediately,
   pendingCutsFor,
@@ -20,7 +23,9 @@ import {
   rankFaceClusters,
   registeredMergeTargets,
   submitPassportRegistration,
+  triggerGlobalPassportFileInputClick,
   undoDismissFamilyCandidate,
+  type PassportManualUploadEventDetail,
   type PassportRegMode,
 } from '../services/passportRegistrationFlow';
 
@@ -29,6 +34,9 @@ export const PASSPORT_REG_DEFERRED_EVENT = 'ghosti_passport_reg_deferred';
 export const PassportRegistrationPanel: React.FC = () => {
   const faceClusters = useSaySeeStore((s) => s.faceClusters);
   const [mode, setMode] = useState<PassportRegMode | null>(null);
+  const [forceManualOpen, setForceManualOpen] = useState<boolean>(false);
+  const [manualUploading, setManualUploading] = useState<boolean>(false);
+  const [manualRealName, setManualRealName] = useState<string>('');
   const [regTick, setRegTick] = useState(0);
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   const [names, setNames] = useState<Record<string, string>>({});
@@ -48,30 +56,58 @@ export const PassportRegistrationPanel: React.FC = () => {
 
   useEffect(() => {
     const pending = consumePendingPassportOpen();
-    if (pending) setMode(pending);
+    const pendingForce = consumeForceManualPassportOpen();
+    if (pending) {
+      setMode(pending);
+      setForceManualOpen(pendingForce);
+    }
     const onOpen = (e: Event) => {
-      const m = (e as CustomEvent<{ mode?: PassportRegMode }>).detail?.mode;
+      const detail = (e as CustomEvent<{ mode?: PassportRegMode; forceManualOpen?: boolean }>).detail;
+      const m = detail?.mode;
       consumePendingPassportOpen();
+      const forced = Boolean(detail?.forceManualOpen) || consumeForceManualPassportOpen();
       if (m === 'self' || m === 'family') {
         setUnchecked(new Set());
         setNames({});
         setJustDismissed({});
         setMergeTargets({});
         setInlineNotice(null);
+        setForceManualOpen(forced);
         setMode(m);
       }
     };
     const onState = () => setRegTick((n) => n + 1);
+    const onManualUpload = (e: Event) => {
+      const detail = (e as CustomEvent<PassportManualUploadEventDetail>).detail;
+      if (!detail) return;
+      if (detail.phase === 'busy') {
+        setManualUploading(true);
+        setInlineNotice('선택하신 사진에서 얼굴을 확인하고 있어요...');
+      } else if (detail.phase === 'done') {
+        setManualUploading(false);
+        setInlineNotice(`✅ ${detail.message || '내 여권 사진이 등록되었어요.'}`);
+        setRegTick((n) => n + 1);
+      } else if (detail.phase === 'error') {
+        setManualUploading(false);
+        setInlineNotice(`⚠️ ${detail.message || '얼굴을 찾지 못했어요. 다른 사진을 골라 주세요.'}`);
+      }
+    };
     window.addEventListener(PASSPORT_REG_OPEN_EVENT, onOpen);
     window.addEventListener(PASSPORT_REG_STATE_EVENT, onState);
+    window.addEventListener(PASSPORT_MANUAL_UPLOAD_EVENT, onManualUpload);
     return () => {
       window.removeEventListener(PASSPORT_REG_OPEN_EVENT, onOpen);
       window.removeEventListener(PASSPORT_REG_STATE_EVENT, onState);
+      window.removeEventListener(PASSPORT_MANUAL_UPLOAD_EVENT, onManualUpload);
     };
   }, []);
 
   const regState = useMemo(() => loadPassportRegState(), [regTick, faceClusters, mode]);
   const selfCluster = useMemo(() => findSelfCluster(regState), [regState, faceClusters]);
+  const confirmedSelfView = useMemo(
+    () => getConfirmedSelfPassportView(),
+    [regTick, faceClusters, mode]
+  );
   const nickname = (loadGhostSecretaryState().nickname || '').trim();
   const savedRealName = (loadGhostPassportBook().self?.realName || '').trim();
 
@@ -103,6 +139,7 @@ export const PassportRegistrationPanel: React.FC = () => {
     (deferred: boolean) => {
       const closingMode = mode;
       setMode(null);
+      setForceManualOpen(false);
       setUnchecked(new Set());
       setNames({});
       setJustDismissed({});
@@ -115,9 +152,12 @@ export const PassportRegistrationPanel: React.FC = () => {
     [mode]
   );
 
-  const hasSessionFeedback = dismissedList.length > 0 || Boolean(inlineNotice);
+  const allowSelfManualFallback =
+    mode === 'self' && (forceManualOpen || (!selfCluster && pickCandidates.length === 0));
+  const hasSessionFeedback = dismissedList.length > 0 || Boolean(inlineNotice) || manualUploading;
   const nothingToShow =
     mode !== null &&
+    !allowSelfManualFallback &&
     !hasSessionFeedback &&
     pickCandidates.length === 0 &&
     people.every((c) => pendingCutsFor(c, regState).length === 0) &&
@@ -233,7 +273,7 @@ export const PassportRegistrationPanel: React.FC = () => {
         <span className="text-[11px] font-medium text-slate-500 shrink-0">내 기기에서만 처리</span>
       </div>
 
-      {mode === 'self' && !selfCluster && (
+      {mode === 'self' && !selfCluster && pickCandidates.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
           {pickCandidates.map((c, idx) => (
             <button
@@ -262,6 +302,78 @@ export const PassportRegistrationPanel: React.FC = () => {
               </span>
             </button>
           ))}
+        </div>
+      )}
+
+      {mode === 'self' && !selfCluster && pickCandidates.length === 0 && (
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
+          <p className="text-[12.5px] text-slate-700 leading-relaxed break-keep">
+            아직 내 기기에서 자동으로 묶인 인물 후보(3장 이상)가 없어요.{' '}
+            <strong>내 얼굴이 나온 사진 1장</strong>만 직접 골라 주시면 바로 내 여권을 만들고, 기기에 있던 1~2장짜리 내 사진도 함께 찾아 연결해 드릴게요.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {!savedRealName && (
+              <input
+                type="text"
+                value={manualRealName}
+                maxLength={18}
+                onChange={(e) => setManualRealName(e.target.value)}
+                placeholder="여권 이름 (실명 · 선택)"
+                className="flex-1 min-w-[140px] h-9 px-3 rounded-lg bg-white border border-slate-300 focus:border-slate-600 outline-none text-[13px] text-slate-900 placeholder:text-slate-400"
+              />
+            )}
+            <button
+              type="button"
+              disabled={manualUploading}
+              onClick={() => triggerGlobalPassportFileInputClick(manualRealName || savedRealName)}
+              className="h-9 px-3.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer disabled:opacity-50"
+            >
+              {manualUploading ? '얼굴 확인 중...' : '📁 내 기기에서 사진 1장 직접 고르기'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'self' && selfCluster && totalPendingCutCount === 0 && confirmedSelfView.cuts.length > 0 && (
+        <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[12.5px] font-semibold text-slate-800 break-keep">
+              현재 등록된 내 여권 사진 ({confirmedSelfView.cuts.length}장) — 새 사진 1장을 골라 바로 추가·변경할 수 있어요.
+            </span>
+            <button
+              type="button"
+              disabled={manualUploading}
+              onClick={() =>
+                triggerGlobalPassportFileInputClick(
+                  (names[selfCluster.clusterId] ?? savedRealName).trim()
+                )
+              }
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              {manualUploading ? '얼굴 확인 중...' : '📁 새 사진 직접 골라 추가·변경'}
+            </button>
+          </div>
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+            {confirmedSelfView.cuts.slice(0, 6).map((cut) => (
+              <div
+                key={`confirmed_${cutKey(selfCluster.clusterId, cut)}`}
+                className="flex flex-col items-center gap-1"
+              >
+                <AutonomousCanvasFaceAvatar
+                  photoFile={cut.representativePhoto || selfCluster.representativePhoto}
+                  boundingBox={cut.boundingBox || selfCluster.boundingBox}
+                  fallbackAvatarUrl={cut.cropUrl || cut.avatarUrl || selfCluster.avatarUrl}
+                  altText={`${cut.year}년`}
+                  sizeClass="w-14 h-14"
+                  shape="square"
+                />
+                <span className="text-[10.5px] font-medium text-slate-500">{cut.year}</span>
+              </div>
+            ))}
+          </div>
+          <span className="text-[11.5px] text-slate-500 break-keep">
+            기존 사진을 지우시려면 우측 상단 <strong>[내 프로필 ➔ 여권]</strong>에서 휴지통 아이콘을 눌러 주세요.
+          </span>
         </div>
       )}
 
@@ -476,7 +588,7 @@ export const PassportRegistrationPanel: React.FC = () => {
         </p>
       )}
 
-      <div className="flex items-center justify-end gap-2 pt-0.5">
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
         {mode === 'self' &&
           selfCluster &&
           confirmedCutsFor(selfCluster, regState).length === 0 &&
@@ -488,11 +600,25 @@ export const PassportRegistrationPanel: React.FC = () => {
                 setUnchecked(new Set());
                 setRegTick((n) => n + 1);
               }}
-              className="mr-auto px-3 py-2 rounded-lg text-[12.5px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+              className="px-3 py-2 rounded-lg text-[12.5px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
             >
               다른 얼굴 고르기
             </button>
           )}
+        {mode === 'self' && (pickCandidates.length > 0 || totalPendingCutCount > 0) && (
+          <button
+            type="button"
+            disabled={manualUploading}
+            onClick={() =>
+              triggerGlobalPassportFileInputClick(
+                (selfCluster ? names[selfCluster.clusterId] : manualRealName) || savedRealName
+              )
+            }
+            className="mr-auto px-3 py-2 rounded-lg text-[12px] font-semibold border border-teal-200 bg-teal-50/70 hover:bg-teal-100/70 text-teal-800 cursor-pointer disabled:opacity-50"
+          >
+            {manualUploading ? '얼굴 확인 중...' : '📁 사진 1장 직접 고르기'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => close(people.length > 0)}

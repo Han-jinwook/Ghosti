@@ -24,6 +24,7 @@ import {
   pushGhostPassportsToCloud,
 } from './ghostPassportSync';
 import {
+  extractSingleFaceFromFileForPassport,
   isOnDeviceFaceScanRunning,
   runOnDeviceFacePassportScan,
   saveCachedOnDeviceFaceClusters,
@@ -584,17 +585,356 @@ export function markFirstOfferShown(): void {
   savePassportRegState({ ...st, firstOfferShown: true, lastPromptedSeq: st.activitySeq, lastPromptedAt: Date.now() });
 }
 
+export const PASSPORT_CHIP_PICK_FILE = '📁 내 기기에서 사진 1장 고르기';
+export const PASSPORT_FORCE_MANUAL_OPEN_KEY = 'ghosti_passport_force_manual_open';
+export const PASSPORT_MANUAL_UPLOAD_EVENT = 'ghosti_passport_manual_upload_status';
+
+export interface PassportManualUploadEventDetail {
+  phase: 'busy' | 'done' | 'error';
+  ok?: boolean;
+  matchedHiddenPhotoCount?: number;
+  message?: string;
+}
+
+function cosineSim128(a?: number[], b?: number[]): number {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length < 64 || b.length < 64) return -1;
+  const len = Math.min(a.length, b.length);
+  let dotVal = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < len; i++) {
+    const va = a[i] || 0;
+    const vb = b[i] || 0;
+    dotVal += va * vb;
+    normA += va * va;
+    normB += vb * vb;
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom > 1e-6 ? dotVal / denom : -1;
+}
+
+/**
+ * 유저가 직접 선택한 사진 1장(File)으로 내 여권을 즉시 생성·변경하고,
+ * 기존에 '3장 미만'이라 자동 후보에서 빠졌던 내 기기 속 1~2장짜리 동일 인물 사진까지 자동으로 찾아 합칩니다.
+ */
+export async function registerManualSelfPassportPhotoFile(
+  file: File,
+  optionalRealName?: string
+): Promise<{ ok: boolean; matchedHiddenPhotoCount: number; message: string }> {
+  const dispatchStatus = (detail: PassportManualUploadEventDetail) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.dispatchEvent(new CustomEvent(PASSPORT_MANUAL_UPLOAD_EVENT, { detail }));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  dispatchStatus({ phase: 'busy' });
+
+  const extracted = await extractSingleFaceFromFileForPassport(file);
+  if (!extracted.ok) {
+    const errMsg =
+      extracted.reason === 'NOT_IMAGE'
+        ? '이미지 파일(JPG, PNG, WEBP 등)을 선택해 주세요.'
+        : '선택하신 사진에서 선명한 인물 얼굴을 찾지 못했어요. 얼굴이 잘 보이는 다른 사진 1장을 골라 주세요.';
+    dispatchStatus({ phase: 'error', ok: false, message: errMsg });
+    return { ok: false, matchedHiddenPhotoCount: 0, message: errMsg };
+  }
+
+  let curStore = useSaySeeStore.getState();
+  // 로컬 사진이 있는데 아직 얼굴 스캔 전이면 즉시 스캔해 숨은 1~2장 내 사진도 함께 매칭
+  if (
+    (curStore.photos || []).length > 0 &&
+    (curStore.faceClusters || []).length === 0 &&
+    !isOnDeviceFaceScanRunning()
+  ) {
+    try {
+      const scanned = await runOnDeviceFacePassportScan(curStore.photos, [], true);
+      if (scanned.clusters.length > 0) {
+        useSaySeeStore.setState({
+          faceClusters: buildAutoMultiConditionSeedClusters(scanned.clusters),
+          latestCorpusYear: scanned.latestCorpusYear,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+    curStore = useSaySeeStore.getState();
+  }
+
+  const st = loadPassportRegState();
+  const book = loadGhostPassportBook();
+  const secSt = loadGhostSecretaryState();
+  const nickname = (secSt.nickname || book.self?.nickname || '').trim();
+  const cleanInputName = (optionalRealName || '').trim();
+  const safeRealName =
+    cleanInputName && !isRelationTagOnly(cleanInputName)
+      ? cleanInputName
+      : (book.self?.realName || '').trim();
+
+  const existingSelf = findSelfCluster(st);
+  const allClusters = (curStore.faceClusters || []).filter((c) => !c.excludedAsPasserby);
+
+  // 업로드한 내 얼굴 128D 벡터와 유사도 >= 0.43 인 클러스터(1~2장 소수 등장 포함!) 전수 흡수
+  const matchedSubClusters = allClusters.filter((c) => {
+    if (existingSelf && c.clusterId === existingSelf.clusterId) return true;
+    return cosineSim128(extracted.embedding128, c.seedVecPreview) >= 0.43;
+  });
+
+  const matchedLocalByName = (curStore.photos || []).find(
+    (p) => !p.quarantined && p.name.toLowerCase() === extracted.fileName.toLowerCase()
+  );
+  const representativePhotoKey =
+    matchedLocalByName?.name || `manual_passport_${Date.now()}_${extracted.fileName.replace(/[^0-9A-Za-z가-힣._-]/g, '_')}`;
+
+  const uploadedCut: YearlyFaceBestCut = {
+    year: extracted.year,
+    representativePhoto: representativePhotoKey,
+    representativeDate: extracted.dateStr,
+    frontalScore: extracted.frontalScore,
+    opticalSharpness: extracted.sharpness,
+    avatarUrl: extracted.avatarDataUrl,
+    cropUrl: extracted.avatarDataUrl,
+    boundingBox: extracted.boundingBox,
+    conditionTag: extracted.styleSlot,
+    conditionShortKo: extracted.styleShortKo,
+  };
+
+  const absorbedPhotoFiles = new Set<string>();
+  if (matchedLocalByName?.name) {
+    absorbedPhotoFiles.add(matchedLocalByName.name);
+  }
+  const absorbedCuts: YearlyFaceBestCut[] = [uploadedCut];
+  const seenCutReps = new Set<string>([representativePhotoKey]);
+
+  // 기존 확정 내 여권 사진 보존
+  for (const prevCut of st.confirmedSelfCuts || []) {
+    const rk = prevCut.representativePhoto || `y${prevCut.year}`;
+    if (!seenCutReps.has(rk)) {
+      seenCutReps.add(rk);
+      absorbedCuts.push(prevCut);
+    }
+  }
+
+  let hiddenMatchedNewPhotos = 0;
+  const prevSelfFiles = new Set(existingSelf?.matchedPhotoFiles || []);
+  for (const mc of matchedSubClusters) {
+    for (const f of mc.matchedPhotoFiles || []) {
+      if (f) {
+        if (!prevSelfFiles.has(f)) hiddenMatchedNewPhotos += 1;
+        absorbedPhotoFiles.add(f);
+      }
+    }
+    for (const cCut of clusterCuts(mc)) {
+      const rk = cCut.representativePhoto || `y${cCut.year}`;
+      if (!seenCutReps.has(rk)) {
+        seenCutReps.add(rk);
+        absorbedCuts.push(cCut);
+      }
+    }
+  }
+  absorbedCuts.sort((a, b) => b.year - a.year);
+
+  const targetClusterId =
+    existingSelf?.clusterId ||
+    matchedSubClusters[0]?.clusterId ||
+    `manual_self_${Date.now().toString(36)}`;
+
+  const absorbedClusterIds = new Set(matchedSubClusters.map((c) => c.clusterId));
+  absorbedClusterIds.add(targetClusterId);
+
+  const mergedMatchedFilesList = Array.from(absorbedPhotoFiles);
+  const displayName = safeRealName || nickname || '나';
+
+  // 기존 벡터와 업로드 벡터 가중 평균 정규화
+  let finalVec = extracted.embedding128;
+  if (existingSelf?.seedVecPreview && existingSelf.seedVecPreview.length === extracted.embedding128.length) {
+    const blended = extracted.embedding128.map((v, i) => v * 0.65 + (existingSelf.seedVecPreview![i] || 0) * 0.35);
+    const norm = Math.sqrt(blended.reduce((acc, v) => acc + v * v, 0)) || 1;
+    finalVec = blended.map((v) => +(v / norm).toFixed(5));
+  }
+
+  const updatedSelfCluster: FaceMemberCluster = {
+    ...(existingSelf || matchedSubClusters[0] || {
+      personKey: 'person_self',
+      relationshipTag: '',
+      suggestedChip: '나',
+      roleHintKo: '직접 등록한 내 얼굴',
+      isPasserbyCandidate: false,
+      excludedAsPasserby: false,
+      detectedSampleCount: Math.max(1, mergedMatchedFilesList.length),
+      matchedVideoSegmentCount: 0,
+      matchedVideoSegments: [],
+      seedDates: [extracted.dateStr],
+    }),
+    clusterId: targetClusterId,
+    registeredName: safeRealName || existingSelf?.registeredName || nickname || '',
+    roomPersonas: {
+      ...(existingSelf?.roomPersonas || {}),
+      ...(safeRealName ? { 우리집: safeRealName } : {}),
+      ...(nickname ? { personal: nickname } : {}),
+    },
+    appearanceLabelKo:
+      mergedMatchedFilesList.length > 0 ? `${mergedMatchedFilesList.length}장 연결됨` : '내 여권 등록됨',
+    excludedAsPasserby: false,
+    representativePhoto: representativePhotoKey,
+    representativeYear: extracted.year,
+    representativeDate: extracted.dateStr,
+    frontalScore: extracted.frontalScore,
+    opticalSharpness: extracted.sharpness,
+    avatarUrl: extracted.avatarDataUrl,
+    cropUrl: extracted.avatarDataUrl,
+    boundingBox: extracted.boundingBox,
+    yearlyBestCuts: absorbedCuts,
+    matchedPhotoCount: Math.max(1, mergedMatchedFilesList.length),
+    matchedPhotoFiles: mergedMatchedFilesList,
+    seedVecPreview: finalVec,
+  };
+
+  const remainingOtherClusters = (curStore.faceClusters || []).filter(
+    (c) => !absorbedClusterIds.has(c.clusterId)
+  );
+  const nextClusters = [updatedSelfCluster, ...remainingOtherClusters];
+  useSaySeeStore.setState({ faceClusters: nextClusters });
+  saveCustomFaceRegistration(targetClusterId, {
+    registeredName: updatedSelfCluster.registeredName,
+    excludedAsPasserby: false,
+  });
+  saveCachedOnDeviceFaceClusters(nextClusters, Math.max(curStore.latestCorpusYear || 2026, extracted.year));
+
+  if (mergedMatchedFilesList.length > 0) {
+    if (safeRealName) addTagToPhotos(mergedMatchedFilesList, `#${safeRealName}`);
+    if (nickname && nickname !== safeRealName) addTagToPhotos(mergedMatchedFilesList, `#${nickname}`);
+  }
+
+  const nextConfirmedKeys = new Set(
+    (st.confirmedKeys || []).filter((k) => {
+      const cid = k.split('::')[0];
+      return !absorbedClusterIds.has(cid) || cid === targetClusterId;
+    })
+  );
+  for (const cut of absorbedCuts) {
+    nextConfirmedKeys.add(cutKey(targetClusterId, cut));
+  }
+  const nextRejectedKeys = (st.rejectedKeys || []).filter(
+    (k) => k !== cutKey(targetClusterId, uploadedCut)
+  );
+
+  const nextPassportBook = {
+    ...book,
+    self: {
+      isSelf: true as const,
+      nickname: nickname || displayName,
+      realName: safeRealName || book.self?.realName,
+    },
+  };
+  saveGhostPassportBook(nextPassportBook);
+
+  savePassportRegState({
+    ...st,
+    selfClusterId: targetClusterId,
+    firstOfferShown: true,
+    confirmedKeys: Array.from(nextConfirmedKeys),
+    confirmedSelfCuts: absorbedCuts,
+    rejectedKeys: nextRejectedKeys,
+    dismissedClusterIds: (st.dismissedClusterIds || []).filter((id) => !absorbedClusterIds.has(id)),
+    lastPromptedSeq: st.activitySeq,
+    lastPromptedAt: Date.now(),
+  });
+
+  const ownerEmail = useSaySeeStore.getState().merlinAuth?.email || '';
+  if (ownerEmail) {
+    void pushGhostPassportsToCloud(
+      ownerEmail,
+      useSaySeeStore.getState().layout === 'mobile' ? 'mobile' : 'pc',
+      buildPassportExtrasFromClusters([
+        {
+          name: safeRealName || nickname || '나',
+          seedVecPreview: finalVec,
+          avatarUrl: extracted.avatarDataUrl,
+          cropUrl: extracted.avatarDataUrl,
+        },
+      ])
+    );
+  }
+
+  const doneMsg =
+    hiddenMatchedNewPhotos > 0
+      ? `선택한 사진으로 내 여권을 등록·변경했어요! 내 기기에 있던 같은 얼굴 사진 ${hiddenMatchedNewPhotos}장도 자동으로 찾아 함께 연결했습니다.`
+      : '선택한 사진으로 내 여권 등록·변경을 완료했어요! 우측 상단 [내 프로필 ➔ 여권]에서 언제든 확인하실 수 있습니다.';
+
+  dispatchStatus({
+    phase: 'done',
+    ok: true,
+    matchedHiddenPhotoCount: hiddenMatchedNewPhotos,
+    message: doneMsg,
+  });
+
+  return {
+    ok: true,
+    matchedHiddenPhotoCount: hiddenMatchedNewPhotos,
+    message: doneMsg,
+  };
+}
+
+let globalPassportFileInput: HTMLInputElement | null = null;
+let pendingManualRealNameHint = '';
+
+/**
+ * 어디서든(왼쪽 여권 패널 · 우측 비서 채팅 버튼 · 상단 [내 프로필 ➔ 여권] 모달) 클릭 즉시
+ * OS 파일 탐색기 / 스마트폰 사진첩을 열어 본인 사진 1장을 고를 수 있게 하는 공용 파일 선택기.
+ */
+export function triggerGlobalPassportFileInputClick(realNameHint?: string): boolean {
+  if (typeof document === 'undefined') return false;
+  pendingManualRealNameHint = (realNameHint || '').trim();
+  try {
+    if (!globalPassportFileInput) {
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      inp.accept = 'image/*';
+      inp.style.display = 'none';
+      inp.setAttribute('aria-hidden', 'true');
+      inp.addEventListener('change', () => {
+        const picked = inp.files?.[0];
+        const nameHint = pendingManualRealNameHint;
+        pendingManualRealNameHint = '';
+        inp.value = '';
+        if (picked) {
+          void registerManualSelfPassportPhotoFile(picked, nameHint);
+        }
+      });
+      document.body.appendChild(inp);
+      globalPassportFileInput = inp;
+    }
+    globalPassportFileInput.click();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // 왼쪽 등록 화면 열기 (비서 명령 · 카드 · 검색 칩 공용)
 // ─────────────────────────────────────────────────────────────
-export function openPassportRegistration(mode: PassportRegMode): void {
+export function openPassportRegistration(
+  mode: PassportRegMode,
+  options?: { forceManualOpen?: boolean }
+): void {
   try {
     sessionStorage.setItem(PASSPORT_REG_PENDING_OPEN_KEY, mode);
+    if (options?.forceManualOpen) {
+      sessionStorage.setItem(PASSPORT_FORCE_MANUAL_OPEN_KEY, '1');
+    }
   } catch {
     /* ignore */
   }
   try {
-    window.dispatchEvent(new CustomEvent(PASSPORT_REG_OPEN_EVENT, { detail: { mode } }));
+    window.dispatchEvent(
+      new CustomEvent(PASSPORT_REG_OPEN_EVENT, {
+        detail: { mode, forceManualOpen: Boolean(options?.forceManualOpen) },
+      })
+    );
   } catch {
     /* ignore */
   }
@@ -610,31 +950,62 @@ export function consumePendingPassportOpen(): PassportRegMode | null {
   }
 }
 
-/** 비서 명령어 인식: "여권 등록", "내 사진 등록", "가족 얼굴 등록하자" 등 (규칙·장수·캐릭터·동물 문의 문장은 제외) */
+export function consumeForceManualPassportOpen(): boolean {
+  try {
+    const v = sessionStorage.getItem(PASSPORT_FORCE_MANUAL_OPEN_KEY) === '1';
+    sessionStorage.removeItem(PASSPORT_FORCE_MANUAL_OPEN_KEY);
+    return v;
+  } catch {
+    return false;
+  }
+}
+
+/** 비서 명령어 인식: "여권 등록", "여권 변경하고 싶어", "내 사진 등록", "가족 얼굴 등록하자" 등 */
 export function matchPassportRegCommand(text: string): PassportRegMode | null {
   const t = (text || '').replace(/\s+/g, ' ').trim();
-  if (!t || t.length > 40) return null;
+  if (!t || t.length > 48) return null;
   if (
-    /몇\s*장|장수|몇\s*명|인원|제한|무제한|규칙|가능|불가|되나|되나요|돼\?|할\s*수\s*있|캐릭터|2d|3d|만화|애니|동물|강아지|고양이|반려|실제\s*인물|어떻게\s*(?:등록|돼|되)/i.test(
+    /몇\s*장|장수|몇\s*명|인원|제한|무제한|규칙|가능|불가|되나|되나요|돼\?|할\s*수\s*있|캐릭터|2d|3d|만화|애니|동물|강아지|고양이|반려|실제\s*인물|어떻게\s*(?:등록|돼|되)|이름.*?바꿔|닉네임.*?바꿔|별명.*?바꿔/i.test(
       t
     )
   ) {
     return null;
   }
   if (
-    /가족\s*(얼굴|사진|여권)도?\s*(등록|추가|만들|하자|할래|해\s*줘)|가족\s*여권|가족도\s*등록|^(가족|인물)\s*(추가|등록)/.test(t)
+    /가족\s*(얼굴|사진|여권)도?\s*(등록|추가|변경|바꾸|교체|만들|하자|할래|해\s*줘)|가족\s*여권|가족도\s*등록|^(가족|인물)\s*(추가|등록)/.test(t)
   ) {
     return 'family';
   }
   if (
-    /여권\s*(사진)?\s*(등록|추가|수정|다시|만들|하자|할래|해\s*줘)|내\s*(얼굴|사진)\s*(등록|추가)|^얼굴\s*(등록|다시)|여권\s*사진\s*(확인|등록)|시기별\s*다양한\s*여권/.test(t)
+    /여권\s*(사진|얼굴)?\s*(등록|추가|수정|변경|바꾸|바꿔|바꿀|교체|다시|새로|만들|하자|할래|해\s*줘|올릴|업로드|선택|고를|고를래|싶어)|(?:내|본인)\s*(얼굴|사진|여권)\s*(등록|추가|변경|바꾸|바꿔|교체|만들|올릴|업로드)|^얼굴\s*(등록|변경|다시)|여권\s*사진\s*(확인|등록|변경|선택)|시기별\s*다양한\s*여권|(?:새로운|다른|새)\s*사진으로\s*여권/.test(
+      t
+    )
   ) {
     return 'self';
   }
   return null;
 }
 
-/** 등록 화면을 열 수 없는 상황(미연결·스캔 중·후보 없음)에 대한 정직한 안내 */
+/** 직전 비서 안내가 여권 관련일 때 "새로운 사진으로 변경할래", "갤러리에서 고를래", "사진 선택할게" 등 후속 파일 선택 의사 판별 */
+export function isPassportDirectPickFollowUp(text: string, lastAssistantText?: string): boolean {
+  const t = (text || '').replace(/\s+/g, ' ').trim();
+  if (!t || t.length > 44) return false;
+  if (t === PASSPORT_CHIP_PICK_FILE) return true;
+  if (
+    /(?:여권|내\s*얼굴)\s*사진\s*(?:직접\s*)?(?:고르기|선택|올리기|업로드|불러오기)/i.test(t)
+  ) {
+    return true;
+  }
+  const lastHadPassportContext = Boolean(
+    lastAssistantText && /여권|내\s*얼굴.*?(?:선택|고르|등록)|사진\s*1장/i.test(lastAssistantText)
+  );
+  if (!lastHadPassportContext) return false;
+  return /(?:새로운|새|다른)?\s*사진(?:으로)?\s*(?:변경|바꾸|바꿔|교체|선택|고를|고르|올릴|업로드)|(?:갤러리|폴더|파일|컴퓨터|내\s*기기)(?:에서)?\s*(?:고를|고르|선택|열어|찾을|불러)|직접\s*(?:고를|고르|선택|올릴)/i.test(
+    t
+  );
+}
+
+/** 등록 화면을 열 수 없는 상황 판별 — 본인('self') 여권은 자동 후보가 0명(0~2장 PC)이어도 왼쪽 화면에서 1장 직접 업로드가 가능하므로 항상 열어준다 */
 export function passportUnavailableReason(mode: PassportRegMode, nickname: string, engineConnected: boolean): string | null {
   const nick = nickname ? `${nickname}님, ` : '';
   const store = useSaySeeStore.getState();
@@ -642,10 +1013,6 @@ export function passportUnavailableReason(mode: PassportRegMode, nickname: strin
   const qualifiedSelfCandidates = rankFaceClusters(clusters, MAX_FACES, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
 
   if (clusters.length === 0 || qualifiedSelfCandidates.length === 0) {
-    const justLoadedBootWindow = typeof performance !== 'undefined' && performance.now() < 10000;
-    if (!engineConnected && (store.photos || []).length === 0 && !justLoadedBootWindow) {
-      return `${nick}내 컴퓨터를 먼저 연결해 주시면 사진 속 얼굴을 찾아서 바로 보여드릴게요!`;
-    }
     if ((store.photos || []).length > 0 && !isOnDeviceFaceScanRunning()) {
       void (async () => {
         try {
@@ -672,11 +1039,22 @@ export function passportUnavailableReason(mode: PassportRegMode, nickname: strin
         }
       })();
     }
-    if (isOnDeviceFaceScanRunning() || clusters.length === 0 || justLoadedBootWindow) {
+    // 본인 여권('self')은 후보가 0명(0~2장 PC 또는 미연결)이어도 즉시 왼쪽 패널을 열어 [사진 1장 직접 고르기]를 제공한다!
+    if (mode === 'self') {
+      return null;
+    }
+    if (!engineConnected && (store.photos || []).length === 0) {
+      return `${nick}내 컴퓨터를 먼저 연결해 주시면 사진 속 가족 얼굴을 찾아서 바로 보여드릴게요!`;
+    }
+    if (isOnDeviceFaceScanRunning()) {
       queueUserPassportWait(mode, nickname);
       return `${nick}아직 사진 속 얼굴을 찾는 중이에요. 다 찾으면 바로 알려드릴게요!`;
     }
-    return `${nick}같은 분이 3장 이상 나온 인물 사진을 아직 찾지 못했어요. 새 사진이 들어오면 자동으로 찾아둘게요!`;
+    const st = loadPassportRegState();
+    if (!findSelfCluster(st)) {
+      return null; // 내 얼굴 직접 1장 등록 화면으로 자연스럽게 연결
+    }
+    return `${nick}3장 이상 등장한 새로운 가족 얼굴 후보를 아직 찾지 못했어요. 새 사진이 들어오면 자동으로 찾아둘게요!`;
   }
   if (mode === 'family') {
     const st = loadPassportRegState();

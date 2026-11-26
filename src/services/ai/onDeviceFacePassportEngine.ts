@@ -1332,3 +1332,226 @@ export async function runOnDeviceFacePassportScan(
   const clusters = await activeScanPromise;
   return { clusters, latestCorpusYear: latestYearOut };
 }
+
+export type SinglePassportFaceExtractResult =
+  | {
+      ok: true;
+      fileName: string;
+      avatarDataUrl: string;
+      embedding128: number[];
+      boundingBox: [number, number, number, number];
+      sharpness: number;
+      frontalScore: number;
+      styleSlot: PassportStyleSlotTag;
+      styleShortKo: string;
+      year: number;
+      dateStr: string;
+    }
+  | {
+      ok: false;
+      reason: 'NOT_IMAGE' | 'NO_FACE' | 'WORKER_UNAVAILABLE';
+    };
+
+/**
+ * 유저가 직접 선택한 사진 1장(File)에서 온디바이스 YuNet + SFace(128D)로 본인 얼굴 아바타와 특징 벡터를 즉시 추출합니다.
+ * - 원본 파일은 외부 서버로 절대 전송되지 않으며 브라우저 메모리 안에서만 처리 후 즉시 해제됩니다.
+ */
+export async function extractSingleFaceFromFileForPassport(
+  file: File
+): Promise<SinglePassportFaceExtractResult> {
+  if (typeof window === 'undefined' || typeof Worker === 'undefined') {
+    return { ok: false, reason: 'WORKER_UNAVAILABLE' };
+  }
+  if (!file || (file.type && !file.type.startsWith('image/') && !/\.(jpe?g|png|webp|bmp|gif|heic|heif)$/i.test(file.name))) {
+    return { ok: false, reason: 'NOT_IMAGE' };
+  }
+
+  const blobUrl = URL.createObjectURL(file);
+  const worker = new Worker(new URL('./facePassportWorker.ts', import.meta.url), {
+    type: 'module',
+  });
+  let reqSeq = 1;
+  const pending = new Map<
+    number,
+    {
+      resolve: (payload: { faces?: WorkerDetectedFace[]; embeddingBuffer?: ArrayBuffer; ok: boolean }) => void;
+      timer: number;
+    }
+  >();
+
+  worker.onmessage = (
+    ev: MessageEvent<{ id: number; ok: boolean; faces?: WorkerDetectedFace[]; embeddingBuffer?: ArrayBuffer }>
+  ) => {
+    const msg = ev.data;
+    if (!msg || typeof msg.id !== 'number') return;
+    const entry = pending.get(msg.id);
+    if (!entry) return;
+    window.clearTimeout(entry.timer);
+    pending.delete(msg.id);
+    entry.resolve(msg);
+  };
+
+  const detectInWorker = (
+    bgr: Float32Array,
+    origW: number,
+    origH: number,
+    scale: number,
+    scoreThreshold = 0.75
+  ): Promise<WorkerDetectedFace[]> =>
+    new Promise((resolve) => {
+      const id = reqSeq++;
+      const timer = window.setTimeout(() => {
+        pending.delete(id);
+        resolve([]);
+      }, 12000);
+      pending.set(id, {
+        resolve: (res) => resolve(Array.isArray(res.faces) ? res.faces : []),
+        timer,
+      });
+      worker.postMessage(
+        { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold },
+        [bgr.buffer]
+      );
+    });
+
+  const embedInWorker = (faceBgr112: Float32Array): Promise<Float32Array | null> =>
+    new Promise((resolve) => {
+      const id = reqSeq++;
+      const timer = window.setTimeout(() => {
+        pending.delete(id);
+        resolve(null);
+      }, 12000);
+      pending.set(id, {
+        resolve: (res) =>
+          resolve(res.ok && res.embeddingBuffer ? new Float32Array(res.embeddingBuffer) : null),
+        timer,
+      });
+      worker.postMessage({ id, type: 'embed', faceBgrBuffer: faceBgr112.buffer }, [faceBgr112.buffer]);
+    });
+
+  try {
+    const img = await loadImageForFaceScan(blobUrl);
+    if (!img) {
+      return { ok: false, reason: 'NOT_IMAGE' };
+    }
+
+    const inputCanvas = document.createElement('canvas');
+    const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true });
+    const rotCanvas = document.createElement('canvas');
+    const rotCtx = rotCanvas.getContext('2d');
+    const cropCanvas = document.createElement('canvas');
+    const cropCtx = cropCanvas.getContext('2d');
+    const featCanvas = document.createElement('canvas');
+    const featCtx = featCanvas.getContext('2d', { willReadFrequently: true });
+    if (!inputCtx || !rotCtx || !cropCtx || !featCtx) {
+      return { ok: false, reason: 'WORKER_UNAVAILABLE' };
+    }
+
+    let activeSource: ScanImageSource = img;
+    const in0 = prepareYuNetInput(img, inputCanvas, inputCtx);
+    let faces = await detectInWorker(in0.bgr, in0.origW, in0.origH, in0.scale, 0.75);
+    const maxScore0 = faces.length > 0 ? faces[0].score : 0;
+
+    if (faces.length === 0 || maxScore0 < 0.92) {
+      const src180 = drawRotatedSource(img, 180, rotCanvas, rotCtx);
+      const in180 = prepareYuNetInput(src180, inputCanvas, inputCtx);
+      const faces180 = await detectInWorker(in180.bgr, in180.origW, in180.origH, in180.scale, 0.80);
+      const maxScore180 = faces180.length > 0 ? faces180[0].score : 0;
+      if (maxScore180 >= 0.84 && maxScore180 > maxScore0 + 0.015) {
+        activeSource = src180;
+        faces = faces180;
+      }
+    }
+
+    if (faces.length === 0) {
+      const src90 = drawRotatedSource(img, 90, rotCanvas, rotCtx);
+      const in90 = prepareYuNetInput(src90, inputCanvas, inputCtx);
+      const faces90 = await detectInWorker(in90.bgr, in90.origW, in90.origH, in90.scale, 0.82);
+      const maxScore90 = faces90.length > 0 ? faces90[0].score : 0;
+
+      const src270 = drawRotatedSource(img, 270, rotCanvas, rotCtx);
+      const in270 = prepareYuNetInput(src270, inputCanvas, inputCtx);
+      const faces270 = await detectInWorker(in270.bgr, in270.origW, in270.origH, in270.scale, 0.82);
+      const maxScore270 = faces270.length > 0 ? faces270[0].score : 0;
+
+      if (maxScore90 >= 0.84 && maxScore90 >= maxScore270) {
+        activeSource = drawRotatedSource(img, 90, rotCanvas, rotCtx);
+        faces = faces90;
+      } else if (maxScore270 >= 0.84) {
+        activeSource = src270;
+        faces = faces270;
+      }
+    }
+
+    if (faces.length === 0) {
+      return { ok: false, reason: 'NO_FACE' };
+    }
+
+    // 단체 사진일 경우 가장 크고 정면인 주인공 얼굴을 우선 선별
+    const rankedFaces = faces.slice().sort((a, b) => {
+      const areaA = Math.max(1e-5, (a.y2 - a.y1) * (a.x2 - a.x1));
+      const areaB = Math.max(1e-5, (b.y2 - b.y1) * (b.x2 - b.x1));
+      return areaB * b.frontalScore - areaA * a.frontalScore;
+    });
+
+    for (const f of rankedFaces) {
+      const cropped = prepareFaceCropAndBgr112(
+        activeSource,
+        f,
+        cropCanvas,
+        cropCtx,
+        featCanvas,
+        featCtx
+      );
+      // 유저가 직접 고른 사진(흑백 증명사진·스튜디오 조명 포함)은 고신뢰 YuNet 검출(>= 0.85) 시 허용
+      if (!cropped.isRealHumanFace && f.score < 0.85) continue;
+      const emb = await embedInWorker(cropped.faceBgr112);
+      if (!emb || emb.length < 64) continue;
+
+      const lastModDate = file.lastModified ? new Date(file.lastModified) : new Date();
+      const fallbackDateStr = `${lastModDate.getFullYear()}-${String(lastModDate.getMonth() + 1).padStart(2, '0')}-${String(lastModDate.getDate()).padStart(2, '0')}`;
+      const pseudoPhoto = {
+        name: file.name || 'manual_passport.jpg',
+        date: fallbackDateStr,
+      } as PhotoItem;
+      const { year, dateStr } = parsePhotoYearAndDate(pseudoPhoto);
+
+      return {
+        ok: true,
+        fileName: file.name || 'manual_passport.jpg',
+        avatarDataUrl: cropped.avatarDataUrl,
+        embedding128: Array.from(emb).map((v) => +v.toFixed(5)),
+        boundingBox: [
+          Math.round(f.y1 * 1000),
+          Math.round(f.x1 * 1000),
+          Math.round(f.y2 * 1000),
+          Math.round(f.x2 * 1000),
+        ],
+        sharpness: cropped.sharpness,
+        frontalScore: f.frontalScore,
+        styleSlot: cropped.styleSlot,
+        styleShortKo: cropped.styleShortKo,
+        year,
+        dateStr,
+      };
+    }
+
+    return { ok: false, reason: 'NO_FACE' };
+  } catch {
+    return { ok: false, reason: 'NOT_IMAGE' };
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+    try {
+      worker.postMessage({ id: reqSeq++, type: 'dispose' });
+    } catch {
+      /* ignore */
+    }
+    window.setTimeout(() => {
+      try {
+        worker.terminate();
+      } catch {
+        /* ignore */
+      }
+    }, 100);
+  }
+}

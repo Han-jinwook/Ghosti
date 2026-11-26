@@ -80,6 +80,8 @@ import {
 } from '../services/ghostPassportSync';
 import { isOnDeviceFaceScanRunning } from '../services/ai/onDeviceFacePassportEngine';
 import {
+  PASSPORT_CHIP_PICK_FILE,
+  PASSPORT_MANUAL_UPLOAD_EVENT,
   PASSPORT_MIN_FACE_PHOTOS_FOR_ASK,
   PASSPORT_REG_DONE_EVENT,
   PASSPORT_REG_STATE_EVENT,
@@ -89,6 +91,7 @@ import {
   familyCandidates,
   findSelfCluster,
   getConfirmedSelfPassportView,
+  isPassportDirectPickFollowUp,
   loadPassportRegState,
   markFirstOfferShown,
   markPassportPrompted,
@@ -99,6 +102,8 @@ import {
   peekQueuedUserPassportWait,
   rankFaceClusters,
   summarizePassportPending,
+  triggerGlobalPassportFileInputClick,
+  type PassportManualUploadEventDetail,
   type PassportRegMode,
 } from '../services/passportRegistrationFlow';
 
@@ -352,6 +357,26 @@ function resolvePassportCommandReply(
     };
   }
 
+  // "갤러리에서 고를래", "사진 선택할게", "새로운 사진으로 변경할래" 또는 [📁 내 기기에서 사진 1장 고르기] 칩 클릭 시
+  // LLM 환각 응답 없이 즉시 실제 OS 파일 탐색기 / 스마트폰 사진첩을 열고 왼쪽 여권 패널도 함께 표시
+  if (isPassportDirectPickFollowUp(text, lastAssistantText)) {
+    useSaySeeStore.getState().setDesktopTab('trash');
+    openPassportRegistration('self', { forceManualOpen: true });
+    markPassportPrompted();
+    const openedNativeDialog = triggerGlobalPassportFileInputClick();
+    return {
+      ...base,
+      id: `secretary_passport_file_pick_${Date.now()}`,
+      text: openedNativeDialog
+        ? `${nickPrefix}내 얼굴이 나온 사진 1장을 고를 수 있도록 **사진 선택 창**을 열어 드렸습니다! (창이 보이지 않으면 아래 버튼이나 왼쪽 여권 화면의 **[내 기기에서 사진 1장 직접 고르기]**를 눌러 주세요.)`
+        : `${nickPrefix}왼쪽 여권 화면과 아래 버튼에 **[내 기기에서 사진 1장 고르기]**를 준비해 두었습니다. 버튼을 누르면 바로 내 폴더(갤러리)가 열립니다!`,
+      followUpSuggestions: [PASSPORT_CHIP_PICK_FILE],
+    };
+  }
+
+  const isExplicitChangeOrUploadAsk =
+    /여권.*?(?:변경|바꾸|바꿔|바꿀|교체|새로|올릴|업로드|선택|고를)|(?:새로운|다른|새)\s*사진으로\s*여권/i.test(text);
+
   let mode: PassportRegMode | null = null;
   if (text === PASSPORT_CHIP_OPEN_SELF || text === '🪪 여권사진 확인하기') mode = 'self';
   else if (text === PASSPORT_CHIP_OPEN_FAMILY || text === '👨‍👩‍👧 가족 사진도 등록할래') mode = 'family';
@@ -363,43 +388,60 @@ function resolvePassportCommandReply(
     return { ...base, id: `secretary_passport_unavailable_${Date.now()}`, text: unavailable };
   }
 
+  useSaySeeStore.getState().setDesktopTab('trash');
   const { selfCluster: self, cuts: confirmedSelfCuts, regState: regSt } = getConfirmedSelfPassportView();
   // 가족을 원해도 '나'를 아직 고르지 않았다면 내 얼굴부터 자연스럽게
   const openMode: PassportRegMode = mode === 'family' && !self ? 'self' : mode;
   const pending = summarizePassportPending(regSt);
-  const hasRealName = Boolean((loadGhostPassportBook().self?.realName || '').trim());
-  const nothingForSelf =
-    openMode === 'self' &&
-    Boolean(self || confirmedSelfCuts.length > 0) &&
-    confirmedSelfCuts.length > 0 &&
-    pending.selfPendingCount === 0 &&
-    hasRealName;
-  if (nothingForSelf) {
-    if (pending.familyPersonCount > 0) {
-      openPassportRegistration('family');
-      markPassportPrompted();
-      return {
-        ...base,
-        id: `secretary_passport_open_family_${Date.now()}`,
-        text: `${nickPrefix}내 여권 사진은 이미 등록되어 있어, 이어서 가족 후보 화면을 왼쪽에 띄워 드렸습니다. 이름을 적거나 아닌 사진만 빼고 [등록]을 눌러주세요.`,
-      };
+  const qualifiedCandidates = rankFaceClusters(useSaySeeStore.getState().faceClusters || []);
+
+  // 1) 이미 내 여권이 등록된 상태에서 "여권 변경하고 싶어" / "여권 등록" 등을 말했을 때:
+  //    단순히 "모두 등록되어 있습니다"로 닫지 않고 왼쪽 여권 패널을 강제 오픈 + 실제 사진 선택창 호출 버튼을 함께 제공!
+  if (openMode === 'self' && (isExplicitChangeOrUploadAsk || (Boolean(self || confirmedSelfCuts.length > 0) && pending.selfPendingCount === 0))) {
+    openPassportRegistration('self', { forceManualOpen: true });
+    markPassportPrompted();
+    if (isExplicitChangeOrUploadAsk) {
+      triggerGlobalPassportFileInputClick();
     }
     return {
       ...base,
-      id: `secretary_passport_done_${Date.now()}`,
-      text: `${nickPrefix}지금 찾은 사진은 모두 등록되어 있습니다. 새 사진이 생기면 자동으로 찾아둘게요.`,
+      id: `secretary_passport_change_open_${Date.now()}`,
+      text: isExplicitChangeOrUploadAsk
+        ? `${nickPrefix}새 사진으로 여권을 추가·변경하실 수 있도록 **왼쪽 여권 화면**과 **사진 선택 창**을 열어 드렸습니다! 아래 버튼을 누르시면 언제든 내 폴더(갤러리)에서 사진 1장을 직접 고르실 수 있어요.`
+        : `${nickPrefix}왼쪽에 내 여권 화면을 띄워 드렸습니다. 새 사진 1장을 직접 골라 추가·변경하거나, 우측 상단 **[내 프로필 ➔ 여권]**에서 기존 사진을 정리하실 수 있어요.`,
+      followUpSuggestions:
+        pending.familyPersonCount > 0
+          ? [PASSPORT_CHIP_PICK_FILE, PASSPORT_CHIP_OPEN_FAMILY]
+          : [PASSPORT_CHIP_PICK_FILE],
     };
   }
 
-  openPassportRegistration(openMode);
+  // 2) 내 사진이 0~2장뿐이라 자동 후보(3장 이상)가 0명인 PC에서 여권 등록을 요청했을 때:
+  if (openMode === 'self' && !self && qualifiedCandidates.length === 0) {
+    openPassportRegistration('self', { forceManualOpen: true });
+    markPassportPrompted();
+    return {
+      ...base,
+      id: `secretary_passport_manual_first_${Date.now()}`,
+      text: `${nickPrefix}현재 기기에서 3장 이상 자동으로 묶인 얼굴 후보가 없어, **내 얼굴 사진 1장을 직접 골라 등록**하실 수 있도록 왼쪽 화면을 열어 드렸습니다. 아래 버튼을 눌러 사진 1장을 선택해 주세요!`,
+      followUpSuggestions: [PASSPORT_CHIP_PICK_FILE],
+    };
+  }
+
+  openPassportRegistration(openMode, { forceManualOpen: openMode === 'self' });
   markPassportPrompted();
   const guide =
     openMode === 'self' && !self
       ? mode === 'family'
-        ? `가족 등록 전에 ${nickname ? `${nickname}님` : '내'} 얼굴부터 왼쪽 화면에서 선택해 주세요.`
-        : `왼쪽 화면에 띄워 드렸습니다. ${nickname ? `${nickname}님` : '내'} 얼굴을 선택해 주세요.`
+        ? `가족 등록 전에 ${nickname ? `${nickname}님` : '내'} 얼굴부터 왼쪽 화면에서 선택해 주세요. (원하는 사진이 없으면 아래 버튼으로 사진 1장을 직접 고를 수 있어요.)`
+        : `왼쪽 화면에 띄워 드렸습니다. ${nickname ? `${nickname}님` : '내'} 얼굴을 선택하거나, 아래 버튼으로 내 사진 1장을 직접 골라 등록해 주세요.`
       : `왼쪽 화면에 띄워 드렸습니다. 아닌 사진만 제외하고 [등록]을 눌러주세요.`;
-  return { ...base, id: `secretary_passport_open_${Date.now()}`, text: guide };
+  return {
+    ...base,
+    id: `secretary_passport_open_${Date.now()}`,
+    text: guide,
+    followUpSuggestions: openMode === 'self' ? [PASSPORT_CHIP_PICK_FILE] : undefined,
+  };
 }
 
 interface MonsterStandardChatColumnProps {
@@ -1040,15 +1082,35 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       fulfillUserWaitIfReady(true);
     };
 
+    const onManualPassportUpload = (ev: Event) => {
+      const detail = (ev as CustomEvent<PassportManualUploadEventDetail>).detail;
+      if (!detail || detail.phase === 'busy') return;
+      if (detail.phase === 'done' && detail.ok) {
+        syncPassportAfterRegistration();
+        pushOnce('secretary_passport_manual_done_', {
+          text: `✅ ${detail.message || '선택하신 사진으로 내 여권 등록·변경을 완료했어요!'}`,
+          followUpSuggestions:
+            familyCandidates().length > 0 ? [PASSPORT_CHIP_OPEN_FAMILY] : undefined,
+        });
+      } else if (detail.phase === 'error') {
+        pushOnce('secretary_passport_manual_err_', {
+          text: detail.message || '선택하신 사진에서 얼굴을 찾지 못했어요. 얼굴이 잘 나온 다른 사진 1장을 골라 주세요.',
+          followUpSuggestions: [PASSPORT_CHIP_PICK_FILE],
+        });
+      }
+    };
+
     window.addEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
     window.addEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
     window.addEventListener(PASSPORT_SCAN_FINISHED_EVENT, onScanFinished);
+    window.addEventListener(PASSPORT_MANUAL_UPLOAD_EVENT, onManualPassportUpload);
     // 다른 화면에서 사진 활동이 있었거나 얼굴 클러스터가 막 준비되었다면 즉시 1회 묻는다
     onRegState();
     return () => {
       window.removeEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
       window.removeEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
       window.removeEventListener(PASSPORT_SCAN_FINISHED_EVENT, onScanFinished);
+      window.removeEventListener(PASSPORT_MANUAL_UPLOAD_EVENT, onManualPassportUpload);
     };
   }, [sourceTab, isMobileOrStore, faceClusterCount]);
   useEffect(() => {
