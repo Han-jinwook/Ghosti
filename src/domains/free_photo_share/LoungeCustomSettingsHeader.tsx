@@ -11,13 +11,12 @@ import { QrCodeSvg } from '../../utils/qrCodeSvg';
 import { CrossDeviceClipboardAndPairingBar } from '../paid_device_sync/CrossDeviceClipboardAndPairingBar';
 import { getThisDeviceIdentity } from '../../services/deviceIntegrationService';
 import {
-  ensureMyRoomAndInviteToken,
   fetchSharedPhotoRoomMembers,
+  getCachedSharedPhotoRoomMembersSync,
   getPrewarmedRoomInviteTokenSync,
   kickMemberFromSupabaseSharedPhotoRoom,
   type SharedPhotoRoomMemberInfo,
 } from '../../services/sharedPhotoRoomSupabase';
-import { resolveDefaultRoomTitle } from '../../services/shareInviteDeepLinkBridge';
 
 import {
   KICKED_ROOM_MEMBERS_STORAGE_KEY,
@@ -84,9 +83,30 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [mobileInstallLinkCopied, setMobileInstallLinkCopied] = useState(false);
   const [subPcLinkCopied, setSubPcLinkCopied] = useState(false);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
-  const [resolvedSettingsRoomId, setResolvedSettingsRoomId] = useState<string | null>(null);
-  const [serverRoomMembers, setServerRoomMembers] = useState<SharedPhotoRoomMemberInfo[]>([]);
-  const [hasLoadedServerMembers, setHasLoadedServerMembers] = useState(false);
+  const initialTargetRoomId =
+    activeJoinedRoomMeta?.roomId ||
+    activeSharedRoomId ||
+    getPrewarmedRoomInviteTokenSync(activeLoungeType, activeFamilyRoom)?.roomId ||
+    null;
+  const initialCachedMembers =
+    (activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') &&
+    Boolean(merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest')
+      ? getCachedSharedPhotoRoomMembersSync(initialTargetRoomId || '', {
+          loungeType: activeLoungeType,
+          familyRoom: activeFamilyRoom,
+          isJoinedOtherRoom: Boolean(activeJoinedRoomMeta),
+        })
+      : null;
+
+  const [resolvedSettingsRoomId, setResolvedSettingsRoomId] = useState<string | null>(
+    initialTargetRoomId
+  );
+  const [serverRoomMembers, setServerRoomMembers] = useState<SharedPhotoRoomMemberInfo[]>(
+    initialCachedMembers ?? []
+  );
+  const [hasLoadedServerMembers, setHasLoadedServerMembers] = useState<boolean>(
+    initialCachedMembers !== null
+  );
   const [memberRefreshTick, setMemberRefreshTick] = useState(0);
   const lastMemberScopeKeyRef = useRef<string>('');
 
@@ -117,7 +137,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
   );
 
-  // [정식 SQL SSOT] 공유방(가족·동호회·동창회) 방관리 진입 시 ghosti_lounge_members에서 실제 참여 회원 전체를 직접 조회
+  // [정식 SQL SSOT + 0ms SWR] 공유방(가족·동호회·동창회) 방관리 진입 즉시 캐시 0ms 표시 + 서버 백그라운드 재검증
   useEffect(() => {
     const isSharedPhotoRoom =
       activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student';
@@ -129,40 +149,36 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       return;
     }
     let cancelled = false;
-    const scopeKey = `${activeLoungeType}:${activeFamilyRoom}:${activeJoinedRoomMeta?.roomId || activeSharedRoomId || ''}:${(merlinAuth?.email || '').trim().toLowerCase()}`;
+    const targetRoomId =
+      activeJoinedRoomMeta?.roomId ||
+      activeSharedRoomId ||
+      getPrewarmedRoomInviteTokenSync(activeLoungeType, activeFamilyRoom)?.roomId ||
+      null;
+    const isJoinedOtherRoom = Boolean(activeJoinedRoomMeta);
+    const scopeKey = `${activeLoungeType}:${activeFamilyRoom}:${targetRoomId || ''}:${(merlinAuth?.email || '').trim().toLowerCase()}`;
+
     if (lastMemberScopeKeyRef.current !== scopeKey) {
       lastMemberScopeKeyRef.current = scopeKey;
-      setServerRoomMembers([]);
-      setHasLoadedServerMembers(false);
+      const cached = getCachedSharedPhotoRoomMembersSync(targetRoomId || '', {
+        loungeType: activeLoungeType,
+        familyRoom: activeFamilyRoom,
+        isJoinedOtherRoom,
+      });
+      if (cached !== null) {
+        setServerRoomMembers(cached);
+        setHasLoadedServerMembers(true);
+      } else {
+        setServerRoomMembers([]);
+        setHasLoadedServerMembers(false);
+      }
     }
 
     const loadRealMembers = async () => {
-      let targetRoomId =
-        activeJoinedRoomMeta?.roomId ||
-        activeSharedRoomId ||
-        getPrewarmedRoomInviteTokenSync(activeLoungeType, activeFamilyRoom)?.roomId ||
-        null;
-
-      if (!targetRoomId) {
-        const nick = resolveAccountScopedNickname(
-          merlinAuth?.email || '',
-          activeLoungeType === 'family' ? '가족방장' : '모임방장'
-        );
-        const ensured = await ensureMyRoomAndInviteToken({
-          loungeType: activeLoungeType,
-          familyRoom: activeFamilyRoom,
-          roomTitle: resolveDefaultRoomTitle(activeLoungeType, activeFamilyRoom),
-          masterNickname: nick,
-        });
-        if (ensured.ok && ensured.roomId) {
-          targetRoomId = ensured.roomId;
-        }
-      }
-      if (cancelled) return;
       setResolvedSettingsRoomId(targetRoomId);
       const members = await fetchSharedPhotoRoomMembers(targetRoomId || '', {
         loungeType: activeLoungeType,
         familyRoom: activeFamilyRoom,
+        isJoinedOtherRoom,
       });
       if (cancelled) return;
       setServerRoomMembers(members);
@@ -182,6 +198,10 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     merlinAuth?.email,
     memberRefreshTick,
   ]);
+  const isLoadingRoomMembers =
+    isLoggedInUser &&
+    (activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') &&
+    !hasLoadedServerMembers;
   const isMainPcConnected = isLoggedInUser && isZCoreConnected;
   const isMobileConnected = isLoggedInUser && Boolean(pcAgentPairedMobile);
 
@@ -1052,7 +1072,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
           <div className="flex flex-col gap-2">
             <span className="text-[12.5px] text-slate-700 font-semibold">
-              참여 멤버 ({visibleFamilyMembers.length}명)
+              참여 멤버 ({isLoadingRoomMembers ? '불러오는 중...' : `${visibleFamilyMembers.length}명`})
             </span>
             {visibleFamilyMembers.length === 0 ? (
               <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-500">
@@ -1083,6 +1103,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     )}
                   </div>
                 ))}
+                {isLoadingRoomMembers && (
+                  <div className="px-2.5 py-1 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-[12px] text-slate-400 animate-pulse">
+                    참여 멤버 확인 중...
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1118,36 +1143,43 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
           <span className="text-[12.5px] text-slate-700 font-semibold mr-1">
-            참여 회원 ({visibleClubMembers.length}명)
+            참여 회원 ({isLoadingRoomMembers ? '불러오는 중...' : `${visibleClubMembers.length}명`})
           </span>
           {visibleClubMembers.length === 0 ? (
             <span className="text-[12px] text-slate-500">
               아직 참여 중인 회원이 없습니다.
             </span>
           ) : (
-            visibleClubMembers.map((m) => (
-              <div
-                key={m.id}
-                title={m.email || m.rawName}
-                className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5 text-[12px]"
-              >
-                <span className="text-slate-800 font-medium">{m.name}</span>
-                {m.role !== 'HOST' && m.email && hasDuplicateNickname(m.rawName) && (
-                  <span className="text-[11px] text-slate-400 font-normal">
-                    ({m.email})
-                  </span>
-                )}
-                {m.role !== 'HOST' && !activeJoinedRoomMeta && (
-                  <button
-                    type="button"
-                    onClick={() => handleKickRoomMember(m.rawName, m.email)}
-                    className="text-slate-400 hover:text-rose-600 text-[11px] font-medium cursor-pointer"
-                  >
-                    내보내기
-                  </button>
-                )}
-              </div>
-            ))
+            <>
+              {visibleClubMembers.map((m) => (
+                <div
+                  key={m.id}
+                  title={m.email || m.rawName}
+                  className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-1.5 text-[12px]"
+                >
+                  <span className="text-slate-800 font-medium">{m.name}</span>
+                  {m.role !== 'HOST' && m.email && hasDuplicateNickname(m.rawName) && (
+                    <span className="text-[11px] text-slate-400 font-normal">
+                      ({m.email})
+                    </span>
+                  )}
+                  {m.role !== 'HOST' && !activeJoinedRoomMeta && (
+                    <button
+                      type="button"
+                      onClick={() => handleKickRoomMember(m.rawName, m.email)}
+                      className="text-slate-400 hover:text-rose-600 text-[11px] font-medium cursor-pointer"
+                    >
+                      내보내기
+                    </button>
+                  )}
+                </div>
+              ))}
+              {isLoadingRoomMembers && (
+                <div className="px-2.5 py-1 rounded-lg bg-slate-50 border border-dashed border-slate-200 text-[12px] text-slate-400 animate-pulse">
+                  참여 회원 확인 중...
+                </div>
+              )}
+            </>
           )}
         </div>
 

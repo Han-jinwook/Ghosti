@@ -140,11 +140,19 @@ interface CachedRoomTokenEntry {
   cachedAt: number;
 }
 
+const ROOM_MEMBERS_CACHE_PREFIX = 'ghosti_room_members_v1:';
+const ROOM_MEMBERS_CACHE_TTL_MS = 30 * 60 * 1000;
 const roomTokenCache = new Map<string, CachedRoomTokenEntry>();
 const joinedRoomsMemoryCache = new Map<
   string,
   { rooms: JoinedSharedPhotoRoomInfo[]; cachedAt: number }
 >();
+const roomMembersMemoryCache = new Map<
+  string,
+  { members: SharedPhotoRoomMemberInfo[]; cachedAt: number }
+>();
+const inflightRoomMembersMap = new Map<string, Promise<SharedPhotoRoomMemberInfo[]>>();
+const prewarmedMembersEmailSet = new Set<string>();
 const inflightEnsureRoomMap = new Map<
   string,
   Promise<{
@@ -263,6 +271,9 @@ function readCachedRoomTokenEntry(cacheKey: string): CachedRoomTokenEntry | null
 export function clearCachedSharedRoomTokens(): void {
   roomTokenCache.clear();
   joinedRoomsMemoryCache.clear();
+  roomMembersMemoryCache.clear();
+  inflightRoomMembersMap.clear();
+  prewarmedMembersEmailSet.clear();
   inflightEnsureRoomMap.clear();
   if (typeof window !== 'undefined') {
     for (const storage of [localStorage, sessionStorage]) {
@@ -272,7 +283,9 @@ export function clearCachedSharedRoomTokens(): void {
           const k = storage.key(i);
           if (
             k &&
-            (k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX) || k.startsWith(JOINED_ROOMS_SESSION_PREFIX))
+            (k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX) ||
+              k.startsWith(JOINED_ROOMS_SESSION_PREFIX) ||
+              k.startsWith(ROOM_MEMBERS_CACHE_PREFIX))
           ) {
             keysToRemove.push(k);
           }
@@ -740,6 +753,9 @@ export async function ensureMyRoomAndInviteToken(opts: {
           masterNickname: resolvedNick,
           cachedAt: nowTs,
         });
+        // 사진 공유 진입 직후 가족(우리집)·동호회·동창회 참여 회원 목록을 백그라운드로 선행 예열해
+        // [방 관리] 클릭 시 3초 대기·'1명' 깜빡임 없이 0ms 즉시 표시 보장
+        prewarmMySharedPhotoRoomMembers(bridgeRes.roomTokensByKey);
         return {
           ok: true,
           roomId: bridgeRes.roomId,
@@ -1542,93 +1558,280 @@ export interface SharedPhotoRoomMemberInfo {
   joinedAt: string;
 }
 
+function buildRoomMembersCacheKeys(
+  email: string,
+  roomId: string,
+  mappedDb: { dbLoungeType: 'family' | 'club'; dbSubType: string } | null,
+  isJoinedOtherRoom?: boolean
+): string[] {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return [];
+  const keys: string[] = [];
+  const cleanRoomId = (roomId || '').trim();
+  if (cleanRoomId) {
+    keys.push(`${cleanEmail}:room:${cleanRoomId}`);
+  }
+  if (mappedDb && !isJoinedOtherRoom) {
+    keys.push(`${cleanEmail}:key:${mappedDb.dbLoungeType}:${mappedDb.dbSubType}`);
+  }
+  return keys;
+}
+
+function saveCachedSharedPhotoRoomMembers(
+  email: string,
+  roomId: string,
+  mappedDb: { dbLoungeType: 'family' | 'club'; dbSubType: string } | null,
+  members: SharedPhotoRoomMemberInfo[],
+  isJoinedOtherRoom?: boolean
+): void {
+  const keys = buildRoomMembersCacheKeys(email, roomId, mappedDb, isJoinedOtherRoom);
+  if (keys.length === 0) return;
+  const payload = { members, cachedAt: Date.now() };
+  const serialized = JSON.stringify(payload);
+  for (const key of keys) {
+    roomMembersMemoryCache.set(key, payload);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`${ROOM_MEMBERS_CACHE_PREFIX}${key}`, serialized);
+      } catch {
+        /* ignore */
+      }
+      try {
+        sessionStorage.setItem(`${ROOM_MEMBERS_CACHE_PREFIX}${key}`, serialized);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+function pruneKickedMemberFromCache(
+  email: string,
+  roomId: string,
+  mappedDb: { dbLoungeType: 'family' | 'club'; dbSubType: string } | null,
+  targetEmail: string,
+  targetNick: string
+): void {
+  const keys = buildRoomMembersCacheKeys(email, roomId, mappedDb, false);
+  const cleanTargetEmail = targetEmail.trim().toLowerCase();
+  const cleanTargetNick = targetNick.trim();
+  for (const key of keys) {
+    const existing = roomMembersMemoryCache.get(key);
+    if (!existing) continue;
+    const filtered = existing.members.filter((m) => {
+      if (cleanTargetEmail && m.memberEmail.toLowerCase() === cleanTargetEmail) return false;
+      if (!cleanTargetEmail && cleanTargetNick && m.nickname === cleanTargetNick) return false;
+      return true;
+    });
+    const nextPayload = { members: filtered, cachedAt: Date.now() };
+    roomMembersMemoryCache.set(key, nextPayload);
+    if (typeof window !== 'undefined') {
+      const serialized = JSON.stringify(nextPayload);
+      try {
+        localStorage.setItem(`${ROOM_MEMBERS_CACHE_PREFIX}${key}`, serialized);
+      } catch {
+        /* ignore */
+      }
+      try {
+        sessionStorage.setItem(`${ROOM_MEMBERS_CACHE_PREFIX}${key}`, serialized);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+export function getCachedSharedPhotoRoomMembersSync(
+  roomId: string,
+  opts?: { loungeType?: LoungeType; familyRoom?: FamilyRoomId; isJoinedOtherRoom?: boolean }
+): SharedPhotoRoomMemberInfo[] | null {
+  if (!hasAuthenticatedHubAccountSession()) return null;
+  const email = resolveCurrentAuthedEmail();
+  if (!email) return null;
+  const mappedDb =
+    opts?.loungeType &&
+    (opts.loungeType === 'family' || opts.loungeType === 'club' || opts.loungeType === 'student')
+      ? mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom || '우리집')
+      : null;
+  const keys = buildRoomMembersCacheKeys(email, roomId, mappedDb, opts?.isJoinedOtherRoom);
+  for (const key of keys) {
+    const mem = roomMembersMemoryCache.get(key);
+    if (mem && Date.now() - mem.cachedAt < ROOM_MEMBERS_CACHE_TTL_MS) {
+      return mem.members;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const raw =
+          localStorage.getItem(`${ROOM_MEMBERS_CACHE_PREFIX}${key}`) ||
+          sessionStorage.getItem(`${ROOM_MEMBERS_CACHE_PREFIX}${key}`);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as {
+          members?: SharedPhotoRoomMemberInfo[];
+          cachedAt?: number;
+        };
+        if (
+          Array.isArray(parsed?.members) &&
+          typeof parsed.cachedAt === 'number' &&
+          Date.now() - parsed.cachedAt < ROOM_MEMBERS_CACHE_TTL_MS
+        ) {
+          roomMembersMemoryCache.set(key, {
+            members: parsed.members,
+            cachedAt: parsed.cachedAt,
+          });
+          return parsed.members;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return null;
+}
+
+export function prewarmMySharedPhotoRoomMembers(
+  roomTokensByKey?: Record<string, { roomId: string; inviteToken: string }>
+): void {
+  if (!hasAuthenticatedHubAccountSession()) return;
+  const email = resolveCurrentAuthedEmail();
+  if (!email || prewarmedMembersEmailSet.has(email)) return;
+  prewarmedMembersEmailSet.add(email);
+  const targets: Array<{ key: string; loungeType: LoungeType; familyRoom: FamilyRoomId }> = [
+    { key: 'family:우리집', loungeType: 'family', familyRoom: '우리집' },
+    { key: 'club:동호회', loungeType: 'club', familyRoom: '우리집' },
+    { key: 'club:동창회', loungeType: 'student', familyRoom: '우리집' },
+  ];
+  for (const t of targets) {
+    const rid = roomTokensByKey?.[t.key]?.roomId || '';
+    void fetchSharedPhotoRoomMembers(rid, {
+      loungeType: t.loungeType,
+      familyRoom: t.familyRoom,
+      isJoinedOtherRoom: false,
+    }).catch(() => {});
+  }
+}
+
 /**
  * [정식 SQL SSOT] 공유방 참여 회원 목록 조회 (`photo_list_room_members` 서버 브릿지 1순위 ➔ 직접 조회 2순위)
- * - 사진 업로드 여부와 무관하게 초대 링크로 방에 정식 합류한 모든 실제 멤버를 RLS 누락 없이 100% 반환합니다.
+ * - 사진 업로드 여부와 무관하게 초대 링크로 방에 정식 합류한 모든 실제 멤버를 RLS 누락 없이 100% 반환하며,
+ *   메모리·로컬 SWR 캐시로 방관리 진입 즉시 0ms 표시를 보장합니다.
  */
 export async function fetchSharedPhotoRoomMembers(
   roomId: string,
-  opts?: { loungeType?: LoungeType; familyRoom?: FamilyRoomId }
+  opts?: { loungeType?: LoungeType; familyRoom?: FamilyRoomId; isJoinedOtherRoom?: boolean }
 ): Promise<SharedPhotoRoomMemberInfo[]> {
   const cleanRoomId = (roomId || '').trim();
   if (!hasAuthenticatedHubAccountSession()) return [];
   if (!cleanRoomId && !opts?.loungeType) return [];
 
+  const currentEmail = resolveCurrentAuthedEmail();
   const mappedDb =
     opts?.loungeType && (opts.loungeType === 'family' || opts.loungeType === 'club' || opts.loungeType === 'student')
       ? mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom || '우리집')
       : null;
 
-  try {
-    const bridgeRes = await callGhostiServerBridge<{
-      roomId?: string;
-      members?: Array<{
-        memberEmail?: string;
-        role?: string;
-        nickname?: string;
-        joinedAt?: string;
-      }>;
-    }>('photo_list_room_members', {
-      roomId: cleanRoomId,
-      dbLoungeType: mappedDb?.dbLoungeType || '',
-      dbSubType: mappedDb?.dbSubType || '',
-    });
-    if (bridgeRes.ok && Array.isArray(bridgeRes.members)) {
-      return bridgeRes.members
-        .map((m) => {
-          const email = String(m?.memberEmail || '').trim().toLowerCase();
-          if (!email) return null;
-          const roleRaw = String(m?.role || 'member').trim().toLowerCase();
+  const dedupKey = `${currentEmail}:${cleanRoomId || (mappedDb ? `${mappedDb.dbLoungeType}:${mappedDb.dbSubType}` : '')}`;
+  const inflight = inflightRoomMembersMap.get(dedupKey);
+  if (inflight) return inflight;
+
+  const task = (async (): Promise<SharedPhotoRoomMemberInfo[]> => {
+    try {
+      try {
+        const bridgeRes = await callGhostiServerBridge<{
+          roomId?: string;
+          members?: Array<{
+            memberEmail?: string;
+            role?: string;
+            nickname?: string;
+            joinedAt?: string;
+          }>;
+        }>('photo_list_room_members', {
+          roomId: cleanRoomId,
+          dbLoungeType: mappedDb?.dbLoungeType || '',
+          dbSubType: mappedDb?.dbSubType || '',
+        });
+        if (bridgeRes.ok && Array.isArray(bridgeRes.members)) {
+          const parsed = bridgeRes.members
+            .map((m) => {
+              const email = String(m?.memberEmail || '').trim().toLowerCase();
+              if (!email) return null;
+              const roleRaw = String(m?.role || 'member').trim().toLowerCase();
+              const role: 'master' | 'admin' | 'member' =
+                roleRaw === 'master' ? 'master' : roleRaw === 'admin' ? 'admin' : 'member';
+              const fallbackNick = email.includes('@') ? email.split('@')[0] : email;
+              return {
+                memberEmail: email,
+                role,
+                nickname: String(m?.nickname || '').trim() || fallbackNick || '멤버',
+                joinedAt: String(m?.joinedAt || ''),
+              };
+            })
+            .filter((x): x is SharedPhotoRoomMemberInfo => Boolean(x));
+          if (currentEmail) {
+            saveCachedSharedPhotoRoomMembers(
+              currentEmail,
+              String(bridgeRes.roomId || cleanRoomId || '').trim(),
+              mappedDb,
+              parsed,
+              opts?.isJoinedOtherRoom
+            );
+          }
+          return parsed;
+        }
+      } catch {
+        /* fallback to direct authed query */
+      }
+
+      if (!cleanRoomId) return [];
+      const authed = await ensureGhostiAuthedSupabaseClient();
+      if (!authed) return [];
+      try {
+        const { data, error } = await authed
+          .from('ghosti_lounge_members')
+          .select('member_email, role, room_persona_nickname, joined_at')
+          .eq('room_id', cleanRoomId)
+          .order('joined_at', { ascending: true });
+        if (error || !Array.isArray(data)) return [];
+        const byEmail = new Map<string, SharedPhotoRoomMemberInfo>();
+        for (const row of data) {
+          const email = String(row.member_email || '').trim().toLowerCase();
+          if (!email) continue;
+          const roleRaw = String(row.role || 'member').trim().toLowerCase();
           const role: 'master' | 'admin' | 'member' =
             roleRaw === 'master' ? 'master' : roleRaw === 'admin' ? 'admin' : 'member';
           const fallbackNick = email.includes('@') ? email.split('@')[0] : email;
-          return {
-            memberEmail: email,
-            role,
-            nickname: String(m?.nickname || '').trim() || fallbackNick || '멤버',
-            joinedAt: String(m?.joinedAt || ''),
-          };
-        })
-        .filter((x): x is SharedPhotoRoomMemberInfo => Boolean(x));
-    }
-  } catch {
-    /* fallback to direct authed query */
-  }
-
-  if (!cleanRoomId) return [];
-  const authed = await ensureGhostiAuthedSupabaseClient();
-  if (!authed) return [];
-  try {
-    const { data, error } = await authed
-      .from('ghosti_lounge_members')
-      .select('member_email, role, room_persona_nickname, joined_at')
-      .eq('room_id', cleanRoomId)
-      .order('joined_at', { ascending: true });
-    if (error || !Array.isArray(data)) return [];
-    const byEmail = new Map<string, SharedPhotoRoomMemberInfo>();
-    for (const row of data) {
-      const email = String(row.member_email || '').trim().toLowerCase();
-      if (!email) continue;
-      const roleRaw = String(row.role || 'member').trim().toLowerCase();
-      const role: 'master' | 'admin' | 'member' =
-        roleRaw === 'master' ? 'master' : roleRaw === 'admin' ? 'admin' : 'member';
-      const fallbackNick = email.includes('@') ? email.split('@')[0] : email;
-      const nick = String(row.room_persona_nickname || '').trim() || fallbackNick || '멤버';
-      const joinedAt = String(row.joined_at || '');
-      const prev = byEmail.get(email);
-      if (!prev || role === 'master') {
-        byEmail.set(email, {
-          memberEmail: email,
-          role,
-          nickname: nick,
-          joinedAt,
-        });
+          const nick = String(row.room_persona_nickname || '').trim() || fallbackNick || '멤버';
+          const joinedAt = String(row.joined_at || '');
+          const prev = byEmail.get(email);
+          if (!prev || role === 'master') {
+            byEmail.set(email, {
+              memberEmail: email,
+              role,
+              nickname: nick,
+              joinedAt,
+            });
+          }
+        }
+        const parsed = Array.from(byEmail.values());
+        if (currentEmail && parsed.length > 0) {
+          saveCachedSharedPhotoRoomMembers(
+            currentEmail,
+            cleanRoomId,
+            mappedDb,
+            parsed,
+            opts?.isJoinedOtherRoom
+          );
+        }
+        return parsed;
+      } catch {
+        return [];
       }
+    } finally {
+      inflightRoomMembersMap.delete(dedupKey);
     }
-    return Array.from(byEmail.values());
-  } catch {
-    return [];
-  }
+  })();
+
+  inflightRoomMembersMap.set(dedupKey, task);
+  return task;
 }
 
 /**
@@ -1656,6 +1859,10 @@ export async function kickMemberFromSupabaseSharedPhotoRoom(
     (opts.loungeType === 'family' || opts.loungeType === 'club' || opts.loungeType === 'student')
       ? mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom || '우리집')
       : null;
+  const currentEmail = resolveCurrentAuthedEmail();
+  if (currentEmail) {
+    pruneKickedMemberFromCache(currentEmail, cleanRoomId, mappedDb, cleanEmail, cleanNick);
+  }
   try {
     const bridgeRes = await callGhostiServerBridge('photo_kick_room_member', {
       roomId: cleanRoomId,
