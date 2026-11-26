@@ -122,6 +122,81 @@ if "--ppocr-worker" in sys.argv:
         sys.exit(ppocr_v5_worker.run_worker_cli(sys.argv[_w_idx + 1], sys.argv[_w_idx + 2]))
     sys.exit(1)
 
+if "--pdf-worker" in sys.argv:
+    _pw_idx = sys.argv.index("--pdf-worker")
+    if len(sys.argv) > _pw_idx + 2:
+        _in_p, _out_p = Path(sys.argv[_pw_idx + 1]), Path(sys.argv[_pw_idx + 2])
+        _res_pw: Dict[str, Any] = {"ok": False}
+        try:
+            import re as _re_pw
+            import unicodedata as _ud_pw
+            import pypdfium2 as _pdfium_pw
+
+            _req_pw = json.loads(_in_p.read_text(encoding="utf-8"))
+            _mode_pw = str(_req_pw.get("mode") or "text")
+            _pdf_path_pw = str(_req_pw.get("path") or "")
+            _max_pages_pw = max(1, int(_req_pw.get("max_pages") or 160))
+            _max_chars_pw = max(256, int(_req_pw.get("max_chars") or 50000))
+            _pdf_doc = _pdfium_pw.PdfDocument(_pdf_path_pw)
+            try:
+                _n_pg = min(len(_pdf_doc), _max_pages_pw)
+                if _mode_pw == "render_pngs":
+                    _out_dir_pw = Path(str(_req_pw.get("out_dir") or ""))
+                    _out_dir_pw.mkdir(parents=True, exist_ok=True)
+                    _pngs: list[str] = []
+                    for _pi in range(_n_pg):
+                        _pg = _pdf_doc[_pi]
+                        try:
+                            _w_pt, _h_pt = _pg.get_size()
+                            _scale = max(1.6, min(2.6, 1750.0 / max(1.0, max(_w_pt, _h_pt))))
+                            _bmp = _pg.render(scale=_scale)
+                            try:
+                                _pil = _bmp.to_pil()
+                            finally:
+                                try:
+                                    _bmp.close()
+                                except Exception:
+                                    pass
+                            _png_f = _out_dir_pw / f"p_{_pi:03d}.png"
+                            _pil.save(_png_f, "PNG")
+                            _pngs.append(str(_png_f))
+                        finally:
+                            _pg.close()
+                    _res_pw = {"ok": True, "pngs": _pngs}
+                else:
+                    _chunks_pw: list[str] = []
+                    _tot_pw = 0
+                    for _pi in range(_n_pg):
+                        _pg = _pdf_doc[_pi]
+                        try:
+                            _tp = _pg.get_textpage()
+                            try:
+                                _rt = _tp.get_text_bounded() or ""
+                            finally:
+                                _tp.close()
+                        finally:
+                            _pg.close()
+                        _nt = _ud_pw.normalize("NFC", _rt.replace("\r\n", "\n").replace("\r", "\n"))
+                        _nt = _re_pw.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", _nt)
+                        _nt = _re_pw.sub(r"[ \t]+", " ", _nt)
+                        _nt = _re_pw.sub(r"\n{3,}", "\n\n", _nt).strip()
+                        if _nt:
+                            _chunks_pw.append(_nt)
+                            _tot_pw += len(_nt) + 2
+                            if _tot_pw >= _max_chars_pw:
+                                break
+                    _res_pw = {"ok": True, "text": "\n\n".join(_chunks_pw).strip()[:_max_chars_pw]}
+            finally:
+                _pdf_doc.close()
+        except Exception as _exc_pw:
+            _res_pw = {"ok": False, "error": str(_exc_pw)}
+        try:
+            _out_p.write_text(json.dumps(_res_pw, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass
+        os._exit(0)
+    os._exit(1)
+
 # [초고속 서브데몬 직행 분기]: --seq-paste-daemon / 압축 CLI / GUI 러너 실행 시
 # 무거운 서버 플러그인 8종(plugin_ghosti_os, plugin_senstalk, plugin_aggrofilter 등) import를 100% 생략하여 초기 기동 지연을 원천 차단!
 _early_argv = sys.argv[1:]
@@ -219,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.9.29"
+CORE_VERSION = "2.9.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")

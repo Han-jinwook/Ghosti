@@ -69,11 +69,11 @@
 
 ---
 
-## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.9.19)
+## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.9.39)
 
 ### 1. 왜 단일 포트(`5199`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`)인가?
 - 유저가 귀신같이·센스톡·어그로필터·썬드리머 스튜디오를 쓸 때마다 별도 설치파일을 2중으로 설치하거나 포트를 나누면 방화벽 경고와 포트 충돌이 발생합니다.
-- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.9.19`, `--onedir` 무중단 원자적 스왑 배포)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`)을 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
+- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.9.39`, `--onedir` 무중단 원자적 스왑 배포)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`)을 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
 
 ### 2. 표준 라우팅 테이블 및 JSON 입출력 규격 (`merlin_z_core_daemon.py` 직결)
 
@@ -574,7 +574,7 @@ exit
 | 내장 플러그인 | HTTP 엔드포인트 (`127.0.0.1:5199`) | 설명 |
 |---|---|---|
 | **통합 코어 게이트웨이** | `GET /__merlin/health`<br>`POST /__merlin/query` | 코어 버전, 자동실행 여부, 내장 플러그인 3종 상태 확인 및 단일 진입점 호출 (`plugin: "zeye" \| "senstalk" \| "aggrofilter"`) |
-| **귀신같이(Z몬스터) & 썬드리머 스튜디오 (`plugin_ghosti_os` + `ppocr_v5_worker`)** | `GET /__zcore/os-inspect`<br>`POST /__zcore/forensic-scan`<br>`POST /__zcore/os-overlay`<br>`GET /__zcore/restore-points`<br>`POST /__zcore/restore-rollback`<br>`POST /__zcore/folder-tree-summary`<br>`GET /__photos/file`<br>`POST /__photos/ocr`<br>`GET /__docs/list`<br>`GET /__videos/thumb`<br>`GET /__videos/stream`<br>`POST /__videos/search`<br>`POST /__videos/ocr-frames`<br>`POST /__videos/extract-ocr-text`<br>`GET /__videos/ocr-cache`<br>`POST /api/teleport/ocr-vanguard` | 실물 Windows OS 진단, 3초 포렌식, TopMost 화살표 오버레이, 최근 한 달 **`[복원 기록]` 0.01초 3단계 무결성 사전 검진(`🟢 100% 복원 가능` / `🟡 부분 복원 가능` / `🔴 복원 불가`)** 및 1초 원복, Zero-LLM 폴더 트리 요약, 대용량 미디어 256KB 디스크 청크 HTTP `206` 스트리밍, 검은 오프닝 회피 고속 썸네일 캐시, HEVC(`hvc1`) 실시간 H.264 트랜스코딩 파이프, **3대 OCR 경로(사진·스캔 PDF·동영상 프레임) 단일 고성능 `PaddleOCR PP-OCRv5 Korean (ONNX)` 격리 워커(`--ppocr-worker`, 평시 상주 메모리 0MB) 일원화 · 화소 변화 기반 중복 슬라이드/디졸브 제거 초고속 장면 추출(`ocrVer=21`) · Google PDFium(`pypdfium2`) 정식 PDF 파서 · HWP v5 OLE2 `BodyText/Section*` 정식 본문 추출 · 전 문서 50,000자 전문 색인**, 그리고 `[창 UI ③]` 역OCR 클립보드 공간이동 브릿지(`/api/teleport/ocr-vanguard`) |
+| **귀신같이(Z몬스터) & 썬드리머 스튜디오 (`plugin_ghosti_os` + `ppocr_v5_worker` + `--pdf-worker`)** | `GET /__zcore/os-inspect`<br>`POST /__zcore/forensic-scan`<br>`POST /__zcore/os-overlay`<br>`GET /__zcore/restore-points`<br>`POST /__zcore/restore-rollback`<br>`POST /__zcore/folder-tree-summary`<br>`GET /__photos/file`<br>`POST /__photos/ocr`<br>`GET /__docs/list`<br>`GET /__videos/thumb`<br>`GET /__videos/stream`<br>`POST /__videos/search`<br>`POST /__videos/ocr-frames`<br>`POST /__videos/extract-ocr-text`<br>`GET /__videos/ocr-cache`<br>`POST /api/teleport/ocr-vanguard` | 실물 Windows OS 진단, 3초 포렌식, TopMost 화살표 오버레이, 최근 한 달 **`[복원 기록]` 0.01초 3단계 무결성 사전 검진(`🟢 100% 복원 가능` / `🟡 부분 복원 가능` / `🔴 복원 불가`)** 및 1초 원복, Zero-LLM 폴더 트리 요약, 대용량 미디어 256KB 디스크 청크 HTTP `206` 스트리밍, 검은 오프닝 회피 고속 썸네일 캐시, HEVC(`hvc1`) 실시간 H.264 트랜스코딩 파이프, **3대 OCR 경로(사진·스캔 PDF·동영상 프레임) 단일 고성능 `PaddleOCR PP-OCRv5 Korean (ONNX)` 격리 워커(`--ppocr-worker`, 평시 상주 메모리 0MB) 일원화 · 화소 변화 기반 중복 슬라이드/디졸브 제거 초고속 장면 추출(`ocrVer=21`) · Google PDFium(`pypdfium2`) 격리 서브프로세스 워커(`--pdf-worker` — `pdfium.dll` `0xc0000409` Fast-Fail로부터 메인 `5199` 데몬 100% 물리 격리 보호 + 사진·문서·동영상 목록 Single-Flight 빌드 락) · HWP v5 OLE2 `BodyText/Section*` 정식 본문 추출 · 전 문서 50,000자 전문 색인**, 그리고 `[창 UI ③]` 역OCR 클립보드 공간이동 브릿지(`/api/teleport/ocr-vanguard`) |
 | **센스톡 (`plugin_senstalk`)** | `GET /api/senstalk/health`<br>`GET /api/senstalk/poll`<br>`POST /api/senstalk/sync`<br>`POST /api/senstalk/start`<br>`POST /api/senstalk/pause`<br>`POST /api/senstalk/skip`<br>`POST /api/senstalk/dispatch` | 6대 메신저 발송 대기열 동기화, 클립보드 자동 장전, `[Enter]` 연속 발송 및 `F8`/`F9` 제어 (구 `28888` 포트 완전 대체) |
 | **어그로필터 (`plugin_aggrofilter`)** | `GET /api/aggrofilter/health`<br>`POST /api/aggrofilter/extract` | 크롬 확장팩 없이 유저 로컬 IP로 유튜브 URL(`watch?v=`, `youtu.be/`, `shorts/`)의 자막 트랙(`TimedText`) 및 메타데이터 즉시 추출 |
 

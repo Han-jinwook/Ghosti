@@ -958,9 +958,14 @@ def _is_safe_user_media_path(p: Path) -> bool:
 _SCAN_DIRS_MEM_CACHE: Dict[str, tuple[float, str, List[Path]]] = {}
 _SCAN_DIRS_CACHE_LOCK = threading.Lock()
 _PHOTOS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "quarantine_len": -1, "resp": None}
+_PHOTOS_LIST_BUILD_LOCK = threading.RLock()
 _DOCS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "resp": None}
+_DOCS_LIST_BUILD_LOCK = threading.RLock()
 _VIDEOS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "resp": None}
+_VIDEOS_LIST_BUILD_LOCK = threading.RLock()
 _WATCH_SIG_TTL_CACHE: Dict[str, Any] = {"ts": 0.0, "resp": None}
+_WATCH_SIG_BUILD_LOCK = threading.Lock()
+_PDFIUM_GLOBAL_LOCK = threading.RLock()
 _BG_INDEX_BUMP_SEQ: int = 0
 _DOC_TEXT_CACHE_DIRTY: bool = False
 _PREWARMED_PHOTO_THUMB_SIGS: set[str] = set()
@@ -1812,6 +1817,22 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = params or {}
     req_dir = str(data.get("dir") or data.get("targetPath") or "").strip()
     recycled_now = safe.recycled_photo_entries()
+    if not req_dir:
+        cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+        cached_resp = _PHOTOS_RESP_MEM_CACHE.get("resp")
+        if (
+            cur_watch_sig
+            and cached_resp is not None
+            and _PHOTOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+            and _PHOTOS_RESP_MEM_CACHE.get("quarantine_len") == len(recycled_now)
+        ):
+            return cached_resp
+    with _PHOTOS_LIST_BUILD_LOCK:
+        return _list_local_photos_unlocked(data, req_dir)
+
+
+def _list_local_photos_unlocked(data: Dict[str, Any], req_dir: str) -> Dict[str, Any]:
+    recycled_now = safe.recycled_photo_entries()
     cur_watch_sig = ""
     if not req_dir:
         cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
@@ -1917,47 +1938,53 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
     if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.45:
         return cached_ws
 
-    scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
-    target_exts = _IMAGE_EXTS | _VIDEO_EXTS | _DOC_EXTS
-    file_count = 0
-    max_mtime_ns = 0
-    size_acc = 0
-    t_ws_start = time.monotonic()
-    for d in scan_dirs:
-        if (time.monotonic() - t_ws_start) > 1.2:
-            break
-        try:
-            with os.scandir(d) as it:
-                for entry in it:
-                    try:
-                        if not entry.is_file(follow_symlinks=False):
-                            continue
-                        nm = entry.name
-                        if nm.startswith((".", "~$", ".~lock.")):
-                            continue
-                        dot = nm.rfind(".")
-                        if dot < 0 or nm[dot:].lower() not in target_exts:
-                            continue
-                        st = entry.stat(follow_symlinks=False)
-                        file_count += 1
-                        mt_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
-                        if mt_ns > max_mtime_ns:
-                            max_mtime_ns = mt_ns
-                        size_acc = (size_acc + int(st.st_size)) & 0x7FFFFFFFFFFFFFFF
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-    sig = f"{len(scan_dirs)}:{file_count}:{max_mtime_ns}:{size_acc}:{_BG_INDEX_BUMP_SEQ}"
-    resp_ws = {
-        "ok": True,
-        "sig": sig,
-        "fileCount": file_count,
-        "folderCount": len(scan_dirs),
-    }
-    _WATCH_SIG_TTL_CACHE["ts"] = now_mono
-    _WATCH_SIG_TTL_CACHE["resp"] = resp_ws
-    return resp_ws
+    with _WATCH_SIG_BUILD_LOCK:
+        now_mono = time.monotonic()
+        cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
+        if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.45:
+            return cached_ws
+
+        scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+        target_exts = _IMAGE_EXTS | _VIDEO_EXTS | _DOC_EXTS
+        file_count = 0
+        max_mtime_ns = 0
+        size_acc = 0
+        t_ws_start = time.monotonic()
+        for d in scan_dirs:
+            if (time.monotonic() - t_ws_start) > 1.2:
+                break
+            try:
+                with os.scandir(d) as it:
+                    for entry in it:
+                        try:
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+                            nm = entry.name
+                            if nm.startswith((".", "~$", ".~lock.")):
+                                continue
+                            dot = nm.rfind(".")
+                            if dot < 0 or nm[dot:].lower() not in target_exts:
+                                continue
+                            st = entry.stat(follow_symlinks=False)
+                            file_count += 1
+                            mt_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
+                            if mt_ns > max_mtime_ns:
+                                max_mtime_ns = mt_ns
+                            size_acc = (size_acc + int(st.st_size)) & 0x7FFFFFFFFFFFFFFF
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+        sig = f"{len(scan_dirs)}:{file_count}:{max_mtime_ns}:{size_acc}:{_BG_INDEX_BUMP_SEQ}"
+        resp_ws = {
+            "ok": True,
+            "sig": sig,
+            "fileCount": file_count,
+            "folderCount": len(scan_dirs),
+        }
+        _WATCH_SIG_TTL_CACHE["ts"] = time.monotonic()
+        _WATCH_SIG_TTL_CACHE["resp"] = resp_ws
+        return resp_ws
 
 
 def _guess_image_mime(p: Path, name: str) -> str:
@@ -2354,12 +2381,48 @@ def _count_meaningful_doc_chars(txt: str) -> int:
     return (ko * 3) + (en * 2) + digits
 
 
+def _invoke_isolated_pdfium_worker(req_payload: Dict[str, Any], timeout_sec: float = 20.0) -> Dict[str, Any]:
+    """
+    [pdfium.dll 0xc0000409 Fast-Fail 프로세스 동반 종료 원천 차단]:
+    - Google PDFium(pdfium.dll) C++ 엔진은 멀티스레드 비안전(non-thread-safe) 및 손상 PDF 조우 시 __fastfail(0xc0000409)을 호출합니다.
+    - 메인 5199 HTTP 서버 프로세스에 pdfium.dll을 직접 로드하지 않고, 격리 서브프로세스(--pdf-worker)에서 실행해
+      어떤 손상 PDF나 동시 요청이 들어와도 Z-코어(5199)가 절대 죽지 않도록 100% 보호합니다.
+    """
+    tmp_w = Path(tempfile.mkdtemp(prefix="merlin_pdfw_"))
+    in_f = tmp_w / "in.json"
+    out_f = tmp_w / "out.json"
+    try:
+        in_f.write_text(json.dumps(req_payload, ensure_ascii=False), encoding="utf-8")
+        clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+        if getattr(sys, "frozen", False):
+            cmd_w = [sys.executable, "--pdf-worker", str(in_f), str(out_f)]
+        else:
+            daemon_py = Path(__file__).resolve().parent / "merlin_z_core_daemon.py"
+            cmd_w = [sys.executable, str(daemon_py), "--pdf-worker", str(in_f), str(out_f)]
+        with _PDFIUM_GLOBAL_LOCK:
+            subprocess.run(
+                cmd_w,
+                capture_output=True,
+                timeout=timeout_sec,
+                env=clean_env,
+                creationflags=0x08000000 if os.name == "nt" else 0,
+            )
+        if out_f.exists():
+            return json.loads(out_f.read_text(encoding="utf-8", errors="replace") or "{}")
+    except Exception:
+        pass
+    finally:
+        shutil.rmtree(tmp_w, ignore_errors=True)
+    return {"ok": False}
+
+
 def _run_ppocr_pdf_pages_ocr(
     entry: Path,
     max_pages: int = 6,
     max_chars: int = DOC_INDEX_MAX_CHARS,
 ) -> str:
-    """스캔 이미지·커스텀 폰트 PDF의 페이지를 Google PDFium(pypdfium2 우선) 또는 pypdf 이미지 추출로 PNG 변환 후 PP-OCRv5 Korean(ONNX)으로 정밀 판독합니다."""
+    """스캔 이미지·커스텀 폰트 PDF의 페이지를 격리 PDFium 워커(--pdf-worker) 또는 pypdf 이미지 추출로 PNG 변환 후 PP-OCRv5 Korean(ONNX)으로 정밀 판독합니다."""
     if not entry.exists():
         return ""
     tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_pdf_ppocr_"))
@@ -2367,41 +2430,35 @@ def _run_ppocr_pdf_pages_ocr(
         import ppocr_v5_worker
 
         png_paths: List[Path] = []
-        try:
-            import pypdfium2 as pdfium
-
-            pdf = pdfium.PdfDocument(str(entry))
+        pw_res = _invoke_isolated_pdfium_worker(
+            {
+                "mode": "render_pngs",
+                "path": str(entry),
+                "max_pages": max(1, int(max_pages)),
+                "out_dir": str(tmp_dir),
+            },
+            timeout_sec=max(18.0, max_pages * 5.0),
+        )
+        if pw_res.get("ok") and isinstance(pw_res.get("pngs"), list):
+            png_paths = [Path(p) for p in pw_res["pngs"] if Path(p).exists()]
+        if not png_paths:
             try:
-                n_pages = min(len(pdf), max(1, int(max_pages)))
-                for p_idx in range(n_pages):
-                    page = pdf[p_idx]
-                    try:
-                        w_pt, h_pt = page.get_size()
-                        scale = max(1.6, min(2.6, 1750.0 / max(1.0, max(w_pt, h_pt))))
-                        bmp = page.render(scale=scale)
-                        pil_im = bmp.to_pil()
-                        out_png = tmp_dir / f"p_{p_idx:03d}.png"
-                        pil_im.save(out_png, "PNG")
-                        png_paths.append(out_png)
-                    finally:
-                        page.close()
-            finally:
-                pdf.close()
-        except ImportError:
-            import pypdf
-            from PIL import Image
+                import pypdf
+                from PIL import Image
 
-            reader = pypdf.PdfReader(str(entry))
-            for p_idx in range(min(len(reader.pages), max(1, int(max_pages)))):
-                page = reader.pages[p_idx]
-                for img_idx, im_obj in enumerate(getattr(page, "images", [])):
-                    try:
-                        pil_im = Image.open(io.BytesIO(im_obj.data)).convert("RGB")
-                        out_png = tmp_dir / f"p_{p_idx:03d}_{img_idx:02d}.png"
-                        pil_im.save(out_png, "PNG")
-                        png_paths.append(out_png)
-                    except Exception:
-                        continue
+                reader = pypdf.PdfReader(str(entry))
+                for p_idx in range(min(len(reader.pages), max(1, int(max_pages)))):
+                    page = reader.pages[p_idx]
+                    for img_idx, im_obj in enumerate(getattr(page, "images", [])):
+                        try:
+                            pil_im = Image.open(io.BytesIO(im_obj.data)).convert("RGB")
+                            out_png = tmp_dir / f"p_{p_idx:03d}_{img_idx:02d}.png"
+                            pil_im.save(out_png, "PNG")
+                            png_paths.append(out_png)
+                        except Exception:
+                            continue
+            except Exception:
+                pass
 
         if not png_paths:
             return ""
@@ -2437,42 +2494,26 @@ def _extract_pdf_text_sota(
     max_chars: int = DOC_INDEX_MAX_CHARS,
 ) -> str:
     """
-    [정식 SOTA PDF 본문 추출기]
-    1순위: Google PDFium C++ 엔진(pypdfium2) / pypdf 텍스트 레이어로 한글 CID/ToUnicode/압축 스트림 전체 페이지를 최대 50,000자까지 고속 추출합니다.
-    2순위: 텍스트 레이어가 없는 스캔 이미지 PDF일 때만 PDFium(또는 pypdf 이미지 추출) + PP-OCRv5 Korean(ONNX)으로 자동 폴백합니다.
+    [정식 SOTA PDF 본문 추출기 — 격리 서브프로세스 보호]
+    1순위: 격리된 Google PDFium 워커(--pdf-worker) / pypdf 텍스트 레이어로 한글 CID/ToUnicode/압축 스트림 전체 페이지를 최대 50,000자까지 고속 추출합니다.
+    2순위: 텍스트 레이어가 없는 스캔 이미지 PDF일 때만 격리 PDFium 워커 + PP-OCRv5 Korean(ONNX)으로 자동 폴백합니다.
     """
     if not entry.exists():
         return ""
-    page_chunks: List[str] = []
-    try:
-        import pypdfium2 as pdfium
-
-        pdf = pdfium.PdfDocument(str(entry))
-        try:
-            n_pages = min(len(pdf), 160)
-            total_len = 0
-            for p_idx in range(n_pages):
-                page = pdf[p_idx]
-                try:
-                    tp = page.get_textpage()
-                    try:
-                        raw_t = tp.get_text_bounded() or ""
-                    finally:
-                        tp.close()
-                finally:
-                    page.close()
-                norm_t = unicodedata.normalize("NFC", raw_t.replace("\r\n", "\n").replace("\r", "\n"))
-                norm_t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", norm_t)
-                norm_t = re.sub(r"[ \t]+", " ", norm_t)
-                norm_t = re.sub(r"\n{3,}", "\n\n", norm_t).strip()
-                if norm_t:
-                    page_chunks.append(norm_t)
-                    total_len += len(norm_t) + 2
-                    if total_len >= max_chars:
-                        break
-        finally:
-            pdf.close()
-    except ImportError:
+    joined = ""
+    pw_res = _invoke_isolated_pdfium_worker(
+        {
+            "mode": "text",
+            "path": str(entry),
+            "max_pages": 160,
+            "max_chars": max_chars,
+        },
+        timeout_sec=14.0,
+    )
+    if pw_res.get("ok"):
+        joined = str(pw_res.get("text") or "").strip()[:max_chars]
+    if not joined:
+        page_chunks: List[str] = []
         try:
             import pypdf
 
@@ -2489,12 +2530,10 @@ def _extract_pdf_text_sota(
                     total_len += len(norm_t) + 2
                     if total_len >= max_chars:
                         break
+            joined = "\n\n".join(page_chunks).strip()[:max_chars]
         except Exception:
             pass
-    except Exception:
-        pass
 
-    joined = "\n\n".join(page_chunks).strip()[:max_chars]
     if _count_meaningful_doc_chars(joined) >= 16:
         return joined
 
@@ -3244,7 +3283,10 @@ def _extract_doc_text(
                 if cache_sig:
                     _save_doc_text_cache_entry(cache_sig, pdf_txt, flush_disk=flush_disk)
                 return pdf_txt
-            return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
+            pdf_fallback = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
+            if allow_pdf_winrt_ocr and cache_sig:
+                _save_doc_text_cache_entry(cache_sig, pdf_fallback, flush_disk=flush_disk)
+            return pdf_fallback
     except Exception:
         return fallback_generic
     return fallback_generic
@@ -3285,6 +3327,19 @@ def _bg_prewarm_pdf_ocr_worker(targets: List[Path]) -> None:
 
 def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(문서, 바탕화면, 다운로드, OneDrive 등)의 서류 파일을 전수 스캔하여 반환합니다."""
+    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    cached_docs_resp = _DOCS_RESP_MEM_CACHE.get("resp")
+    if (
+        cur_watch_sig
+        and cached_docs_resp is not None
+        and _DOCS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+    ):
+        return cached_docs_resp
+    with _DOCS_LIST_BUILD_LOCK:
+        return _list_local_docs_unlocked()
+
+
+def _list_local_docs_unlocked() -> Dict[str, Any]:
     global _PDF_BG_OCR_RUNNING
     cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
     cached_docs_resp = _DOCS_RESP_MEM_CACHE.get("resp")
@@ -5328,6 +5383,19 @@ def _trigger_bg_video_thumb_prewarm(items: List[tuple[Path, float]]) -> None:
 
 def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
+    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    cached_vids_resp = _VIDEOS_RESP_MEM_CACHE.get("resp")
+    if (
+        cur_watch_sig
+        and cached_vids_resp is not None
+        and _VIDEOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+    ):
+        return cached_vids_resp
+    with _VIDEOS_LIST_BUILD_LOCK:
+        return _list_local_videos_unlocked()
+
+
+def _list_local_videos_unlocked() -> Dict[str, Any]:
     cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
     cached_vids_resp = _VIDEOS_RESP_MEM_CACHE.get("resp")
     if (
