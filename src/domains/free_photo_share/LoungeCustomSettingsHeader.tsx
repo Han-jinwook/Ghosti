@@ -16,6 +16,7 @@ import {
   KICKED_ROOM_MEMBERS_STORAGE_KEY,
   readHostRetainsHidePermission,
   writeHostRetainsHidePermission,
+  resolveCurrentUserIdentityTokens,
   copyAuthenticatedRoomInviteFlow,
 } from './loungeRoomPermissions';
 
@@ -185,23 +186,67 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       .showToast(`${clean} 님을 공유방에서 내보냈습니다.`);
   };
 
-  const derivedParticipantNames = Array.from(
-    new Set(
-      [
-        ...(activeJoinedRoomMeta && isLoggedInUser ? [myDisplayName] : []),
-        ...currentRoomCorpus
-          .map((p) => String(p.uploaderLabel || '').replace(/^[👑📸👤\s]+/, '').trim())
-          .filter(Boolean),
-      ].filter(
-        (name) =>
-          name &&
-          name !== hostDisplayName &&
-          name !== `${hostDisplayName} (방장)` &&
-          name !== '방장' &&
-          !kickedSet.has(name)
-      )
-    )
+  const myEmailLower = (merlinAuth?.email || '').trim().toLowerCase();
+  const myIdentityLowerSet = new Set(
+    [
+      ...resolveCurrentUserIdentityTokens(myEmailLower),
+      myDisplayName,
+      `${myDisplayName} (방장)`,
+    ]
+      .map((t) => String(t || '').trim().toLowerCase())
+      .filter(Boolean)
   );
+  const hostLowerSet = new Set(
+    [
+      hostDisplayName,
+      `${hostDisplayName} (방장)`,
+      '방장',
+      ...(!activeJoinedRoomMeta ? Array.from(myIdentityLowerSet) : []),
+    ]
+      .map((t) => String(t || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+
+  // [동일 유저 2명 중복 방지 — 이메일 SSOT + 신원 토큰(여권 별명·실명·허브 닉네임·이메일 아이디) 1인 단일 집계]
+  const derivedParticipantNames = (() => {
+    const byIdentityKey = new Map<string, string>();
+    const normalizeLabel = (raw?: string | null) =>
+      String(raw || '')
+        .replace(/^[👑📸👤\s]+/, '')
+        .replace(/\s*\(방장\)\s*$/u, '')
+        .trim();
+
+    if (activeJoinedRoomMeta && isLoggedInUser) {
+      const myNorm = normalizeLabel(myDisplayName);
+      if (myNorm && !hostLowerSet.has(myNorm.toLowerCase()) && !kickedSet.has(myNorm)) {
+        byIdentityKey.set(myEmailLower ? `email:${myEmailLower}` : `name:${myNorm.toLowerCase()}`, myNorm);
+      }
+    }
+
+    for (const p of currentRoomCorpus) {
+      const uploaderEmail = String(p.sharedUploaderEmail || '').trim().toLowerCase();
+      const label = normalizeLabel(p.uploaderLabel);
+      if (!label) continue;
+      const lowerLabel = label.toLowerCase();
+      if (kickedSet.has(label) || hostLowerSet.has(lowerLabel)) continue;
+
+      // 본인 계정 이메일로 올린 과거 사진(예: 별명 등록 전 sundream7879로 업로드 ➔ 이후 썬드림 등록)은
+      // 방장 본인이거나 이미 집계된 내 계정과 동일 인물이므로 절대 별도 참여 회원으로 중복 추가하지 않음
+      if (uploaderEmail && myEmailLower && uploaderEmail === myEmailLower) {
+        continue;
+      }
+      if (!uploaderEmail && myIdentityLowerSet.has(lowerLabel)) {
+        continue;
+      }
+
+      const key = uploaderEmail ? `email:${uploaderEmail}` : `name:${lowerLabel}`;
+      if (!byIdentityKey.has(key)) {
+        byIdentityKey.set(key, label);
+      }
+    }
+
+    return Array.from(byIdentityKey.values());
+  })();
 
   const visibleFamilyMembers = isLoggedInUser || activeJoinedRoomMeta
     ? [

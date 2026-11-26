@@ -11,7 +11,10 @@ import {
   getPrewarmedRoomInviteTokenSync,
   reseedRoomPhotosForInvite,
 } from '../../services/sharedPhotoRoomSupabase';
-import { resolveAccountScopedNickname } from '../../services/ghostSecretaryEngine';
+import {
+  loadGhostPassportBook,
+  resolveAccountScopedNickname,
+} from '../../services/ghostSecretaryEngine';
 import { loadPassportFlowState } from '../../services/passportRegistrationFlow';
 
 export const HOST_HIDE_PERMISSION_STORAGE_KEY = 'ghosti_room_host_hide_perm_v1';
@@ -37,12 +40,41 @@ export function writeHostRetainsHidePermission(enabled: boolean): void {
 
 export function resolveCurrentUserIdentityTokens(email?: string | null): string[] {
   const flow = loadPassportFlowState();
+  const passportBook = loadGhostPassportBook();
   const cleanEmail = (email || '').trim().toLowerCase();
   const emailPrefix = cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail;
   const nick = resolveAccountScopedNickname(cleanEmail, '');
+  const extraStoredNames: string[] = [];
+  if (typeof window !== 'undefined') {
+    try {
+      const hubNick = (localStorage.getItem('ghosti_hub_user_nickname') || '').trim();
+      const userNick = (localStorage.getItem('userNickname') || '').trim();
+      if (hubNick) extraStoredNames.push(hubNick);
+      if (userNick) extraStoredNames.push(userNick);
+      const cachedRaw = localStorage.getItem('merlin_cached_user');
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw) as { nickname?: string; name?: string } | null;
+        if (parsed?.nickname?.trim()) extraStoredNames.push(parsed.nickname.trim());
+        if (parsed?.name?.trim()) extraStoredNames.push(parsed.name.trim());
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   return Array.from(
     new Set(
-      [flow.userRealName, ...(flow.userAliases || []), nick, emailPrefix, '나', '방장']
+      [
+        flow.userRealName,
+        ...(flow.userAliases || []),
+        passportBook.self?.realName,
+        passportBook.self?.nickname,
+        nick,
+        ...extraStoredNames,
+        cleanEmail,
+        emailPrefix,
+        '나',
+        '방장',
+      ]
         .map((s) => String(s || '').trim())
         .filter(Boolean)
     )
