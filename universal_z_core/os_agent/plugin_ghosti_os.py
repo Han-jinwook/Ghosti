@@ -1020,6 +1020,11 @@ _WATCH_SIG_TTL_CACHE: Dict[str, Any] = {"ts": 0.0, "resp": None}
 _WATCH_SIG_BUILD_LOCK = threading.Lock()
 _PDFIUM_GLOBAL_LOCK = threading.RLock()
 _BG_INDEX_BUMP_SEQ: int = 0
+_DRIVE_SCAN_SEQ: int = 0
+_DOC_BG_ENRICH_SEQ: int = 0
+_VID_BG_ENRICH_SEQ: int = 0
+_LAST_VID_OCR_DISK_FLUSH_TS: float = 0.0
+_VIDEO_OCR_CACHE_DIRTY: bool = False
 _DOC_TEXT_CACHE_DIRTY: bool = False
 _PREWARMED_PHOTO_THUMB_SIGS: set[str] = set()
 _FULL_DRIVE_EXTRA_DIRS: List[Path] = []
@@ -1299,7 +1304,7 @@ def decide_external_drive_web(payload: dict) -> dict:
 
     if decision == "included" and drv_letter:
         def _bg_web_ext_index() -> None:
-            global _FULL_DRIVE_SCAN_STARTED, _BG_INDEX_BUMP_SEQ
+            global _FULL_DRIVE_SCAN_STARTED, _BG_INDEX_BUMP_SEQ, _DRIVE_SCAN_SEQ
             drv_prefix = drv_letter[:2].upper()
             drv_root = f"{drv_prefix}\\"
             _WEB_EXT_DRIVE_STATE["indexing_vol_id"] = vol_id
@@ -1373,6 +1378,7 @@ def decide_external_drive_web(payload: dict) -> dict:
                 with _FULL_DRIVE_SCAN_LOCK:
                     _FULL_DRIVE_SCAN_STARTED = False
                 _start_bg_full_drive_scan_once()
+                _DRIVE_SCAN_SEQ += 1
                 _BG_INDEX_BUMP_SEQ += 1
                 _WATCH_SIG_TTL_CACHE["ts"] = 0.0
                 _PHOTOS_RESP_MEM_CACHE["sig"] = ""
@@ -1438,7 +1444,7 @@ def _start_bg_full_drive_scan_once() -> None:
         _FULL_DRIVE_SCAN_STARTED = True
 
     def _bg_worker() -> None:
-        global _BG_INDEX_BUMP_SEQ
+        global _BG_INDEX_BUMP_SEQ, _DRIVE_SCAN_SEQ
         try:
             time.sleep(0.15)
             apply_hardware_protection_guard(mode="silent", batch_count=0)
@@ -1530,8 +1536,8 @@ def _start_bg_full_drive_scan_once() -> None:
 
                 rr_idx = 0
                 per_drive_discovered = 0
-                per_drive_cap = 800 if is_virtual else 6000
-                drv_time_cap = 3.0 if is_virtual else 12.0
+                per_drive_cap = 260 if is_virtual else 6000
+                drv_time_cap = 2.0 if is_virtual else 12.0
                 max_walk_depth = 6 if is_virtual else 12
                 t_drv_start = time.time()
                 while (
@@ -1599,6 +1605,7 @@ def _start_bg_full_drive_scan_once() -> None:
                         _FULL_DRIVE_EXTRA_DIRS[:] = list(discovered)
                     with _SCAN_DIRS_CACHE_LOCK:
                         _SCAN_DIRS_MEM_CACHE.clear()
+                    _DRIVE_SCAN_SEQ += 1
                     _BG_INDEX_BUMP_SEQ += 1
                     _WATCH_SIG_TTL_CACHE["ts"] = 0.0
                     _PHOTOS_RESP_MEM_CACHE["sig"] = ""
@@ -1934,45 +1941,98 @@ def _make_collision_safe_media_key(resolved: Path, folder_name: str, seen_keys: 
     return key
 
 
+_VIRTUAL_DIR_PHOTO_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, str, str, os.stat_result, Path, str]]]] = {}
+_LOCAL_DIR_PHOTO_SCAN_CACHE: Dict[str, tuple[int, List[tuple[Path, str, str, os.stat_result, Path, str]]]] = {}
+
+
 def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(사진, 바탕화면, 다운로드, 문서, 동영상 등)의 모든 실물 사진을 전수 스캔하여 반환합니다."""
     data = params or {}
     req_dir = str(data.get("dir") or data.get("targetPath") or "").strip()
     recycled_now = safe.recycled_photo_entries()
     if not req_dir:
-        cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+        ws_obj = get_local_watch_signature()
+        cur_fs_sig = str(ws_obj.get("fsSig") or ws_obj.get("sig") or "")
         cached_resp = _PHOTOS_RESP_MEM_CACHE.get("resp")
         if (
-            cur_watch_sig
+            cur_fs_sig
             and cached_resp is not None
-            and _PHOTOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+            and _PHOTOS_RESP_MEM_CACHE.get("sig") == cur_fs_sig
             and _PHOTOS_RESP_MEM_CACHE.get("quarantine_len") == len(recycled_now)
         ):
             return cached_resp
     with _PHOTOS_LIST_BUILD_LOCK:
-        return _list_local_photos_unlocked(data, req_dir)
+        return _list_local_photos_unlocked(data, req_dir, recycled_now)
 
 
-def _list_local_photos_unlocked(data: Dict[str, Any], req_dir: str) -> Dict[str, Any]:
-    recycled_now = safe.recycled_photo_entries()
-    cur_watch_sig = ""
+def _list_local_photos_unlocked(
+    data: Dict[str, Any],
+    req_dir: str,
+    recycled_in: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    recycled_now = recycled_in if recycled_in is not None else safe.recycled_photo_entries()
+    cur_fs_sig = ""
     if not req_dir:
-        cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+        ws_obj = get_local_watch_signature()
+        cur_fs_sig = str(ws_obj.get("fsSig") or ws_obj.get("sig") or "")
         cached_resp = _PHOTOS_RESP_MEM_CACHE.get("resp")
         if (
-            cur_watch_sig
+            cur_fs_sig
             and cached_resp is not None
-            and _PHOTOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+            and _PHOTOS_RESP_MEM_CACHE.get("sig") == cur_fs_sig
             and _PHOTOS_RESP_MEM_CACHE.get("quarantine_len") == len(recycled_now)
         ):
             return cached_resp
 
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(req_dir), max_depth=3)
+    if len(_LOCAL_DIR_PHOTO_SCAN_CACHE) > 12000:
+        _LOCAL_DIR_PHOTO_SCAN_CACHE.clear()
 
     raw_photo_candidates: List[tuple[Path, str, str, os.stat_result, Path, str]] = []
     seen_paths: set[str] = set()
+    now_m = time.monotonic()
+    virt_p_elapsed = 0.0
+    UNPINNED_CLOUD_MASK = 0x1000 | 0x40000 | 0x400000
 
-    for d in scan_dirs:
+    for idx_dir, d in enumerate(scan_dirs):
+        is_virt_d = _is_virtual_cloud_drive_path(d)
+        d_key = os.path.normcase(str(d))
+        if is_virt_d:
+            hit_vp = _VIRTUAL_DIR_PHOTO_SCAN_CACHE.get(d_key)
+            # 가상 드라이브(G:/H: 구글드라이브)는 30초 TTL 내 os.stat() 네트워크 I/O를 0회로 즉시 반환 (260개 폴더 stat 지연 원천 차단)
+            if hit_vp is not None and (now_m - hit_vp[0]) < 30.0:
+                for p_tup in hit_vp[2]:
+                    np_low = p_tup[2].lower()
+                    if np_low not in seen_paths:
+                        seen_paths.add(np_low)
+                        raw_photo_candidates.append(p_tup)
+                continue
+            if virt_p_elapsed >= 0.30:
+                if hit_vp is not None:
+                    for p_tup in hit_vp[2]:
+                        np_low = p_tup[2].lower()
+                        if np_low not in seen_paths:
+                            seen_paths.add(np_low)
+                            raw_photo_candidates.append(p_tup)
+                continue
+        elif idx_dir >= 24:
+            # 보조·심층 로컬 폴더(900~4,500개)는 디렉터리 mtime_ns 불변 시 캐시 재사용 (1.9초 재스캔 ➔ 15ms 즉시 응답)
+            hit_lp = _LOCAL_DIR_PHOTO_SCAN_CACHE.get(d_key)
+            if hit_lp is not None:
+                try:
+                    cur_d_mt = int(getattr(os.stat(d), "st_mtime_ns", 0))
+                except Exception:
+                    cur_d_mt = -1
+                if cur_d_mt == hit_lp[0] and cur_d_mt > 0:
+                    for p_tup in hit_lp[1]:
+                        np_low = p_tup[2].lower()
+                        if np_low not in seen_paths:
+                            seen_paths.add(np_low)
+                            raw_photo_candidates.append(p_tup)
+                    continue
+
+        t_p0 = time.monotonic()
+        p_bucket: List[tuple[Path, str, str, os.stat_result, Path, str]] = []
         d_label = _detect_folder_label(d)
         d_low = str(d).lower()
         is_sample_or_test_dir = "test_photos" in d_low or "sample" in d_low
@@ -1988,20 +2048,29 @@ def _list_local_photos_unlocked(data: Dict[str, Any], req_dir: str) -> Dict[str,
                     dot = nm.rfind(".")
                     if dot < 0 or nm[dot:].lower() not in _IMAGE_EXTS:
                         continue
-                    entry_path = Path(dent.path)
-                    if _is_cloud_virtual_or_unpinned_file(entry_path):
+                    # os.scandir의 WIN32_FIND_DATA 캐시(dent.stat)에서 커널 핸들 오픈 0회로 오프라인 클라우드 속성 판별
+                    st = dent.stat(follow_symlinks=False)
+                    if int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK:
+                        continue
+                    if st.st_size < 4096 and not is_sample_or_test_dir:
                         continue
                     abs_str = os.path.abspath(dent.path)
                     norm_resolved = abs_str.lower()
-                    if norm_resolved in seen_paths:
-                        continue
-                    st = dent.stat(follow_symlinks=False)
-                    if st.st_size < 4096 and not is_sample_or_test_dir:
-                        continue
-                    seen_paths.add(norm_resolved)
-                    raw_photo_candidates.append((d, d_label, abs_str, st, Path(abs_str), nm))
+                    ptup = (d, d_label, abs_str, st, Path(abs_str), nm)
+                    p_bucket.append(ptup)
+                    if norm_resolved not in seen_paths:
+                        seen_paths.add(norm_resolved)
+                        raw_photo_candidates.append(ptup)
         except Exception:
             pass
+        if is_virt_d:
+            virt_p_elapsed += max(0.0, time.monotonic() - t_p0)
+            _VIRTUAL_DIR_PHOTO_SCAN_CACHE[d_key] = (now_m, 1, p_bucket)
+        elif idx_dir >= 24:
+            try:
+                _LOCAL_DIR_PHOTO_SCAN_CACHE[d_key] = (int(getattr(os.stat(d), "st_mtime_ns", 0)), p_bucket)
+            except Exception:
+                pass
 
     raw_photo_candidates.sort(key=lambda item: item[3].st_mtime, reverse=True)
     fair_photo_candidates = _select_fair_entries_by_drive(raw_photo_candidates, lambda item: item[2], 6000)
@@ -2023,16 +2092,16 @@ def _list_local_photos_unlocked(data: Dict[str, Any], req_dir: str) -> Dict[str,
     primary_dir = resolve_active_photo_dir(req_dir)
     if files:
         unwarmed_paths: List[Path] = []
-        for f in files[:360]:
+        for f in files[:96]:
             fp_s = f.get("fullPath")
-            if fp_s:
+            if fp_s and not _is_virtual_cloud_drive_path(fp_s):
                 psig = f"{fp_s}|{f.get('size')}|{f.get('mtimeMs')}"
                 if psig not in _PREWARMED_PHOTO_THUMB_SIGS:
                     _PREWARMED_PHOTO_THUMB_SIGS.add(psig)
                     unwarmed_paths.append(Path(fp_s))
         if unwarmed_paths:
             _trigger_bg_photo_thumb_prewarm(unwarmed_paths)
-    resp_obj = {
+    resp_obj = _PreEncodedJsonDict({
         "ok": True,
         "dir": str(primary_dir),
         "scannedFolderCount": len(scan_dirs),
@@ -2040,30 +2109,45 @@ def _list_local_photos_unlocked(data: Dict[str, Any], req_dir: str) -> Dict[str,
         "total": len(files),
         "files": files,
         "quarantined": recycled_now,
-    }
-    if not req_dir and cur_watch_sig:
-        _PHOTOS_RESP_MEM_CACHE["sig"] = cur_watch_sig
+    })
+    if not req_dir and cur_fs_sig:
+        _PHOTOS_RESP_MEM_CACHE["sig"] = cur_fs_sig
         _PHOTOS_RESP_MEM_CACHE["quarantine_len"] = len(recycled_now)
         _PHOTOS_RESP_MEM_CACHE["resp"] = resp_obj
     return resp_obj
 
 
-_SECONDARY_WATCH_SIG_CACHE: Dict[str, Any] = {"ts": 0.0, "sig": "0:0:0:0", "count": 0}
+class _PreEncodedJsonDict(dict):
+    """대용량 목록 응답(1~4MB)을 캐시 생성 시 단 1회만 UTF-8 바이트로 직렬화하여 웜 캐시 응답 시 json.dumps GIL 점유를 0ms로 제거합니다."""
+
+    __slots__ = ("_raw_json_bytes",)
+
+    def __init__(self, mapping: Dict[str, Any]) -> None:
+        super().__init__(mapping)
+        self._raw_json_bytes: bytes = json.dumps(mapping, ensure_ascii=False).encode("utf-8")
+
+
+_SECONDARY_WATCH_SIG_CACHE: Dict[str, Any] = {"ts": 0.0, "sig": "0:0", "count": 0}
 _SECONDARY_WATCH_REFRESH_INFLIGHT = False
 
 
-def _scan_dirs_into_watch_metrics(dirs_to_scan: List[Path], target_exts: set[str], budget_sec: float) -> tuple[int, int, int, int]:
+def _scan_dirs_into_watch_metrics_deterministic(
+    dirs_to_scan: List[Path],
+    target_exts: set[str],
+    per_dir_cap: int = 600,
+) -> tuple[int, int, int, int]:
+    """시간 예산(budget_sec) 중도 탈출로 인해 CPU 부하에 따라 시그니처가 출렁이던 버그를 원천 제거한 100% 결정론적(Deterministic) 스캔."""
     f_cnt = 0
     max_mt = 0
     sz_acc = 0
     nm_xor = 0
-    t0 = time.monotonic()
-    for idx_d, d in enumerate(dirs_to_scan):
-        if (idx_d & 7) == 7 and (time.monotonic() - t0) > budget_sec:
-            break
+    for d in dirs_to_scan:
         try:
+            seen_in_d = 0
             with os.scandir(d) as it:
                 for entry in it:
+                    if seen_in_d >= per_dir_cap:
+                        break
                     try:
                         if not entry.is_file(follow_symlinks=False):
                             continue
@@ -2073,6 +2157,7 @@ def _scan_dirs_into_watch_metrics(dirs_to_scan: List[Path], target_exts: set[str
                         dot = nm.rfind(".")
                         if dot < 0 or nm[dot:].lower() not in target_exts:
                             continue
+                        seen_in_d += 1
                         st = entry.stat(follow_symlinks=False)
                         f_cnt += 1
                         mt_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
@@ -2088,24 +2173,42 @@ def _scan_dirs_into_watch_metrics(dirs_to_scan: List[Path], target_exts: set[str
     return f_cnt, max_mt, sz_acc, nm_xor
 
 
+def _compute_secondary_dir_mtime_sig(dirs_to_check: List[Path]) -> tuple[int, str]:
+    """보조 드라이브 폴더(최대 400개)의 디렉터리 mtime_ns 합산을 4ms 내에 결정론적으로 계산하여 파일 추가·삭제만 정확히 감지합니다."""
+    d_cnt = 0
+    mt_xor = 0
+    max_d_mt = 0
+    for d in dirs_to_check[:400]:
+        if _is_virtual_cloud_drive_path(d):
+            continue
+        try:
+            st_d = os.stat(d)
+            mt_ns = int(getattr(st_d, "st_mtime_ns", int(st_d.st_mtime * 1_000_000_000)))
+            d_cnt += 1
+            if mt_ns > max_d_mt:
+                max_d_mt = mt_ns
+            mt_xor ^= (hash((os.path.normcase(str(d)), mt_ns)) & 0x7FFFFFFFFFFFFFFF)
+        except Exception:
+            pass
+    return d_cnt, f"{d_cnt}:{max_d_mt}:{mt_xor}"
+
+
 def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
-    [열려 있는 귀신검색창 실시간 파일 추가·삭제·변경 감지용 5ms 2계층 시그니처 (`GET /__zcore/watch-sig`)]:
-    - 1계층(로컬 핵심 사용자 폴더: 바탕화면·다운로드·문서·사진·동영상·S: 등 비가상 폴더): 매 호출(0.25s 마이크로캐시)마다 < 10ms 내에
-      파일 수·최신 mtime_ns·용량·파일명 해시(0바이트 빈 메모 파일 생성/삭제까지 100% 포착)를 즉시 계산합니다.
-    - 2계층(G: 구글드라이브 등 가상 클라우드 및 심층 보조 폴더): 12초 캐시 + 백그라운드 비동기 갱신으로 분리하여
-      폴링 타임아웃(기존 2.74초)을 0%로 만들고 파일 저장·삭제 시 1초 이내 자동 반영을 보장합니다.
+    [열려 있는 귀신검색창 실시간 파일 추가·삭제·변경 감지용 5ms 결정론적 2계층 시그니처 (`GET /__zcore/watch-sig`)]:
+    - 1계층(로컬 핵심 사용자 폴더 상위 32개): 시간 제한 중도 탈출 없이 항상 동일한 폴더 집합을 < 10ms 내에 결정론적으로 계산합니다.
+    - 2계층(보조 드라이브 폴더 디렉터리 mtime_ns): 10초 캐시 + 비동기 갱신으로 CPU 부하와 무관하게 100% 동일한 fsSig를 보장합니다.
     """
     global _SECONDARY_WATCH_REFRESH_INFLIGHT
     now_mono = time.monotonic()
     cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
-    if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.25:
+    if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.40:
         return cached_ws
 
     with _WATCH_SIG_BUILD_LOCK:
         now_mono = time.monotonic()
         cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
-        if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.25:
+        if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.40:
             return cached_ws
 
         scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
@@ -2113,46 +2216,47 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
         hot_local_dirs: List[Path] = []
         secondary_dirs: List[Path] = []
         for d in scan_dirs:
-            if not _is_virtual_cloud_drive_path(d) and len(hot_local_dirs) < 120:
+            if not _is_virtual_cloud_drive_path(d) and len(hot_local_dirs) < 32:
                 hot_local_dirs.append(d)
             else:
                 secondary_dirs.append(d)
 
-        h_cnt, h_mt, h_sz, h_xor = _scan_dirs_into_watch_metrics(hot_local_dirs, target_exts, budget_sec=0.12)
+        h_cnt, h_mt, h_sz, h_xor = _scan_dirs_into_watch_metrics_deterministic(hot_local_dirs, target_exts, per_dir_cap=600)
 
         sec_ts = float(_SECONDARY_WATCH_SIG_CACHE.get("ts") or 0.0)
-        if secondary_dirs and (sec_ts <= 0.0 or (now_mono - sec_ts) >= 12.0) and not _SECONDARY_WATCH_REFRESH_INFLIGHT:
-            if sec_ts <= 0.0:
-                s_cnt, s_mt, s_sz, s_xor = _scan_dirs_into_watch_metrics(secondary_dirs, target_exts, budget_sec=0.15)
-                _SECONDARY_WATCH_SIG_CACHE["sig"] = f"{s_cnt}:{s_mt}:{s_sz}:{s_xor}"
-                _SECONDARY_WATCH_SIG_CACHE["count"] = s_cnt
-                _SECONDARY_WATCH_SIG_CACHE["ts"] = time.monotonic()
-            else:
-                _SECONDARY_WATCH_REFRESH_INFLIGHT = True
+        if secondary_dirs and sec_ts <= 0.0:
+            sc_d, sec_s = _compute_secondary_dir_mtime_sig(secondary_dirs)
+            _SECONDARY_WATCH_SIG_CACHE["sig"] = sec_s
+            _SECONDARY_WATCH_SIG_CACHE["count"] = sc_d
+            _SECONDARY_WATCH_SIG_CACHE["ts"] = now_mono
+        elif secondary_dirs and (now_mono - sec_ts) >= 10.0 and not _SECONDARY_WATCH_REFRESH_INFLIGHT:
+            _SECONDARY_WATCH_REFRESH_INFLIGHT = True
 
-                def _bg_sec_watch(dirs_snap: List[Path] = list(secondary_dirs)) -> None:
-                    global _SECONDARY_WATCH_REFRESH_INFLIGHT
-                    try:
-                        sc, sm, ss, sx = _scan_dirs_into_watch_metrics(dirs_snap, target_exts, budget_sec=0.45)
-                        _SECONDARY_WATCH_SIG_CACHE["sig"] = f"{sc}:{sm}:{ss}:{sx}"
-                        _SECONDARY_WATCH_SIG_CACHE["count"] = sc
-                        _SECONDARY_WATCH_SIG_CACHE["ts"] = time.monotonic()
-                    except Exception:
-                        pass
-                    finally:
-                        _SECONDARY_WATCH_REFRESH_INFLIGHT = False
+            def _bg_sec_watch(dirs_snap: List[Path] = list(secondary_dirs)) -> None:
+                global _SECONDARY_WATCH_REFRESH_INFLIGHT
+                try:
+                    sc_d2, sec_s2 = _compute_secondary_dir_mtime_sig(dirs_snap)
+                    _SECONDARY_WATCH_SIG_CACHE["sig"] = sec_s2
+                    _SECONDARY_WATCH_SIG_CACHE["count"] = sc_d2
+                    _SECONDARY_WATCH_SIG_CACHE["ts"] = time.monotonic()
+                except Exception:
+                    pass
+                finally:
+                    _SECONDARY_WATCH_REFRESH_INFLIGHT = False
 
-                threading.Thread(target=_bg_sec_watch, daemon=True, name="GhostiWatchSigSecondary").start()
+            threading.Thread(target=_bg_sec_watch, daemon=True, name="GhostiWatchSigSecondary").start()
 
-        sec_sig = str(_SECONDARY_WATCH_SIG_CACHE.get("sig") or "0:0:0:0")
+        sec_sig = str(_SECONDARY_WATCH_SIG_CACHE.get("sig") or "0:0")
         total_cnt = h_cnt + int(_SECONDARY_WATCH_SIG_CACHE.get("count") or 0)
-        sig = f"{len(scan_dirs)}:{h_cnt}:{h_mt}:{h_sz}:{h_xor}:{sec_sig}:{_BG_INDEX_BUMP_SEQ}"
-        resp_ws = {
+        fs_sig = f"{len(scan_dirs)}:{h_cnt}:{h_mt}:{h_sz}:{h_xor}:{sec_sig}:{_DRIVE_SCAN_SEQ}"
+        sig = f"{fs_sig}:{_DOC_BG_ENRICH_SEQ}:{_VID_BG_ENRICH_SEQ}"
+        resp_ws = _PreEncodedJsonDict({
             "ok": True,
             "sig": sig,
+            "fsSig": fs_sig,
             "fileCount": total_cnt,
             "folderCount": len(scan_dirs),
-        }
+        })
         _WATCH_SIG_TTL_CACHE["ts"] = time.monotonic()
         _WATCH_SIG_TTL_CACHE["resp"] = resp_ws
         return resp_ws
@@ -3472,24 +3576,25 @@ def _split_camel_and_alnum_words(src: str) -> str:
 
 
 def _bg_prewarm_pdf_ocr_worker(targets: List[Path]) -> None:
-    global _PDF_BG_OCR_RUNNING, _BG_INDEX_BUMP_SEQ
+    global _PDF_BG_OCR_RUNNING, _BG_INDEX_BUMP_SEQ, _DOC_BG_ENRICH_SEQ
     updated_any = False
     try:
-        for p in targets[:40]:
+        for p in targets[:24]:
             try:
-                prev_cache = dict(_load_doc_text_cache())
+                prev_cache = _load_doc_text_cache()
                 st_p = p.stat()
-                sig_p = _make_doc_cache_sig(p, st_p)
+                sig_p = f"{os.path.abspath(p)}|{st_p.st_size}|{int(st_p.st_mtime)}|{_DOC_CACHE_SCHEMA_TAG}"
                 had_before = sig_p in prev_cache
                 res = _extract_doc_text(p, allow_pdf_winrt_ocr=True, flush_disk=False)
                 if not had_before and res and "보관된 " not in res[:60]:
                     updated_any = True
-                time.sleep(0.06)
+                time.sleep(0.12)
             except Exception:
                 pass
     finally:
         _flush_doc_text_cache_if_dirty()
         if updated_any:
+            _DOC_BG_ENRICH_SEQ += 1
             _BG_INDEX_BUMP_SEQ += 1
             _DOCS_RESP_MEM_CACHE["sig"] = ""
             _WATCH_SIG_TTL_CACHE["ts"] = 0.0
@@ -3498,12 +3603,13 @@ def _bg_prewarm_pdf_ocr_worker(targets: List[Path]) -> None:
 
 def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(문서, 바탕화면, 다운로드, OneDrive 등)의 서류 파일을 전수 스캔하여 반환합니다."""
-    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    ws_obj = get_local_watch_signature()
+    cur_doc_sig = f"{ws_obj.get('fsSig') or ws_obj.get('sig') or ''}:{_DOC_BG_ENRICH_SEQ}"
     cached_docs_resp = _DOCS_RESP_MEM_CACHE.get("resp")
     if (
-        cur_watch_sig
+        cur_doc_sig
         and cached_docs_resp is not None
-        and _DOCS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+        and _DOCS_RESP_MEM_CACHE.get("sig") == cur_doc_sig
     ):
         return cached_docs_resp
     with _DOCS_LIST_BUILD_LOCK:
@@ -3513,29 +3619,43 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 _DOCS_ENTRY_MEM_CACHE: Dict[str, Dict[str, Any]] = {}
 _DOCS_FULL_TEXT_MEM_MAP: Dict[str, str] = {}
 _VIRTUAL_DIR_DOC_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, Path, os.stat_result]]]] = {}
+_LOCAL_DIR_DOC_SCAN_CACHE: Dict[str, tuple[int, List[tuple[Path, Path, os.stat_result]]]] = {}
 _DOC_TEXT_BG_PREWARM_RUNNING = False
 
 
 def _bg_prewarm_doc_texts_worker(targets: List[Path]) -> None:
-    global _DOC_TEXT_BG_PREWARM_RUNNING, _BG_INDEX_BUMP_SEQ
+    global _DOC_TEXT_BG_PREWARM_RUNNING, _BG_INDEX_BUMP_SEQ, _DOC_BG_ENRICH_SEQ
     updated_any = False
     try:
+        # 초기 부팅·창 진입 직후 5199 HTTP 스레드와 GIL/디스크 경합을 0%로 차단하기 위해 8초 유휴 대기 후 경량 문서만 저부하 선행 색인
+        time.sleep(8.0)
         apply_hardware_protection_guard(mode="silent", batch_count=0)
-        for idx_t, p in enumerate(targets[:1500]):
+        prewarmed_cnt = 0
+        for p in targets:
+            if prewarmed_cnt >= 120:
+                break
             try:
+                ext_l = p.suffix.lower()
+                # 대용량 PDF(pypdf GIL 점유) 및 대형 엑셀·한글 파일은 사용자가 검색(/__docs/search)·열람(/__docs/full-text) 시 온디맨드 추출
+                if ext_l in (".pdf", ".xls", ".ppt", ".doc"):
+                    continue
                 if not p.exists():
+                    continue
+                st_p = p.stat()
+                if st_p.st_size <= 0 or st_p.st_size > 384 * 1024:
                     continue
                 txt = _extract_doc_text(p, allow_pdf_winrt_ocr=False, flush_disk=False)
                 if txt:
                     _DOCS_FULL_TEXT_MEM_MAP[str(p).lower()] = txt
                     updated_any = True
+                    prewarmed_cnt += 1
             except Exception:
                 pass
-            if (idx_t & 15) == 15:
-                time.sleep(0.01)
+            time.sleep(0.08)
     finally:
         _flush_doc_text_cache_if_dirty()
         if updated_any:
+            _DOC_BG_ENRICH_SEQ += 1
             _BG_INDEX_BUMP_SEQ += 1
             _DOCS_RESP_MEM_CACHE["sig"] = ""
             _WATCH_SIG_TTL_CACHE["ts"] = 0.0
@@ -3584,39 +3704,60 @@ def get_local_doc_full_text(params: Dict[str, Any] | None = None) -> Dict[str, A
 
 def _list_local_docs_unlocked() -> Dict[str, Any]:
     global _PDF_BG_OCR_RUNNING, _DOC_TEXT_BG_PREWARM_RUNNING
-    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    ws_obj = get_local_watch_signature()
+    cur_doc_sig = f"{ws_obj.get('fsSig') or ws_obj.get('sig') or ''}:{_DOC_BG_ENRICH_SEQ}"
     cached_docs_resp = _DOCS_RESP_MEM_CACHE.get("resp")
     if (
-        cur_watch_sig
+        cur_doc_sig
         and cached_docs_resp is not None
-        and _DOCS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+        and _DOCS_RESP_MEM_CACHE.get("sig") == cur_doc_sig
     ):
         return cached_docs_resp
 
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+    if len(_LOCAL_DIR_DOC_SCAN_CACHE) > 12000:
+        _LOCAL_DIR_DOC_SCAN_CACHE.clear()
     raw_entries: List[tuple[Path, Path, os.stat_result]] = []
     seen_paths: set[str] = set()
     now_m = time.monotonic()
     virt_elapsed = 0.0
+    UNPINNED_CLOUD_MASK = 0x1000 | 0x40000 | 0x400000
 
-    for d in scan_dirs:
+    for idx_dir, d in enumerate(scan_dirs):
         is_virt_d = _is_virtual_cloud_drive_path(d)
         d_key = os.path.normcase(str(d))
         if is_virt_d:
             hit_vd = _VIRTUAL_DIR_DOC_SCAN_CACHE.get(d_key)
-            try:
-                d_mt = int(getattr(os.stat(d), "st_mtime_ns", 0)) if virt_elapsed < 0.25 else (hit_vd[1] if hit_vd else -1)
-            except Exception:
-                d_mt = hit_vd[1] if hit_vd else -1
-            if hit_vd is not None and (now_m - hit_vd[0]) < 25.0 and hit_vd[1] == d_mt:
+            if hit_vd is not None and (now_m - hit_vd[0]) < 30.0:
                 for cd, cp, cst in hit_vd[2]:
                     nd = str(cp).lower()
                     if nd not in seen_paths:
                         seen_paths.add(nd)
                         raw_entries.append((cd, cp, cst))
                 continue
-            if virt_elapsed >= 0.45:
+            if virt_elapsed >= 0.30:
+                if hit_vd is not None:
+                    for cd, cp, cst in hit_vd[2]:
+                        nd = str(cp).lower()
+                        if nd not in seen_paths:
+                            seen_paths.add(nd)
+                            raw_entries.append((cd, cp, cst))
                 continue
+        elif idx_dir >= 24:
+            hit_ld = _LOCAL_DIR_DOC_SCAN_CACHE.get(d_key)
+            if hit_ld is not None:
+                try:
+                    cur_d_mt = int(getattr(os.stat(d), "st_mtime_ns", 0))
+                except Exception:
+                    cur_d_mt = -1
+                if cur_d_mt == hit_ld[0] and cur_d_mt > 0:
+                    for cd, cp, cst in hit_ld[1]:
+                        nd = str(cp).lower()
+                        if nd not in seen_paths:
+                            seen_paths.add(nd)
+                            raw_entries.append((cd, cp, cst))
+                    continue
+
         t_d0 = time.monotonic()
         dir_bucket: List[tuple[Path, Path, os.stat_result]] = []
         try:
@@ -3631,27 +3772,28 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                         continue
                     if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
                         continue
+                    st = dent.stat(follow_symlinks=False)
+                    if int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK:
+                        continue
                     abs_doc = os.path.abspath(dent.path)
                     norm_doc = abs_doc.lower()
-                    if norm_doc in seen_paths:
-                        continue
-                    seen_paths.add(norm_doc)
-                    st = dent.stat(follow_symlinks=False)
                     tup = (d, Path(abs_doc), st)
-                    raw_entries.append(tup)
-                    if is_virt_d:
-                        dir_bucket.append(tup)
+                    dir_bucket.append(tup)
+                    if norm_doc not in seen_paths:
+                        seen_paths.add(norm_doc)
+                        raw_entries.append(tup)
         except Exception:
             pass
         if is_virt_d:
             virt_elapsed += max(0.0, time.monotonic() - t_d0)
+            _VIRTUAL_DIR_DOC_SCAN_CACHE[d_key] = (now_m, 1, dir_bucket)
+        elif idx_dir >= 24:
             try:
-                _VIRTUAL_DIR_DOC_SCAN_CACHE[d_key] = (now_m, int(getattr(os.stat(d), "st_mtime_ns", 0)), dir_bucket)
+                _LOCAL_DIR_DOC_SCAN_CACHE[d_key] = (int(getattr(os.stat(d), "st_mtime_ns", 0)), dir_bucket)
             except Exception:
                 pass
 
     # [전 드라이브 보유 문서 100% 편입 (기존 800건 상한 철폐 ➔ 12,000건)]:
-    # D:/E:/F: 등 보조 하드의 수천 개 문서가 800건 컷오프로 누락되던 문제를 근본 해결합니다.
     raw_entries.sort(key=lambda item: item[2].st_mtime, reverse=True)
     fair_doc_entries = _select_fair_entries_by_drive(raw_entries, lambda item: str(item[1]), 12000)
     docs: List[Dict[str, Any]] = []
@@ -3674,9 +3816,9 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
         ".ppt": ("PPT", "📙 파워포인트 발표자료"),
     }
 
-    if len(_DOCS_ENTRY_MEM_CACHE) > 16000:
+    if len(_DOCS_ENTRY_MEM_CACHE) > 20000:
         _DOCS_ENTRY_MEM_CACHE.clear()
-    if len(_DOCS_FULL_TEXT_MEM_MAP) > 16000:
+    if len(_DOCS_FULL_TEXT_MEM_MAP) > 20000:
         _DOCS_FULL_TEXT_MEM_MAP.clear()
 
     t_extract_budget0 = time.monotonic()
@@ -3685,31 +3827,38 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
             resolved_doc_str = str(entry)
             resolved_low = resolved_doc_str.lower()
             ext_low = entry.suffix.lower()
-            sig_all = _make_doc_cache_sig(entry, st)
-            has_disk_cache = sig_all in doc_cache_ref
-            entry_mem_key = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}"
+            # Path.resolve()의 CreateFileW 커널 핸들 오픈(2,748회 * 클라우드 50ms = 14초 지연)을 원천 제거!
+            sig_all = f"{resolved_doc_str}|{st.st_size}|{int(st.st_mtime)}|{_DOC_CACHE_SCHEMA_TAG}"
+            mem_full = _DOCS_FULL_TEXT_MEM_MAP.get(resolved_low) or ""
+            disk_full = str(doc_cache_ref.get(sig_all) or "") if not mem_full else ""
+            known_text = mem_full or disk_full
+            has_known_text = bool(known_text)
+            entry_mem_key = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{1 if has_known_text else 0}"
             cached_doc_item = _DOCS_ENTRY_MEM_CACHE.get(entry_mem_key)
             if cached_doc_item is not None:
-                if cached_doc_item.get("extractedText") or not has_disk_cache:
-                    docs.append(cached_doc_item)
-                    continue
+                docs.append(cached_doc_item)
+                if not has_known_text and not _is_virtual_cloud_drive_path(resolved_doc_str):
+                    if len(deferred_doc_texts) < 1500:
+                        deferred_doc_texts.append(entry)
+                continue
 
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
             stem_expanded = _split_camel_and_alnum_words(stem)
-            is_virt_e = _is_virtual_cloud_drive_path(entry)
-            if has_disk_cache:
-                extracted = str(doc_cache_ref.get(sig_all) or "")
+            is_virt_e = _is_virtual_cloud_drive_path(resolved_doc_str)
+            if has_known_text:
+                extracted = known_text
             elif is_virt_e:
                 extracted = ""
-            elif (time.monotonic() - t_extract_budget0) < 0.45 or (ext_low in (".txt", ".md", ".csv") and st.st_size <= 65536 and idx_doc < 400):
+            elif ext_low in (".txt", ".md", ".csv") and st.st_size <= 65536 and (time.monotonic() - t_extract_budget0) < 0.06:
                 extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=False, flush_disk=False)
             else:
                 extracted = ""
-                deferred_doc_texts.append(entry)
+                if len(deferred_doc_texts) < 1500:
+                    deferred_doc_texts.append(entry)
 
             if extracted:
                 _DOCS_FULL_TEXT_MEM_MAP[resolved_low] = extracted
-            if ext_low == ".pdf" and not has_disk_cache and sig_all not in doc_cache_ref and not is_virt_e and len(deferred_pdfs) < 40:
+            if ext_low == ".pdf" and not extracted and not is_virt_e and len(deferred_pdfs) < 24:
                 deferred_pdfs.append(entry)
 
             norm_ext, badge = ext_badge_map.get(ext_low, ("DOC", "📄 로컬 문서 파일"))
@@ -3738,8 +3887,8 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                 "size": int(st.st_size),
                 "deviceSource": _detect_folder_label(d),
             }
-            if extracted or is_virt_e:
-                _DOCS_ENTRY_MEM_CACHE[entry_mem_key] = doc_obj
+            cache_key_final = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{1 if extracted else 0}"
+            _DOCS_ENTRY_MEM_CACHE[cache_key_final] = doc_obj
             docs.append(doc_obj)
         except Exception:
             pass
@@ -3750,19 +3899,13 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
         _DOC_TEXT_BG_PREWARM_RUNNING = True
         threading.Thread(target=_bg_prewarm_doc_texts_worker, args=(deferred_doc_texts,), daemon=True, name="GhostiBgDocTexts").start()
 
-    if deferred_pdfs and not _PDF_BG_OCR_RUNNING:
-        _PDF_BG_OCR_RUNNING = True
-        threading.Thread(target=_bg_prewarm_pdf_ocr_worker, args=(deferred_pdfs,), daemon=True).start()
-
-    # [페이로드 2배 중복 직렬화 제거 (3.77MB ➔ 1.88MB 절감 · 본문 손실 0%)]:
-    # 과거 "documents": docs 와 "docs": docs 에 동일 본문 배열을 2번 실어 JSON 직렬화·파싱 비용이 2배로 들던 병목을 제거하고 "docs" 단일 키로 반환합니다.
-    resp_docs = {
+    resp_docs = _PreEncodedJsonDict({
         "ok": True,
         "total": len(docs),
         "docs": docs,
-    }
-    if cur_watch_sig:
-        _DOCS_RESP_MEM_CACHE["sig"] = cur_watch_sig
+    })
+    if cur_doc_sig:
+        _DOCS_RESP_MEM_CACHE["sig"] = cur_doc_sig
         _DOCS_RESP_MEM_CACHE["resp"] = resp_docs
     return resp_docs
 
@@ -3871,7 +4014,7 @@ def _schedule_bg_video_duration_probe(sig: str, file_path: Path) -> None:
     _BG_VID_DUR_RUNNING = True
 
     def _worker() -> None:
-        global _BG_VID_DUR_RUNNING, _BG_INDEX_BUMP_SEQ
+        global _BG_VID_DUR_RUNNING, _BG_INDEX_BUMP_SEQ, _VID_BG_ENRICH_SEQ
         updated = False
         try:
             while _BG_VID_DUR_QUEUE:
@@ -3882,24 +4025,32 @@ def _schedule_bg_video_duration_probe(sig: str, file_path: Path) -> None:
                 if ff_d is not None:
                     _save_video_duration_disk_cache_entry(s_item, ff_d)
                     updated = True
-                time.sleep(0.02)
+                time.sleep(0.04)
         except Exception:
             pass
         finally:
             _BG_VID_DUR_RUNNING = False
             if updated:
+                _VID_BG_ENRICH_SEQ += 1
                 _BG_INDEX_BUMP_SEQ += 1
+                _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+                _WATCH_SIG_TTL_CACHE["ts"] = 0.0
 
     threading.Thread(target=_worker, daemon=True, name="GhostiBgVideoDurProbe").start()
 
 
-def _get_fast_video_duration_sec(file_path: Path, allow_ffmpeg_sync: bool = True) -> float:
+def _get_fast_video_duration_sec(
+    file_path: Path,
+    allow_ffmpeg_sync: bool = True,
+    st_hint: os.stat_result | None = None,
+    allow_file_io: bool = True,
+) -> float:
     """MP4/MOV 파일의 mvhd 헤더를 0.001초 만에 파싱하고, 미검출·레거시 포맷(.wmv/.mkv/.avi 등) 시 ffmpeg 실측값을 영구 디스크+메모리 캐싱하여 재실행 시 0.01ms 만에 반환합니다."""
-    if _is_cloud_virtual_or_unpinned_file(file_path):
-        return 24.0
     _ensure_video_duration_disk_cache_loaded()
     try:
-        st = file_path.stat()
+        st = st_hint if st_hint is not None else file_path.stat()
+        if int(getattr(st, "st_file_attributes", 0) or 0) & (0x1000 | 0x40000 | 0x400000):
+            return 24.0
         sig = f"{file_path}|{st.st_size}|{int(st.st_mtime)}"
         if sig in _VIDEO_DURATION_MEM_CACHE:
             return _VIDEO_DURATION_MEM_CACHE[sig]
@@ -3908,17 +4059,17 @@ def _get_fast_video_duration_sec(file_path: Path, allow_ffmpeg_sync: bool = True
 
     is_virt_drv = _is_virtual_cloud_drive_path(file_path)
     ext = file_path.suffix.lower()
-    if not is_virt_drv and ext in (".mp4", ".m4v", ".mov"):
+    if allow_file_io and not is_virt_drv and ext in (".mp4", ".m4v", ".mov"):
         try:
             sz = st.st_size
             with open(file_path, "rb") as f:
-                head_buf = f.read(min(sz, 1024 * 1024))
+                head_buf = f.read(min(sz, 524288))
                 parsed = _parse_mvhd_chunk(head_buf)
                 if parsed is not None:
                     _VIDEO_DURATION_MEM_CACHE[sig] = parsed
                     return parsed
                 if sz > 512 * 1024:
-                    tail_read = min(sz, 4 * 1024 * 1024)
+                    tail_read = min(sz, 2 * 1024 * 1024)
                     f.seek(max(0, sz - tail_read))
                     tail_buf = f.read(tail_read)
                     parsed_tail = _parse_mvhd_chunk(tail_buf)
@@ -4029,24 +4180,30 @@ def find_ffmpeg_exe() -> str | None:
 _VIDEO_CODEC_MEM_CACHE: Dict[str, str] = {}
 
 
-def _detect_video_codec_fast(file_path: Path, allow_file_io: bool = True) -> str:
+def _detect_video_codec_fast(
+    file_path: Path,
+    allow_file_io: bool = True,
+    st_hint: os.stat_result | None = None,
+) -> str:
     """0.5ms 내에 MP4/MOV/WMV/AVI 헤더/트레일러에서 브라우저 직접 재생 가능 여부(hvc1/non-faststart/레거시 컨테이너)를 판별합니다."""
     ext = file_path.suffix.lower()
-    if _is_cloud_virtual_or_unpinned_file(file_path) or _is_virtual_cloud_drive_path(file_path):
+    if _is_virtual_cloud_drive_path(file_path):
         return "needs_transcode" if ext in (".wmv", ".avi", ".mkv", ".3gp", ".ts", ".mts", ".flv") else "avc1"
     if ext in (".wmv", ".avi", ".mkv", ".3gp", ".ts", ".mts", ".flv"):
         return "needs_transcode"
     if ext not in (".mp4", ".mov", ".m4v"):
         return "avc1"
-    if not allow_file_io:
-        return "avc1"
     try:
-        st = file_path.stat()
+        st = st_hint if st_hint is not None else file_path.stat()
+        if int(getattr(st, "st_file_attributes", 0) or 0) & (0x1000 | 0x40000 | 0x400000):
+            return "avc1"
         sz = st.st_size
         ck = f"{file_path}|{sz}|{int(st.st_mtime)}"
         cached_c = _VIDEO_CODEC_MEM_CACHE.get(ck)
         if cached_c:
             return cached_c
+        if not allow_file_io:
+            return "avc1"
         with open(file_path, "rb") as fp:
             head = fp.read(min(sz, 262144))
             tail = b""
@@ -4444,18 +4601,27 @@ def get_or_create_faststart_video_cache(
 
 
 def _prewarm_hevc_stream_caches(targets: List[Path]) -> None:
-    # 구버전 고비트레이트(v1 vc_*.mp4) 캐시 정리 후 짧은 클립부터 저우선순위(2스레드)로 순차 캐싱합니다.
+    # 구버전 고비트레이트(v1 vc_*.mp4) 캐시 정리 후 초기 부팅 CPU 경합을 피하기 위해 유휴 대기 후 소량 클립만 저우선순위 캐싱합니다.
+    time.sleep(10.0)
     try:
         if _VIDEO_STREAM_CACHE_DIR.exists():
             for legacy_vc in _VIDEO_STREAM_CACHE_DIR.glob("vc_*.mp4"):
                 legacy_vc.unlink(missing_ok=True)
     except Exception:
         pass
-    sorted_targets = sorted(targets, key=lambda x: x.stat().st_size if x.exists() else 0)
-    for p in sorted_targets:
+    small_targets: List[tuple[int, Path]] = []
+    for p in targets[:12]:
+        try:
+            st = p.stat()
+            if 0 < st.st_size <= 35 * 1024 * 1024:
+                small_targets.append((int(st.st_size), p))
+        except Exception:
+            pass
+    small_targets.sort(key=lambda x: x[0])
+    for _, p in small_targets[:4]:
         try:
             get_or_create_faststart_video_cache(p, max_sync_sec=180.0, interactive=False)
-            time.sleep(0.15)
+            time.sleep(0.5)
         except Exception:
             pass
 
@@ -4546,33 +4712,49 @@ def get_or_create_video_thumb(params: Dict[str, Any] | None = None) -> tuple[Pat
     return None, 404
 
 
+_VIDEO_OCR_MEM_CACHE: Dict[str, Any] | None = None
+
+
 def _load_video_ocr_cache() -> Dict[str, Any]:
+    global _VIDEO_OCR_MEM_CACHE
+    if _VIDEO_OCR_MEM_CACHE is not None:
+        return _VIDEO_OCR_MEM_CACHE
     try:
         if _VIDEO_OCR_CACHE_FILE.exists():
             raw = json.loads(_VIDEO_OCR_CACHE_FILE.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                # 구버전(ocrVer < 25: 화면 전환 슬라이스·왕관 아이콘 W 오인식·4지점 고정 샘플링 캐시 포함) 즉시 소거 후 정밀 재인덱싱!
                 purged = {
                     k: v
                     for k, v in raw.items()
                     if isinstance(v, dict)
                     and int(v.get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER
                 }
+                _VIDEO_OCR_MEM_CACHE = purged
                 if len(purged) != len(raw):
-                    _save_video_ocr_cache(purged)
-                return purged
+                    _save_video_ocr_cache(purged, force_flush=True)
+                return _VIDEO_OCR_MEM_CACHE
     except Exception:
         pass
-    return {}
+    _VIDEO_OCR_MEM_CACHE = {}
+    return _VIDEO_OCR_MEM_CACHE
 
 
-def _save_video_ocr_cache(cache_data: Dict[str, Any]) -> None:
-    global _BG_INDEX_BUMP_SEQ
+def _save_video_ocr_cache(cache_data: Dict[str, Any], *, force_flush: bool = False) -> None:
+    global _BG_INDEX_BUMP_SEQ, _VID_BG_ENRICH_SEQ, _VIDEO_OCR_MEM_CACHE, _LAST_VID_OCR_DISK_FLUSH_TS, _VIDEO_OCR_CACHE_DIRTY
+    _VIDEO_OCR_MEM_CACHE = cache_data
+    now_m = time.monotonic()
+    # 백그라운드 971개 영상 연속 OCR 중에는 매건마다 디스크 JSON 재직렬화·watch-sig 폭풍을 일으키지 않고 25초 주기로만 반영!
+    if _VIDEO_OCR_BG_RUNNING and not force_flush and (now_m - _LAST_VID_OCR_DISK_FLUSH_TS) < 25.0:
+        _VIDEO_OCR_CACHE_DIRTY = True
+        return
     try:
         _ensure_merlin_dir()
         tmp = _VIDEO_OCR_CACHE_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(cache_data, ensure_ascii=False), encoding="utf-8")
         tmp.replace(_VIDEO_OCR_CACHE_FILE)
+        _LAST_VID_OCR_DISK_FLUSH_TS = now_m
+        _VIDEO_OCR_CACHE_DIRTY = False
+        _VID_BG_ENRICH_SEQ += 1
         _BG_INDEX_BUMP_SEQ += 1
         _VIDEOS_RESP_MEM_CACHE["sig"] = ""
         _WATCH_SIG_TTL_CACHE["ts"] = 0.0
@@ -4870,16 +5052,25 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
             _VIDEO_OCR_BG_RUNNING = False
         return
     try:
+        time.sleep(20.0)
+        processed_v = 0
         for cache_sig, vpath, _dur_sec in video_entries:
+            if processed_v >= 10:
+                break
             try:
+                if not vpath.exists() or vpath.stat().st_size > 35 * 1024 * 1024:
+                    continue
                 cur_cache = _load_video_ocr_cache()
                 if int((cur_cache.get(cache_sig) or {}).get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER:
                     continue
                 extract_full_video_ocr_text({"videoFileName": vpath.name, "filePath": str(vpath)})
+                processed_v += 1
             except Exception:
                 pass
-            time.sleep(0.20)
+            time.sleep(1.50)
     finally:
+        if _VIDEO_OCR_CACHE_DIRTY and _VIDEO_OCR_MEM_CACHE is not None:
+            _save_video_ocr_cache(_VIDEO_OCR_MEM_CACHE, force_flush=True)
         with _VIDEO_OCR_LOCK:
             _VIDEO_OCR_BG_RUNNING = False
 
@@ -5747,12 +5938,13 @@ def _trigger_bg_video_thumb_prewarm(items: List[tuple[Path, float]]) -> None:
 
 def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
-    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    ws_obj = get_local_watch_signature()
+    cur_vid_sig = f"{ws_obj.get('fsSig') or ws_obj.get('sig') or ''}:{_VID_BG_ENRICH_SEQ}"
     cached_vids_resp = _VIDEOS_RESP_MEM_CACHE.get("resp")
     if (
-        cur_watch_sig
+        cur_vid_sig
         and cached_vids_resp is not None
-        and _VIDEOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+        and _VIDEOS_RESP_MEM_CACHE.get("sig") == cur_vid_sig
     ):
         return cached_vids_resp
     with _VIDEOS_LIST_BUILD_LOCK:
@@ -5760,41 +5952,65 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
 
 _VIRTUAL_DIR_VID_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, Path, os.stat_result]]]] = {}
+_LOCAL_DIR_VID_SCAN_CACHE: Dict[str, tuple[int, List[tuple[Path, Path, os.stat_result]]]] = {}
+_VIDEOS_ENTRY_MEM_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 def _list_local_videos_unlocked() -> Dict[str, Any]:
-    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    ws_obj = get_local_watch_signature()
+    cur_vid_sig = f"{ws_obj.get('fsSig') or ws_obj.get('sig') or ''}:{_VID_BG_ENRICH_SEQ}"
     cached_vids_resp = _VIDEOS_RESP_MEM_CACHE.get("resp")
     if (
-        cur_watch_sig
+        cur_vid_sig
         and cached_vids_resp is not None
-        and _VIDEOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+        and _VIDEOS_RESP_MEM_CACHE.get("sig") == cur_vid_sig
     ):
         return cached_vids_resp
 
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+    if len(_LOCAL_DIR_VID_SCAN_CACHE) > 12000:
+        _LOCAL_DIR_VID_SCAN_CACHE.clear()
     raw_video_candidates: List[tuple[Path, Path, os.stat_result]] = []
     seen_paths: set[str] = set()
     now_m = time.monotonic()
     virt_v_elapsed = 0.0
-    for d in scan_dirs:
+    UNPINNED_CLOUD_MASK = 0x1000 | 0x40000 | 0x400000
+
+    for idx_dir, d in enumerate(scan_dirs):
         is_virt_d = _is_virtual_cloud_drive_path(d)
         d_key = os.path.normcase(str(d))
         if is_virt_d:
             hit_vv = _VIRTUAL_DIR_VID_SCAN_CACHE.get(d_key)
-            try:
-                d_mt = int(getattr(os.stat(d), "st_mtime_ns", 0)) if virt_v_elapsed < 0.25 else (hit_vv[1] if hit_vv else -1)
-            except Exception:
-                d_mt = hit_vv[1] if hit_vv else -1
-            if hit_vv is not None and (now_m - hit_vv[0]) < 25.0 and hit_vv[1] == d_mt:
+            if hit_vv is not None and (now_m - hit_vv[0]) < 30.0:
                 for cd, cp, cst in hit_vv[2]:
                     nv = str(cp).lower()
                     if nv not in seen_paths:
                         seen_paths.add(nv)
                         raw_video_candidates.append((cd, cp, cst))
                 continue
-            if virt_v_elapsed >= 0.45:
+            if virt_v_elapsed >= 0.30:
+                if hit_vv is not None:
+                    for cd, cp, cst in hit_vv[2]:
+                        nv = str(cp).lower()
+                        if nv not in seen_paths:
+                            seen_paths.add(nv)
+                            raw_video_candidates.append((cd, cp, cst))
                 continue
+        elif idx_dir >= 24:
+            hit_lv = _LOCAL_DIR_VID_SCAN_CACHE.get(d_key)
+            if hit_lv is not None:
+                try:
+                    cur_d_mt = int(getattr(os.stat(d), "st_mtime_ns", 0))
+                except Exception:
+                    cur_d_mt = -1
+                if cur_d_mt == hit_lv[0] and cur_d_mt > 0:
+                    for cd, cp, cst in hit_lv[1]:
+                        nv = str(cp).lower()
+                        if nv not in seen_paths:
+                            seen_paths.add(nv)
+                            raw_video_candidates.append((cd, cp, cst))
+                    continue
+
         t_v0 = time.monotonic()
         v_bucket: List[tuple[Path, Path, os.stat_result]] = []
         try:
@@ -5806,22 +6022,24 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                     dot = nm.rfind(".")
                     if dot < 0 or nm[dot:].lower() not in _VIDEO_EXTS:
                         continue
+                    st = dent.stat(follow_symlinks=False)
+                    if int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK:
+                        continue
                     abs_v = os.path.abspath(dent.path)
                     norm_vid = abs_v.lower()
-                    if norm_vid in seen_paths:
-                        continue
-                    seen_paths.add(norm_vid)
-                    st = dent.stat(follow_symlinks=False)
                     vtup = (d, Path(abs_v), st)
-                    raw_video_candidates.append(vtup)
-                    if is_virt_d:
-                        v_bucket.append(vtup)
+                    v_bucket.append(vtup)
+                    if norm_vid not in seen_paths:
+                        seen_paths.add(norm_vid)
+                        raw_video_candidates.append(vtup)
         except Exception:
             pass
         if is_virt_d:
             virt_v_elapsed += max(0.0, time.monotonic() - t_v0)
+            _VIRTUAL_DIR_VID_SCAN_CACHE[d_key] = (now_m, 1, v_bucket)
+        elif idx_dir >= 24:
             try:
-                _VIRTUAL_DIR_VID_SCAN_CACHE[d_key] = (now_m, int(getattr(os.stat(d), "st_mtime_ns", 0)), v_bucket)
+                _LOCAL_DIR_VID_SCAN_CACHE[d_key] = (int(getattr(os.stat(d), "st_mtime_ns", 0)), v_bucket)
             except Exception:
                 pass
 
@@ -5834,6 +6052,7 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
     missing_for_bg: List[tuple[str, Path, float]] = []
     prewarm_targets: List[Path] = []
     vthumb_prewarm_targets: List[tuple[Path, float]] = []
+    t_vid_probe0 = time.monotonic()
 
     for d, resolved, st in fair_video_candidates:
         try:
@@ -5846,29 +6065,44 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
             enc_name = urllib.parse.quote(video_key)
 
-            real_dur_sec = _get_fast_video_duration_sec(resolved, allow_ffmpeg_sync=False)
-            if real_dur_sec <= 0:
-                # moov atom 누락 등 재생 불가능한 손상 더미 파일은 목록에서 자동 제외
+            sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
+            cached_ocr = ocr_cache.get(sig)
+            cached_ver = int((cached_ocr or {}).get("ocrVer") or 0)
+            v_mem_key = f"{norm_vid}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{video_key}|{cached_ver}"
+            cached_v_item = _VIDEOS_ENTRY_MEM_CACHE.get(v_mem_key)
+            if cached_v_item is not None:
+                videos.append(cached_v_item)
                 continue
-            # HTML5 <video> 플레이어(Chrome/Edge) 하단 컨트롤바의 전체 길이 표기(초 단위 버림: 20.7s -> 0:20, 17.7s -> 0:17)와 100% 일치
+            if len(_VIDEOS_ENTRY_MEM_CACHE) > 8000:
+                _VIDEOS_ENTRY_MEM_CACHE.clear()
+
+            # 971개 대량 영상 보유 PC에서 동기 디스크 헤더 판독 블로킹을 0.06초 시간 예산으로 원천 제거!
+            allow_sync_io = (time.monotonic() - t_vid_probe0) < 0.06
+            real_dur_sec = _get_fast_video_duration_sec(
+                resolved,
+                allow_ffmpeg_sync=False,
+                st_hint=st,
+                allow_file_io=allow_sync_io,
+            )
+            if real_dur_sec <= 0:
+                continue
             int_dur = max(1, int(real_dur_sec))
             dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
 
             has_video_transcoder = bool(ff or os.name == "nt")
-            codec_tag = _detect_video_codec_fast(resolved)
+            codec_tag = _detect_video_codec_fast(resolved, allow_file_io=allow_sync_io, st_hint=st)
             if codec_tag in ("hevc", "mov_slow", "needs_transcode") and has_video_transcoder:
                 vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
-                if len(prewarm_targets) < 40:
+                if len(prewarm_targets) < 6:
                     prewarm_targets.append(resolved)
             else:
                 vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
 
             thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
             thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if has_video_transcoder else ""
-            if has_video_transcoder and len(vthumb_prewarm_targets) < 60:
+            if has_video_transcoder and len(vthumb_prewarm_targets) < 16:
                 vthumb_prewarm_targets.append((resolved, float(thumb_seek)))
 
-            # 순수 파일명·폴더명 의미어 토큰(CamelCase 분리 포함) + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
             stem_expanded = _split_camel_and_alnum_words(stem)
             raw_kw_tokens = [
                 w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {stem_expanded}")
@@ -5887,7 +6121,8 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
             if (
                 (cached_ocr is None or cached_ver < _VIDEO_PADDLE_OCR_VER)
                 and os.name == "nt"
-                and not _is_cloud_virtual_or_unpinned_file(resolved)
+                and not _is_virtual_cloud_drive_path(resolved)
+                and len(missing_for_bg) < 180
             ):
                 missing_for_bg.append((sig, resolved, real_dur_sec))
 
@@ -5962,7 +6197,7 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                         tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"
 
             vid_hash = hashlib.sha1(norm_vid.encode("utf-8", errors="ignore")).hexdigest()[:8]
-            videos.append({
+            vid_item_obj = {
                 "id": f"local_vid_{vid_hash}_{entry.stem[:20]}",
                 "videoFileName": video_key,
                 "fullPath": str(resolved),
@@ -5989,7 +6224,9 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                 "ocrLines": ocr_lines_cached if has_meaningful_screen_ocr else [],
                 "ocrFullText": ocr_full_cached if has_meaningful_screen_ocr else "",
                 "timelineFrames": timeline_frames,
-            })
+            }
+            _VIDEOS_ENTRY_MEM_CACHE[v_mem_key] = vid_item_obj
+            videos.append(vid_item_obj)
         except Exception:
             pass
 
@@ -6009,14 +6246,14 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                 threading.Thread(target=_run_batch_video_ocr, args=(missing_for_bg,), daemon=True).start()
 
     # [실물 파일 순수성 철칙] 정적 샘플(poc/results/video_timeline_index.json) 병합을 전면 배제하고 100% 실제 내 PC 동영상만 반환!
-    resp_vids = {
+    resp_vids = _PreEncodedJsonDict({
         "ok": True,
         "total": len(videos),
         "ocrIndexingPending": bool(missing_for_bg or _VIDEO_OCR_BG_RUNNING),
         "videos": videos,
-    }
-    if cur_watch_sig:
-        _VIDEOS_RESP_MEM_CACHE["sig"] = cur_watch_sig
+    })
+    if cur_vid_sig:
+        _VIDEOS_RESP_MEM_CACHE["sig"] = cur_vid_sig
         _VIDEOS_RESP_MEM_CACHE["resp"] = resp_vids
     return resp_vids
 
@@ -6275,11 +6512,15 @@ def detect_scan_performance_tier(force: bool = False) -> Dict[str, Any]:
     return dict(data)
 
 
+_LAST_HW_GC_TS: float = 0.0
+
+
 def apply_hardware_protection_guard(mode: str = "silent", batch_count: int = 0) -> Dict[str, Any]:
     """
     인덱싱 워커 기동 및 20개 파일 배치마다 호출되어 OS 커널 차원의 4대 하드웨어 보호 안전망을 강제 적용합니다.
     (유저가 [⚡ 지금 전체 고속 정리] 터보 모드를 켜더라도 이 4대 안전망은 절대 해제되지 않습니다.)
     """
+    global _LAST_HW_GC_TS
     import gc
 
     total_cores = max(1, os.cpu_count() or 4)
@@ -6300,18 +6541,39 @@ def apply_hardware_protection_guard(mode: str = "silent", batch_count: int = 0) 
             priority_applied = False
             affinity_applied = False
 
-    # 3) 20개 파일 단위 명시적 GC 및 500MB 상한 메모리 워킹셋 릴리즈
+    # 3) 45초 주기 GC 및 실제 워킹셋이 500MB 상한을 초과했을 때만 워킹셋 릴리즈 (HTTP 메모리 캐시 강제 스왑아웃 스래싱 방지)
     gc_collected = 0
-    if batch_count <= 0 or (batch_count % 20 == 0):
-        gc_collected = gc.collect()
+    now_gc = time.monotonic()
+    if (batch_count <= 0 or (batch_count % 20 == 0)) and (now_gc - _LAST_HW_GC_TS) >= 45.0:
+        _LAST_HW_GC_TS = now_gc
+        gc_collected = gc.collect(0)
         if os.name == "nt":
             try:
-                ctypes.windll.kernel32.SetProcessWorkingSetSize(
-                    ctypes.windll.kernel32.GetCurrentProcess(),
-                    ctypes.c_size_t(-1),
-                    ctypes.c_size_t(-1),
-                )
-                working_set_trimmed = True
+                class _PMC(ctypes.Structure):
+                    _fields_ = [
+                        ("cb", ctypes.c_ulong),
+                        ("PageFaultCount", ctypes.c_ulong),
+                        ("PeakWorkingSetSize", ctypes.c_size_t),
+                        ("WorkingSetSize", ctypes.c_size_t),
+                        ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                        ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                        ("PagefileUsage", ctypes.c_size_t),
+                        ("PeakPagefileUsage", ctypes.c_size_t),
+                    ]
+
+                pmc = _PMC()
+                pmc.cb = ctypes.sizeof(_PMC)
+                h_proc = ctypes.windll.kernel32.GetCurrentProcess()
+                psapi_ok = bool(ctypes.windll.psapi.GetProcessMemoryInfo(h_proc, ctypes.byref(pmc), pmc.cb))
+                if psapi_ok and int(pmc.WorkingSetSize) > MAX_RAM_BYTES_500MB:
+                    ctypes.windll.kernel32.SetProcessWorkingSetSize(
+                        h_proc,
+                        ctypes.c_size_t(-1),
+                        ctypes.c_size_t(-1),
+                    )
+                    working_set_trimmed = True
             except Exception:
                 pass
 

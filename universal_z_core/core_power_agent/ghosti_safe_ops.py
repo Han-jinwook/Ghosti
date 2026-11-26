@@ -408,12 +408,15 @@ def restore_from_recycle_bin(
     user_prompt: str = "",
     user_approval_text: str = "",
     record_restore_point: bool = True,
+    allowed_recycle_dirs: Optional[List[Path]] = None,
+    skip_ledger_write: bool = False,
 ) -> Dict[str, Any]:
     """현재 사용자 휴지통의 $I 메타파일을 해독해 $R 실물을 원래 위치로 되돌린다(덮어쓰기 금지)."""
     mf = Path(meta_file or "")
     if not mf.name.startswith("$I"):
         return {"ok": False, "error": "올바른 휴지통 항목이 아닙니다."}
-    if not any(is_within(mf, d) for d in user_recycle_dirs()):
+    rdirs = allowed_recycle_dirs if allowed_recycle_dirs is not None else user_recycle_dirs()
+    if not any(is_within(mf, d) for d in rdirs):
         return {"ok": False, "error": "현재 사용자의 휴지통 항목만 복원할 수 있습니다."}
     meta = parse_recycle_i_file(mf)
     if not meta:
@@ -434,20 +437,22 @@ def restore_from_recycle_bin(
 
     # [단일 SSOT 장부 동기화] 귀신비서 사진 정리로 휴지통에 들어갔던 사진이 채팅 3초 구출로 복원될 때도
     # RECYCLE_LEDGER_FILE에서 해당 항목을 즉시 정리하여 연속 5회 이상 왕복 시 장부 불일치를 원천 차단한다.
-    try:
-        with _LOCK:
-            rows = _read_json_list(RECYCLE_LEDGER_FILE)
-            mf_low = str(mf).lower()
-            orig_low = str(meta["originalPath"]).lower()
-            filtered = [
-                r for r in rows
-                if str(r.get("recycleMetaFile") or "").lower() != mf_low
-                and not (not r.get("recycleMetaFile") and str(r.get("originalPath") or "").lower() == orig_low)
-            ]
-            if len(filtered) != len(rows):
-                _write_json_list_atomic(RECYCLE_LEDGER_FILE, filtered)
-    except Exception:
-        pass
+    # (restore_photos 배치 호출 시에는 마지막에 1회만 원자적으로 기록하므로 skip_ledger_write=True로 N회 디스크 재기록을 제거)
+    if not skip_ledger_write:
+        try:
+            with _LOCK:
+                rows = _read_json_list(RECYCLE_LEDGER_FILE)
+                mf_low = str(mf).lower()
+                orig_low = str(meta["originalPath"]).lower()
+                filtered = [
+                    r for r in rows
+                    if str(r.get("recycleMetaFile") or "").lower() != mf_low
+                    and not (not r.get("recycleMetaFile") and str(r.get("originalPath") or "").lower() == orig_low)
+                ]
+                if len(filtered) != len(rows):
+                    _write_json_list_atomic(RECYCLE_LEDGER_FILE, filtered)
+        except Exception:
+            pass
 
     restore_id = ""
     if record_restore_point:
@@ -582,6 +587,9 @@ def recycle_photos(
 def restore_photos(names: List[str]) -> Dict[str, Any]:
     restored: List[Dict[str, str]] = []
     errors: List[Dict[str, str]] = []
+    # 배치 전체에서 휴지통 드라이브 목록을 단 1회만 조회하고, 장부(RECYCLE_LEDGER_FILE)도 마지막에 단 1회만 기록하여
+    # 수십 장 전체 복원 시 발생하던 N회 드라이브 프로브 + N회 디스크 JSON 재기록 병목을 제거한다.
+    cached_rdirs = user_recycle_dirs()
     with _LOCK:
         rows = _read_json_list(RECYCLE_LEDGER_FILE)
         for name in names:
@@ -605,7 +613,12 @@ def restore_photos(names: List[str]) -> Dict[str, Any]:
 
             res: Dict[str, Any] = {"ok": False, "error": "휴지통 위치를 확인하지 못해 자동 복원할 수 없습니다."}
             if meta_file:
-                res = restore_from_recycle_bin(meta_file, record_restore_point=False)
+                res = restore_from_recycle_bin(
+                    meta_file,
+                    record_restore_point=False,
+                    allowed_recycle_dirs=cached_rdirs,
+                    skip_ledger_write=True,
+                )
 
             # 구버전 장부이거나 $I 메타파일이 유실되었더라도 $R 실물과 originalPath가 남아 있으면 직접 안전 복원
             if not res.get("ok") and data_file and data_file.exists() and orig_path_str:
@@ -639,25 +652,46 @@ def restore_photos(names: List[str]) -> Dict[str, Any]:
     }
 
 
+_RECYCLED_PHOTO_MEM_CACHE: Dict[str, Any] = {"ts": 0.0, "mtime_ns": -1, "rows": None}
+
+
 def recycled_photo_entries() -> List[Dict[str, Any]]:
-    """휴지통에 아직 실물이 남아 있는 사진 장부 항목."""
+    """휴지통에 아직 실물이 남아 있는 사진 장부 항목 (장부 파일 mtime 기반 고속 캐시)."""
+    now_m = time.monotonic()
+    try:
+        cur_mt = int(getattr(os.stat(RECYCLE_LEDGER_FILE), "st_mtime_ns", 0)) if RECYCLE_LEDGER_FILE.exists() else 0
+    except Exception:
+        cur_mt = 0
+    cached_rows = _RECYCLED_PHOTO_MEM_CACHE.get("rows")
+    if (
+        cached_rows is not None
+        and _RECYCLED_PHOTO_MEM_CACHE.get("mtime_ns") == cur_mt
+        and (now_m - float(_RECYCLED_PHOTO_MEM_CACHE.get("ts") or 0.0)) < 3.0
+    ):
+        return list(cached_rows)
+
     out: List[Dict[str, Any]] = []
     for row in ledger_load():
-        df = Path(row.get("recycleDataFile") or "")
-        if row.get("recycleDataFile") and df.exists():
-            try:
-                st = df.stat()
-                out.append(
-                    {
-                        "path": row["name"],
-                        "fullPath": str(df),
-                        "size": int(st.st_size),
-                        "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
-                        "mtimeMs": int(st.st_mtime * 1000),
-                    }
-                )
-            except Exception:
-                continue
+        raw_df = row.get("recycleDataFile") or ""
+        if not raw_df:
+            continue
+        df = Path(raw_df)
+        try:
+            st = df.stat()
+            out.append(
+                {
+                    "path": row["name"],
+                    "fullPath": str(df),
+                    "size": int(st.st_size),
+                    "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                    "mtimeMs": int(st.st_mtime * 1000),
+                }
+            )
+        except Exception:
+            continue
+    _RECYCLED_PHOTO_MEM_CACHE["ts"] = now_m
+    _RECYCLED_PHOTO_MEM_CACHE["mtime_ns"] = cur_mt
+    _RECYCLED_PHOTO_MEM_CACHE["rows"] = list(out)
     return out
 
 

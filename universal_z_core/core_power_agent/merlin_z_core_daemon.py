@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.9.59"
+CORE_VERSION = "2.9.81"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -579,7 +579,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         return True
 
     def _send_json(self, data: Dict[str, Any], status: int = 200) -> None:
-        raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        raw = getattr(data, "_raw_json_bytes", None)
+        if not isinstance(raw, bytes):
+            raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))

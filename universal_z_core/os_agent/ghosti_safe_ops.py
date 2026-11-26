@@ -652,25 +652,46 @@ def restore_photos(names: List[str]) -> Dict[str, Any]:
     }
 
 
+_RECYCLED_PHOTO_MEM_CACHE: Dict[str, Any] = {"ts": 0.0, "mtime_ns": -1, "rows": None}
+
+
 def recycled_photo_entries() -> List[Dict[str, Any]]:
-    """휴지통에 아직 실물이 남아 있는 사진 장부 항목."""
+    """휴지통에 아직 실물이 남아 있는 사진 장부 항목 (장부 파일 mtime 기반 고속 캐시)."""
+    now_m = time.monotonic()
+    try:
+        cur_mt = int(getattr(os.stat(RECYCLE_LEDGER_FILE), "st_mtime_ns", 0)) if RECYCLE_LEDGER_FILE.exists() else 0
+    except Exception:
+        cur_mt = 0
+    cached_rows = _RECYCLED_PHOTO_MEM_CACHE.get("rows")
+    if (
+        cached_rows is not None
+        and _RECYCLED_PHOTO_MEM_CACHE.get("mtime_ns") == cur_mt
+        and (now_m - float(_RECYCLED_PHOTO_MEM_CACHE.get("ts") or 0.0)) < 3.0
+    ):
+        return list(cached_rows)
+
     out: List[Dict[str, Any]] = []
     for row in ledger_load():
-        df = Path(row.get("recycleDataFile") or "")
-        if row.get("recycleDataFile") and df.exists():
-            try:
-                st = df.stat()
-                out.append(
-                    {
-                        "path": row["name"],
-                        "fullPath": str(df),
-                        "size": int(st.st_size),
-                        "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
-                        "mtimeMs": int(st.st_mtime * 1000),
-                    }
-                )
-            except Exception:
-                continue
+        raw_df = row.get("recycleDataFile") or ""
+        if not raw_df:
+            continue
+        df = Path(raw_df)
+        try:
+            st = df.stat()
+            out.append(
+                {
+                    "path": row["name"],
+                    "fullPath": str(df),
+                    "size": int(st.st_size),
+                    "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                    "mtimeMs": int(st.st_mtime * 1000),
+                }
+            )
+        except Exception:
+            continue
+    _RECYCLED_PHOTO_MEM_CACHE["ts"] = now_m
+    _RECYCLED_PHOTO_MEM_CACHE["mtime_ns"] = cur_mt
+    _RECYCLED_PHOTO_MEM_CACHE["rows"] = list(out)
     return out
 
 
