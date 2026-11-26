@@ -1535,25 +1535,88 @@ export async function leaveSupabaseSharedPhotoRoom(roomId: string): Promise<bool
   return true;
 }
 
+export interface SharedPhotoRoomMemberInfo {
+  memberEmail: string;
+  role: 'master' | 'admin' | 'member';
+  nickname: string;
+  joinedAt: string;
+}
+
+/**
+ * [정식 SQL SSOT] 공유방 참여 회원 목록 조회 (`ghosti_lounge_members`)
+ * - 사진 업로드 여부와 무관하게 초대 링크로 방에 정식 합류한 모든 실제 멤버를 100% 반환합니다.
+ */
+export async function fetchSharedPhotoRoomMembers(
+  roomId: string
+): Promise<SharedPhotoRoomMemberInfo[]> {
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanRoomId || !hasAuthenticatedHubAccountSession()) return [];
+  const authed = await ensureGhostiAuthedSupabaseClient();
+  if (!authed) return [];
+  try {
+    const { data, error } = await authed
+      .from('ghosti_lounge_members')
+      .select('member_email, role, room_persona_nickname, joined_at')
+      .eq('room_id', cleanRoomId)
+      .order('joined_at', { ascending: true });
+    if (error || !Array.isArray(data)) return [];
+    const byEmail = new Map<string, SharedPhotoRoomMemberInfo>();
+    for (const row of data) {
+      const email = String(row.member_email || '').trim().toLowerCase();
+      if (!email) continue;
+      const roleRaw = String(row.role || 'member').trim().toLowerCase();
+      const role: 'master' | 'admin' | 'member' =
+        roleRaw === 'master' ? 'master' : roleRaw === 'admin' ? 'admin' : 'member';
+      const fallbackNick = email.includes('@') ? email.split('@')[0] : email;
+      const nick = String(row.room_persona_nickname || '').trim() || fallbackNick || '멤버';
+      const joinedAt = String(row.joined_at || '');
+      const prev = byEmail.get(email);
+      if (!prev || role === 'master') {
+        byEmail.set(email, {
+          memberEmail: email,
+          role,
+          nickname: nick,
+          joinedAt,
+        });
+      }
+    }
+    return Array.from(byEmail.values());
+  } catch {
+    return [];
+  }
+}
+
 /**
  * [Step 6 — 방장의 멤버 내보내기(강퇴)]
- * - 방장이 특정 멤버를 공유방에서 내보내면 서버 멤버십(ghosti_lounge_members) 및 해당 멤버의 업로드 마중물을 정리합니다.
+ * - 방장이 특정 멤버를 공유방에서 내보내면 서버 멤버십(ghosti_lounge_members)에서 즉시 제거합니다.
  */
 export async function kickMemberFromSupabaseSharedPhotoRoom(
   roomId: string,
-  memberNickname: string
+  memberNickname: string,
+  memberEmail?: string
 ): Promise<boolean> {
   const cleanRoomId = (roomId || '').trim();
   const cleanNick = (memberNickname || '').trim();
-  if (!cleanRoomId || !cleanNick || !hasAuthenticatedHubAccountSession()) return false;
+  const cleanEmail = (memberEmail || '').trim().toLowerCase();
+  if (!cleanRoomId || (!cleanNick && !cleanEmail) || !hasAuthenticatedHubAccountSession()) {
+    return false;
+  }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return false;
   try {
-    await authed
-      .from('ghosti_lounge_members')
-      .delete()
-      .eq('room_id', cleanRoomId)
-      .eq('room_persona_nickname', cleanNick);
+    if (cleanEmail) {
+      await authed
+        .from('ghosti_lounge_members')
+        .delete()
+        .eq('room_id', cleanRoomId)
+        .ilike('member_email', cleanEmail);
+    } else {
+      await authed
+        .from('ghosti_lounge_members')
+        .delete()
+        .eq('room_id', cleanRoomId)
+        .eq('room_persona_nickname', cleanNick);
+    }
   } catch {
     /* ignore */
   }

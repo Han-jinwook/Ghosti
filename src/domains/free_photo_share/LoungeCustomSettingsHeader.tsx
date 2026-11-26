@@ -10,7 +10,14 @@ import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 import { QrCodeSvg } from '../../utils/qrCodeSvg';
 import { CrossDeviceClipboardAndPairingBar } from '../paid_device_sync/CrossDeviceClipboardAndPairingBar';
 import { getThisDeviceIdentity } from '../../services/deviceIntegrationService';
-import { kickMemberFromSupabaseSharedPhotoRoom } from '../../services/sharedPhotoRoomSupabase';
+import {
+  ensureMyRoomAndInviteToken,
+  fetchSharedPhotoRoomMembers,
+  getPrewarmedRoomInviteTokenSync,
+  kickMemberFromSupabaseSharedPhotoRoom,
+  type SharedPhotoRoomMemberInfo,
+} from '../../services/sharedPhotoRoomSupabase';
+import { resolveDefaultRoomTitle } from '../../services/shareInviteDeepLinkBridge';
 
 import {
   KICKED_ROOM_MEMBERS_STORAGE_KEY,
@@ -77,6 +84,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [mobileInstallLinkCopied, setMobileInstallLinkCopied] = useState(false);
   const [subPcLinkCopied, setSubPcLinkCopied] = useState(false);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
+  const [resolvedSettingsRoomId, setResolvedSettingsRoomId] = useState<string | null>(null);
+  const [serverRoomMembers, setServerRoomMembers] = useState<SharedPhotoRoomMemberInfo[]>([]);
+  const [hasLoadedServerMembers, setHasLoadedServerMembers] = useState(false);
 
   useEffect(() => {
     setIsZCoreConnected(zCoreBridge.isConnected);
@@ -90,6 +100,67 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const isLoggedInUser = Boolean(
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
   );
+
+  // [정식 SQL SSOT] 공유방(가족·동호회·동창회) 방관리 진입 시 ghosti_lounge_members에서 실제 참여 회원 전체를 직접 조회
+  useEffect(() => {
+    const isSharedPhotoRoom =
+      activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student';
+    if (!isSharedPhotoRoom || !isLoggedInUser) {
+      setResolvedSettingsRoomId(null);
+      setServerRoomMembers([]);
+      setHasLoadedServerMembers(false);
+      return;
+    }
+    let cancelled = false;
+    setServerRoomMembers([]);
+    setHasLoadedServerMembers(false);
+
+    const loadRealMembers = async () => {
+      let targetRoomId =
+        activeJoinedRoomMeta?.roomId ||
+        activeSharedRoomId ||
+        getPrewarmedRoomInviteTokenSync(activeLoungeType, activeFamilyRoom)?.roomId ||
+        null;
+
+      if (!targetRoomId) {
+        const nick = resolveAccountScopedNickname(
+          merlinAuth?.email || '',
+          activeLoungeType === 'family' ? '가족방장' : '모임방장'
+        );
+        const ensured = await ensureMyRoomAndInviteToken({
+          loungeType: activeLoungeType,
+          familyRoom: activeFamilyRoom,
+          roomTitle: resolveDefaultRoomTitle(activeLoungeType, activeFamilyRoom),
+          masterNickname: nick,
+        });
+        if (ensured.ok && ensured.roomId) {
+          targetRoomId = ensured.roomId;
+        }
+      }
+      if (cancelled) return;
+      setResolvedSettingsRoomId(targetRoomId);
+      if (!targetRoomId) {
+        setHasLoadedServerMembers(true);
+        return;
+      }
+      const members = await fetchSharedPhotoRoomMembers(targetRoomId);
+      if (cancelled) return;
+      setServerRoomMembers(members);
+      setHasLoadedServerMembers(true);
+    };
+
+    void loadRealMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeLoungeType,
+    activeFamilyRoom,
+    activeSharedRoomId,
+    activeJoinedRoomMeta?.roomId,
+    isLoggedInUser,
+    merlinAuth?.email,
+  ]);
   const isMainPcConnected = isLoggedInUser && isZCoreConnected;
   const isMobileConnected = isLoggedInUser && Boolean(pcAgentPairedMobile);
 
@@ -165,25 +236,42 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     ? activeJoinedRoomMeta.masterNickname || '방장'
     : myDisplayName;
 
+  const effectiveRoomIdForManage =
+    activeJoinedRoomMeta?.roomId || activeSharedRoomId || resolvedSettingsRoomId;
+
   const kickedSet = new Set(kickedMemberNames);
-  const handleKickRoomMember = (memberName: string) => {
+  const handleKickRoomMember = (memberName: string, memberEmail?: string) => {
     const clean = memberName.trim();
-    if (!clean) return;
-    const nextKicked = Array.from(new Set([...kickedMemberNames, clean]));
-    setKickedMemberNames(nextKicked);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(KICKED_ROOM_MEMBERS_STORAGE_KEY, JSON.stringify(nextKicked));
-      } catch {
-        /* ignore */
+    const cleanEmail = (memberEmail || '').trim().toLowerCase();
+    if (!clean && !cleanEmail) return;
+    if (cleanEmail) {
+      setServerRoomMembers((prev) =>
+        prev.filter((m) => m.memberEmail.toLowerCase() !== cleanEmail)
+      );
+    } else if (clean) {
+      setServerRoomMembers((prev) => prev.filter((m) => m.nickname !== clean));
+    }
+    if (clean && !cleanEmail) {
+      const nextKicked = Array.from(new Set([...kickedMemberNames, clean]));
+      setKickedMemberNames(nextKicked);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(KICKED_ROOM_MEMBERS_STORAGE_KEY, JSON.stringify(nextKicked));
+        } catch {
+          /* ignore */
+        }
       }
     }
-    if (activeSharedRoomId) {
-      void kickMemberFromSupabaseSharedPhotoRoom(activeSharedRoomId, clean);
+    if (effectiveRoomIdForManage) {
+      void kickMemberFromSupabaseSharedPhotoRoom(
+        effectiveRoomIdForManage,
+        clean,
+        cleanEmail || undefined
+      );
     }
     useSaySeeStore
       .getState()
-      .showToast(`${clean} 님을 공유방에서 내보냈습니다.`);
+      .showToast(`${clean || cleanEmail} 님을 공유방에서 내보냈습니다.`);
   };
 
   const myEmailLower = (merlinAuth?.email || '').trim().toLowerCase();
@@ -196,52 +284,86 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       .map((t) => String(t || '').trim().toLowerCase())
       .filter(Boolean)
   );
+  const serverMasterMember = serverRoomMembers.find((m) => m.role === 'master');
+  const masterEmailLower = (
+    serverMasterMember?.memberEmail || (!activeJoinedRoomMeta ? myEmailLower : '')
+  )
+    .trim()
+    .toLowerCase();
+  const effectiveHostDisplayName =
+    masterEmailLower && myEmailLower && masterEmailLower === myEmailLower
+      ? myDisplayName
+      : serverMasterMember?.nickname || hostDisplayName;
+
   const hostLowerSet = new Set(
     [
+      effectiveHostDisplayName,
+      `${effectiveHostDisplayName} (방장)`,
       hostDisplayName,
       `${hostDisplayName} (방장)`,
+      serverMasterMember?.nickname,
       '방장',
-      ...(!activeJoinedRoomMeta ? Array.from(myIdentityLowerSet) : []),
+      ...(!activeJoinedRoomMeta || (masterEmailLower && masterEmailLower === myEmailLower)
+        ? Array.from(myIdentityLowerSet)
+        : []),
     ]
       .map((t) => String(t || '').trim().toLowerCase())
       .filter(Boolean)
   );
 
-  // [동일 유저 2명 중복 방지 — 이메일 SSOT + 신원 토큰(여권 별명·실명·허브 닉네임·이메일 아이디) 1인 단일 집계]
-  const derivedParticipantNames = (() => {
-    const byIdentityKey = new Map<string, string>();
+  // [정식 SQL 멤버 SSOT + 동일 유저 중복 방지]
+  // 1순위: ghosti_lounge_members 서버 정식 참여 회원 (사진을 안 올린 합류 회원도 100% 표시)
+  // 2순위: 로컬/오프라인 폴백 시 currentRoomCorpus 업로더 보조 병합 (이메일·신원 토큰 기준 1인 단일 집계)
+  const derivedParticipants = (() => {
+    const byIdentityKey = new Map<string, { rawName: string; email?: string }>();
     const normalizeLabel = (raw?: string | null) =>
       String(raw || '')
         .replace(/^[👑📸👤\s]+/, '')
         .replace(/\s*\(방장\)\s*$/u, '')
         .trim();
 
+    for (const sm of serverRoomMembers) {
+      if (sm.role === 'master') continue;
+      const email = sm.memberEmail.trim().toLowerCase();
+      if (masterEmailLower && email && email === masterEmailLower) continue;
+      const isMe = Boolean(email && myEmailLower && email === myEmailLower);
+      const label = normalizeLabel(isMe ? myDisplayName : sm.nickname) || sm.nickname;
+      if (!label) continue;
+      byIdentityKey.set(email ? `email:${email}` : `name:${label.toLowerCase()}`, {
+        rawName: label,
+        email: email || undefined,
+      });
+    }
+
     if (activeJoinedRoomMeta && isLoggedInUser) {
       const myNorm = normalizeLabel(myDisplayName);
-      if (myNorm && !hostLowerSet.has(myNorm.toLowerCase()) && !kickedSet.has(myNorm)) {
-        byIdentityKey.set(myEmailLower ? `email:${myEmailLower}` : `name:${myNorm.toLowerCase()}`, myNorm);
+      const myKey = myEmailLower ? `email:${myEmailLower}` : `name:${myNorm.toLowerCase()}`;
+      if (
+        myNorm &&
+        !byIdentityKey.has(myKey) &&
+        !(masterEmailLower && myEmailLower && masterEmailLower === myEmailLower) &&
+        !hostLowerSet.has(myNorm.toLowerCase())
+      ) {
+        byIdentityKey.set(myKey, { rawName: myNorm, email: myEmailLower || undefined });
       }
     }
 
-    for (const p of currentRoomCorpus) {
-      const uploaderEmail = String(p.sharedUploaderEmail || '').trim().toLowerCase();
-      const label = normalizeLabel(p.uploaderLabel);
-      if (!label) continue;
-      const lowerLabel = label.toLowerCase();
-      if (kickedSet.has(label) || hostLowerSet.has(lowerLabel)) continue;
+    // 서버 멤버 조회가 비어 있는 오프라인/로컬 폴백 시에만 사진 업로더에서 보조 추론
+    if (!hasLoadedServerMembers || serverRoomMembers.length === 0) {
+      for (const p of currentRoomCorpus) {
+        const uploaderEmail = String(p.sharedUploaderEmail || '').trim().toLowerCase();
+        const label = normalizeLabel(p.uploaderLabel);
+        if (!label) continue;
+        const lowerLabel = label.toLowerCase();
+        if (kickedSet.has(label) || hostLowerSet.has(lowerLabel)) continue;
+        if (uploaderEmail && myEmailLower && uploaderEmail === myEmailLower) continue;
+        if (uploaderEmail && masterEmailLower && uploaderEmail === masterEmailLower) continue;
+        if (!uploaderEmail && myIdentityLowerSet.has(lowerLabel)) continue;
 
-      // 본인 계정 이메일로 올린 과거 사진(예: 별명 등록 전 sundream7879로 업로드 ➔ 이후 썬드림 등록)은
-      // 방장 본인이거나 이미 집계된 내 계정과 동일 인물이므로 절대 별도 참여 회원으로 중복 추가하지 않음
-      if (uploaderEmail && myEmailLower && uploaderEmail === myEmailLower) {
-        continue;
-      }
-      if (!uploaderEmail && myIdentityLowerSet.has(lowerLabel)) {
-        continue;
-      }
-
-      const key = uploaderEmail ? `email:${uploaderEmail}` : `name:${lowerLabel}`;
-      if (!byIdentityKey.has(key)) {
-        byIdentityKey.set(key, label);
+        const key = uploaderEmail ? `email:${uploaderEmail}` : `name:${lowerLabel}`;
+        if (!byIdentityKey.has(key)) {
+          byIdentityKey.set(key, { rawName: label, email: uploaderEmail || undefined });
+        }
       }
     }
 
@@ -252,15 +374,17 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     ? [
         {
           id: 'host_member',
-          name: `${hostDisplayName} (방장)`,
-          rawName: hostDisplayName,
+          name: `${effectiveHostDisplayName} (방장)`,
+          rawName: effectiveHostDisplayName,
+          email: masterEmailLower || undefined,
           room: activeFamilyRoom || '우리집',
           role: 'HOST' as const,
         },
-        ...derivedParticipantNames.map((name, idx) => ({
-          id: `fam_member_${idx}_${name}`,
-          name,
-          rawName: name,
+        ...derivedParticipants.map((m, idx) => ({
+          id: `fam_member_${idx}_${m.email || m.rawName}`,
+          name: m.rawName,
+          rawName: m.rawName,
+          email: m.email,
           room: activeFamilyRoom || '우리집',
           role: 'MEMBER' as const,
         })),
@@ -271,15 +395,17 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     ? [
         {
           id: 'club_host_member',
-          name: `${hostDisplayName} (방장)`,
-          rawName: hostDisplayName,
+          name: `${effectiveHostDisplayName} (방장)`,
+          rawName: effectiveHostDisplayName,
+          email: masterEmailLower || undefined,
           badge: '방장',
           role: 'HOST' as const,
         },
-        ...derivedParticipantNames.map((name, idx) => ({
-          id: `club_member_${idx}_${name}`,
-          name,
-          rawName: name,
+        ...derivedParticipants.map((m, idx) => ({
+          id: `club_member_${idx}_${m.email || m.rawName}`,
+          name: m.rawName,
+          rawName: m.rawName,
+          email: m.email,
           badge: '참여회원',
           role: 'MEMBER' as const,
         })),
@@ -907,7 +1033,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     {m.role !== 'HOST' && !activeJoinedRoomMeta && (
                       <button
                         type="button"
-                        onClick={() => handleKickRoomMember(m.rawName)}
+                        onClick={() => handleKickRoomMember(m.rawName, m.email)}
                         className="text-slate-400 hover:text-rose-600 text-[11px] font-medium ml-1 cursor-pointer"
                       >
                         내보내기
@@ -966,7 +1092,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 {m.role !== 'HOST' && !activeJoinedRoomMeta && (
                   <button
                     type="button"
-                    onClick={() => handleKickRoomMember(m.rawName)}
+                    onClick={() => handleKickRoomMember(m.rawName, m.email)}
                     className="text-slate-400 hover:text-rose-600 text-[11px] font-medium cursor-pointer"
                   >
                     내보내기
