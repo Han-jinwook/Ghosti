@@ -78,6 +78,12 @@ import type {
   VideoSceneItem,
   VoiceRoutingTrace,
 } from '../../types/saysee';
+
+let activeInitAppPromise: Promise<void> | null = null;
+let activeInitAppStartedConnected = false;
+let pendingQueuedForceInit = false;
+let pcBackgroundStageEpoch = 0;
+let userManuallySelectedTrashTab = false;
 import {
   INITIAL_PROACTIVE_HINTS,
   buildSetupDiagnosisPlan,
@@ -568,7 +574,19 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   initApp: async (force?: boolean) => {
     if (!force && (get().initialized || get().initializing)) return;
-    set({ initializing: true });
+    if (activeInitAppPromise) {
+      // 이미 Z-코어 연결 상태로 진행 중인 initApp이 있으면 중복 병렬 실행(App + HubBridge 3중 경합)을 막고 하나로 합류!
+      // 단, 시작 시점에는 미연결이었다가 도중에 Z-코어가 연결되어 force 재호출된 경우에만 종료 직후 1회 재실행합니다.
+      if (force && !activeInitAppStartedConnected && zCoreBridge.isConnected) {
+        pendingQueuedForceInit = true;
+      }
+      await activeInitAppPromise;
+      return;
+    }
+
+    const runSingleInitApp = async (): Promise<void> => {
+      activeInitAppStartedConnected = zCoreBridge.isConnected;
+      set({ initializing: true });
 
     const isStandaloneSearchWin =
       typeof window !== 'undefined' &&
@@ -794,11 +812,21 @@ export const createAssistantOnboardingSlice: StateCreator<
       !isStandaloneSearchWin &&
       enrichedPhotos.length > 0
     ) {
+      if (zCoreBridge.isConnected) {
+        activeInitAppStartedConnected = true;
+      }
       try {
         const instantAudit = await applyCachedPcOpticalAuditInstant(enrichedPhotos);
         enrichedPhotos = instantAudit.updatedPhotos;
         initialDuplicateGroups = instantAudit.duplicateGroups;
         uncachedOpticalCount = instantAudit.uncachedCount;
+        // 일부 미캐시 사진(<= 80장)만 남은 경우 첫 렌더 직전에 0.2초 내 완결하여 화면 표시 후 장수 변동을 0%로 차단
+        if (uncachedOpticalCount > 0 && uncachedOpticalCount <= 80) {
+          const fullAudit = await auditRealPcPhotosAndCluster(enrichedPhotos);
+          enrichedPhotos = fullAudit.updatedPhotos;
+          initialDuplicateGroups = fullAudit.duplicateGroups;
+          uncachedOpticalCount = 0;
+        }
       } catch {
         /* fallback to background audit */
       }
@@ -930,12 +958,13 @@ export const createAssistantOnboardingSlice: StateCreator<
           photos: enrichedPhotos,
           sharedRoomHostPhotos: hostSharedPhotos,
           duplicateGroups: initialDuplicateGroups,
-          activeTrashCategoryFilter:
-            initialDuplicateGroups.length > 0
-              ? 'duplicate'
-              : enrichedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
-              ? 'blurry'
-              : latestState.activeTrashCategoryFilter,
+          activeTrashCategoryFilter: userManuallySelectedTrashTab
+            ? latestState.activeTrashCategoryFilter
+            : initialDuplicateGroups.length > 0
+            ? 'duplicate'
+            : enrichedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+            ? 'blurry'
+            : latestState.activeTrashCategoryFilter,
           localDocuments: indexedDocs,
           matchedLocalDocs: latestSharedMode ? [] : effectiveInitialDocs,
           matchedVaultPhotos: latestSharedMode ? [] : initialVaultPhotos,
@@ -1126,24 +1155,30 @@ export const createAssistantOnboardingSlice: StateCreator<
             }, 220);
           } else {
             // Stage 1 ➔ Stage 2 ➔ Stage 3 순차 직렬 실행 (동시 워커 폭발 0%)
+            const myStageEpoch = ++pcBackgroundStageEpoch;
             window.setTimeout(async () => {
-              // Stage 1: 미캐시 신규 사진이 남아 있을 때만 광학 dHash·선명도 추가 스캔 수행 (캐시 100% 적중 시 재렌더 0회)
+              if (myStageEpoch !== pcBackgroundStageEpoch) return;
               if (uncachedOpticalCount > 0) {
                 try {
                   const currentPhotos = get().photos;
                   const { updatedPhotos, duplicateGroups: realDupGroups } =
                     await auditRealPcPhotosAndCluster(currentPhotos);
-                  const nextTrashIds = new Set<string>();
-                  updatedPhotos.forEach((p) => {
-                    if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
-                  });
+                  if (myStageEpoch !== pcBackgroundStageEpoch) return;
                   const updatedById = new Map<string, PhotoItem>(
                     updatedPhotos.map((p) => [p.id, p])
                   );
                   set((state) => {
+                    const mergedPhotos = updatedPhotos.map((up) => {
+                      const live = state.photos.find((lp) => lp.id === up.id);
+                      return live?.quarantined ? { ...up, quarantined: true } : up;
+                    });
+                    const nextTrashIds = new Set<string>();
+                    mergedPhotos.forEach((p) => {
+                      if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
+                    });
                     const nextSearchResults =
                       !state.hasExecutedUserSearch && state.activeLoungeType === 'personal'
-                        ? filterVisibleGalleryPhotos(updatedPhotos).map((photo) => ({
+                        ? filterVisibleGalleryPhotos(mergedPhotos).map((photo) => ({
                             photo,
                             score: 0.99,
                             matchPercentage: 99,
@@ -1154,16 +1189,17 @@ export const createAssistantOnboardingSlice: StateCreator<
                             return refreshed ? { ...sr, photo: refreshed } : sr;
                           });
                     return {
-                      photos: updatedPhotos,
+                      photos: mergedPhotos,
                       duplicateGroups: realDupGroups,
                       searchResults: nextSearchResults,
                       selectedTrashIds: nextTrashIds,
-                      activeTrashCategoryFilter:
-                        realDupGroups.length > 0
-                          ? 'duplicate'
-                          : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
-                          ? 'blurry'
-                          : state.activeTrashCategoryFilter,
+                      activeTrashCategoryFilter: userManuallySelectedTrashTab
+                        ? state.activeTrashCategoryFilter
+                        : realDupGroups.length > 0
+                        ? 'duplicate'
+                        : mergedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+                        ? 'blurry'
+                        : state.activeTrashCategoryFilter,
                     };
                   });
                 } catch {
@@ -1173,10 +1209,12 @@ export const createAssistantOnboardingSlice: StateCreator<
 
               // Stage 2: 온디바이스 얼굴 여권 추출 (YuNet + SFace int8) — 새로고침 직후 UI 조작 여유를 둔 뒤 저부하 실행
               await new Promise<void>((r) => window.setTimeout(r, 1500));
+              if (myStageEpoch !== pcBackgroundStageEpoch) return;
               await runFacePassportStage();
 
-              // Stage 3: 동영상 키프레임 및 실사진 비전 벡터 768D 저부하 인덱싱 (앞 2단계 종료 후 충분한 여유 간격 뒤 단독 실행)
+              // Stage 3: 검색용 비전 벡터 768D 저부하 인덱싱
               await new Promise<void>((r) => window.setTimeout(r, 2500));
+              if (myStageEpoch !== pcBackgroundStageEpoch) return;
               const pendingPhotoPatches = new Map<string, Partial<PhotoItem>>();
               let flushTimer = 0;
               const flushPhotoPatches = () => {
@@ -1185,26 +1223,19 @@ export const createAssistantOnboardingSlice: StateCreator<
                 const snap = new Map(pendingPhotoPatches);
                 pendingPhotoPatches.clear();
                 set((state) => {
-                  const nextSel = new Set(state.selectedTrashIds);
                   const nextPhotos = state.photos.map((p) => {
                     const pt = snap.get(p.id);
                     if (!pt) return p;
-                    const merged = { ...p, ...pt };
-                    if (merged.isVaultDocument) {
-                      merged.trashCategory = undefined;
-                      merged.intrinsicTrashCategory = undefined;
-                      nextSel.delete(p.id);
-                    } else if (!p.trashCategory && merged.trashCategory && !merged.quarantined) {
-                      nextSel.add(p.id);
-                    }
-                    return merged;
+                    const { trashCategory: _ignoreTc, intrinsicTrashCategory: _ignoreItc, isVaultDocument: _ignoreVd, ...safeSearchPatch } = pt;
+                    return { ...p, ...safeSearchPatch };
                   });
                   return {
                     photos: nextPhotos,
-                    selectedTrashIds: nextSel,
                     searchResults: state.searchResults.map((sr) => {
                       const pt = snap.get(sr.photo.id);
-                      return pt ? { ...sr, photo: { ...sr.photo, ...pt } } : sr;
+                      if (!pt) return sr;
+                      const { trashCategory: _ignoreTc, intrinsicTrashCategory: _ignoreItc, isVaultDocument: _ignoreVd, ...safeSearchPatch } = pt;
+                      return { ...sr, photo: { ...sr.photo, ...safeSearchPatch } };
                     }),
                   };
                 });
@@ -1302,8 +1333,6 @@ export const createAssistantOnboardingSlice: StateCreator<
         }
       }
       if (isCapacitorNativeMobileRuntime() && !zCoreBridge.isConnected && typeof window !== 'undefined') {
-        // [모바일 앱 수동 불러오기 전면 폐지 ➔ 자동 갤러리 인덱싱 개통]:
-        // 앱 기동 즉시 IndexedDB 영구 색인본을 0.05초 만에 복원하고, Android MediaStore / iOS PhotoKit 네이티브 갤러리 자동 스캔을 수행합니다.
         window.setTimeout(() => {
           void get().syncMobileNativeGalleryAuto({ promptPermission: true });
         }, 120);
@@ -1311,6 +1340,16 @@ export const createAssistantOnboardingSlice: StateCreator<
     } catch {
       /* 키워드 검색으로 계속 동작 */
     }
+    };
+
+    activeInitAppPromise = runSingleInitApp().finally(() => {
+      activeInitAppPromise = null;
+      if (pendingQueuedForceInit) {
+        pendingQueuedForceInit = false;
+        void get().initApp(true);
+      }
+    });
+    await activeInitAppPromise;
   },
 
   syncMobileNativeGalleryAuto: async (options) => {
@@ -2041,7 +2080,12 @@ export const createAssistantOnboardingSlice: StateCreator<
   lastQuarantineToast: null,
   lastUndoBatch: null,
 
-  setActiveTrashCategoryFilter: (activeTrashCategoryFilter) => set({ activeTrashCategoryFilter }),
+  setActiveTrashCategoryFilter: (activeTrashCategoryFilter) => {
+    if (activeTrashCategoryFilter !== 'none') {
+      userManuallySelectedTrashTab = true;
+    }
+    set({ activeTrashCategoryFilter });
+  },
 
   toggleTrashSelection: (id: string) => {
     set((state) => {

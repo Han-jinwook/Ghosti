@@ -2574,16 +2574,12 @@ export async function startSilentRealMediaVisionIndexing(params: {
       return;
     }
 
-    // 1) 이미 IndexedDB에 비전 벡터·시맨틱/OCR 메타가 캐싱된 사진은 모델 로딩(WebGPU 컴파일) 및 재추론 없이 0.5ms 배치로 즉시 복원!
-    // [Chrome 1.9GB RAM·CPU 폭주 방어]: 1회 세션당 미색인 신규 처리는 데스크톱 120장 / 모바일 80장으로 제한해 CPU 점유를 낮게 유지
-    const candidatesAll = silentIndexingBrake
-      .sortPhotosRecent90DaysFirst(
-        params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
-      )
-      .slice(0, isMobileEnv ? 80 : 120);
-
-    const unindexedPhotos: PhotoItem[] = [];
-    for (const item of candidatesAll) {
+    // 1) 이미 IndexedDB에 비전 벡터·시맨틱/OCR 메타가 캐싱된 사진은 전체 사진에 대해 모델 로딩 없이 0.5ms 배치로 즉시 복원하고,
+    //    진짜 미색인 신규 사진에 대해서만 데스크톱 120장 / 모바일 80장 상한을 적용합니다 (Chrome 1.9GB RAM·CPU 폭주 방어).
+    const unindexedCandidates: PhotoItem[] = [];
+    for (const item of params.photos) {
+      if (item.quarantined) continue;
+      if (item.vec && item.vec.length === DEFAULT_DIM) continue;
       const pKey = getPhotoMediaCacheKey(item.name, item.size);
       const cachedVec = hydratedPhotoVecMap.get(pKey);
       const cachedMeta = hydratedPhotoMetaMap.get(pKey);
@@ -2613,9 +2609,12 @@ export async function startSilentRealMediaVisionIndexing(params: {
           ...(item.captionKo ? { captionKo: item.captionKo } : {}),
         });
       } else {
-        unindexedPhotos.push(item);
+        unindexedCandidates.push(item);
       }
     }
+    const unindexedPhotos = silentIndexingBrake
+      .sortPhotosRecent90DaysFirst(unindexedCandidates)
+      .slice(0, isMobileEnv ? 80 : 120);
 
     const localVids = params.videos
       .filter(
@@ -2757,31 +2756,13 @@ export async function startSilentRealMediaVisionIndexing(params: {
             : `OCR: ${prevMeta.ocrSnippet}`;
         }
 
-        let inferredTrash: TrashCategory | undefined = undefined;
-        let inferredVaultDoc = false;
-        const top1 = topMatches[0];
-        if (!item.isVaultDocument && !item.trashCategory && top1) {
-          if (top1.probe.id === 'document' && top1.sim >= 0.27) {
-            inferredVaultDoc = true;
-          } else if (top1.probe.id === 'receipt' && top1.sim >= 0.25) {
-            inferredTrash = 'memo';
-          } else if (top1.probe.id === 'screenshot' && top1.sim >= 0.27) {
-            inferredTrash = 'screenshot';
-          }
-        }
-        if (inferredVaultDoc) {
-          item.isVaultDocument = true;
-        } else if (inferredTrash) {
-          item.trashCategory = inferredTrash;
-          item.intrinsicTrashCategory = inferredTrash;
-        }
+        // [정리 후보 장수 불변 원칙]: 1. 귀신비서 사진 정리 후보(trashCategory)는 Stage 1 광학·파일명 결정론 엔진이 100% 고정 확정하며,
+        // 백그라운드 120장 분할 Stage 3 검색 색인기가 뒤늦게 trashCategory를 건드려 새로고침·탭 클릭 중 후보 장수가 변하는 현상을 원천 차단합니다.
         params.onPhotoVisionHydrated?.(item.id, {
           vec,
           tags: item.tags,
           keywordsKo: item.keywordsKo,
           ontologyPrimaryTags: item.ontologyPrimaryTags,
-          ...(inferredVaultDoc ? { isVaultDocument: true, trashCategory: undefined } : {}),
-          ...(inferredTrash ? { trashCategory: inferredTrash, intrinsicTrashCategory: inferredTrash, trashConfidence: 0.92 } : {}),
           ...(item.captionKo ? { captionKo: item.captionKo } : {}),
         });
 
