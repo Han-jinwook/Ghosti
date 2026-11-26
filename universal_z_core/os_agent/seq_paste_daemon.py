@@ -3683,14 +3683,16 @@ def _load_doc_body_cache_fast() -> dict[str, str]:
 
 _SEARCH_SKIP_SUB_DIRS = {
     "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
-    "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
+    "dist", "build", "_internal", "_tk_data", "universal_z_core", "merlin_z_core", "$recycle.bin",
     "system volume information", "windows", "program files", "program files (x86)",
     "programdata", "recovery", "perflogs", "msocache", "intel", "amd", "nvidia",
     "temp", "tmp", "cache", "caches", "logs", "obj", "bin", "debug", "release",
     "target", "packages", "vendor", "bower_components", "site-packages",
     "merlin_ai_models", "shadowvault", "windowsapps", "wpsystem", "wudownloadcache",
     "config.msi", "drivers", "efi", "boot", "windows.old", "onedrivetemp",
-    ".gradle", "gradle", "pods", "android", "ios", ".next", ".nuxt", ".vite",
+    ".gradle", "gradle", "pods", "android", "ios", ".next", ".nuxt", ".vite", ".turbo",
+    ".pytest_cache", ".mypy_cache", "ms-playwright", "playwright", "puppeteer",
+    "locales", "swiftshader", "crashpad", "shader_cache", "gpu_cache", "code cache",
     ".cache", "coverage", "storybook-static", "documents and settings",
 }
 
@@ -3698,16 +3700,16 @@ _SCAN_DIRS_CACHE: dict = {"ts": 0.0, "dirs": []}
 
 
 def _collect_search_scan_dirs(
-    max_total_dirs: int = 8000,
-    max_per_drive: int = 2400,
-    time_budget_sec: float = 9.0,
+    max_total_dirs: int = 15000,
+    max_per_drive: int = 6500,
+    time_budget_sec: float = 11.0,
     force: bool = False,
 ) -> list[Path]:
     """
     [전 PC 전 하드 드라이브 2계층 공정 라운드-로빈 폴더 수집기 (Starvation 0%)]:
-    - 1계층(드라이브 간 1:1): S:, D:, E:, F:, C:, G: 등 각 드라이브에 독립 폴더 상한(2,400/드라이브)·독립 시간 예산(로컬 4.5s, 가상 2.0s) 배분.
-    - 2계층(드라이브 내부 루트 간 1:1): C: 내부에서도 Desktop/Downloads/Documents/Pictures/Videos/카카오톡/사용자폴더가
-      각각 독립 서브큐로 교대 확장되어, Documents·Downloads 하위 폴더가 많아도 사진(Pictures)·영상(Videos)이 절대 잘리지 않음!
+    - 1계층(드라이브 간 1:1): S:, D:, E:, F:, C:, G: 등 각 드라이브에 독립 폴더 상한(6,500/드라이브)·독립 시간 예산(로컬 6.0s, 가상 2.0s) 배분.
+    - 2계층(드라이브 내부 루트 간 1:1): C: 내부뿐 아니라 D:/E:/F: 보조 드라이브의 최상위 폴더들도 각각 독립 서브큐로 교대 확장(깊이 12)되어,
+      대형 프로젝트 폴더가 있어도 D:\\기타 · D:\\C드라이브에서 이동 등 모든 폴더의 보유 파일 전부를 누락 없이 수집합니다!
     """
     now_c = time.time()
     if not force and _SCAN_DIRS_CACHE["dirs"] and (now_c - float(_SCAN_DIRS_CACHE["ts"])) < 20.0:
@@ -3745,13 +3747,42 @@ def _collect_search_scan_dirs(
                 "sub_queues": [],
                 "rr_idx": 0,
                 "added": 0,
-                "cap": 600 if is_virtual_cloud else max_per_drive,
+                "cap": 700 if is_virtual_cloud else max_per_drive,
                 "elapsed": 0.0,
-                "time_cap": 2.0 if is_virtual_cloud else 4.5,
+                "time_cap": 2.0 if is_virtual_cloud else 6.0,
                 "is_virtual": is_virtual_cloud,
             }
             drive_groups[drv_key] = grp
-        grp["sub_queues"].append([(root_fd, 0)])
+        # 보조 물리 드라이브 루트(D:\, E:\, F:\)는 최상위 폴더별로 독립 서브큐를 분리해 1:1 공정 확장
+        if len(rs.rstrip("\\/")) == 2 and drv_key not in ("C:", "S:") and not grp["is_virtual"]:
+            try:
+                with os.scandir(root_fd) as it_drv_top:
+                    for top_e in it_drv_top:
+                        try:
+                            if not top_e.is_dir(follow_symlinks=False):
+                                continue
+                            t_nm = top_e.name
+                            t_low = t_nm.lower()
+                            if (
+                                t_nm.startswith((".", "$", "~"))
+                                or t_low in _SEARCH_SKIP_SUB_DIRS
+                                or t_low.startswith(("found.", "msdownld", "__"))
+                                or t_low.endswith((".dist-info", ".egg-info"))
+                            ):
+                                continue
+                            norm_top = os.path.normcase(os.path.abspath(top_e.path))
+                            if norm_top not in seen_scan_dirs:
+                                seen_scan_dirs.add(norm_top)
+                                p_top_d = Path(top_e.path)
+                                scan_dirs.append(p_top_d)
+                                grp["added"] += 1
+                                grp["sub_queues"].append([(p_top_d, 1)])
+                        except Exception:
+                            pass
+            except Exception:
+                grp["sub_queues"].append([(root_fd, 0)])
+        else:
+            grp["sub_queues"].append([(root_fd, 0)])
 
     # 로컬 물리 드라이브(S:, D:, E:, F:, C: 등)를 가상 클라우드 드라이브(G:/H:)보다 먼저 라운드-로빈 배치
     ordered_groups = sorted(
@@ -3759,7 +3790,7 @@ def _collect_search_scan_dirs(
         key=lambda g: (1 if g["is_virtual"] else 0, 0 if g["drv"] == "S:" else (2 if g["drv"] == "C:" else 1), g["drv"]),
     )
 
-    max_depth = 5
+    max_depth = 12
     active = True
     while active and len(scan_dirs) < max_total_dirs and (time.time() - t_start) <= time_budget_sec:
         active = False
@@ -3772,7 +3803,7 @@ def _collect_search_scan_dirs(
             n_sq = len(sub_qs)
             if n_sq == 0:
                 continue
-            # 드라이브 내부 각 루트(Desktop/Downloads/Documents/Pictures/Videos 등)를 1:1 공정 라운드-로빈으로 선택
+            # 드라이브 내부 각 루트(Desktop/Downloads/Documents/Pictures/Videos/D:\최상위폴더 등)를 1:1 공정 라운드-로빈으로 선택
             chosen_q = None
             for _off in range(n_sq):
                 idx_try = (grp["rr_idx"] + _off) % n_sq
@@ -3784,7 +3815,8 @@ def _collect_search_scan_dirs(
                 continue
             active = True
             cur_fd, depth = chosen_q.pop(0)
-            if depth >= max_depth:
+            drv_max_d = 6 if grp["is_virtual"] else max_depth
+            if depth >= drv_max_d:
                 continue
             t_step = time.time()
             try:
@@ -3801,6 +3833,7 @@ def _collect_search_scan_dirs(
                                 sname.startswith((".", "$", "~"))
                                 or sname_low in _SEARCH_SKIP_SUB_DIRS
                                 or sname_low.startswith(("found.", "msdownld", "__"))
+                                or sname_low.endswith((".dist-info", ".egg-info"))
                             ):
                                 continue
                             norm_s = os.path.normcase(os.path.abspath(sub_e.path))
@@ -3809,7 +3842,7 @@ def _collect_search_scan_dirs(
                                 p_sub = Path(sub_e.path)
                                 scan_dirs.append(p_sub)
                                 grp["added"] += 1
-                                if depth + 1 < max_depth:
+                                if depth + 1 < drv_max_d:
                                     chosen_q.append((p_sub, depth + 1))
                         except Exception:
                             pass
@@ -3970,20 +4003,31 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         CLOUD_UNHYDRATED_MASK = 0x00400000 | 0x00001000  # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_OFFLINE
         t_scan_loop = time.time()
         drv_elapsed: dict[str, float] = {}
+        virt_drv_flags: dict[str, bool] = {}
 
         for _idx_fd, fd in enumerate(scan_dirs):
             if (_idx_fd & 31) == 31:
                 time.sleep(0.0005)
-                if (time.time() - t_scan_loop) > 4.5:
+                if (time.time() - t_scan_loop) > 14.0:
                     break
             fd_str = str(fd)
             fd_str_low = fd_str.lower()
             drv_prefix = fd_str[:2].upper() if len(fd_str) >= 2 and fd_str[1] == ":" else ""
             is_non_c_drv = bool(drv_prefix and drv_prefix not in ("C:", "S:"))
+            is_virt_drv = False
+            if is_non_c_drv:
+                if drv_prefix not in virt_drv_flags:
+                    _vr = f"{drv_prefix}\\"
+                    virt_drv_flags[drv_prefix] = bool(
+                        os.path.exists(os.path.join(_vr, ".shortcut-targets-by-id"))
+                        or os.path.exists(os.path.join(_vr, "내 드라이브"))
+                        or os.path.exists(os.path.join(_vr, "My Drive"))
+                    )
+                is_virt_drv = virt_drv_flags[drv_prefix]
             if is_non_c_drv:
                 hit_nc = _NON_C_DIR_SCAN_CACHE.get(fd_str_low)
                 try:
-                    fd_mt_ns = int(getattr(os.stat(fd), "st_mtime_ns", 0)) if drv_elapsed.get(drv_prefix, 0.0) <= 0.35 else (hit_nc[1] if hit_nc else -1)
+                    fd_mt_ns = int(getattr(os.stat(fd), "st_mtime_ns", 0)) if (not is_virt_drv or drv_elapsed.get(drv_prefix, 0.0) <= 0.35) else (hit_nc[1] if hit_nc else -1)
                 except Exception:
                     fd_mt_ns = hit_nc[1] if hit_nc else -1
                 if hit_nc is not None and (now - hit_nc[0]) < 25.0 and hit_nc[1] == fd_mt_ns:
@@ -3993,7 +4037,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                             seen_files.add(n_fp)
                             by_kind[c_it["kind"]].append(dict(c_it))
                     continue
-                if drv_elapsed.get(drv_prefix, 0.0) > 1.6:
+                if is_virt_drv and drv_elapsed.get(drv_prefix, 0.0) > 1.8:
                     continue
             t_drv0 = time.time()
             nc_dir_items: list[dict] = []
@@ -4072,7 +4116,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
             by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
             time.sleep(0.0005)
 
-        top_docs = _select_fair_by_drive(by_kind["doc"], 6000)
+        top_docs = _select_fair_by_drive(by_kind["doc"], 20000)
         if top_docs:
             doc_body_cache = _load_doc_body_cache_fast()
             for idx_d, d_it in enumerate(top_docs):
@@ -4119,8 +4163,8 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
 
         top_items = (
             top_docs
-            + _select_fair_by_drive(by_kind["image"], 6000)
-            + _select_fair_by_drive(by_kind["video"], 2000)
+            + _select_fair_by_drive(by_kind["image"], 12000)
+            + _select_fair_by_drive(by_kind["video"], 4000)
         )
 
         # [3단계: 승인된('included') 연결 외장 드라이브 로컬 캐시 병합 (탈착 시 즉시 자동 숨김 · USB 내부 쓰기 0 Byte)]

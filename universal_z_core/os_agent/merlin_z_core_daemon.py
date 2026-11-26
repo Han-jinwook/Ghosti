@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.9.59"
+CORE_VERSION = "2.9.69"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -995,6 +995,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__docs/list", "/api/ghosti/docs/list"):
             self._send_json(plugin_ghosti_os.list_local_docs(qp))
+            return
+
+        if path in ("/__docs/full-text", "/api/ghosti/docs/full-text"):
+            self._send_json(plugin_ghosti_os.get_local_doc_full_text(qp))
             return
 
         # [3귀신 업무 공유(S: 드라이브) 네이티브 마운트 · 실시간 파일/잠금(~$) 스캔 · 원본 다운로드 API]

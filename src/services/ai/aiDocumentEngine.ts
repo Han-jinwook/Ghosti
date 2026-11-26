@@ -246,9 +246,9 @@ export async function searchLocalDocumentFilesAsync(
   // 전혀 연관이 없는 문서가 섞이거나 유사 문서 안내 배지가 누락되는 것을 원천 차단합니다.
   // 이미 로컬 문서 목록(fallbackDocs)이 적재되어 있는데 일치 결과가 0건이면 억지 유사 문서를 끌어오지 않고 즉시 0건을 반환합니다.
   const localScored = searchLocalDocumentFiles(q, fallbackDocs);
+  const exactLocalHits = localScored.filter((d) => d.matchType !== 'SIMILAR');
   if (
-    localScored.length > 0 ||
-    fallbackDocs.length > 0 ||
+    exactLocalHits.length > 0 ||
     !hasActiveGhostiLoginSession() ||
     !zCoreBridge.isConnected
   ) {
@@ -257,7 +257,7 @@ export async function searchLocalDocumentFilesAsync(
 
   try {
     const ctrl = new AbortController();
-    const tId = setTimeout(() => ctrl.abort(), 1200);
+    const tId = setTimeout(() => ctrl.abort(), 2000);
     const res = await fetch(getZCoreUrl('/__docs/search'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -267,13 +267,25 @@ export async function searchLocalDocumentFilesAsync(
     if (res.ok) {
       const json = await res.json();
       if (json.ok && Array.isArray(json.documents) && json.documents.length > 0) {
-        return json.documents.map((d: LocalDocumentFile) => ({
-          ...d,
-          matchType: d.matchType || 'SIMILAR',
-          similarityNoticeKo:
-            d.similarityNoticeKo ||
-            '검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!',
-        }));
+        const seenKeys = new Set<string>();
+        const merged: LocalDocumentFile[] = [];
+        for (const d of json.documents as LocalDocumentFile[]) {
+          const uk = String(d.path || d.id || d.fileName).toLowerCase();
+          if (seenKeys.has(uk)) continue;
+          seenKeys.add(uk);
+          merged.push({
+            ...d,
+            matchType: d.matchType === 'SIMILAR' ? 'SIMILAR' : 'EXACT',
+          });
+        }
+        for (const ls of localScored) {
+          const uk = String(ls.path || ls.id || ls.fileName).toLowerCase();
+          if (!seenKeys.has(uk)) {
+            seenKeys.add(uk);
+            merged.push(ls);
+          }
+        }
+        return merged;
       }
     }
   } catch {

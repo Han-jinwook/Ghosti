@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import {
   stopSetupMonsterTts,
   getIsTtsSpeaking,
@@ -25,6 +26,7 @@ export const LocalDocPreviewModal: React.FC = () => {
     hasExecutedUserSearch,
   } = useSaySeeStore();
   const [, setVoiceTick] = useState(0);
+  const [hydratedFullText, setHydratedFullText] = useState<string | null>(null);
 
   useEffect(() => {
     return subscribeGhostiVoicePrefs(() => {
@@ -32,11 +34,39 @@ export const LocalDocPreviewModal: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    setHydratedFullText(null);
+    if (
+      !selectedDocModal?.path ||
+      !(selectedDocModal as { hasMoreText?: boolean }).hasMoreText ||
+      !zCoreBridge.isConnected
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void fetch(
+      getZCoreUrl(`/__docs/full-text?path=${encodeURIComponent(selectedDocModal.path)}`)
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; extractedText?: string } | null) => {
+        if (!cancelled && j?.ok && j.extractedText) {
+          setHydratedFullText(j.extractedText);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDocModal?.id, selectedDocModal?.path]);
+
   if (!selectedDocModal) return null;
 
+  const displayDocText = hydratedFullText ?? selectedDocModal.extractedText;
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
   const isSpeakingNow = getIsTtsSpeaking();
-  const fallbackDocVoiceText = `${selectedDocModal.title}. ${selectedDocModal.extractedText}`;
+  const fallbackDocVoiceText = `${selectedDocModal.title}. ${displayDocText}`;
 
   const handleCloseModal = () => {
     stopSetupMonsterTts();
@@ -113,7 +143,7 @@ export const LocalDocPreviewModal: React.FC = () => {
             </span>
             <p className="text-[13.5px] text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
               {renderHighlightedDocText(
-                selectedDocModal.extractedText,
+                displayDocText,
                 effectiveQuery,
                 selectedDocModal.keywords.slice(0, 4)
               )}
@@ -160,7 +190,7 @@ export const LocalDocPreviewModal: React.FC = () => {
                 onClick={async () => {
                   const res = await triggerUserFavoriteAiLiveVoiceBatonTouch({
                     docTitle: selectedDocModal.title,
-                    docText: selectedDocModal.extractedText,
+                    docText: displayDocText,
                     userQuestion:
                       activeQuery && hasExecutedUserSearch
                         ? activeQuery
@@ -182,7 +212,7 @@ export const LocalDocPreviewModal: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                void navigator.clipboard?.writeText(selectedDocModal.extractedText);
+                void navigator.clipboard?.writeText(displayDocText);
                 useSaySeeStore.setState({
                   lastQuarantineToast: `[${selectedDocModal.title}] 본문이 클립보드에 복사되었습니다.`,
                 });

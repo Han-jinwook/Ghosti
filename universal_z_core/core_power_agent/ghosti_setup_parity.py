@@ -351,10 +351,11 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
     for d in docs:
         raw_fname = str(d.get("fileName") or d.get("name") or "")
         fname_stem = Path(raw_fname).stem if raw_fname else ""
-        fname_corpus = _expand_camel_and_alnum(f"{fname_stem} {d.get('title', '')}").lower()
+        fname_corpus = _expand_camel_and_alnum(f"{fname_stem} {d.get('title', '')} {d.get('deviceSource', '')}").lower()
         kws = " ".join(str(x) for x in (d.get("keywords") or []))
+        full_body = plugin_ghosti_os.get_cached_full_doc_text_fast(str(d.get("path") or "")) or str(d.get("extractedText") or "")
         corpus = _expand_camel_and_alnum(
-            f"{raw_fname} {d.get('title', '')} {d.get('categoryBadge', '')} {d.get('extractedText', '')} {kws}"
+            f"{raw_fname} {d.get('title', '')} {d.get('categoryBadge', '')} {full_body} {kws}"
         ).lower()
         corpus_nospace = re.sub(r"\s+", "", corpus)
         hits = 0
@@ -367,11 +368,24 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
                 hits += 1
         if hits >= req_hits:
             item = dict(d)
-            item["matchType"] = "filename" if fname_hits > 0 else "body"
+            if full_body and len(full_body) > len(str(item.get("extractedText") or "")):
+                low_fb = full_body.lower()
+                hit_pos = -1
+                for tk in tokens:
+                    idx_p = low_fb.find(tk.lower())
+                    if idx_p >= 0:
+                        hit_pos = idx_p
+                        break
+                if hit_pos > 400:
+                    start_w = max(0, hit_pos - 220)
+                    item["extractedText"] = ("… " if start_w > 0 else "") + full_body[start_w : start_w + 1800]
+                else:
+                    item["extractedText"] = full_body[:1800]
+            item["matchType"] = "EXACT"
             scored.append((hits, fname_hits, item))
 
     scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    matched = [d for _, _, d in scored]
+    matched = [d for _, _, d in scored[:250]]
     return {"ok": True, "documents": matched, "docs": matched}
 
 

@@ -707,16 +707,31 @@ _SKIP_DIR_NAMES = {
     "tmp",
     "_internal",
     "_tk_data",
+    "site-packages",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".next",
+    ".nuxt",
+    ".vite",
+    ".turbo",
+    ".gradle",
+    "target",
+    "coverage",
+    "ms-playwright",
+    "playwright",
+    "puppeteer",
+    "locales",
+    "swiftshader",
+    "crashpad",
+    "shader_cache",
+    "gpu_cache",
+    "code cache",
     "accountpictures",
     "crisp_thumbs",
     "merlin_z_core",
     "universal_z_core",
     "sample_photos_301",
     "merlin_ai_models",
-    "merlinfamilyos",
-    "antigravity",
-    "marketingmonster",
-    "yesfile",
     "$recycle.bin",
     "system volume information",
     "programdata",
@@ -731,6 +746,14 @@ _SKIP_DIR_PREFIXES = (
     "merlin_zcore_",
     "_mei",
 )
+
+
+def _is_skip_subdir_name(nm_low: str) -> bool:
+    return (
+        nm_low in _SKIP_DIR_NAMES
+        or nm_low.startswith(_SKIP_DIR_PREFIXES)
+        or nm_low.endswith((".dist-info", ".egg-info"))
+    )
 _ALLOW_CORPUS_DIRS: set[str] = set()
 _CUSTOM_SCAN_ROOTS_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_custom_scan_roots.json"
 _WORK_SDRIVE_CONFIG_FILE = LOCAL_APPDATA / "Merlin" / "work_sdrive_config.json"
@@ -1417,7 +1440,7 @@ def _start_bg_full_drive_scan_once() -> None:
     def _bg_worker() -> None:
         global _BG_INDEX_BUMP_SEQ
         try:
-            time.sleep(0.8)
+            time.sleep(0.15)
             apply_hardware_protection_guard(mode="silent", batch_count=0)
             target_exts = _IMAGE_EXTS | _DOC_EXTS | _VIDEO_EXTS
             skip_top_names = {
@@ -1471,18 +1494,63 @@ def _start_bg_full_drive_scan_once() -> None:
             drive_candidates.sort(key=lambda x: (x[0], x[1]))
 
             for _prio, letter, drive, is_virtual in drive_candidates:
-                stack: List[tuple[Path, int]] = [(drive, 0)]
+                # [최상위 폴더 1:1 공정 라운드-로빈 서브큐 & 최대 깊이 12 확장]:
+                # D:\CafeScraper 등 대형 폴더 1개가 쿼터를 독점해 D:\기타 · D:\C드라이브에서 이동 · D:\Secretary 등이
+                # 누락되던 문제를 원천 제거하고 보유 파일 전부를 누락 없이 색인합니다.
+                sub_queues: List[List[tuple[Path, int]]] = []
+                try:
+                    root_has_media = False
+                    with os.scandir(drive) as it_top:
+                        for dent_t in it_top:
+                            nm_t = dent_t.name
+                            nm_t_low = nm_t.lower()
+                            try:
+                                if dent_t.is_dir(follow_symlinks=False):
+                                    if (
+                                        not nm_t.startswith((".", "$", "~"))
+                                        and nm_t_low not in skip_top_names
+                                        and not _is_skip_subdir_name(nm_t_low)
+                                    ):
+                                        p_top = Path(dent_t.path)
+                                        if letter == "C" and _is_code_repo_dir(p_top):
+                                            continue
+                                        sub_queues.append([(p_top, 1)])
+                                elif not root_has_media and dent_t.is_file(follow_symlinks=False):
+                                    dot_t = nm_t_low.rfind(".")
+                                    if dot_t >= 0 and nm_t_low[dot_t:] in target_exts:
+                                        root_has_media = True
+                            except Exception:
+                                pass
+                    drv_res_s = str(drive.resolve()).lower()
+                    seen_d.add(drv_res_s)
+                    if root_has_media and drv_res_s not in known_roots_low:
+                        discovered.append(drive.resolve())
+                except Exception:
+                    sub_queues = [[(drive, 0)]]
+
+                rr_idx = 0
                 per_drive_discovered = 0
-                per_drive_cap = 220 if is_virtual else 450
-                drv_time_cap = 2.5 if is_virtual else 4.5
+                per_drive_cap = 800 if is_virtual else 6000
+                drv_time_cap = 3.0 if is_virtual else 12.0
+                max_walk_depth = 6 if is_virtual else 12
                 t_drv_start = time.time()
                 while (
-                    stack
+                    sub_queues
                     and per_drive_discovered < per_drive_cap
-                    and len(discovered) < 2400
+                    and len(discovered) < 12000
                     and (time.time() - t_drv_start) < drv_time_cap
                 ):
-                    cur, depth = stack.pop(0)
+                    n_sq = len(sub_queues)
+                    chosen_q = None
+                    for off in range(n_sq):
+                        idx_q = (rr_idx + off) % n_sq
+                        if sub_queues[idx_q]:
+                            chosen_q = sub_queues[idx_q]
+                            rr_idx = (idx_q + 1) % n_sq
+                            break
+                    if chosen_q is None:
+                        break
+                    cur, depth = chosen_q.pop(0)
                     try:
                         cur_res = cur.resolve()
                         cur_low = str(cur_res).lower()
@@ -1498,19 +1566,15 @@ def _start_bg_full_drive_scan_once() -> None:
                                 try:
                                     if dent.is_dir(follow_symlinks=False):
                                         if (
-                                            depth < 5
+                                            depth < max_walk_depth
                                             and not nm.startswith((".", "$", "~"))
                                             and nm_low not in skip_top_names
-                                            and nm_low not in _SKIP_DIR_NAMES
-                                            and not nm_low.startswith(_SKIP_DIR_PREFIXES)
+                                            and not _is_skip_subdir_name(nm_low)
                                         ):
                                             p_sub = Path(dent.path)
-                                            # 보조 드라이브(D:/E:/F:)의 업무·프로젝트 최상위 폴더에 보관된 실제 문서·사진이
-                                            # .git/package.json 존재만으로 통째로 누락되지 않도록 depth<=1은 허용
-                                            if letter != "C" and depth <= 1:
-                                                sub_cands.append(p_sub)
-                                            elif not _is_code_repo_dir(p_sub):
-                                                sub_cands.append(p_sub)
+                                            if letter == "C" and _is_code_repo_dir(p_sub):
+                                                continue
+                                            sub_cands.append(p_sub)
                                     elif not has_media and dent.is_file(follow_symlinks=False):
                                         dot = nm_low.rfind(".")
                                         if dot >= 0 and nm_low[dot:] in target_exts:
@@ -1520,11 +1584,12 @@ def _start_bg_full_drive_scan_once() -> None:
                         if has_media and cur_low not in known_roots_low:
                             discovered.append(cur_res)
                             per_drive_discovered += 1
-                        stack.extend((sd, depth + 1) for sd in sub_cands)
+                        if sub_cands:
+                            sub_cands.sort(key=lambda p_x: p_x.name.lower())
+                            chosen_q.extend((sd, depth + 1) for sd in sub_cands)
                         batch_counter += 1
-                        if batch_counter % 25 == 0:
-                            apply_hardware_protection_guard(mode="silent", batch_count=batch_counter)
-                            time.sleep(0.01)
+                        if (batch_counter & 127) == 127:
+                            time.sleep(0.0005)
                     except Exception:
                         pass
 
@@ -1614,17 +1679,20 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3, _force_sync_rebuild: 
 
     result: List[Path] = []
     seen: set[str] = set()
-    max_total = 1600
-    per_root_cap = 220
+    max_total = 10000
+    per_root_cap = 600
+    effective_depth = max(max_depth, 6)
 
     for r in roots:
         if len(result) >= max_total:
             break
         root_count = 0
+        is_virt_r = _is_virtual_cloud_drive_path(r)
+        r_max_depth = min(effective_depth, 4) if is_virt_r else effective_depth
 
         def _walk(curr: Path, depth: int) -> None:
             nonlocal root_count
-            if depth > max_depth or root_count >= per_root_cap or len(result) >= max_total:
+            if depth > r_max_depth or root_count >= per_root_cap or len(result) >= max_total:
                 return
             try:
                 if _is_under_excluded_work_vault(curr, excluded_work_dir):
@@ -1635,7 +1703,7 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3, _force_sync_rebuild: 
                 seen.add(r_str)
                 result.append(curr)
                 root_count += 1
-                if depth == max_depth:
+                if depth == r_max_depth:
                     return
                 sub_dirs: List[Path] = []
                 with os.scandir(curr) as it:
@@ -1646,8 +1714,7 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3, _force_sync_rebuild: 
                             nm = dent.name
                             if (
                                 (nm.startswith(".") and nm != ".shortcut-targets-by-id")
-                                or nm.lower() in _SKIP_DIR_NAMES
-                                or nm.lower().startswith(_SKIP_DIR_PREFIXES)
+                                or _is_skip_subdir_name(nm.lower())
                             ):
                                 continue
                             p_sub = Path(dent.path)
@@ -1655,7 +1722,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3, _force_sync_rebuild: 
                                 continue
                             if _is_other_account_phone_backup_dir(p_sub, active_backup_sub):
                                 continue
-                            if not _is_code_repo_dir(p_sub):
+                            cur_drv = str(p_sub)[:2].upper()
+                            if cur_drv != "C:" or not _is_code_repo_dir(p_sub):
                                 sub_dirs.append(p_sub)
                         except Exception:
                             pass
@@ -1936,7 +2004,7 @@ def _list_local_photos_unlocked(data: Dict[str, Any], req_dir: str) -> Dict[str,
             pass
 
     raw_photo_candidates.sort(key=lambda item: item[3].st_mtime, reverse=True)
-    fair_photo_candidates = _select_fair_entries_by_drive(raw_photo_candidates, lambda item: item[2], 2000)
+    fair_photo_candidates = _select_fair_entries_by_drive(raw_photo_candidates, lambda item: item[2], 6000)
     files: List[Dict[str, Any]] = []
     seen_keys: set[str] = set()
     for d, d_label, abs_str, st, resolved, nm in fair_photo_candidates:
@@ -3443,11 +3511,79 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
 
 _DOCS_ENTRY_MEM_CACHE: Dict[str, Dict[str, Any]] = {}
+_DOCS_FULL_TEXT_MEM_MAP: Dict[str, str] = {}
 _VIRTUAL_DIR_DOC_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, Path, os.stat_result]]]] = {}
+_DOC_TEXT_BG_PREWARM_RUNNING = False
+
+
+def _bg_prewarm_doc_texts_worker(targets: List[Path]) -> None:
+    global _DOC_TEXT_BG_PREWARM_RUNNING, _BG_INDEX_BUMP_SEQ
+    updated_any = False
+    try:
+        apply_hardware_protection_guard(mode="silent", batch_count=0)
+        for idx_t, p in enumerate(targets[:1500]):
+            try:
+                if not p.exists():
+                    continue
+                txt = _extract_doc_text(p, allow_pdf_winrt_ocr=False, flush_disk=False)
+                if txt:
+                    _DOCS_FULL_TEXT_MEM_MAP[str(p).lower()] = txt
+                    updated_any = True
+            except Exception:
+                pass
+            if (idx_t & 15) == 15:
+                time.sleep(0.01)
+    finally:
+        _flush_doc_text_cache_if_dirty()
+        if updated_any:
+            _BG_INDEX_BUMP_SEQ += 1
+            _DOCS_RESP_MEM_CACHE["sig"] = ""
+            _WATCH_SIG_TTL_CACHE["ts"] = 0.0
+        _DOC_TEXT_BG_PREWARM_RUNNING = False
+
+
+def get_cached_full_doc_text_fast(path_str: str) -> str:
+    if not path_str:
+        return ""
+    low = str(path_str).strip().lower()
+    hit = _DOCS_FULL_TEXT_MEM_MAP.get(low)
+    if hit:
+        return hit
+    try:
+        p = Path(path_str)
+        if p.exists() and p.is_file():
+            st = p.stat()
+            sig = _make_doc_cache_sig(p, st)
+            dc = _load_doc_text_cache()
+            if sig in dc:
+                _DOCS_FULL_TEXT_MEM_MAP[low] = str(dc[sig])
+                return str(dc[sig])
+    except Exception:
+        pass
+    return ""
+
+
+def get_local_doc_full_text(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    qp = params or {}
+    raw_p = str(qp.get("path") or qp.get("p") or "").strip()
+    if not raw_p:
+        return {"ok": False, "error": "MISSING_PATH"}
+    fast_hit = get_cached_full_doc_text_fast(raw_p)
+    if fast_hit:
+        return {"ok": True, "path": raw_p, "extractedText": fast_hit}
+    try:
+        p = Path(raw_p)
+        if not p.exists() or not p.is_file() or not _is_safe_user_media_path(p):
+            return {"ok": False, "missingFile": True, "error": "FILE_NOT_FOUND"}
+        txt = _extract_doc_text(p, allow_pdf_winrt_ocr=False, flush_disk=True)
+        _DOCS_FULL_TEXT_MEM_MAP[str(p).lower()] = txt
+        return {"ok": True, "path": raw_p, "extractedText": txt}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def _list_local_docs_unlocked() -> Dict[str, Any]:
-    global _PDF_BG_OCR_RUNNING
+    global _PDF_BG_OCR_RUNNING, _DOC_TEXT_BG_PREWARM_RUNNING
     cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
     cached_docs_resp = _DOCS_RESP_MEM_CACHE.get("resp")
     if (
@@ -3489,10 +3625,11 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                     if not dent.is_file(follow_symlinks=False):
                         continue
                     nm = dent.name
-                    dot = nm.rfind(".")
-                    if dot < 0 or nm[dot:].lower() not in _DOC_EXTS:
+                    nm_low = nm.lower()
+                    dot = nm_low.rfind(".")
+                    if dot < 0 or nm_low[dot:] not in _DOC_EXTS:
                         continue
-                    if nm.startswith("~$") or nm.lower().startswith("readme"):
+                    if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
                         continue
                     abs_doc = os.path.abspath(dent.path)
                     norm_doc = abs_doc.lower()
@@ -3513,11 +3650,13 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
             except Exception:
                 pass
 
-    # 최신 수정 문서 우선 정렬 + 전 드라이브 공정 쿼터 선발(한쪽 드라이브에 최신 파일이 몰려도 타 드라이브 누락 0%)
+    # [전 드라이브 보유 문서 100% 편입 (기존 800건 상한 철폐 ➔ 12,000건)]:
+    # D:/E:/F: 등 보조 하드의 수천 개 문서가 800건 컷오프로 누락되던 문제를 근본 해결합니다.
     raw_entries.sort(key=lambda item: item[2].st_mtime, reverse=True)
-    fair_doc_entries = _select_fair_entries_by_drive(raw_entries, lambda item: str(item[1]), 800)
+    fair_doc_entries = _select_fair_entries_by_drive(raw_entries, lambda item: str(item[1]), 12000)
     docs: List[Dict[str, Any]] = []
     deferred_pdfs: List[Path] = []
+    deferred_doc_texts: List[Path] = []
     doc_cache_ref = _load_doc_text_cache()
 
     ext_badge_map = {
@@ -3535,47 +3674,53 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
         ".ppt": ("PPT", "📙 파워포인트 발표자료"),
     }
 
-    if len(_DOCS_ENTRY_MEM_CACHE) > 3000:
+    if len(_DOCS_ENTRY_MEM_CACHE) > 16000:
         _DOCS_ENTRY_MEM_CACHE.clear()
+    if len(_DOCS_FULL_TEXT_MEM_MAP) > 16000:
+        _DOCS_FULL_TEXT_MEM_MAP.clear()
 
-    # [HTTP 응답 스레드 무거운 PDF 이미지 OCR 동기 블로킹 원천 금지 & 파일 단위 증분 메모리 캐시 (2.48s ➔ 25ms)]:
-    # 파일 1개가 저장·삭제될 때 변경되지 않은 나머지 수백 개 문서는 (경로|크기|mtime_ns) 메모리 캐시에서 0.01ms 만에 즉시 재사용합니다.
-    for d, entry, st in fair_doc_entries:
+    t_extract_budget0 = time.monotonic()
+    for idx_doc, (d, entry, st) in enumerate(fair_doc_entries):
         try:
             resolved_doc_str = str(entry)
+            resolved_low = resolved_doc_str.lower()
             ext_low = entry.suffix.lower()
-            entry_mem_key = f"{resolved_doc_str.lower()}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}"
-            if ext_low != ".pdf":
-                cached_doc_item = _DOCS_ENTRY_MEM_CACHE.get(entry_mem_key)
-                if cached_doc_item is not None:
+            sig_all = _make_doc_cache_sig(entry, st)
+            has_disk_cache = sig_all in doc_cache_ref
+            entry_mem_key = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}"
+            cached_doc_item = _DOCS_ENTRY_MEM_CACHE.get(entry_mem_key)
+            if cached_doc_item is not None:
+                if cached_doc_item.get("extractedText") or not has_disk_cache:
                     docs.append(cached_doc_item)
                     continue
-            else:
-                sig_pdf_chk = _make_doc_cache_sig(entry, st)
-                cached_doc_item = _DOCS_ENTRY_MEM_CACHE.get(entry_mem_key)
-                if cached_doc_item is not None and (cached_doc_item.get("extractedText") or sig_pdf_chk in doc_cache_ref):
-                    if not cached_doc_item.get("extractedText") and sig_pdf_chk in doc_cache_ref:
-                        cached_doc_item = None
-                    else:
-                        docs.append(cached_doc_item)
-                        continue
+
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
             stem_expanded = _split_camel_and_alnum_words(stem)
-            sig_chk = _make_doc_cache_sig(entry, st) if ext_low == ".pdf" else ""
-            was_pdf_cached = bool(sig_chk and sig_chk in doc_cache_ref)
-            if _is_virtual_cloud_drive_path(entry) and sig_chk and not was_pdf_cached:
+            is_virt_e = _is_virtual_cloud_drive_path(entry)
+            if has_disk_cache:
+                extracted = str(doc_cache_ref.get(sig_all) or "")
+            elif is_virt_e:
                 extracted = ""
-            else:
+            elif (time.monotonic() - t_extract_budget0) < 0.45 or (ext_low in (".txt", ".md", ".csv") and st.st_size <= 65536 and idx_doc < 400):
                 extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=False, flush_disk=False)
-            if ext_low == ".pdf" and not was_pdf_cached and sig_chk not in doc_cache_ref and not _is_virtual_cloud_drive_path(entry):
+            else:
+                extracted = ""
+                deferred_doc_texts.append(entry)
+
+            if extracted:
+                _DOCS_FULL_TEXT_MEM_MAP[resolved_low] = extracted
+            if ext_low == ".pdf" and not has_disk_cache and sig_all not in doc_cache_ref and not is_virt_e and len(deferred_pdfs) < 40:
                 deferred_pdfs.append(entry)
+
             norm_ext, badge = ext_badge_map.get(ext_low, ("DOC", "📄 로컬 문서 파일"))
             kw_tokens = [
                 w
                 for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {stem_expanded} {d.name} {extracted[:360]}")
                 if len(w) >= 2
             ][:26]
-            doc_hash = hashlib.sha1(resolved_doc_str.lower().encode("utf-8", errors="ignore")).hexdigest()[:8]
+            doc_hash = hashlib.sha1(resolved_low.encode("utf-8", errors="ignore")).hexdigest()[:8]
+            wire_limit = 2000 if idx_doc < 300 else 900
+            wire_text = extracted[:wire_limit] if len(extracted) > wire_limit else extracted
             doc_obj = {
                 "id": f"local_doc_{doc_hash}_{entry.stem[:20]}",
                 "fileName": entry.name,
@@ -3584,7 +3729,8 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                 "ext": norm_ext,
                 "title": stem or entry.name,
                 "categoryBadge": badge,
-                "extractedText": extracted,
+                "extractedText": wire_text,
+                "hasMoreText": len(extracted) > len(wire_text),
                 "keywords": list(dict.fromkeys(kw_tokens)),
                 "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d"),
                 "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
@@ -3592,12 +3738,17 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                 "size": int(st.st_size),
                 "deviceSource": _detect_folder_label(d),
             }
-            _DOCS_ENTRY_MEM_CACHE[entry_mem_key] = doc_obj
+            if extracted or is_virt_e:
+                _DOCS_ENTRY_MEM_CACHE[entry_mem_key] = doc_obj
             docs.append(doc_obj)
         except Exception:
             pass
 
     _flush_doc_text_cache_if_dirty()
+
+    if deferred_doc_texts and not _DOC_TEXT_BG_PREWARM_RUNNING:
+        _DOC_TEXT_BG_PREWARM_RUNNING = True
+        threading.Thread(target=_bg_prewarm_doc_texts_worker, args=(deferred_doc_texts,), daemon=True, name="GhostiBgDocTexts").start()
 
     if deferred_pdfs and not _PDF_BG_OCR_RUNNING:
         _PDF_BG_OCR_RUNNING = True
@@ -5675,7 +5826,7 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                 pass
 
     raw_video_candidates.sort(key=lambda item: item[2].st_mtime, reverse=True)
-    fair_video_candidates = _select_fair_entries_by_drive(raw_video_candidates, lambda item: str(item[1]), 500)
+    fair_video_candidates = _select_fair_entries_by_drive(raw_video_candidates, lambda item: str(item[1]), 2000)
     videos: List[Dict[str, Any]] = []
     seen_keys: set[str] = set()
     ff = find_ffmpeg_exe()
