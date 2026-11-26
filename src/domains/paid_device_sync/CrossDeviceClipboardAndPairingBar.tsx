@@ -6,13 +6,6 @@ import {
   getThisDeviceIdentity,
   writeTextToLocalOsClipboard,
 } from '../../services/deviceIntegrationService';
-import {
-  getNativeClipboardImeStatus,
-  isCapacitorAndroidRuntime,
-  isCapacitorIosRuntime,
-  openNativeAppPermissionSettings,
-  openNativeClipboardImeSettings,
-} from '../../services/ghostiMobileCareBridge';
 import { zCoreBridge } from '../../services/zCoreBridge';
 import { formatKoreaDateShort } from '../../services/subscriptionPlanCatalog';
 
@@ -48,31 +41,8 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
   const [zCoreConnected, setZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
   const [clipSearchQuery, setClipSearchQuery] = useState('');
   const [showAllClips, setShowAllClips] = useState(false);
-  const [androidImeStatus, setAndroidImeStatus] = useState<{
-    supported: boolean;
-    enabled: boolean;
-    selected: boolean;
-  }>({ supported: false, enabled: false, selected: false });
 
   useEffect(() => zCoreBridge.subscribe((alive) => setZCoreConnected(alive)), []);
-
-  useEffect(() => {
-    if (!isCapacitorAndroidRuntime()) return;
-    let alive = true;
-    const check = () => {
-      void getNativeClipboardImeStatus().then((st) => {
-        if (alive) setAndroidImeStatus(st);
-      });
-    };
-    check();
-    window.addEventListener('focus', check);
-    document.addEventListener('visibilitychange', check);
-    return () => {
-      alive = false;
-      window.removeEventListener('focus', check);
-      document.removeEventListener('visibilitychange', check);
-    };
-  }, []);
 
   const isLoggedIn = Boolean(
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
@@ -432,66 +402,8 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
       </form>
 
       <p className="text-[11.5px] text-slate-500 leading-normal">
-        PC와 모바일 모두 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. 다른 앱에서 텍스트를 선택해 <strong>[귀신 클립보드 저장]</strong> 또는 <strong>[귀신 7일 클립보드]</strong> 키보드로 전환하면 앱을 열지 않고도 바로 입력·전송할 수 있습니다.
+        PC와 모바일 모두 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. PC에서 복사(Ctrl+C)하면 연결된 스마트폰으로 자동 전달되며, 스마트폰에서 복사한 글자는 귀신같이 앱을 열면(아이폰은 <strong>[붙여넣기 허용]</strong> 팝업 탭, 안드로이드는 글자 선택 <strong>[귀신 클립보드 저장]</strong>도 지원) PC로 바로 전송됩니다.
       </p>
-
-      {/* 3.5. Android 네이티브 앱 미진입 입력창 직결 키보드 원탭 설정 */}
-      {androidImeStatus.supported && (
-        <div className="px-3 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[12px]">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="font-semibold text-teal-900">
-              {androidImeStatus.enabled
-                ? '입력창 직결 7일 클립보드 키보드 준비됨'
-                : '다른 앱에서 앱 열지 않고 바로 붙여넣기 (키보드 켜기)'}
-            </span>
-            <span className="text-[11.5px] text-teal-800/90 leading-snug break-keep">
-              {androidImeStatus.enabled
-                ? '카톡·크롬·메모장에서 앱을 열지 않고도 키보드 전환(🌐)으로 PC 복사본을 바로 붙여넣고, 텍스트 선택 [귀신 클립보드 저장]으로 PC에 즉시 전송됩니다.'
-                : '시스템 키보드 목록에서 [귀신 7일 클립보드]를 켜 두면 앱을 열지 않고 카톡·크롬에서 PC↔폰 복사본을 바로 주고받을 수 있습니다.'}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {!androidImeStatus.enabled ? (
-              <button
-                type="button"
-                onClick={() => void openNativeClipboardImeSettings('settings')}
-                className="px-2.5 py-1.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
-              >
-                키보드 켜기
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => void openNativeClipboardImeSettings('picker')}
-                className="px-2.5 py-1.5 rounded-md bg-white hover:bg-teal-50 border border-teal-300 text-teal-800 text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
-              >
-                키보드 선택
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3.6. iOS 입력창 직결 키보드 & '붙여넣기 허용' 1회 영구 해제 바로가기 */}
-      {isCapacitorIosRuntime() && (
-        <div className="px-3 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[12px]">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="font-semibold text-teal-900">
-              아이폰 앱 열지 않고 바로 붙여넣기 · 팝업 없애기 (1회 설정)
-            </span>
-            <span className="text-[11.5px] text-teal-800/90 leading-snug break-keep">
-              ① <strong>설정 → 일반 → 키보드 → 키보드 → 귀신 7일 클립보드(전체 접근 허용)</strong>를 켜면 카톡·메모장에서 앱을 열지 않고 바로 주고받으며, ② <strong>설정 → 귀신같이 → 다른 앱에서 붙여넣기 → 허용</strong>으로 바꾸면 확인 팝업이 다시 뜨지 않습니다.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => void openNativeAppPermissionSettings()}
-            className="px-2.5 py-1.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap shrink-0 self-start sm:self-center"
-          >
-            아이폰 설정 열기
-          </button>
-        </div>
-      )}
 
       {/* 4. 최근 공유 목록 (7일 보관 · 최대 500건) */}
       {isLoggedIn && syncedClipboardItems.length > 0 && (() => {
