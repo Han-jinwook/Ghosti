@@ -196,24 +196,24 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
                         <span
                           data-testid="work-doc-folder-path-badge"
-                          className="inline-flex items-center px-2 py-0.5 rounded bg-teal-50 border border-teal-200/80 text-teal-800 text-[11px] font-semibold font-mono"
+                          className="inline-flex items-center px-2 py-0.5 rounded bg-teal-50 border border-teal-200/80 text-teal-800 text-[11px] font-semibold font-mono max-w-full truncate"
                         >
                           {doc.folderPath}
                         </span>
-                        <span className="text-[11.5px] text-slate-500">
+                        <span className="text-[11.5px] text-slate-500 whitespace-nowrap">
                           {doc.sizeLabel} · {doc.updatedAt}
                         </span>
                         {doc.lockedBy ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                             {doc.lockedBy}님 열람 중
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-medium">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-medium whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                             편집 가능
                           </span>
                         )}
