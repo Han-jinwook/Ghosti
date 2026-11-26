@@ -302,8 +302,8 @@ def _fast_dir_size_bytes(path: Path, max_files: int = 8000, deadline: Optional[f
     except Exception:
         pass
 
-    # 파일 수가 많아 조기 컷오프된 경우 Windows robocopy /L /MT:8 로 정밀 바이트 합계 고속 측정 (최대 1.8초)
-    if truncated and sys.platform == "win32":
+    # 파일 수가 많아 조기 컷오프된 경우 Windows robocopy /L /MT:8 로 정밀 바이트 합계 고속 측정 (단, 전체 스캔 마감시각 경과 시 즉시 생략!)
+    if truncated and sys.platform == "win32" and (deadline is None or time.monotonic() < deadline):
         try:
             rem_t = 1.8 if deadline is None else max(0.5, min(1.8, deadline - time.monotonic()))
             r = subprocess.run(
@@ -840,8 +840,10 @@ def execute_disk_hog_cleanup(
         # 일반 캐시 및 선택 폴더 ➔ Windows 기본 [휴지통] 안전 이동
         target_paths = [Path(p) for p in (it.get("paths") or ([it["path"]] if it.get("path") else [])) if p]
         item_reclaimed = 0
+        item_moved_any = False
         for tp in target_paths:
             if not tp.exists():
+                item_moved_any = True
                 continue
             # 절대 금지 시스템 루트 가드 (Python 서버측 2중 하드코딩 방어)
             tp_low = str(tp.resolve()).lower().rstrip("\\")
@@ -850,17 +852,20 @@ def execute_disk_hog_cleanup(
                 str(USERPROFILE).lower(), str(safe_ops.known_folder("desktop")).lower(),
                 str(safe_ops.known_folder("documents")).lower(), str(safe_ops.known_folder("downloads")).lower(),
             ):
-                # 사용자 최상위 폴더 자체는 절대 삭제 금지 — Downloads 등 폴더 자체가 선택된 경우 내부 파일이 아닌 안전 거절
                 if cat != "SAFE_CACHE":
                     errors.append(f"시스템/기본 폴더 자체({tp.name})는 안전을 위해 삭제하지 않습니다. 개별 하위 폴더를 선택하거나 D: 이사를 이용해 주세요.")
                     continue
             if cat == "SAFE_CACHE" and tp.is_dir():
                 r_c = _recycle_dir_contents_skip_locked(tp)
+                moved_c = int(r_c.get("movedCount") or 0)
                 item_reclaimed += int(r_c.get("reclaimedBytes") or 0)
+                if moved_c > 0 or r_c.get("ok"):
+                    item_moved_any = True
             else:
                 sz = int(it.get("sizeBytes") or 0)
                 r_rb = _send_path_safe_recycle(tp)
                 if r_rb.get("ok"):
+                    item_moved_any = True
                     item_reclaimed += sz
                     restore_ops.append({
                         "op": "PHOTO_RECYCLE",
@@ -873,9 +878,10 @@ def execute_disk_hog_cleanup(
                     })
                 else:
                     errors.append(f"{tp.name}: {r_rb.get('error') or '사용 중'}")
-        if item_reclaimed > 0:
+        if item_moved_any:
             moved_to_recycle_bytes += item_reclaimed
-            processed_labels.append(f"{name} ({round(item_reclaimed / (1024 * 1024), 1)}MB 휴지통 이동)")
+            size_note = f"{round(item_reclaimed / (1024 * 1024), 1)}MB " if item_reclaimed > 0 else ""
+            processed_labels.append(f"{name} ({size_note}휴지통 이동)")
 
     restore_id = ""
     if restore_ops:
@@ -897,6 +903,28 @@ def execute_disk_hog_cleanup(
     immediate_mb = round(immediate_reclaimed_bytes / (1024 * 1024), 1)
     projected_after_empty_gb = round(after_free_gb + (moved_to_recycle_bytes / (1024 ** 3)), 1)
 
+    if len(selected) > 0 and len(processed_labels) == 0:
+        fail_lines = ["⚠️ **선택한 항목을 정리하지 못했습니다.**"]
+        if errors:
+            for er in errors[:5]:
+                fail_lines.append(f"• {er}")
+        else:
+            fail_lines.append("• 폴더나 파일이 다른 프로그램에서 열려 있는지 확인한 뒤 다시 시도해 주세요.")
+        return {
+            "ok": False,
+            "processedCount": 0,
+            "processedLabels": [],
+            "excludedLabels": skipped_excluded,
+            "movedToRecycleMb": 0.0,
+            "immediateReclaimedMb": 0.0,
+            "beforeFreeGb": before_free_gb,
+            "currentFreeGb": after_free_gb,
+            "projectedFreeAfterEmptyGb": after_free_gb,
+            "restoreId": "",
+            "errors": errors,
+            "reportKo": "\n".join(fail_lines),
+        }
+
     report_lines = [
         f"✅ **대용량 공간 정리 완료 ({len(processed_labels)}개 항목 처리)**",
     ]
@@ -908,6 +936,8 @@ def execute_disk_hog_cleanup(
             f"  📊 **현재 C: 실물 여유 `{after_free_gb} GB` ➔ 휴지통 비우기 후 최종 확보 여유 `{projected_after_empty_gb} GB`**\n"
             f"  *(안전을 위해 먼저 휴지통에 보관했습니다. 이상 없으면 채팅창에 **\"휴지통 비워줘\"**를 입력해 용량을 확정해 주세요!)*"
         )
+    elif processed_labels:
+        report_lines.append(f"• **처리된 항목**: {', '.join(processed_labels[:8])}")
     if skipped_excluded:
         report_lines.append(f"• **유저 지시로 보존(제외)됨**: {', '.join(skipped_excluded[:8])}")
     if errors:
@@ -1643,15 +1673,20 @@ def execute_desktop_batch_action(
     recycled: List[str] = []
     moved: List[str] = []
     hidden_icons: List[str] = []
+    already_gone: List[str] = []
+    skipped_errors: List[str] = []
     restore_ops: List[Dict[str, Any]] = []
     reclaimed_bytes = 0
 
     for raw_p in (recycle_paths or []):
         p = Path(str(raw_p or ""))
         if not p.exists():
+            if raw_p:
+                already_gone.append(p.name)
             continue
         p_low = str(p.resolve()).lower().rstrip("\\")
         if p_low in (str(USERPROFILE).lower(), str(safe_ops.known_folder("desktop")).lower(), str(safe_ops.known_folder("documents")).lower(), str(SYSTEMROOT).lower()):
+            skipped_errors.append(f"{p.name}: 시스템·기본 폴더 보호됨")
             continue
         sz, _, _ = _fast_dir_size_bytes(p, max_files=1500)
         r = _send_path_safe_recycle(p)
@@ -1667,37 +1702,47 @@ def execute_desktop_batch_action(
                 "sizeBytes": sz,
                 "rolledBack": False,
             })
+        else:
+            skipped_errors.append(f"{p.name}: {r.get('error') or '사용 중이어서 건너뜀'}")
 
     dest_drv = (move_destination_drive or "D:").strip().rstrip("\\/").upper()
     if len(dest_drv) == 1:
         dest_drv += ":"
-    if move_paths and Path(f"{dest_drv}\\").exists():
-        vault = Path(f"{dest_drv}\\귀신비서_보관함")
-        vault.mkdir(parents=True, exist_ok=True)
-        for raw_p in move_paths:
-            p = Path(str(raw_p or ""))
-            if not p.exists():
-                continue
-            sz, _, _ = _fast_dir_size_bytes(p, max_files=1500)
-            dest = safe_ops.unique_target(vault / p.name)
-            try:
-                shutil.move(str(p), str(dest))
-                moved.append(f"{p.name} ➔ {dest}")
-                restore_ops.append({
-                    "op": "MOVE",
-                    "name": p.name,
-                    "fromPath": str(p),
-                    "toPath": str(dest),
-                    "sizeBytes": sz,
-                    "rolledBack": False,
-                })
-            except Exception:
-                continue
+    if move_paths:
+        if Path(f"{dest_drv}\\").exists():
+            vault = Path(f"{dest_drv}\\귀신비서_보관함")
+            vault.mkdir(parents=True, exist_ok=True)
+            for raw_p in move_paths:
+                p = Path(str(raw_p or ""))
+                if not p.exists():
+                    if raw_p:
+                        already_gone.append(p.name)
+                    continue
+                sz, _, _ = _fast_dir_size_bytes(p, max_files=1500)
+                dest = safe_ops.unique_target(vault / p.name)
+                try:
+                    shutil.move(str(p), str(dest))
+                    moved.append(f"{p.name} ➔ {dest}")
+                    restore_ops.append({
+                        "op": "MOVE",
+                        "name": p.name,
+                        "fromPath": str(p),
+                        "toPath": str(dest),
+                        "sizeBytes": sz,
+                        "rolledBack": False,
+                    })
+                except Exception as exc:
+                    skipped_errors.append(f"{p.name}: 이동 실패 ({exc})")
+                    continue
+        else:
+            skipped_errors.append(f"{dest_drv} 드라이브를 찾을 수 없어 안전 이사를 건너뛰었습니다.")
 
     for icon_id in (hide_system_icons or []):
         r_ic = toggle_system_desktop_icon(str(icon_id), hide=True)
         if r_ic.get("ok"):
             hidden_icons.append(str(r_ic.get("label") or icon_id))
+        elif r_ic.get("error"):
+            skipped_errors.append(f"{icon_id}: {r_ic.get('error')}")
 
     restore_id = ""
     if restore_ops:
@@ -1713,6 +1758,25 @@ def execute_desktop_batch_action(
         except Exception:
             pass
 
+    total_done = len(recycled) + len(moved) + len(hidden_icons) + len(already_gone)
+    if total_done == 0:
+        err_lines = ["⚠️ **선택한 항목을 정리하지 못했습니다.**"]
+        if skipped_errors:
+            for se in skipped_errors[:5]:
+                err_lines.append(f"• {se}")
+        else:
+            err_lines.append("• 폴더나 파일이 다른 창에서 열려 있는지 확인한 뒤 다시 눌러 주세요.")
+        return {
+            "ok": False,
+            "recycled": [],
+            "moved": [],
+            "hiddenIcons": [],
+            "reclaimedMb": 0.0,
+            "restoreId": "",
+            "errors": skipped_errors,
+            "reportKo": "\n".join(err_lines),
+        }
+
     lines = ["✅ **바탕화면 선택 항목 정리가 완료되었습니다!**"]
     if recycled:
         lines.append(f"• **Windows [휴지통] 이동 ({len(recycled)}건, {round(reclaimed_bytes / (1024*1024), 1)}MB)**: {', '.join(recycled[:8])}")
@@ -1720,6 +1784,10 @@ def execute_desktop_batch_action(
         lines.append(f"• **{dest_drv} 안전 이사 ({len(moved)}건)**: {', '.join(moved[:5])}")
     if hidden_icons:
         lines.append(f"• **시스템 아이콘 안전 숨김**: {', '.join(hidden_icons)}")
+    if already_gone and not recycled and not moved:
+        lines.append(f"• **이미 정리된 항목 확인 완료 ({len(already_gone)}건)**: {', '.join(already_gone[:8])}")
+    if skipped_errors:
+        lines.append(f"• **일부 건너뜀(열려 있음/보호됨)**: {'; '.join(skipped_errors[:4])}")
     if restore_id:
         lines.append(f"• **[복원 기록 {restore_id}]**에 안전하게 기록되어 언제든 1초 만에 원래대로 되돌릴 수 있어요!")
 
@@ -1730,6 +1798,7 @@ def execute_desktop_batch_action(
         "hiddenIcons": hidden_icons,
         "reclaimedMb": round(reclaimed_bytes / (1024 * 1024), 1),
         "restoreId": restore_id,
+        "errors": skipped_errors,
         "reportKo": "\n".join(lines),
     }
 

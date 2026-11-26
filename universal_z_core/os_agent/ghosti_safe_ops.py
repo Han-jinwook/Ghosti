@@ -335,17 +335,47 @@ def _drive_has_recycle_bin(p: Path) -> bool:
     return drive in [d.upper() for d in fixed_drives()]
 
 
+def _is_protected_root_dir(p: Path) -> bool:
+    """드라이브 루트·OS 핵심 폴더·사용자 기본 루트 폴더(바탕화면·문서·다운로드·사진·동영상 자체)는 절대 휴지통 이동 금지."""
+    try:
+        rp = str(p.resolve()).lower().rstrip("\\/")
+    except Exception:
+        return True
+    if len(rp) <= 3 and rp.endswith(":"):
+        return True
+    sys_root = str(Path(os.environ.get("SystemRoot", r"C:\Windows")).resolve()).lower().rstrip("\\/")
+    user_root = str(Path.home().resolve()).lower().rstrip("\\/")
+    protected = {
+        sys_root,
+        r"c:\program files",
+        r"c:\program files (x86)",
+        r"c:\programdata",
+        r"c:\users",
+        user_root,
+    }
+    for k in ("desktop", "downloads", "documents", "pictures", "videos"):
+        try:
+            protected.add(str(known_folder(k).resolve()).lower().rstrip("\\/"))
+        except Exception:
+            pass
+    return rp in protected
+
+
 def send_to_recycle_bin(path: Path) -> Dict[str, Any]:
-    """파일 1개를 OS 기본 휴지통으로 이동하고, 휴지통 안의 $I/$R 위치까지 찾아 반환한다."""
+    """파일 또는 사용자 하위 폴더 1개를 OS 기본 휴지통으로 안전 이동하고, 휴지통 안의 $I/$R 위치까지 찾아 반환한다."""
     p = Path(path)
     if os.name != "nt":
         return {"ok": False, "error": "WINDOWS_ONLY"}
-    if not p.exists() or not p.is_file():
-        return {"ok": False, "error": "원본 파일이 없습니다."}
+    if not p.exists() or (not p.is_file() and not p.is_dir()):
+        return {"ok": False, "error": "원본 파일·폴더가 없습니다."}
+    if p.is_symlink():
+        return {"ok": False, "error": "심볼릭 링크는 안전을 위해 이동하지 않습니다."}
+    if p.is_dir() and _is_protected_root_dir(p):
+        return {"ok": False, "error": "시스템·기본 루트 폴더 자체는 보호되어 삭제할 수 없습니다."}
     if not _drive_has_recycle_bin(p):
         return {"ok": False, "error": "휴지통이 없는 드라이브(USB·네트워크 등)라 안전을 위해 이동하지 않았습니다."}
 
-    original = str(p.resolve())
+    original = str(p.resolve()).rstrip("\\/")
     started = time.time()
     buf = ctypes.create_unicode_buffer(original + "\0")
     op = _SHFILEOPSTRUCTW()
@@ -356,9 +386,11 @@ def send_to_recycle_bin(path: Path) -> Dict[str, Any]:
     op.fFlags = _FOF_ALLOWUNDO | _FOF_NOCONFIRMATION | _FOF_SILENT | _FOF_NOERRORUI
     rc = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
     if rc != 0 or op.fAnyOperationsAborted:
+        if rc == 32:
+            return {"ok": False, "error": "폴더나 파일이 다른 창에서 열려 있어 사용 중입니다. 열려 있는 창을 닫고 다시 시도해 주세요."}
         return {"ok": False, "error": f"휴지통 이동 실패 (코드 {rc})"}
     if Path(original).exists():
-        return {"ok": False, "error": "휴지통 이동 후에도 원본이 남아 있습니다."}
+        return {"ok": False, "error": "휴지통 이동 후에도 원본이 남아 있습니다(사용 중인 파일 확인)."}
 
     # 방금 들어간 휴지통 항목($I) 찾기 — 원래 경로 일치 + 이동 시각 이후 (최근 생성 순 1회 즉시 스캔 + 최대 2회 마이크로 폴백)
     match: Optional[Dict[str, Any]] = None
@@ -432,7 +464,11 @@ def restore_from_recycle_bin(
     except Exception:
         pass
 
-    restored_size = int(target.stat().st_size) if target.exists() else int(meta.get("sizeBytes", 0))
+    restored_size = (
+        0
+        if target.is_dir()
+        else (int(target.stat().st_size) if target.exists() else int(meta.get("sizeBytes", 0)))
+    )
     orig_name = Path(meta["originalPath"]).name
 
     # [단일 SSOT 장부 동기화] 귀신비서 사진 정리로 휴지통에 들어갔던 사진이 채팅 3초 구출로 복원될 때도

@@ -2722,31 +2722,43 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </>
             )}
 
-            {card.executed && (
-              <div className="space-y-2">
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[11.5px] text-emerald-950 whitespace-pre-line leading-relaxed">
-                  {card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.'}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {card.action !== 'hidden_rats_apply' && (
-                    <button
-                      type="button"
-                      onClick={() => void submitExternalMonsterChatQuery('휴지통 비워줘', message.sourceTab || 'trash')}
-                      className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
-                    >
-                      🗑️ 휴지통 비워서 C: 용량 확정하기
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void submitExternalMonsterChatQuery('최근 [복원 기록] 보여줘', message.sourceTab || 'trash')}
-                    className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
+            {(card.executed || Boolean(card.executionReportKo)) && (() => {
+              const reportText = card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.';
+              const isWarnReport = !card.executed || reportText.startsWith('⚠️') || reportText.startsWith('ℹ️');
+              return (
+                <div className="space-y-2">
+                  <div
+                    className={`rounded-lg p-2.5 text-[11.5px] whitespace-pre-line leading-relaxed border ${
+                      isWarnReport
+                        ? 'bg-amber-50 border-amber-200 text-amber-950'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                    }`}
                   >
-                    ↩️ 복원 기록 확인
-                  </button>
+                    {reportText}
+                  </div>
+                  {card.executed && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {card.action !== 'hidden_rats_apply' && (
+                        <button
+                          type="button"
+                          onClick={() => void submitExternalMonsterChatQuery('휴지통 비워줘', message.sourceTab || 'trash')}
+                          className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
+                        >
+                          🗑️ 휴지통 비워서 C: 용량 확정하기
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void submitExternalMonsterChatQuery('최근 [복원 기록] 보여줘', message.sourceTab || 'trash')}
+                        className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
+                      >
+                        ↩️ 복원 기록 확인
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {(!card.executed || selectedCount > 0) && (
               <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-200">

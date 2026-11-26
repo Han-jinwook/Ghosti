@@ -3706,14 +3706,18 @@ export async function processUnifiedMonsterChatQuery(params: {
     if (
       pendingApprovalMsg.cardKind === 'AGENT_CARE_BATCH_CARD' &&
       pendingApprovalMsg.agentCareCardPayload &&
-      !pendingApprovalMsg.agentCareCardPayload.executed &&
       (pendingApprovalMsg.agentCareCardPayload.selectedIds?.length || 0) > 0 &&
       !/(빼고|제외|놔두|놔둬|남기|냅두|말고|나머지|빨간색|차단\s*권장|삭제\s*안전|안전\s*캐시만|수동\s*전환|수동으로|[d-zD-Z]\s*:?\s*(?:드라이브|로\s*옮|로\s*이사)|이사|옮겨|#\d+|\d+\s*번|만\s*(?:지워|삭제|제거|정리|꺼|치워|숨겨))/i.test(
         clean
       )
     ) {
       const card = pendingApprovalMsg.agentCareCardPayload;
+      const runningIds = card.selectedIds || [];
+      const prevExecIds = card.executedIds || [];
       const execRes = await executeAgentCareBatchCard(card, clean);
+      const nextExecIds = execRes.ok
+        ? Array.from(new Set([...prevExecIds, ...runningIds]))
+        : prevExecIds;
       cachedPcContext = null;
       setSharedMonsterMessages((prev) =>
         prev.map((m) =>
@@ -3722,7 +3726,9 @@ export async function processUnifiedMonsterChatQuery(params: {
                 ...m,
                 agentCareCardPayload: {
                   ...m.agentCareCardPayload,
-                  executed: execRes.ok,
+                  executed: execRes.ok || Boolean(m.agentCareCardPayload.executed),
+                  executedIds: nextExecIds,
+                  selectedIds: execRes.ok ? [] : runningIds,
                   approvedTypedText: clean,
                   executionReportKo: execRes.reportKo,
                   currentFreeGb: execRes.currentFreeGb ?? m.agentCareCardPayload.currentFreeGb,

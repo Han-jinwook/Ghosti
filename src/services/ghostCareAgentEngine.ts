@@ -576,10 +576,14 @@ async function callCareApi<T = any>(
       signal: controller.signal,
     });
     const json = await res.json().catch(() => null);
-    if (!res.ok || !json) {
+    if (!json) {
       return { ok: false, error: `HTTP_${res.status}` };
     }
-    return { ok: Boolean(json.ok), data: json as T, error: json.error };
+    return {
+      ok: Boolean(res.ok && json.ok),
+      data: json as T,
+      error: json.error || (!res.ok ? `HTTP_${res.status}` : undefined),
+    };
   } catch (err: any) {
     return { ok: false, error: String(err?.message || err || 'NETWORK_ERROR') };
   } finally {
