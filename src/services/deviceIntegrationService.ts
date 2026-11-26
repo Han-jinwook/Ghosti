@@ -1138,6 +1138,7 @@ import {
   readActiveWorkRoomInviteMeta,
   readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
+  resolveCurrentWorkAccountEmail,
 } from './workRoomSyncService';
 
 let lastSyncedPcEngineSubFlag: string | null = null;
@@ -1150,6 +1151,7 @@ export async function syncEntitlementToLocalPcEngine(
     roomId?: string;
     isHost?: boolean;
     planId?: string;
+    purgeInvitedVault?: boolean;
     force?: boolean;
   }
 ): Promise<void> {
@@ -1157,14 +1159,8 @@ export async function syncEntitlementToLocalPcEngine(
     return;
   }
   const isSub = Boolean(entitlement?.isPaidUnlimited);
-  const cleanEmail = (
-    accountEmail ||
-    localStorage.getItem('merlin_hub_user_email') ||
-    localStorage.getItem('ghosti_hub_user_email') ||
-    ''
-  )
-    .trim()
-    .toLowerCase();
+  const resolvedWorkEmail = resolveCurrentWorkAccountEmail(accountEmail);
+  const cleanEmail = resolvedWorkEmail !== 'anonymous' ? resolvedWorkEmail : '';
 
   // 업무 공유 탭 밖(내 기기 통합·구독 결제창 등)에서 호출되더라도 기존 소속 업무방(방장방·초대팀원방) 권한·roomId가 덮어써지지 않게 보호
   const activeInvite = readActiveWorkRoomInviteMeta();
@@ -1228,6 +1224,7 @@ export async function syncEntitlementToLocalPcEngine(
           email: cleanEmail,
           roomId,
           isHost,
+          ...(workOverride?.purgeInvitedVault ? { purgeInvitedVault: true } : {}),
           planId:
             workOverride?.planId ||
             (!isHost && invitedWorkUnlocked

@@ -1247,6 +1247,11 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         return inspect_s_drive_status()
 
     if action == "unmount":
+        if bool(payload.get("purgeInvitedVault")):
+            _isolate_invited_room_local_vault(
+                str(payload.get("roomId") or _load_sdrive_config().get("activeWorkRoomId") or ""),
+                req_email,
+            )
         released: List[str] = []
         failed: List[str] = []
         if os.name == "nt":
@@ -2073,6 +2078,26 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     known_sig = str(qp.get("knownSig") or "").strip()
     vault_dir = get_work_vault_dir(ensure_dirs=True)
     cfg = _load_sdrive_config()
+    # [초대 팀원 방 나가기/추방 후 격리 보호]: 비방장 미연결 잠금 상태에서는 이전 업무방의 잔여 파일 목록을 절대 반환하지 않음
+    if (
+        cfg.get("workEntitlementLocked") is True
+        and not bool(cfg.get("isWorkHost"))
+        and not str(cfg.get("activeWorkRoomId") or "").strip()
+        and str(cfg.get("workLockReason") or "") != "WORK_TRIAL_EXPIRED"
+    ):
+        return {
+            "ok": True,
+            "mounted": False,
+            "driveLetter": WORK_DRIVE_PREFERRED,
+            "targetDir": str(vault_dir),
+            "listSig": "locked_isolated_empty",
+            "scanComplete": True,
+            "fileCount": 0,
+            "previewPendingCount": 0,
+            "locallyDeletedRelPaths": [],
+            "localDeletedTombstones": {},
+            "files": [],
+        }
     hidden_rel_set = set(cfg.get("hiddenRelPaths") or [])
     uploader_map: Dict[str, str] = cfg.get("uploaderByRelPath") or {}
     default_author = str(qp.get("author") or cfg.get("hostNickname") or os.environ.get("USERNAME") or "내 PC (로컬)")
@@ -2227,6 +2252,13 @@ def get_work_locks_fast(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     if not vault_dir.exists():
         return {"ok": True, "locks": {}, "fileCount": 0}
     cfg = _load_sdrive_config()
+    if (
+        cfg.get("workEntitlementLocked") is True
+        and not bool(cfg.get("isWorkHost"))
+        and not str(cfg.get("activeWorkRoomId") or "").strip()
+        and str(cfg.get("workLockReason") or "") != "WORK_TRIAL_EXPIRED"
+    ):
+        return {"ok": True, "locks": {}, "fileCount": 0}
     hidden_rel_set = set(cfg.get("hiddenRelPaths") or [])
     default_author = str(qp.get("author") or cfg.get("hostNickname") or os.environ.get("USERNAME") or "현재 PC 사용자")
     fallback_owner = _fallback_lock_owner(default_author)
@@ -3189,6 +3221,69 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
 # - 만료/미개통(unlocked=False) 시: 즉시 S: 드라이브 연결 해제(폴더 내 원본 파일은 100% 보존) + 외부 터널 종료
 # - 계정(email) 또는 방(roomId) 변경 시: 이전 계정의 knownRelPaths·Tombstone을 계정별 슬롯으로 분리해 혼입 0% 보장
 # ─────────────────────────────────────────────────────────────────────────────
+def _isolate_invited_room_local_vault(room_id: str = "", email: str = "") -> int:
+    """초대 팀원이 [이 업무방 나가기]를 누르거나 방장에게 [내보내기(강퇴)] 되었을 때,
+    기본 공유 수신 폴더(%LOCALAPPDATA%\\Merlin\\업무공유폴더_S)에 동기화되어 있던 이전 방의 문서·폴더 잔상을
+    영구 삭제 없이 격리 보관소(_isolated_left_rooms)로 즉시 분리하고 S: 드라이브와 원장 캐시를 깨끗이 비웁니다.
+    (방장 본인이 지정한 사용자 폴더는 절대 건드리지 않습니다.)"""
+    moved_count = 0
+    vault_dir = get_work_vault_dir(ensure_dirs=False)
+    default_dir = _default_work_vault_dir()
+    if os.name == "nt":
+        for letter in _letters_mapped_to(vault_dir):
+            _unmount_drive_letter_sota(letter)
+        _list_subst_map(force=True)
+
+    if _same_path(vault_dir, default_dir) and vault_dir.exists():
+        safe_room_tag = re.sub(r"[^A-Za-z0-9_.-]+", "_", (room_id or "left_room").strip())[:48] or "left_room"
+        ts_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        iso_root = _get_merlin_appdata_dir() / "_isolated_left_rooms" / f"{safe_room_tag}_{ts_tag}"
+        entries, _locks, _complete = _scan_work_vault(vault_dir, set(), include_hidden=True)
+        for full_p, rel_p, _st in entries:
+            try:
+                if detect_file_lock_owner(full_p):
+                    continue
+                dst = iso_root / Path(rel_p.replace("/", "\\"))
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(full_p), str(dst))
+                moved_count += 1
+            except Exception:
+                pass
+        # 비어 있는 기본 서브폴더(01_...~04_... 등) 정리 -> 탐색기나 재스캔 시 빈 폴더 잔상 0건 보장
+        try:
+            for root_w, dirs_w, _files_w in os.walk(str(vault_dir), topdown=False):
+                for d_name in dirs_w:
+                    dp = Path(root_w) / d_name
+                    try:
+                        if not any(dp.iterdir()):
+                            dp.rmdir()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    clean_email = (email or "").strip().lower()
+    clean_room = (room_id or "").strip()
+
+    def _clear_ledger(cur: Dict[str, Any]) -> None:
+        cur["knownRelPaths"] = []
+        cur["deletedTombstones"] = {}
+        cur["uploaderByRelPath"] = {}
+        cur["hiddenRelPaths"] = []
+        scoped = dict(cur.get("scopedWorkLedgers") or {})
+        if clean_email:
+            scoped.pop(f"{clean_email}::", None)
+            if clean_room:
+                scoped.pop(f"{clean_email}::{clean_room}", None)
+            else:
+                for k_sc in [k for k in scoped if k.startswith(f"{clean_email}::")]:
+                    scoped.pop(k_sc, None)
+        cur["scopedWorkLedgers"] = scoped
+
+    _mutate_sdrive_config(_clear_ledger)
+    return moved_count
+
+
 def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     payload = data or {}
     unlocked = bool(payload.get("unlocked", False))
@@ -3196,6 +3291,7 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
     raw_room_id = str(payload.get("roomId") or "").strip()
     plan_id = str(payload.get("planId") or "").strip()
     reason = str(payload.get("reason") or "").strip()
+    purge_invited = bool(payload.get("purgeInvitedVault", False))
     has_explicit_is_host = "isHost" in payload
     raw_is_host = bool(payload.get("isHost", False))
 
@@ -3204,32 +3300,42 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
     if owner_block is not None:
         return owner_block
 
-    effective_state: Dict[str, Any] = {"roomId": raw_room_id, "isHost": raw_is_host}
+    effective_state: Dict[str, Any] = {
+        "roomId": raw_room_id,
+        "isHost": raw_is_host,
+        "prevRoom": "",
+        "prevWasInvited": False,
+    }
 
     def _apply_ent(cur: Dict[str, Any]) -> None:
         prev_email = str(cur.get("activeAccountEmail") or "").strip().lower()
         prev_room = str(cur.get("activeWorkRoomId") or "").strip()
         prev_is_host = bool(cur.get("isWorkHost", False))
+        prev_plan = str(cur.get("workPlanId") or "").strip()
+        effective_state["prevRoom"] = prev_room
+        effective_state["prevWasInvited"] = bool(
+            (not prev_is_host) and (prev_room or prev_plan == "work_invited_member")
+        )
         by_scope: Dict[str, Any] = dict(cur.get("scopedWorkLedgers") or {})
         cur.pop("accountWorkEntitlements", None)
 
         # 동일 계정에서 탭 외부(내 기기 통합 등) 공용 권한 호출이 roomId=""로 들어와 기존 활성 업무방 ID·원장을 지우는 현상 원천 차단
         room_id = raw_room_id
-        if unlocked and not room_id and email and email == prev_email and prev_room:
+        if unlocked and not room_id and not purge_invited and email and email == prev_email and prev_room:
             room_id = prev_room
         is_host = (
             raw_is_host
-            if (raw_room_id or not (email and email == prev_email and prev_room))
+            if (raw_room_id or purge_invited or not (email and email == prev_email and prev_room))
             else (raw_is_host or prev_is_host)
         )
-        if not has_explicit_is_host and email and email == prev_email:
+        if not has_explicit_is_host and not purge_invited and email and email == prev_email:
             is_host = prev_is_host
 
         effective_state["roomId"] = room_id
         effective_state["isHost"] = is_host
 
-        # 기존 계정·방의 원장을 슬롯에 백업하고 새 계정·방 원장으로 전환 (순차 교대 사용 시 혼입 차단)
-        if prev_email or prev_room:
+        # 기존 계정·방의 원장을 슬롯에 백업하고 새 계정·방 원장으로 전환 (단, 방 나가기/추방 격리 시에는 이전 초대방 잔상을 백업하지 않고 소거)
+        if (prev_email or prev_room) and not purge_invited:
             prev_key = f"{prev_email}::{prev_room}"
             by_scope[prev_key] = {
                 "knownRelPaths": list(cur.get("knownRelPaths") or []),
@@ -3256,6 +3362,15 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
 
     _mutate_sdrive_config(_apply_ent)
 
+    should_isolate_invited = bool(
+        purge_invited or (not unlocked and effective_state.get("prevWasInvited"))
+    )
+    if should_isolate_invited:
+        _isolate_invited_room_local_vault(
+            str(effective_state.get("prevRoom") or raw_room_id or ""),
+            email,
+        )
+
     if not unlocked:
         unmount_res = mount_or_unmount_s_drive({"action": "unmount", "email": email, "forceUnmount": True})
         stop_outbound_work_tunnel()
@@ -3264,9 +3379,10 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
             "unlocked": False,
             "mounted": False,
             "unmountedOnExpiry": True,
+            "isolatedInvitedVault": should_isolate_invited,
             "targetDir": unmount_res.get("targetDir"),
             "reason": reason or "SUBSCRIPTION_REQUIRED",
-            "message": "🔒 업무 공유 이용 기간이 종료되어 S: 드라이브 연결을 해제했습니다. 업무 폴더 안의 원본 파일은 100% 그대로 보존됩니다.",
+            "message": "🔒 업무 공유 연결이 해제되었습니다.",
         }
 
     if os.name == "nt":

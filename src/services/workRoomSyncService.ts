@@ -209,6 +209,7 @@ const WORK_INVITE_SESSION_KEY = 'ghosti_active_work_room_invite_v1';
 const MY_WORK_ROOM_CACHE_PREFIX = 'ghosti_my_work_room_meta_v2::';
 const JOINED_WORK_ROOM_CACHE_PREFIX = 'ghosti_joined_work_room_meta_v1::';
 const LOCAL_WORK_TOMBSTONES_PREFIX = 'ghosti_work_tombstones_v2::';
+const PENDING_INVITED_VAULT_PURGE_PREFIX = 'ghosti_pending_invited_vault_purge_v1::';
 
 let activeHostTunnelSession: {
   roomId: string;
@@ -220,6 +221,40 @@ let activeHostTunnelSession: {
 
 export function getActiveHostTunnelSession(): typeof activeHostTunnelSession {
   return activeHostTunnelSession;
+}
+
+export function clearActiveHostTunnelSession(): void {
+  activeHostTunnelSession = null;
+}
+
+export function markPendingInvitedVaultPurge(accountEmail?: string, roomId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return;
+    localStorage.setItem(
+      `${PENDING_INVITED_VAULT_PURGE_PREFIX}${scopeEmail}`,
+      JSON.stringify({ roomId: roomId || '', markedAt: new Date().toISOString() })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function consumePendingInvitedVaultPurge(accountEmail?: string): { pending: boolean; roomId: string } {
+  if (typeof window === 'undefined') return { pending: false, roomId: '' };
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return { pending: false, roomId: '' };
+    const key = `${PENDING_INVITED_VAULT_PURGE_PREFIX}${scopeEmail}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return { pending: false, roomId: '' };
+    localStorage.removeItem(key);
+    const parsed = JSON.parse(raw) as { roomId?: string };
+    return { pending: true, roomId: String(parsed?.roomId || '') };
+  } catch {
+    return { pending: false, roomId: '' };
+  }
 }
 
 export function setActiveHostTunnelSession(
@@ -1003,6 +1038,8 @@ export async function mountWorkSDriveNative(opts?: {
   openExplorer?: boolean;
   targetDir?: string;
   accountEmail?: string;
+  purgeInvitedVault?: boolean;
+  roomId?: string;
 }): Promise<{
   ok: boolean;
   cancelled?: boolean;
@@ -1033,6 +1070,8 @@ export async function mountWorkSDriveNative(opts?: {
         body: JSON.stringify({
           action,
           openExplorer: Boolean(opts?.openExplorer),
+          ...(opts?.purgeInvitedVault ? { purgeInvitedVault: true } : {}),
+          ...(opts?.roomId ? { roomId: opts.roomId } : {}),
           ...(resolvedEmail && resolvedEmail !== 'anonymous' ? { email: resolvedEmail } : {}),
           ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
         }),

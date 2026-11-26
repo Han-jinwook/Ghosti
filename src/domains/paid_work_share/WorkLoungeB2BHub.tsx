@@ -14,10 +14,12 @@ import { isLocalPcBlockedByOtherAccount } from '../../services/pcSingleAccountGu
 import {
   acceptWorkRoomInvite,
   cacheWorkRoomPreviewLocally,
+  clearActiveHostTunnelSession,
   clearActiveWorkRoomInviteMeta,
   clearCachedJoinedWorkRoomMeta,
   clearPendingKickedWorkRoomNotice,
   connectWorkRoomRealtimeChannel,
+  consumePendingInvitedVaultPurge,
   deleteWorkFileShared,
   downloadWorkFileOriginal,
   ensureLocalHostOutboundTunnelAndRegister,
@@ -34,6 +36,7 @@ import {
   loadCachedWorkTombstones,
   lookupWorkTombstone,
   manageWorkBackupServersNative,
+  markPendingInvitedVaultPurge,
   mountWorkSDriveNative,
   normalizeWorkTombstoneMap,
   openGhostSearchForWorkSDrive,
@@ -329,6 +332,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   });
   const isAcceptingInviteRef = useRef<boolean>(false);
   const memberMutationEpochRef = useRef<number>(0);
+  const roomCleanupEpochRef = useRef<number>(0);
   const recentlyKickedEmailsRef = useRef<Map<string, number>>(new Map());
   const pendingMembersBroadcastRef = useRef<WorkRoomServerMemberDto[] | null>(null);
   const lastPullSyncSigRef = useRef<string>('');
@@ -385,6 +389,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
       ? !remoteRoomLockReason
       : isOwnWorkUnlocked
   );
+  const hasOwnExpiredHostVault = Boolean(
+    isAuthenticated &&
+      !isJoinedInvitedMember &&
+      !kickedFromRoomTitle &&
+      readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId &&
+      isWorkTrialExpired &&
+      !isOwnWorkUnlocked
+  );
 
   const markMemberMutation = useCallback(
     (kickedEmail?: string) => {
@@ -419,13 +431,20 @@ export const WorkLoungeB2BHub: React.FC = () => {
     []
   );
 
-    const performKickedOrRemovedCleanup = useCallback(
+  const performKickedOrRemovedCleanup = useCallback(
     (roomIdToClear: string, roomTitleHint?: string, notifyToast = true) => {
+      roomCleanupEpochRef.current += 1;
+      memberMutationEpochRef.current += 1;
       const resolvedScope = resolveCurrentWorkAccountEmail(merlinAuth?.email || undefined);
       const cleanEmail = resolvedScope !== 'anonymous' ? resolvedScope : '';
       authoritativeMembersRoomRef.current = '';
       inFlightInviteKeyRef.current = '';
       completedInviteKeyRef.current = '';
+      lastWorkFilesSigRef.current = '';
+      lastPullSyncSigRef.current = '';
+      realtimeRef.current?.dispose();
+      realtimeRef.current = null;
+      clearActiveHostTunnelSession();
       clearActiveWorkRoomInviteMeta();
       clearCachedJoinedWorkRoomMeta(cleanEmail || undefined);
       if (roomIdToClear) {
@@ -433,16 +452,26 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (cleanEmail && typeof window !== 'undefined') {
           try {
             localStorage.removeItem(`ghosti_work_members_v1::${cleanEmail}::${roomIdToClear}`);
+            localStorage.removeItem(`ghosti_work_preview_cache_v3::${cleanEmail}::${roomIdToClear}`);
+            localStorage.removeItem(`ghosti_work_tombstones_v2::${cleanEmail}::${roomIdToClear}`);
           } catch {
             /* ignore */
           }
         }
       }
       localDocsRef.current = [];
+      remoteDocsRef.current = [];
       setJoinedInvitedRoom(null);
       setServerMembers([]);
+      setPresencePeers([]);
+      setRemoteLocksByRelPath({});
       setRemoteDocs([]);
       setLocalDocs([]);
+      setLastSyncedToLocalCount(0);
+      setSelectedFolderId('all');
+      setSelectedDocId('');
+      setIsSidePeekOpen(false);
+      setSearchQuery('');
       setActiveWorkRoomId('');
       setMyRoomRole('host');
       setSDriveMounted(false);
@@ -450,18 +479,32 @@ export const WorkLoungeB2BHub: React.FC = () => {
         savePendingKickedWorkRoomNotice(roomTitleHint, cleanEmail || undefined);
         setKickedFromRoomTitle(roomTitleHint);
       }
-      if (zCoreBridge.isConnected && !isOwnWorkUnlocked && !isLocalPcBlockedByOtherAccount()) {
+
+      const ownHostRoomId = isOwnWorkUnlocked
+        ? readCachedMyWorkRoomMeta(cleanEmail || undefined)?.roomId || ''
+        : '';
+      const keepOwnHostActive = Boolean(isOwnWorkUnlocked && ownHostRoomId && ownHostRoomId !== roomIdToClear);
+
+      if (zCoreBridge.isConnected && !isLocalPcBlockedByOtherAccount()) {
         void syncEntitlementToLocalPcEngine(deviceEntitlement || null, cleanEmail || undefined, {
-          unlocked: false,
-          roomId: '',
-          isHost: false,
+          unlocked: keepOwnHostActive,
+          roomId: keepOwnHostActive ? ownHostRoomId : '',
+          isHost: keepOwnHostActive,
+          purgeInvitedVault: true,
           force: true,
         });
-        void mountWorkSDriveNative({
-          action: 'unmount',
-          openExplorer: false,
-          accountEmail: cleanEmail || undefined,
-        });
+        if (!keepOwnHostActive) {
+          void mountWorkSDriveNative({
+            action: 'unmount',
+            openExplorer: false,
+            accountEmail: cleanEmail || undefined,
+            purgeInvitedVault: true,
+            roomId: roomIdToClear,
+          });
+        }
+      } else {
+        // Z-코어가 일시 종료된 상태에서 방을 나간 경우, 엔진 재기동 즉시 S: 드라이브 해제 및 이전 방 동기화 폴더 자동 격리
+        markPendingInvitedVaultPurge(cleanEmail || undefined, roomIdToClear);
       }
       if (notifyToast && !roomTitleHint) {
         showToast('참여 중이던 업무 공유방에서 연결이 해제되었습니다.');
@@ -880,12 +923,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
   };
 
   const syncRealWorkFiles = useCallback(async (forceRefresh = false) => {
+    const cleanupEpochAtStart = roomCleanupEpochRef.current;
     if (!isWorkUnlocked) {
-      const hasOwnExpiredHostVault = Boolean(
-        readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId &&
-          deviceEntitlement?.workTrialExpired &&
-          !isOwnWorkUnlocked
-      );
       if (!hasOwnExpiredHostVault || Boolean(kickedFromRoomTitle)) {
         if (localDocsRef.current.length > 0) {
           localDocsRef.current = [];
@@ -899,7 +938,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       author: actorNickname,
       knownSig: forceRefresh ? undefined : lastWorkFilesSigRef.current || undefined,
     });
-    if (!res.ok) return;
+    if (!res.ok || cleanupEpochAtStart !== roomCleanupEpochRef.current) return;
     if (
       !res.mounted &&
       isWorkUnlocked &&
@@ -1061,7 +1100,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   }, [
     activeWorkRoomId,
     actorNickname,
-    deviceEntitlement?.workTrialExpired,
+    hasOwnExpiredHostVault,
     isJoinedInvitedMember,
     isOwnWorkUnlocked,
     isWorkUnlocked,
@@ -1073,6 +1112,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
   ]);
 
   const pollLocalLocksFast = useCallback(async () => {
+    if (!isWorkUnlocked && !hasOwnExpiredHostVault) {
+      return;
+    }
     if (isZCoreConnected) {
       if (fastLocksUnsupportedRef.current) {
         await syncRealWorkFiles();
@@ -1132,7 +1174,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         );
       }
     }
-  }, [isZCoreConnected, actorNickname, isWorkUnlocked, syncRealWorkFiles]);
+  }, [isZCoreConnected, actorNickname, isWorkUnlocked, hasOwnExpiredHostVault, syncRealWorkFiles]);
 
   // PC 엔진 연결 시: 권한 동기화 ➔ S: 마운트/해제 순차 직렬 실행 (경합·초대 팀원 잠금 원천 차단)
   useEffect(() => {
@@ -1151,6 +1193,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
           setLocalDocs([]);
           return;
         }
+        // Z-코어가 꺼져 있던 중 [이 업무방 나가기]·[내보내기]가 발생했던 경우, 엔진 연결 즉시 이전 방 동기화 폴더·S: 드라이브 선격리
+        const pendingPurge = isZCoreConnected
+          ? consumePendingInvitedVaultPurge(merlinAuth?.email || undefined)
+          : { pending: false, roomId: '' };
+        if (pendingPurge.pending && !isJoinedInvitedMember) {
+          await mountWorkSDriveNative({
+            action: 'unmount',
+            openExplorer: false,
+            accountEmail: merlinAuth?.email || undefined,
+            purgeInvitedVault: true,
+            roomId: pendingPurge.roomId || undefined,
+          });
+        }
         // 로그인된 초대 팀원이 첫 진입 시 소속 업무방 조회(fetchMyJoinedWorkRooms) 완료 전에 오잠금/해제되는 현상 방지
         if (!isWorkUnlocked && isAuthenticated && isCheckingJoinedRooms) {
           return;
@@ -1163,6 +1218,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               unlocked: isWorkUnlocked,
               roomId: activeWorkRoomId || undefined,
               isHost: !isJoinedInvitedMember && myRoomRole === 'host',
+              ...(pendingPurge.pending ? { purgeInvitedVault: true, force: true } : {}),
               planId: isJoinedInvitedMember
                 ? 'work_invited_member'
                 : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
@@ -1184,9 +1240,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
           void syncRealWorkFiles();
         } else {
           // 만료/미개통 상태: 현재 단독 점유 계정의 S: 드라이브 연결 해제(폴더 내 원본 목록은 본인 만료 시에만 열람·보존)
-          const isOwnHostSubscriptionExpired = Boolean(
-            deviceEntitlement?.workTrialExpired && !isOwnWorkUnlocked
-          );
           const mRes = await mountWorkSDriveNative({
             action: 'unmount',
             openExplorer: false,
@@ -1195,7 +1248,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           if (cancelled) return;
           setSDriveMounted(false);
           if (mRes.targetDir) setDriveTargetPath(mRes.targetDir);
-          if (isOwnHostSubscriptionExpired && !kickedFromRoomTitle) {
+          if (hasOwnExpiredHostVault && !kickedFromRoomTitle) {
             void syncRealWorkFiles();
           } else {
             localDocsRef.current = [];
@@ -1498,10 +1551,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
   useEffect(() => {
     const resolvedScope = resolveCurrentWorkAccountEmail(merlinAuth?.email || undefined);
     const effectiveEmail = resolvedScope !== 'anonymous' ? resolvedScope : undefined;
+    const cleanupEpochForEffect = roomCleanupEpochRef.current;
     if (activeWorkRoomId && (isAuthenticated || hasAuthenticatedHubAccountSession())) {
       const knownTombs = loadCachedWorkTombstones(activeWorkRoomId, effectiveEmail);
       void loadCachedWorkRoomPreview(activeWorkRoomId, effectiveEmail).then(
         (cachedDocs) => {
+          if (cleanupEpochForEffect !== roomCleanupEpochRef.current || !activeWorkRoomIdRef.current) {
+            return;
+          }
           const filteredCached = cachedDocs.filter((d) => !lookupWorkTombstone(knownTombs, d.relPath));
           if (filteredCached.length > 0) {
             setRemoteDocs((prev) => (prev.length > 0 ? prev : filteredCached));
@@ -1519,10 +1576,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
           return;
         }
         const epochAtStart = memberMutationEpochRef.current;
+        const cleanupEpochAtStart = roomCleanupEpochRef.current;
         const authed = await fetchWorkRoomAuthedState(activeWorkRoomId, inviteMeta.inviteToken, {
           skipBlockingTunnelFetch: true,
         });
-        if (cancelled) return;
+        if (cancelled || cleanupEpochAtStart !== roomCleanupEpochRef.current) return;
         if (!authed.ok) {
           if (
             authed.reason === 'WORK_TRIAL_EXPIRED' ||
@@ -1617,7 +1675,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
             authed.hostTunnel.tunnelUrl,
             authed.hostTunnel.accessKey
           ).then((fromTunnel) => {
-            if (cancelled || !fromTunnel.ok) return;
+            if (cancelled || cleanupEpochAtStart !== roomCleanupEpochRef.current || !fromTunnel.ok) {
+              return;
+            }
             setRemoteDocs((prev) => (areWorkDocsEqual(prev, fromTunnel.docs) ? prev : fromTunnel.docs));
             mergeAndPersistTombstones(fromTunnel.deletedTombstones);
             void cacheWorkRoomPreviewLocally(
@@ -1957,6 +2017,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   // 로컬 S:\ 파일 + 대장 PC 터널 파일 통합 및 삭제 Tombstone · 실시간 잠금 상태 병합
   const docs = useMemo<WorkLoungeDocDto[]>(() => {
+    if (!isWorkUnlocked && !hasOwnExpiredHostVault) {
+      return [];
+    }
     const byRel = new Map<string, WorkLoungeDocDto>();
     for (const rd of remoteDocs) {
       if (inFlightDeletesRef.current.has(rd.relPath)) continue;
@@ -1995,7 +2058,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         d.author || '팀원'
       ),
     }));
-  }, [localDocs, remoteDocs, deletedTombstones, remoteLocksByRelPath, actorNickname]);
+  }, [isWorkUnlocked, hasOwnExpiredHostVault, localDocs, remoteDocs, deletedTombstones, remoteLocksByRelPath, actorNickname]);
 
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = {
@@ -2777,7 +2840,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 type="button"
                 onClick={async () => {
                   const targetRoomId = activeWorkRoomId;
-                  await removeWorkRoomMemberOnServer({ roomId: targetRoomId });
+                  const rmRes = await removeWorkRoomMemberOnServer({ roomId: targetRoomId });
+                  if (rmRes.members) {
+                    realtimeRef.current?.broadcastMembersUpdated(rmRes.members);
+                  }
                   performKickedOrRemovedCleanup(targetRoomId, undefined, false);
                   showToast('초대받은 업무 공유방에서 나왔으며 내 기기의 해당 방 연결과 임시 캐시를 정리했습니다.');
                 }}
@@ -2790,6 +2856,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
         </div>
       )}
 
+      {(isWorkUnlocked || hasOwnExpiredHostVault) && (
+        <>
       {/* 1. 헤더 + 액션바 + 듀얼 모드 스위처 + 검색창 + 폴더 필터 */}
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
@@ -3185,6 +3253,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
         activatePricingPlan={activatePricingPlan}
         setShowProModal={setShowProModal}
       />
+        </>
+      )}
         </>
       )}
     </section>

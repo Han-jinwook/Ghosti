@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.10.29"
+CORE_VERSION = "2.10.59"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2413,6 +2413,16 @@ def main() -> None:
                 except Exception:
                     pass
             super().server_bind()
+            if sys.platform == "win32":
+                try:
+                    os.set_inheritable(self.socket.fileno(), False)
+                except Exception:
+                    pass
+                try:
+                    import ctypes as _ct_inh
+                    _ct_inh.windll.kernel32.SetHandleInformation(int(self.socket.fileno()), 1, 0)
+                except Exception:
+                    pass
 
     # 1) 포트 5199 HTTP 서버를 가장 먼저 즉시 바인딩하여 웹앱의 '실행했어요 (즉시 확인)' 헬스체크가 0.1초 만에 성공하게 보장
     srv = ReusableThreadingHTTPServer(("127.0.0.1", args.port), MerlinUnifiedHTTPHandler)
