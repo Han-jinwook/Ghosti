@@ -809,19 +809,37 @@ export function isLocalVideosOcrIndexingPending(): boolean {
   return lastLocalVideosOcrIndexingPending;
 }
 
+let lastLocalVideosFetchOk = false;
+
+export function wasLastVideosFetchOk(): boolean {
+  return lastLocalVideosFetchOk;
+}
+
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
     const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
     // [실전 전용 철칙]: Z-코어 미연결 시 번들 쇼케이스/샘플 영상(코타키나발루·회의실 등)을 자동 적재하지 않고 0건 즉시 반환 (불필요한 정적 JSON 다운로드 0건)
     if (!canProbeLocal) {
       lastLocalVideosOcrIndexingPending = false;
+      lastLocalVideosFetchOk = false;
       return [];
     }
 
     const isStandaloneSearchWin =
       typeof window !== 'undefined' &&
       Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow'));
-    const zResPromise = fetch(getZCoreUrl('/__videos/list'));
+    const fetchVideosOnce = () => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      return fetch(getZCoreUrl('/__videos/list'), {
+        cache: 'no-store',
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(tid));
+    };
+    const zResPromise = fetchVideosOnce().catch(async () => {
+      await new Promise((r) => setTimeout(r, 350));
+      return fetchVideosOnce();
+    });
     if (isStandaloneSearchWin) {
       void hydrateRealMediaVectorCacheOnce();
     } else {
@@ -830,6 +848,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     const zRes = await zResPromise;
     if (!zRes.ok) {
       lastLocalVideosOcrIndexingPending = false;
+      lastLocalVideosFetchOk = false;
       return [];
     }
 
@@ -954,10 +973,20 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
       }
       realVideos.set(v.videoFileName, normalizedVid);
     }
+    lastLocalVideosFetchOk = true;
     return Array.from(realVideos.values());
   } catch {
+    lastLocalVideosFetchOk = false;
     return [];
   }
+}
+
+export async function fetchIndexedVideosSafe(): Promise<{
+  ok: boolean;
+  videos: VideoSceneItem[];
+}> {
+  const videos = await _fetchIndexedVideosMerged();
+  return { ok: lastLocalVideosFetchOk, videos };
 }
 
 async function _unusedOldFetchDocs(): Promise<LocalDocumentFile[]> {

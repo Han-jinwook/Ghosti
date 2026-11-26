@@ -669,25 +669,33 @@ export const createAssistantOnboardingSlice: StateCreator<
       Boolean(urlQueryEarly) ||
       curTabState.desktopTab === 'dashboard' ||
       curTabState.mobileTab === 'search';
-    const rawDocsPromise = needsDocsAndVideosAtBoot ? fetchIndexedDocuments() : Promise.resolve(curTabState.localDocuments);
-    const rawVideosPromise = needsDocsAndVideosAtBoot ? fetchIndexedVideos() : Promise.resolve(curTabState.videoSceneItems);
+    const rawDocsSafePromise = needsDocsAndVideosAtBoot
+      ? import('../../services/aiEngine').then((m) => m.fetchIndexedDocumentsSafe())
+      : Promise.resolve({ ok: true, docs: curTabState.localDocuments });
+    const rawVideosSafePromise = needsDocsAndVideosAtBoot
+      ? import('../../services/aiEngine').then((m) => m.fetchIndexedVideosSafe())
+      : Promise.resolve({ ok: true, videos: curTabState.videoSceneItems });
     const rawFacesPromise = fetchAutonomousFaceClusters();
 
-    // [F5 새로고침 장시간 로딩 원천 차단]: 문서·동영상·얼굴 인덱스 응답이 지연되더라도
-    // 800ms 내에 첫 화면을 먼저 열어주고, 늦게 도착한 목록은 백그라운드에서 조용히 보강합니다.
-    const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
+    // [F5 새로고침 장시간 로딩 원천 차단 & 재연결 시 기존 문서·영상 0건 증발 방지]:
+    // 800ms 내에 첫 화면을 먼저 열어주되 이미 적재된 문서·영상이 있다면 빈 배열([])로 덮어쓰지 않고 기존 목록을 보존한 채 뒤에서 보강합니다.
+    const [dataset, telemetry, indexedDocsRes, indexedVideosRes, faceData, hostSharedPhotos] = await Promise.all([
       photoDatasetPromise,
       Promise.race([
         rawTelemetryPromise,
         new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 700)),
       ]),
       Promise.race([
-        rawDocsPromise,
-        new Promise<LocalDocumentFile[]>((resolve) => window.setTimeout(() => resolve([]), 800)),
+        rawDocsSafePromise,
+        new Promise<{ ok: boolean; docs: LocalDocumentFile[] }>((resolve) =>
+          window.setTimeout(() => resolve({ ok: false, docs: curTabState.localDocuments }), 800)
+        ),
       ]),
       Promise.race([
-        rawVideosPromise,
-        new Promise<VideoSceneItem[]>((resolve) => window.setTimeout(() => resolve([]), 800)),
+        rawVideosSafePromise,
+        new Promise<{ ok: boolean; videos: VideoSceneItem[] }>((resolve) =>
+          window.setTimeout(() => resolve({ ok: false, videos: curTabState.videoSceneItems }), 800)
+        ),
       ]),
       Promise.race([
         rawFacesPromise,
@@ -700,6 +708,8 @@ export const createAssistantOnboardingSlice: StateCreator<
         new Promise<PhotoItem[]>((resolve) => window.setTimeout(() => resolve([]), 700)),
       ]),
     ]);
+    const indexedDocs = indexedDocsRes.ok ? indexedDocsRes.docs : curTabState.localDocuments;
+    const indexedVideos = indexedVideosRes.ok ? indexedVideosRes.videos : curTabState.videoSceneItems;
 
     // 원격 공유방 사진·텔레메트리·문서·동영상이 첫 렌더 마감(700~800ms)보다 늦게 도착해도 F5 로딩을 막지 않고 뒤에서 조용히 보강
     void rawTelemetryPromise
@@ -716,23 +726,28 @@ export const createAssistantOnboardingSlice: StateCreator<
         }
       })
       .catch(() => {});
-    void rawDocsPromise
-      .then((lateDocs) => {
-        if (!Array.isArray(lateDocs) || lateDocs.length === 0) return;
+    void rawDocsSafePromise
+      .then((lateDocsRes) => {
+        if (!lateDocsRes?.ok || !Array.isArray(lateDocsRes.docs)) return;
+        const lateDocs = lateDocsRes.docs;
         const stNow = get();
-        if (stNow.localDocuments.length >= lateDocs.length) return;
         const sharedNow = isSharedPhotoLounge(stNow.activeLoungeType);
+        const openDocPath = (stNow.selectedDocModal?.path || '').trim().toLowerCase();
+        const closeDoc =
+          Boolean(openDocPath) &&
+          !lateDocs.some((d) => (d.path || '').trim().toLowerCase() === openDocPath);
         set({
           localDocuments: lateDocs,
           matchedLocalDocs: sharedNow ? stNow.matchedLocalDocs : stNow.hasExecutedUserSearch ? stNow.matchedLocalDocs : lateDocs,
+          ...(closeDoc ? { selectedDocModal: null } : {}),
         });
       })
       .catch(() => {});
-    void rawVideosPromise
-      .then((lateVideos) => {
-        if (!Array.isArray(lateVideos) || lateVideos.length === 0) return;
+    void rawVideosSafePromise
+      .then((lateVideosRes) => {
+        if (!lateVideosRes?.ok || !Array.isArray(lateVideosRes.videos)) return;
+        const lateVideos = lateVideosRes.videos;
         const stNow = get();
-        if (stNow.videoSceneItems.length >= lateVideos.length) return;
         const sharedNow = isSharedPhotoLounge(stNow.activeLoungeType);
         set({
           videoSceneItems: lateVideos,
@@ -996,8 +1011,8 @@ export const createAssistantOnboardingSlice: StateCreator<
           syncState,
           sentenceChips: localChips,
           onboardingAhaItems: localAhaItems,
-          // 유저가 이미 동영상이나 문서 탭을 클릭해 탐색 중이거나 검색한 경우, 백그라운드 재인덱싱/Z코어 재연결 시 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
-          searchSpace: currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
+          // 유저가 이미 동영상이나 문서 탭을 탐색 중이거나 이미 초기화된 상태에서 재연결/재인덱싱될 때 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
+          searchSpace: latestState.initialized || currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
           hasExecutedUserSearch: currentHasExecutedUserSearch,
           hasUserSelectedSearchTab: currentHasUserSelectedSearchTab,
           activeQuery: currentHasExecutedUserSearch

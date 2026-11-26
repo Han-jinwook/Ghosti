@@ -436,12 +436,19 @@ export function groupBurstSearchResults(
  * 연사/중복 그룹(DuplicateGroup) 및 4대 쓰레기 카테고리를 수학적으로 자동 분류합니다.
  */
 
+let lastPhotoDatasetFetchOk = false;
+
+export function wasLastPhotoDatasetFetchOk(): boolean {
+  return lastPhotoDatasetFetchOk;
+}
+
 export async function loadInitialPhotoDataset(): Promise<{
   photos: PhotoItem[];
   duplicateGroups: DuplicateGroup[];
   quarantinedCount: number;
   quarantinedBytes: number;
 }> {
+  lastPhotoDatasetFetchOk = false;
   type LocalPhotoEntry = {
     path: string;
     originalName?: string;
@@ -474,9 +481,12 @@ export async function loadInitialPhotoDataset(): Promise<{
       // 렌더러 메인스레드 IPC 역직렬화가 중첩되어 브라우저 행(Page Unresponsive)을 유발하므로,
       // 실제 검색 실행 시점 또는 Stage 3 유휴 백그라운드에서만 청크 커서 방식으로 복원합니다.
       const res = await fetchWithTimeout().catch(() => fetchWithTimeout());
-      const json = await res.json();
-      fileList = json.files ?? [];
-      quarantinedList = json.quarantined ?? [];
+      if (res.ok) {
+        const json = await res.json();
+        fileList = json.files ?? [];
+        quarantinedList = json.quarantined ?? [];
+        lastPhotoDatasetFetchOk = true;
+      }
     }
   } catch {
     /* offline fallback */

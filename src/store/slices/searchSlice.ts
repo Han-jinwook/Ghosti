@@ -85,14 +85,15 @@ import {
   executeTextSearch,
   executeZeroSttVoiceSearch,
   fetchAutonomousFaceClusters,
-  fetchIndexedDocuments,
-  fetchIndexedVideos,
+  fetchIndexedDocumentsSafe,
+  fetchIndexedVideosSafe,
   fetchSharedFamilyHostPhotos,
   hasUnindexedLocalVideos,
   isLocalVideosOcrIndexingPending,
   isTextQueryEncoderReady,
   normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
+  wasLastPhotoDatasetFetchOk,
   runOnboardingIndexingPipeline,
   searchLocalDocumentFiles,
   searchLocalDocumentFilesAsync,
@@ -183,7 +184,10 @@ export interface SearchSlice {
   setGroupBurstsInSearch: (group: boolean) => void;
   setIsSlimCapsule: (slim: boolean) => void;
   setVoiceThreshold: (t: number) => void;
-  runTextQuery: (q: string, options?: { fromVoice?: boolean }) => Promise<void>;
+  runTextQuery: (
+    q: string,
+    options?: { fromVoice?: boolean; preserveCurrentSpace?: boolean }
+  ) => Promise<void>;
   toggleMicRecording: () => Promise<void>;
   runPresetVoiceQuery: (presetId: string, forceFallbackDemo?: boolean) => Promise<void>;
   toggleBookmark: (photoId: string) => void;
@@ -572,91 +576,118 @@ export const createSearchSlice: StateCreator<
     if (isSharedPhotoLounge(stBefore.activeLoungeType)) return;
 
     const videosPromise = Promise.race([
-      fetchIndexedVideos(),
-      new Promise<VideoSceneItem[] | null>((resolve) =>
+      fetchIndexedVideosSafe(),
+      new Promise<{ ok: boolean; videos: VideoSceneItem[] } | null>((resolve) =>
         setTimeout(() => resolve(null), 4500)
       ),
     ]);
 
-    const [freshPhotoDataset, freshDocs] = await Promise.all([
+    const [freshPhotoDataset, docsRes] = await Promise.all([
       loadInitialPhotoDataset(),
-      fetchIndexedDocuments(),
+      fetchIndexedDocumentsSafe(),
     ]);
-    const freshPhotos = freshPhotoDataset.photos;
+    const photoFetchOk = wasLastPhotoDatasetFetchOk();
+    const docsFetchOk = docsRes.ok;
 
     const cur = get();
-    const existingPhotoByName = new Map<string, PhotoItem>();
-    for (const p of cur.photos) {
-      if (String(p.id || '').startsWith('shared_')) continue;
-      existingPhotoByName.set(p.name, p);
+    const newlyAddedPhotos: PhotoItem[] = [];
+    let mergedPersonalPhotos: PhotoItem[];
+    let nextPhotos: PhotoItem[];
+
+    if (photoFetchOk) {
+      const freshPhotos = freshPhotoDataset.photos;
+      const existingPhotoByName = new Map<string, PhotoItem>();
+      for (const p of cur.photos) {
+        if (String(p.id || '').startsWith('shared_')) continue;
+        existingPhotoByName.set(p.name, p);
+      }
+
+      mergedPersonalPhotos = freshPhotos.map((fp) => {
+        const prev = existingPhotoByName.get(fp.name);
+        if (!prev) {
+          newlyAddedPhotos.push(fp);
+          return fp;
+        }
+        return {
+          ...fp,
+          id: prev.id,
+          vec: prev.vec || fp.vec,
+          tags: prev.tags?.length ? prev.tags : fp.tags,
+          keywordsKo: prev.keywordsKo?.length ? prev.keywordsKo : fp.keywordsKo,
+          ontologyPrimaryTags: prev.ontologyPrimaryTags ?? fp.ontologyPrimaryTags,
+          ontologyCaptionTags: prev.ontologyCaptionTags ?? fp.ontologyCaptionTags,
+          captionKo: prev.captionKo || fp.captionKo,
+          trashCategory: prev.trashCategory ?? fp.trashCategory,
+          duplicateGroupId: prev.duplicateGroupId ?? fp.duplicateGroupId,
+          isBestInDuplicateGroup: prev.isBestInDuplicateGroup ?? fp.isBestInDuplicateGroup,
+          dhash: prev.dhash && prev.dhash !== '0' ? prev.dhash : fp.dhash,
+          clusterId: prev.clusterId ?? fp.clusterId,
+          opticalSharpness: prev.opticalSharpness ?? fp.opticalSharpness,
+          isVaultDocument: prev.isVaultDocument ?? fp.isVaultDocument,
+          vaultCategoryLabel: prev.vaultCategoryLabel ?? fp.vaultCategoryLabel,
+          quarantined: prev.quarantined ?? fp.quarantined,
+          bookmarked: prev.bookmarked ?? fp.bookmarked,
+        };
+      });
+
+      const sharedKeptPhotos = cur.photos.filter(
+        (p) =>
+          String(p.id || '').startsWith('shared_host_') ||
+          String(p.id || '').startsWith('shared_added_') ||
+          Boolean(p.sharedLoungeType)
+      );
+      nextPhotos = [...mergedPersonalPhotos, ...sharedKeptPhotos];
+    } else {
+      mergedPersonalPhotos = isolatePersonalPhotos(cur.photos);
+      nextPhotos = cur.photos;
     }
 
-    const newlyAddedPhotos: PhotoItem[] = [];
-    const mergedPersonalPhotos: PhotoItem[] = freshPhotos.map((fp) => {
-      const prev = existingPhotoByName.get(fp.name);
-      if (!prev) {
-        newlyAddedPhotos.push(fp);
-        return fp;
+    // 일시적 통신 지연/재시작으로 docsFetchOk === false일 때는 기존 문서 목록을 0건으로 덮어쓰지 않고 그대로 유지
+    const effectiveDocs = docsFetchOk ? docsRes.docs : cur.localDocuments;
+
+    let shouldCloseStaleDocModal = false;
+    let deletedOpenFileToast: string | null = null;
+    if (docsFetchOk && cur.selectedDocModal) {
+      const openDoc = cur.selectedDocModal;
+      const openDocPath = (openDoc.path || '').trim().toLowerCase();
+      const openDocId = String(openDoc.id || '');
+      const stillExists = effectiveDocs.some((d) => {
+        const dp = (d.path || '').trim().toLowerCase();
+        if (openDocPath && dp) return dp === openDocPath;
+        return openDocId.startsWith('local_doc_') && d.id === openDocId;
+      });
+      if (!stillExists && (openDocPath || openDocId.startsWith('local_doc_'))) {
+        shouldCloseStaleDocModal = true;
+        deletedOpenFileToast = `[${openDoc.fileName || openDoc.title}] 파일이 삭제되어 상세 창을 닫고 목록을 갱신했습니다.`;
       }
-      return {
-        ...fp,
-        id: prev.id,
-        vec: prev.vec || fp.vec,
-        tags: prev.tags?.length ? prev.tags : fp.tags,
-        keywordsKo: prev.keywordsKo?.length ? prev.keywordsKo : fp.keywordsKo,
-        ontologyPrimaryTags: prev.ontologyPrimaryTags ?? fp.ontologyPrimaryTags,
-        ontologyCaptionTags: prev.ontologyCaptionTags ?? fp.ontologyCaptionTags,
-        captionKo: prev.captionKo || fp.captionKo,
-        trashCategory: prev.trashCategory ?? fp.trashCategory,
-        duplicateGroupId: prev.duplicateGroupId ?? fp.duplicateGroupId,
-        isBestInDuplicateGroup: prev.isBestInDuplicateGroup ?? fp.isBestInDuplicateGroup,
-        dhash: prev.dhash && prev.dhash !== '0' ? prev.dhash : fp.dhash,
-        clusterId: prev.clusterId ?? fp.clusterId,
-        opticalSharpness: prev.opticalSharpness ?? fp.opticalSharpness,
-        isVaultDocument: prev.isVaultDocument ?? fp.isVaultDocument,
-        vaultCategoryLabel: prev.vaultCategoryLabel ?? fp.vaultCategoryLabel,
-        quarantined: prev.quarantined ?? fp.quarantined,
-        bookmarked: prev.bookmarked ?? fp.bookmarked,
-      };
-    });
+    }
 
-    const sharedKeptPhotos = cur.photos.filter(
-      (p) =>
-        String(p.id || '').startsWith('shared_host_') ||
-        String(p.id || '').startsWith('shared_added_') ||
-        Boolean(p.sharedLoungeType)
-    );
-    const nextPhotos = [...mergedPersonalPhotos, ...sharedKeptPhotos];
-
-    const freshDocPaths = new Set(
-      freshDocs
-        .map((d) => (d.path || '').trim().toLowerCase())
-        .filter(Boolean)
-    );
-    const freshPhotoPaths = new Set(
-      mergedPersonalPhotos
-        .map((p) => (p.fullPath || '').trim().toLowerCase())
-        .filter(Boolean)
-    );
-    const openDocPath = (cur.selectedDocModal?.path || '').trim().toLowerCase();
-    const shouldCloseStaleDocModal = Boolean(openDocPath && !freshDocPaths.has(openDocPath));
-    const openPhotoPath = (cur.selectedPhoto?.fullPath || '').trim().toLowerCase();
-    const shouldCloseStalePhotoModal = Boolean(
-      openPhotoPath &&
-        !String(cur.selectedPhoto?.id || '').startsWith('shared_') &&
-        !freshPhotoPaths.has(openPhotoPath)
-    );
+    let shouldCloseStalePhotoModal = false;
+    if (photoFetchOk && cur.selectedPhoto && !String(cur.selectedPhoto.id || '').startsWith('shared_')) {
+      const openPhoto = cur.selectedPhoto;
+      const openPhotoPath = (openPhoto.fullPath || '').trim().toLowerCase();
+      const stillExists = mergedPersonalPhotos.some((p) => {
+        const pp = (p.fullPath || '').trim().toLowerCase();
+        if (openPhotoPath && pp) return pp === openPhotoPath;
+        return p.name === openPhoto.name;
+      });
+      if (!stillExists) {
+        shouldCloseStalePhotoModal = true;
+        deletedOpenFileToast = `[${openPhoto.name}] 파일이 삭제되어 상세 창을 닫고 목록을 갱신했습니다.`;
+      }
+    }
 
     set({
       photos: nextPhotos,
-      localDocuments: freshDocs,
+      localDocuments: effectiveDocs,
       ...(shouldCloseStaleDocModal ? { selectedDocModal: null } : {}),
-      ...(shouldCloseStalePhotoModal ? { selectedPhoto: null, selectedPhotoBurstGroup: null } : {}),
+      ...(shouldCloseStalePhotoModal ? { selectedPhoto: null, selectedBurstGroup: null } : {}),
+      ...(deletedOpenFileToast ? { lastQuarantineToast: deletedOpenFileToast } : {}),
     });
 
     const afterDocsSet = get();
     if (afterDocsSet.hasExecutedUserSearch && afterDocsSet.activeQuery.trim()) {
-      await get().runTextQuery(afterDocsSet.activeQuery);
+      await get().runTextQuery(afterDocsSet.activeQuery, { preserveCurrentSpace: true });
     } else {
       const galleryPhotos = filterVisibleGalleryPhotos(mergedPersonalPhotos).map((photo) => ({
         photo,
@@ -676,20 +707,21 @@ export const createSearchSlice: StateCreator<
       const totalFramesNow = curVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
       set({
         searchResults: galleryPhotos,
-        matchedLocalDocs: freshDocs,
+        matchedLocalDocs: effectiveDocs,
         matchedVaultPhotos: vaultPhotos,
         activeQuery:
           afterDocsSet.searchSpace === 'video'
             ? `동영상 ${curVideos.length}개 전 구간(총 ${totalFramesNow}개 타임라인 프레임) 자동 해부`
             : afterDocsSet.searchSpace === 'vault'
-            ? `최근 서류 ${freshDocs.length + vaultPhotos.length}건 통합 (로컬 문서 ${freshDocs.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
+            ? `최근 서류 ${effectiveDocs.length + vaultPhotos.length}건 통합 (로컬 문서 ${effectiveDocs.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
             : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
       });
     }
 
-    const freshVideos = await videosPromise;
+    const videosRes = await videosPromise;
     const newlyAddedVideos: VideoSceneItem[] = [];
-    if (Array.isArray(freshVideos)) {
+    if (videosRes && videosRes.ok && Array.isArray(videosRes.videos)) {
+      const freshVideos = videosRes.videos;
       const curVState = get();
       const existingVideoByName = new Map<string, VideoSceneItem>();
       for (const v of curVState.videoSceneItems) {
@@ -715,10 +747,29 @@ export const createSearchSlice: StateCreator<
           keywords: Array.from(new Set([...(fv.keywords || []), ...(prevV.keywords || [])])),
         };
       });
-      set({ videoSceneItems: nextVideos });
+      let shouldCloseStaleVideoModal = false;
+      let deletedVideoToast: string | null = null;
+      if (curVState.selectedVideoModal) {
+        const openVid = curVState.selectedVideoModal;
+        const openVPath = (openVid.fullPath || '').trim().toLowerCase();
+        const stillHasVid = nextVideos.some((v) => {
+          const vp = (v.fullPath || '').trim().toLowerCase();
+          if (openVPath && vp) return vp === openVPath;
+          return v.videoFileName === openVid.videoFileName;
+        });
+        if (!stillHasVid) {
+          shouldCloseStaleVideoModal = true;
+          deletedVideoToast = `[${openVid.videoFileName || openVid.title}] 영상이 삭제되어 상세 창을 닫고 목록을 갱신했습니다.`;
+        }
+      }
+      set({
+        videoSceneItems: nextVideos,
+        ...(shouldCloseStaleVideoModal ? { selectedVideoModal: null } : {}),
+        ...(deletedVideoToast ? { lastQuarantineToast: deletedVideoToast } : {}),
+      });
       const afterVidSet = get();
       if (afterVidSet.hasExecutedUserSearch && afterVidSet.activeQuery.trim()) {
-        await get().runTextQuery(afterVidSet.activeQuery);
+        await get().runTextQuery(afterVidSet.activeQuery, { preserveCurrentSpace: true });
       } else {
         const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
         set({
@@ -785,8 +836,12 @@ export const createSearchSlice: StateCreator<
   setIsSlimCapsule: (isSlimCapsule) => set({ isSlimCapsule }),
   setVoiceThreshold: (voiceThreshold) => set({ voiceThreshold }),
 
-  runTextQuery: async (q: string, options?: { fromVoice?: boolean }) => {
+  runTextQuery: async (
+    q: string,
+    options?: { fromVoice?: boolean; preserveCurrentSpace?: boolean }
+  ) => {
     const fromVoice = Boolean(options?.fromVoice);
+    const preserveCurrentSpace = Boolean(options?.preserveCurrentSpace);
     const query = q.trim();
     if (!query) return;
     const reqSeq = ++storeSharedRefs.latestRunTextQuerySeq;
@@ -1245,7 +1300,9 @@ export const createSearchSlice: StateCreator<
     // 768차원 비전/텍스트 ONNX 모델 로딩(2~3초)을 기다리지 않고 0.00문서·어휘 결과를 즉시 렌더링합니다!
     const instantHasDirectDocFileHit = instantDocMatches.some((d) => Boolean(d.matchedInFileName));
     if (searchSpace === 'vault' || !encoderReadyBeforeQuery || (!hasUserSelectedSearchTab && instantHasDirectDocFileHit)) {
-      const immediateSpace: SearchSpaceMode = sharedMode || isExplicitPhotoOnlyQuery
+      const immediateSpace: SearchSpaceMode = preserveCurrentSpace
+        ? searchSpace
+        : sharedMode || isExplicitPhotoOnlyQuery
         ? 'gallery'
         : isExplicitVideoIntent && instantVideoLexical.length > 0
         ? 'video'
@@ -1450,24 +1507,25 @@ export const createSearchSlice: StateCreator<
     const hasDirectDocFileNameMatch = docMatches.some((d) => Boolean(d.matchedInFileName));
     const hasDirectPhotoLexicalMatch = results.some((r) => (r.lexicalHits ?? 0) > 0);
 
-    let targetSpace: SearchSpaceMode =
-      sharedMode || isExplicitPhotoOnlyQuery
-        ? 'gallery'
-        : isExplicitVideoIntent && videoMatches.length > 0
-        ? 'video'
-        : isExplicitDocIntent && (docMatches.length > 0 || vaultPhotoMatches.length > 0)
-        ? 'vault'
-        : hasUserSelectedSearchTab
-        ? searchSpace
-        : isTimeRangeOrAlumniQuery
-        ? 'gallery'
-        : hasDirectDocFileNameMatch && !hasDirectPhotoLexicalMatch
-        ? 'vault'
-        : 'gallery';
+    let targetSpace: SearchSpaceMode = preserveCurrentSpace
+      ? searchSpace
+      : sharedMode || isExplicitPhotoOnlyQuery
+      ? 'gallery'
+      : isExplicitVideoIntent && videoMatches.length > 0
+      ? 'video'
+      : isExplicitDocIntent && (docMatches.length > 0 || vaultPhotoMatches.length > 0)
+      ? 'vault'
+      : hasUserSelectedSearchTab
+      ? searchSpace
+      : isTimeRangeOrAlumniQuery
+      ? 'gallery'
+      : hasDirectDocFileNameMatch && !hasDirectPhotoLexicalMatch
+      ? 'vault'
+      : 'gallery';
 
     // 사용자가 명시적으로 특정 탭([문서]·[동영상]·[사진])을 선택하지 않은 초기 통합 검색 상태(!hasUserSelectedSearchTab)일 때만
-    // 현재 탭 결과가 0건이면 다른 탭([사진 ➔ 동영상 ➔ 문서])으로 자동 안내하며, 사용자가 직접 누른 탭은 0건이어도 그대로 유지합니다.
-    if (!hasUserSelectedSearchTab) {
+    // 현재 탭 결과가 0건이면 다른 탭([사진 ➔ 동영상 ➔ 문서])으로 자동 안내하며, 사용자가 직접 누른 탭이나 실시간 파일 감시 갱신(preserveCurrentSpace) 중에는 그대로 유지합니다.
+    if (!hasUserSelectedSearchTab && !preserveCurrentSpace) {
       if (targetSpace === 'gallery' && results.length === 0) {
         if (videoMatches.length > 0) targetSpace = 'video';
         else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';

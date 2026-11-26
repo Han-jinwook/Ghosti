@@ -190,15 +190,33 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [  {
     deviceSource: '내 스마트폰 · PC 문서함',
   }];
 
-export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
+export async function fetchIndexedDocumentsSafe(): Promise<{
+  ok: boolean;
+  docs: LocalDocumentFile[];
+}> {
   try {
     const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
     if (!canProbeLocal) {
-      // [실전 전용 철칙]: Z-코어 미연결 시에도 번들 샘플 문서(주택임대차계약서·비밀번호관리표 등)를 적재하지 않고 0건 즉시 반환 (불필요한 정적 JSON 다운로드 0건)
-      return [];
+      return { ok: false, docs: [] };
     }
 
-    const zRes = await fetch(getZCoreUrl('/__docs/list'));
+    const fetchOnce = async (): Promise<Response> => {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      return fetch(getZCoreUrl('/__docs/list'), {
+        cache: 'no-store',
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(tid));
+    };
+
+    let zRes = await fetchOnce().catch(async () => {
+      await new Promise((r) => setTimeout(r, 350));
+      return fetchOnce();
+    });
+    if (!zRes.ok) {
+      await new Promise((r) => setTimeout(r, 350));
+      zRes = await fetchOnce();
+    }
     if (zRes.ok) {
       const zJson = await zRes.json();
       const zDocs: LocalDocumentFile[] = Array.isArray(zJson.documents)
@@ -206,8 +224,6 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         : Array.isArray(zJson.docs)
         ? zJson.docs
         : [];
-      // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 예시 샘플 문서를 절대 섞지 않고 100% 내 진짜 PC 문서만 반환!
-      // (바탕화면·다운로드 등 서로 다른 폴더에 동일 파일명이 있어도 누락되지 않도록 절대경로 기준으로 보존)
       const realOnly = new Map<string, LocalDocumentFile>();
       for (const d of zDocs) {
         const fname = d.fileName || (d as any).name;
@@ -226,13 +242,18 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
           deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
         });
       }
-      return Array.from(realOnly.values());
+      return { ok: true, docs: Array.from(realOnly.values()) };
     }
 
-    return [];
+    return { ok: false, docs: [] };
   } catch {
-    return [];
+    return { ok: false, docs: [] };
   }
+}
+
+export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
+  const res = await fetchIndexedDocumentsSafe();
+  return res.docs;
 }
 
 export async function searchLocalDocumentFilesAsync(
