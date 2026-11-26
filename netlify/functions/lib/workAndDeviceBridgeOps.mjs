@@ -2147,6 +2147,53 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'device_reconnect_device') {
+    const targetDeviceId = String(body.targetDeviceId || body.deviceId || '').trim();
+    if (!targetDeviceId || targetDeviceId.length > 128) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_DEVICE_ID' } };
+    }
+    const nowIso = new Date().toISOString();
+    const patchRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(targetDeviceId)}&owner_email=eq.${encodeURIComponent(email)}`,
+      {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify({ revoked_at: null, last_seen_at: nowIso }),
+      }
+    );
+    if (!patchRes.ok) {
+      return { status: 502, body: { ok: false, reason: 'DEVICE_RECONNECT_FAILED' } };
+    }
+    const [listRes, entRaw] = await Promise.all([
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&order=created_at.asc`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/entitlement_v1.json`,
+        { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
+      ),
+    ]);
+    const devices = listRes.ok ? await listRes.json().catch(() => []) : [];
+    const safeDevices = Array.isArray(devices) ? devices : [];
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        reconnectedDeviceId: targetDeviceId,
+        devices: safeDevices,
+        entitlement: computeEntitlementView(entRaw, safeDevices.length),
+        canonicalUserId: userId,
+      },
+    };
+  }
+
   if (action === 'device_activate_plan' || action === 'work_activate_trial') {
     const planId =
       action === 'work_activate_trial'

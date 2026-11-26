@@ -873,7 +873,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.107',
+    appVersion: '1.0.112',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
@@ -1047,6 +1047,57 @@ export async function revokeConnectedDevice(targetDeviceId: string): Promise<{
     ok: true,
     revokedDeviceId: cleanId,
     revokedSelf,
+    devices: safeDevices,
+    entitlement: safeEntitlement,
+  };
+}
+
+export async function reconnectConnectedDevice(targetDeviceId: string): Promise<{
+  ok: boolean;
+  reconnectedDeviceId: string;
+  devices: GhostiConnectedDeviceDto[];
+  entitlement: GhostiDeviceEntitlementView | null;
+}> {
+  const cleanId = (targetDeviceId || '').trim();
+  const ident = getThisDeviceIdentity();
+  if (!cleanId || !hasAuthenticatedHubAccountSession()) {
+    return {
+      ok: false,
+      reconnectedDeviceId: cleanId,
+      devices: [],
+      entitlement: null,
+    };
+  }
+  const res = await callGhostiServerBridge<{
+    reconnectedDeviceId?: string;
+    devices?: GhostiConnectedDeviceDto[];
+    entitlement?: GhostiDeviceEntitlementView;
+    canonicalUserId?: string;
+  }>('device_reconnect_device', { targetDeviceId: cleanId });
+  if (!res.ok) {
+    return {
+      ok: false,
+      reconnectedDeviceId: cleanId,
+      devices: [],
+      entitlement: null,
+    };
+  }
+  const safeDevices = Array.isArray(res.devices) ? res.devices : [];
+  const safeEntitlement = res.entitlement || null;
+  if (cleanId === ident.deviceId) {
+    thisDeviceRevokedLocally = false;
+  }
+  saveCachedDeviceIntegrationSnapshot({
+    devices: safeDevices,
+    entitlement: safeEntitlement,
+  });
+  broadcastDeviceIntegrationStateUpdate({
+    devices: safeDevices,
+    entitlement: safeEntitlement,
+  });
+  return {
+    ok: true,
+    reconnectedDeviceId: cleanId,
     devices: safeDevices,
     entitlement: safeEntitlement,
   };

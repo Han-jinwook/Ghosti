@@ -21,10 +21,12 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     deviceEntitlement,
     syncedClipboardItems,
     thisDeviceRevoked,
+    lastRevokedPeerDevice,
     refreshDeviceIntegrationState,
     pairWithSixDigitCode,
     unlinkConnectedDevice,
     reconnectThisDevice,
+    reconnectPeerDevice,
     sendTextToPairedClipboard,
     setDeviceIntegrationSnapshot,
     setShowProModal,
@@ -221,18 +223,24 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </div>
       </div>
 
-      {/* 1.5. 연결 해제 상태 또는 연결된 기기 목록 */}
-      {isLoggedIn && thisDeviceRevoked && (
+      {/* 1.5. 연결 해제 상태(현재 기기 또는 방금 해제한 상대 기기) 또는 연결된 기기 목록 */}
+      {isLoggedIn && (thisDeviceRevoked || Boolean(lastRevokedPeerDevice)) && (
         <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[12px]">
           <span className="text-slate-700">
-            이 기기의 연결이 해제되어 있습니다.
+            {thisDeviceRevoked
+              ? '이 기기의 연결이 해제되어 있습니다.'
+              : `${lastRevokedPeerDevice?.displayName || '상대 기기'}의 연결이 해제되어 있습니다.`}
           </span>
           <button
             type="button"
             disabled={reconnectingBusy}
             onClick={async () => {
               setReconnectingBusy(true);
-              await reconnectThisDevice();
+              if (thisDeviceRevoked) {
+                await reconnectThisDevice();
+              } else if (lastRevokedPeerDevice) {
+                await reconnectPeerDevice(lastRevokedPeerDevice.deviceId);
+              }
               setReconnectingBusy(false);
             }}
             className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer disabled:opacity-50 shrink-0"
