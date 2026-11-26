@@ -1085,10 +1085,115 @@ export function normalizeSuggestionChipTone(rawChip: string): string {
   return `${core}${parenPart}${arrowPart}${punct}`.replace(/\s{2,}/g, ' ').trim();
 }
 
-export function normalizeSuggestionChips(chips?: string[]): string[] | undefined {
+/**
+ * [전사 공통 의도 중복 판별 SSOT]
+ * 유저가 방금 실행·요청한 명령과 동일한 의도의 추천 칩이 하단 선택지에 다시 중복 노출되는 현상을 원천 차단합니다.
+ */
+function classifySuggestionIntentKey(raw: string): string | null {
+  const s = (raw || '').trim();
+  if (!s) return null;
+  if (/(?:백신|보안|디펜더|defender).*?(?:db|업데이트|패치|최신\s*버전)/i.test(s)) return 'DEFENDER_DB_UPDATE';
+  if (/(?:바이러스|백신|디펜더|defender).*?(?:빠른\s*)?(?:검사|스캔)/i.test(s)) return 'DEFENDER_QUICK_SCAN';
+  if (/(?:시작\s*프로그램|부팅.*?켜지는|자동\s*실행).*?(?:목록|보여|관리|점검)/i.test(s)) return 'STARTUP_LIST';
+  if (/(?:설치된|깔린)\s*(?:프로그램|앱).*?(?:목록|전체|보여)/i.test(s)) return 'INSTALLED_APPS_LIST';
+  if (/(?:임시\s*(?:파일|쓰레기)|temp\s*(?:파일|폴더)).*?(?:정리|청소|봐\s*줘|점검)/i.test(s)) return 'TEMP_JUNK_CLEAN';
+  if (/휴지통\s*(?:비워|비우기)/i.test(s)) return 'RECYCLE_BIN_EMPTY';
+  if (/복원\s*기록.*?(?:보여|확인|열어)/i.test(s)) return 'RESTORE_POINTS_VIEW';
+  if (/(?:원래대로|방금\s*한\s*거).*?(?:되돌려|원복|복구|복원)/i.test(s)) return 'ROLLBACK_LAST';
+  if (/(?:사양|스펙).*?(?:봐\s*줘|진단|점검|확인|돌아가)/i.test(s)) return 'PC_SPEC_CHECK';
+  if (/(?:부팅\s*경과|켜\s*둔\s*지|경과\s*시간).*?(?:진단|점검|확인|얼마나)/i.test(s)) return 'BOOT_UPTIME_CHECK';
+  if (/(?:새벽|자동)\s*재부팅.*?예약/i.test(s)) return 'AUTO_REBOOT_SCHEDULE';
+  if (/(?:은행|관공서)?\s*보안\s*(?:절전|잠재우|재워|알아서\s*재우)/i.test(s)) return 'BANK_SECURITY_SLEEP';
+  if (/보안\s*프로그램.*?(?:깨워|깨우|기상)/i.test(s)) return 'BANK_SECURITY_WAKE';
+  if (/보안\s*프로그램\s*상태.*?(?:확인|봐\s*줘)/i.test(s)) return 'BANK_SECURITY_STATUS';
+  if (/바탕화면.*?다운로드.*?(?:정리|봐\s*줘)/i.test(s)) return 'DESKTOP_DOWNLOAD_SCAN';
+  if (/(?:편의\s*기능|초능력).*?(?:알려|설명)/i.test(s)) return 'SUPERPOWERS_GUIDE';
+  if (/(?:실적\s*보고서|모아둔.*?실적|뒤에서\s*뭐\s*했)/i.test(s)) return 'SECRETARY_REPORT';
+  if (/기본\s*압축\s*앱.*?(?:연결|설정)/i.test(s)) return 'DEFAULT_ZIP_APP';
+  if (/다운로드\s*폴더\s*열어.*?압축|1초\s*압축\s*풀기\s*써/i.test(s)) return 'OPEN_DOWNLOADS_UNZIP';
+  return null;
+}
+
+function extractCoreActionTokens(raw: string): string[] {
+  const cleaned = (raw || '')
+    .toLowerCase()
+    .replace(/[^\w가-힣\s]/g, ' ')
+    .replace(
+      /\b(?:해줘|해주세요|해줄래|할래|볼래|보여줘|보여주세요|알려줘|알려주세요|실행해줘|실행|봐줘|확인해줘|점검해줘|시작해줘|최신|전체|지금|바로|다시|내|좀|거|것)\b/g,
+      ' '
+    )
+    .replace(/(?:해\s*줘|해\s*주세요|보여\s*줘|알려\s*줘|실행해\s*줘|봐\s*줘|확인해\s*줘)$/g, ' ');
+  return cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+}
+
+export function isSuggestionRedundantWithRecentTurn(
+  chip: string,
+  recentUserQuery?: string,
+  assistantReplyText?: string
+): boolean {
+  const c = (chip || '').trim();
+  const q = (recentUserQuery || '').trim();
+  if (!c || !q) return false;
+  // 파일 선택창 재호출 버튼('내 기기에서 사진 1장 고르기')은 브라우저 팝업 차단 대비용이므로 유지
+  if (/사진\s*1장.*?(?:고르기|선택)/.test(c)) return false;
+
+  const compactC = c.replace(/[\s!.~?'"`[\]()]/g, '').toLowerCase();
+  const compactQ = q.replace(/[\s!.~?'"`[\]()]/g, '').toLowerCase();
+  if (compactC === compactQ) return true;
+
+  const chipKey = classifySuggestionIntentKey(c);
+  const queryKey = classifySuggestionIntentKey(q);
+  if (chipKey && queryKey && chipKey === queryKey) {
+    return true;
+  }
+
+  // 응답 본문 자체가 이미 해당 작업 완료를 명시한 경우(예: "백신 보안 DB가 이미 최신 버전으로 적용되어 있어") 중복 차단
+  if (chipKey === 'DEFENDER_DB_UPDATE' && assistantReplyText && /보안\s*DB.*?(?:이미\s*최신|최신\s*버전|업데이트했어요)/.test(assistantReplyText) && /(?:업데이트|db|패치)/i.test(q)) {
+    return true;
+  }
+
+  const qTokens = extractCoreActionTokens(q);
+  const cTokens = extractCoreActionTokens(c);
+  if (qTokens.length >= 2 && cTokens.length >= 2) {
+    const cSet = new Set(cTokens);
+    const qSet = new Set(qTokens);
+    const qInC = qTokens.filter((t) => cSet.has(t)).length / qTokens.length;
+    const cInQ = cTokens.filter((t) => qSet.has(t)).length / cTokens.length;
+    if (qInC >= 0.8 && cInQ >= 0.65) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function normalizeSuggestionChips(
+  chips?: string[],
+  context?: { recentUserQuery?: string; assistantReplyText?: string }
+): string[] | undefined {
   if (!chips || !Array.isArray(chips)) return undefined;
-  const normalized = chips.map((c) => normalizeSuggestionChipTone(c)).filter(Boolean);
-  return normalized.length > 0 ? normalized : undefined;
+  const seenCompact = new Set<string>();
+  const seenIntentKeys = new Set<string>();
+  const out: string[] = [];
+
+  for (const raw of chips) {
+    const norm = normalizeSuggestionChipTone(raw);
+    if (!norm) continue;
+    if (context && isSuggestionRedundantWithRecentTurn(norm, context.recentUserQuery, context.assistantReplyText)) {
+      continue;
+    }
+    const comp = norm.replace(/[\s!.~?]/g, '').toLowerCase();
+    const ikey = classifySuggestionIntentKey(norm);
+    if (seenCompact.has(comp) || (ikey && seenIntentKeys.has(ikey))) {
+      continue;
+    }
+    seenCompact.add(comp);
+    if (ikey) seenIntentKeys.add(ikey);
+    out.push(norm);
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 export function questPromptFor(

@@ -67,7 +67,7 @@ import {
   isYes,
   isNo,
   parseNicknameSettingIntent,
-  normalizeSuggestionChipTone,
+  normalizeSuggestionChips,
   syncProfileNicknameFromHubEvent,
   syncSecretaryNicknameToHubProfile,
   type GhostSecretaryState,
@@ -2187,7 +2187,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             messages.find((m) => m.role !== 'user' && !completedSecretaryAnimIds.has(m.id))?.id ??
             null;
           let foundActive = false;
-          return messages.map((msg) => {
+          return messages.map((msg, msgIdx) => {
             const isUser = msg.role === 'user';
             if (!isUser && activePendingId) {
               if (msg.id === activePendingId) {
@@ -2319,11 +2319,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   </div>
                 )}
 
-                {!isUser && msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-slate-200 flex flex-wrap gap-1.5">
-                    {msg.followUpSuggestions.map((sug, sIdx) => {
-                      const casualSug = normalizeSuggestionChipTone(sug);
-                      return (
+                {!isUser && msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (() => {
+                  let precedingUserText = '';
+                  for (let k = msgIdx - 1; k >= 0; k--) {
+                    if (messages[k]?.role === 'user') {
+                      precedingUserText = messages[k].text || '';
+                      break;
+                    }
+                  }
+                  const visibleSuggestions =
+                    normalizeSuggestionChips(msg.followUpSuggestions, {
+                      recentUserQuery: precedingUserText,
+                      assistantReplyText: msg.text,
+                    }) || [];
+                  if (visibleSuggestions.length === 0) return null;
+                  return (
+                    <div className="mt-2.5 pt-2 border-t border-slate-200 flex flex-wrap gap-1.5">
+                      {visibleSuggestions.map((casualSug, sIdx) => (
                         <button
                           key={sIdx}
                           type="button"
@@ -2338,10 +2350,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                         >
                           {casualSug}
                         </button>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* 첫 환영 말풍선 안 1회성 대답 칩 */}
                 {!isUser &&

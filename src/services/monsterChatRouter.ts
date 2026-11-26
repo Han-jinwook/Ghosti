@@ -1929,13 +1929,21 @@ function formatReadableSecurityItems(rawLabels: string[]): string[] {
   return Array.from(counts.entries()).map(([label, cnt]) => (cnt > 1 ? `${label} · ${cnt}건` : label));
 }
 
+let activeProcessingUserQuery = '';
+
 function reply(
   sourceTab: 'trash' | 'repair',
   text: string,
   extra: Partial<MonsterChatMessage> = {}
 ): MonsterChatMessage {
   const normalizedExtra = extra.followUpSuggestions
-    ? { ...extra, followUpSuggestions: normalizeSuggestionChips(extra.followUpSuggestions) }
+    ? {
+        ...extra,
+        followUpSuggestions: normalizeSuggestionChips(extra.followUpSuggestions, {
+          recentUserQuery: activeProcessingUserQuery,
+          assistantReplyText: text,
+        }),
+      }
     : extra;
   const cleanText = text
     .replace(/(?:[\u{1F300}-\u{1F445}\u{1F447}-\u{1FAFF}]|[\u2600-\u2712\u2717-\u27BF])\uFE0F?/gu, '')
@@ -3158,6 +3166,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     .trim()
     .replace(/^['"‘’“”`]+|['"‘’“”`]+$/g, '')
     .trim();
+  activeProcessingUserQuery = clean;
   const speak = (text: string) => {
     if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
   };
@@ -5276,14 +5285,28 @@ export async function processUnifiedMonsterChatQuery(params: {
         `사설 백신은 잦은 광고 팝업과 상주 메모리 점유로 오히려 PC 속도를 늦춥니다. Windows에 기본 내장된 **순정 백신(Microsoft Defender)** 하나만 켜두셔도 실시간 바이러스·랜섬웨어 방어력이 충분하며 광고도 전혀 없어요!\n\n` +
         baseSummaryText
       : baseSummaryText;
+    const defFollowUps = wantsUpdate
+      ? [
+          '빠른 바이러스 검사 실행해줘',
+          '시작프로그램 목록 보여줘',
+          '설치된 프로그램 전체 목록 보여줘',
+        ]
+      : wantsScan
+      ? [
+          '백신 DB 최신 업데이트 해줘',
+          '시작프로그램 목록 보여줘',
+          '설치된 프로그램 전체 목록 보여줘',
+        ]
+      : [
+          '빠른 바이러스 검사 실행해줘',
+          '백신 DB 최신 업데이트 해줘',
+          '설치된 프로그램 전체 목록 보여줘',
+        ];
     speak(summaryText);
     return reply(sourceTab, summaryText, {
       cardKind: defWrap.payload ? 'DEFENDER_GUARD_CARD' : undefined,
       defenderGuardPayload: defWrap.payload,
-      followUpSuggestions: [        '빠른 바이러스 검사 실행해줘',
-        '백신 DB 최신 업데이트 해줘',
-        '설치된 프로그램 전체 목록 보여줘',
-      ],
+      followUpSuggestions: defFollowUps,
     });
   }
 
