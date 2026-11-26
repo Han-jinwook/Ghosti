@@ -346,6 +346,7 @@ export interface MonsterStartupItem {
   enabled: boolean;
   isProtected: boolean;
   requiresAdmin?: boolean;
+  fileExists?: boolean;
 }
 
 export interface MonsterStartupManagerPayload {
@@ -1595,6 +1596,46 @@ export async function toggleStartupProgramItem(
     };
   }
   return { ok: true, message: String(r.data.message || '변경되었습니다.') };
+}
+
+export async function openStartupProgramLocation(
+  targetExePath: string
+): Promise<{ ok: boolean; missingFile?: boolean; messageKo: string }> {
+  const cleanTarget = (targetExePath || '').trim();
+  if (!cleanTarget) {
+    return { ok: false, messageKo: '열 수 있는 폴더 위치 정보가 없습니다.' };
+  }
+  const r = await zcoreJson<{
+    ok: boolean;
+    missingFile?: boolean;
+    opened?: string;
+    error?: string;
+  }>('/__quarantine/open-folder', postJson({ targetPath: cleanTarget, strictFile: true }), 6000);
+
+  if (!r.ok) {
+    return {
+      ok: false,
+      messageKo: '내 컴퓨터 연결(PC 엔진) 상태를 확인해 주세요.',
+    };
+  }
+  if (r.data?.ok) {
+    return {
+      ok: true,
+      messageKo: '실제 프로그램이 있는 폴더를 파일 탐색기에서 열었습니다.',
+    };
+  }
+  if (r.data?.missingFile) {
+    return {
+      ok: false,
+      missingFile: true,
+      messageKo:
+        '예전에 삭제된 프로그램의 이름과 옛 주소만 윈도우 시작 목록에 남아 있는 항목입니다(현재 PC에 실제 파일 없음).',
+    };
+  }
+  return {
+    ok: false,
+    messageKo: r.data?.error || '해당 폴더 위치를 열지 못했습니다.',
+  };
 }
 
 export async function fetchInstalledAppsPayload(query = ''): Promise<{

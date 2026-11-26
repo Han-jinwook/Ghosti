@@ -9,6 +9,8 @@ import {
   Volume2,
   ChevronDown,
   ChevronRight,
+  FolderOpen,
+  Copy,
 } from 'lucide-react';
 import {
   type MonsterChatMessage,
@@ -26,6 +28,7 @@ import {
   fetchDefenderGuardState,
   fetchStartupManagerPayload,
   toggleStartupProgramItem,
+  openStartupProgramLocation,
   submitExternalMonsterChatQuery,
 } from '../services/monsterChatRouter';
 import { useSaySeeStore } from '../store/useSaySeeStore';
@@ -79,6 +82,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const [appFilterQuery, setAppFilterQuery] = useState('');
   const [activeCareBucket, setActiveCareBucket] = useState<CareNormalizedBucketId | null>(null);
   const [expandedStartupIds, setExpandedStartupIds] = useState<Set<string>>(() => new Set());
+  const [missingStartupIds, setMissingStartupIds] = useState<Set<string>>(() => new Set());
+  const [verifiedStartupIds, setVerifiedStartupIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (message.cardKind !== 'DEFENDER_GUARD_CARD' || !message.defenderGuardPayload?.scanRunning) {
@@ -1779,28 +1784,54 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             title = title.replace(/_[0-9A-Fa-f]{12,}$/, '');
           }
 
-          // 따옴표 및 실행 인자(--no-startup-window 등)를 분리해 깔끔한 실행파일명과 순수 경로만 추출
+          // 따옴표 및 실행 인자(--no-startup-window 등)를 분리해 깔끔한 실행파일명과 폴더 경로 추출
           const quotedMatch = (rawCmd || '').match(/^"([^"]+)"/);
-          const barePathMatch = (rawCmd || '').match(/^([^\s"]+\.(?:exe|bat|cmd|vbs|lnk))/i);
+          const barePathMatch = (rawCmd || '').match(/^([A-Za-z]:\\.+?\.(?:exe|bat|cmd|vbs|lnk))(?:\s|$)/i)
+            || (rawCmd || '').match(/^([^\s"]+\.(?:exe|bat|cmd|vbs|lnk))/i);
           const cleanPath = (quotedMatch?.[1] || barePathMatch?.[1] || rawCmd || '').trim();
-          const exeName = cleanPath.split(/[\\/]/).pop() || '';
-          const probe = `${title} ${exeName}`.toLowerCase();
+          const hasFolderPath = /^[A-Za-z]:[\\/]/.test(cleanPath) && /[\\/]/.test(cleanPath);
+          const folderDir = hasFolderPath ? cleanPath.replace(/[\\/][^\\/]+$/, '') : '';
+          const exeName = cleanPath.split(/[\\/]/).pop() || cleanPath;
+          const probe = `${title} ${exeName} ${cleanPath}`.toLowerCase();
 
-          let summary = exeName;
-          if (/chrome/.test(probe)) summary = '크롬 백그라운드 빠른 실행';
-          else if (/msedge|edge/.test(probe)) summary = '엣지 백그라운드 빠른 실행';
-          else if (/kakaotalk/.test(probe)) summary = '카카오톡 자동 시작';
-          else if (/googledrive/.test(probe)) summary = '구글 드라이브 동기화';
-          else if (/onedrive/.test(probe)) summary = '원드라이브 클라우드 동기화';
-          else if (/adobe|acrobat|collabsync/.test(probe)) summary = '어도비 PDF 동기화';
-          else if (/figma/.test(probe)) summary = '피그마 로컬 폰트 연결';
-          else if (/steam/.test(probe)) summary = '스팀 런처 자동 시작';
-          else if (/discord/.test(probe)) summary = '디스코드 자동 시작';
-          else if (/merlin|z_core|ghosti/.test(probe)) summary = '귀신같이 필수 엔진';
-          else if (/sensetalk/.test(probe)) summary = '센스톡 로컬 엔진';
-          else if (/tailscale/.test(probe)) summary = '네트워크 보안 연결';
+          let summary = '윈도우가 켜질 때 함께 자동 실행되는 등록 프로그램';
+          if (/chrome/.test(probe)) summary = '웹 브라우저를 빠르게 열기 위한 크롬 백그라운드 자동 시작';
+          else if (/msedge|edge/.test(probe)) summary = '웹 브라우저를 빠르게 열기 위한 엣지 백그라운드 자동 시작';
+          else if (/kakaotalk/.test(probe)) summary = '컴퓨터를 켜면 카카오톡이 바로 열리도록 도와주는 자동 시작';
+          else if (/mybox|ndrive/.test(probe)) summary = '네이버 MYBOX 클라우드 폴더를 내 컴퓨터와 자동 연결하는 도우미';
+          else if (/googledrive/.test(probe)) summary = '구글 드라이브 폴더를 내 컴퓨터와 실시간 동기화하는 도우미';
+          else if (/onedrive/.test(probe)) summary = '마이크로소프트 원드라이브 클라우드 폴더 자동 동기화 도우미';
+          else if (/dropbox/.test(probe)) summary = '드롭박스 클라우드 폴더를 내 컴퓨터와 자동 연결하는 도우미';
+          else if (/adobe|acrobat|collabsync/.test(probe)) summary = '어도비 PDF 문서 동기화 및 업데이트 확인 도우미';
+          else if (/figma/.test(probe)) summary = '피그마 디자인 작업 시 내 컴퓨터 글꼴을 연결해 주는 보조 도구';
+          else if (/startccc|allistart|clistart|ati\.ace|radeon|amd/.test(probe)) summary = 'AMD 그래픽카드 화면·해상도 설정을 불러오는 자동 시작 도구';
+          else if (/nvidia|nvbackend|nvcontainer/.test(probe)) summary = 'NVIDIA 그래픽카드 화면 설정 및 보조 기능 자동 시작 도구';
+          else if (/igfx|intel/.test(probe)) summary = '인텔 내장 그래픽 화면·소리 보조 설정 자동 시작 도구';
+          else if (/realtek|rtkaud|ravcpl/.test(probe)) summary = '스피커·마이크 소리 연결을 도와주는 오디오 제어 도구';
+          else if (/seagull|ssdal/.test(probe)) summary = '바코드·라벨 프린터 연결을 대기하는 드라이버 보조 도구';
+          else if (/ahnlab|v3lite|v3clinic/.test(probe)) summary = '안랩 V3 실시간 보안 점검 및 바이러스 감시 프로그램';
+          else if (/alyac|estsoft|alupdate/.test(probe)) summary = '이스트소프트 알약·알툴즈 자동 업데이트 및 보안 보조 도구';
+          else if (/hancom|hncupdate/.test(probe)) summary = '한컴오피스(한글) 자동 업데이트 확인 도우미';
+          else if (/crossex|touchen|delfino|veraport|anysign|iniline|astx|nprotect/.test(probe)) summary = '은행·관공서 홈페이지 이용 시 설치된 키보드·인증 보안 프로그램';
+          else if (/steam/.test(probe)) summary = '스팀 게임 런처를 컴퓨터 시작 시 자동으로 여는 항목';
+          else if (/discord/.test(probe)) summary = '디스코드 음성·채팅 메신저를 부팅 시 자동으로 여는 항목';
+          else if (/slack/.test(probe)) summary = '슬랙 업무용 메신저를 컴퓨터 시작 시 자동으로 여는 항목';
+          else if (/notion/.test(probe)) summary = '노션 앱을 컴퓨터 시작 시 빠르게 열도록 준비하는 항목';
+          else if (/zoom/.test(probe)) summary = '줌 화상회의 앱을 컴퓨터 시작 시 자동 대기시키는 항목';
+          else if (/teams/.test(probe)) summary = '마이크로소프트 팀즈 메신저를 부팅 시 자동으로 여는 항목';
+          else if (/logi|lghub/.test(probe)) summary = '로지텍 마우스·키보드 버튼 설정을 적용하는 도우미';
+          else if (/merlin|z_core|ghosti/.test(probe)) summary = '귀신같이 내 컴퓨터 정리·보호를 담당하는 필수 연결 엔진';
+          else if (/sensetalk|senstalk/.test(probe)) summary = '센스톡 메시지 전송을 도와주는 내 컴퓨터 연결 엔진';
+          else if (/tailscale/.test(probe)) summary = '외부 기기와 안전하게 연결해 주는 보안 네트워크 도구';
 
-          return { title: title || exeName || '시작프로그램', summary, cleanPath };
+          return {
+            title: title || exeName || '시작프로그램',
+            summary,
+            cleanPath,
+            hasFolderPath,
+            folderDir,
+            exeName,
+          };
         };
 
         return (
@@ -1829,11 +1860,26 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
             {items.map((stItem) => {
               const isBusyRow = busyId === `st_${stItem.id}`;
+              const isOpeningRow = busyId === `st_open_${stItem.id}`;
               const isCmdExpanded = expandedStartupIds.has(stItem.id);
-              const { title: dispTitle, summary: dispSummary, cleanPath } = formatStartupDisplay(
-                stItem.name,
-                stItem.command
-              );
+              const isMissingFile = stItem.fileExists === false || missingStartupIds.has(stItem.id);
+              const isVerifiedExists = stItem.fileExists === true || verifiedStartupIds.has(stItem.id);
+              const {
+                title: dispTitle,
+                summary: dispSummary,
+                cleanPath,
+                hasFolderPath,
+                folderDir,
+                exeName,
+              } = formatStartupDisplay(stItem.name, stItem.command);
+
+              const effectiveSummary = isMissingFile
+                ? '이미 삭제된 프로그램의 남은 시작 흔적 (현재 PC에 실제 파일 없음)'
+                : dispSummary;
+              const hoverFullSentence = effectiveSummary
+                ? `${dispTitle} — ${effectiveSummary}`
+                : dispTitle;
+
               const toggleCmdExpand = () => {
                 setExpandedStartupIds((prev) => {
                   const next = new Set(prev);
@@ -1856,13 +1902,18 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   <button
                     type="button"
                     onClick={cleanPath ? toggleCmdExpand : undefined}
-                    title={cleanPath ? `${dispTitle}\n파일 위치: ${cleanPath}` : dispTitle}
+                    title={hoverFullSentence}
                     className="min-w-0 flex-1 text-left group cursor-pointer"
                   >
-                    <div className="flex items-center gap-1 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                       <span className="font-semibold text-[12.5px] text-slate-900 break-words leading-snug group-hover:text-teal-800 transition-colors">
                         {dispTitle}
                       </span>
+                      {isMissingFile && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold shrink-0">
+                          삭제된 앱 흔적 · 파일 없음
+                        </span>
+                      )}
                       {cleanPath && (
                         <span className="text-slate-400 group-hover:text-slate-600 shrink-0">
                           {isCmdExpanded ? (
@@ -1885,9 +1936,14 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       >
                         {shortLoc}
                       </span>
-                      {dispSummary && (
-                        <span className="text-[11px] text-slate-500 truncate">
-                          {dispSummary}
+                      {effectiveSummary && (
+                        <span
+                          title={effectiveSummary}
+                          className={`text-[11px] truncate ${
+                            isMissingFile ? 'text-amber-700 font-medium' : 'text-slate-500'
+                          }`}
+                        >
+                          {effectiveSummary}
                         </span>
                       )}
                     </div>
@@ -1974,11 +2030,97 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 </div>
 
                 {isCmdExpanded && cleanPath && (
-                  <div className="pt-1.5 border-t border-slate-100 text-[10.5px] text-slate-500 space-y-0.5 leading-relaxed">
+                  <div className="pt-1.5 border-t border-slate-100 text-[11px] text-slate-600 space-y-1.5 leading-relaxed">
                     {dispTitle !== stItem.name && (
-                      <div className="break-all">등록 이름: {stItem.name}</div>
+                      <div className="text-[10.5px] text-slate-500 break-all">등록 이름: {stItem.name}</div>
                     )}
-                    <div className="font-mono break-all text-slate-600">파일 위치: {cleanPath}</div>
+
+                    {isMissingFile ? (
+                      <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-amber-900 space-y-1">
+                        <div className="font-semibold text-[11px] break-keep">
+                          현재 내 컴퓨터에서 이미 삭제된 프로그램입니다 (옛 시작 등록 흔적)
+                        </div>
+                        <div className="text-[10.5px] text-amber-800 break-keep leading-snug">
+                          예전에 프로그램을 지울 때 윈도우 시작 목록에만 이름과 옛날 주소가 남은 상태라 실제 폴더·파일이 없습니다. 우측 스위치를 [꺼짐]으로 두시면 부팅 시 아무것도 실행되지 않아 안전합니다.
+                        </div>
+                        <div className="font-mono text-[10px] text-amber-700/80 break-all pt-0.5">
+                          남아 있던 옛 주소: {cleanPath}
+                        </div>
+                      </div>
+                    ) : hasFolderPath ? (
+                      <>
+                        <div className="space-y-0.5">
+                          <div className="font-mono text-[10.5px] break-all text-slate-700">
+                            폴더 주소: {folderDir}
+                          </div>
+                          <div className="font-mono text-[10.5px] break-all text-slate-500">
+                            실행 파일: {exeName}
+                            {isVerifiedExists && (
+                              <span className="ml-1.5 font-sans text-[10px] text-emerald-700 font-semibold">
+                                (실제 파일 확인됨)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            disabled={isOpeningRow}
+                            onClick={async () => {
+                              setBusyId(`st_open_${stItem.id}`);
+                              const openRes = await openStartupProgramLocation(cleanPath);
+                              setBusyId(null);
+                              if (openRes.ok) {
+                                setVerifiedStartupIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.add(stItem.id);
+                                  return next;
+                                });
+                                onToast?.(openRes.messageKo);
+                              } else if (openRes.missingFile) {
+                                setMissingStartupIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.add(stItem.id);
+                                  return next;
+                                });
+                                onToast?.(openRes.messageKo);
+                              } else {
+                                onToast?.(openRes.messageKo);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 font-semibold text-[10.5px] cursor-pointer transition-colors disabled:opacity-60"
+                          >
+                            <FolderOpen className="w-3 h-3 shrink-0" />
+                            <span>{isOpeningRow ? '확인 중...' : '실제 폴더 열기'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(folderDir);
+                                onToast?.('폴더 주소를 복사했어요. 탐색기 주소창에 붙여넣어 이동할 수 있습니다.');
+                              } catch {
+                                onToast?.(`폴더 주소: ${folderDir}`);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 font-medium text-[10.5px] cursor-pointer transition-colors"
+                          >
+                            <Copy className="w-3 h-3 shrink-0" />
+                            <span>폴더 주소 복사</span>
+                          </button>
+                        </div>
+                        <div className="text-[10px] text-slate-400 break-keep">
+                          ※ 예전에 지운 앱은 윈도우 시작 목록에 옛 주소만 남아 있을 수 있어요. [실제 폴더 열기]를 누르면 실제 존재 여부를 바로 확인해 폴더를 열어 드립니다.
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-0.5 text-[10.5px]">
+                        <div className="font-mono break-all text-slate-700">실행 명령: {cleanPath}</div>
+                        <div className="text-slate-500 break-keep">
+                          별도 폴더 주소 없이 윈도우 기본 시스템 경로에서 실행되는 드라이버·보조 항목입니다.
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
