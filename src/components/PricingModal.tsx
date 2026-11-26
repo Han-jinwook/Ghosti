@@ -220,9 +220,9 @@ export const PricingModal: React.FC = () => {
           </div>
 
           <ul className="text-[13px] text-slate-600 space-y-1.5 leading-relaxed border-t border-slate-100 pt-3">
-            <li>• 기기 대수 제한 없이 내 스마트폰 · 집 PC · 회사 PC 통합 검색 및 사진 백업</li>
-            <li>• 기기 간 실시간 클립보드 공유</li>
-            <li>• 사진·표 OCR 창(글자·표 추출) 및 귀신 라벨러(파일명 자동 정리) 무제한 이용</li>
+            <li>• 폰으로 찍고 PC Ctrl+0 ➔ 1초 사진·표 OCR 엑셀 직행 및 귀신 라벨러 무제한</li>
+            <li>• 내 폰 · 집 PC · 회사 PC 대수 제한 없이 통합 1초 내용 검색 및 원본 사진 정리·백업</li>
+            <li>• 7일 통합 클립보드 보관함 (PC↔PC 무버튼 직결 · 폰↔PC 1탭 전송) 및 PC 상용구 동기화</li>
           </ul>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

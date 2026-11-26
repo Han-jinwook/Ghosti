@@ -243,10 +243,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                   </span>
                 </div>
                 <div className="text-[16px] font-semibold text-slate-900 break-keep">
-                  스마트폰과 집 · 회사 PC를 하나의 계정으로 연결
+                  카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로
                 </div>
                 <p className="text-[13px] text-slate-600 leading-relaxed break-keep">
-                  메신저 ‘나에게 보내기’ 없이 스마트폰 사진·영수증과 PC 문서를 연동하고 클립보드 및 텍스트 추출 기능을 함께 사용합니다.
+                  폰으로 찍은 사진·영수증의 1초 사진·표 OCR 추출과 귀신 라벨러, 내 폰·집컴·회사컴 통합 검색·원본 백업, 7일 통합 클립보드 보관함(PC↔PC 무버튼 직결 · 폰↔PC 1탭 전송)을 함께 사용합니다.
                 </p>
                 <details className="pt-1 text-[12.5px] text-slate-600">
                   <summary className="cursor-pointer font-medium text-slate-800 hover:text-slate-900 select-none">

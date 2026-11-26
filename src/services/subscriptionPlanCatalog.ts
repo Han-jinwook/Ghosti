@@ -20,9 +20,9 @@ export interface SubscriptionPlanSpec {
 export const PENDING_SUB_CHECKOUT_STORAGE_KEY = 'ghosti_pending_sub_checkout_v1';
 
 const PERSONAL_BENEFITS: string[] = [
-  '스마트폰 · 집 PC · 회사 PC 대수 제한 없이 통합 연결 및 원격 검색',
-  '기기 간 실시간 클립보드 공유',
-  '사진·표 OCR 창 및 귀신 라벨러 무제한 이용',
+  '폰으로 찍고 PC Ctrl+0 ➔ 1초 사진·표 OCR 엑셀 직행 및 귀신 라벨러 무제한',
+  '내 폰 · 집 PC · 회사 PC 대수 제한 없이 통합 1초 내용 검색 및 원본 사진 백업',
+  '7일 통합 클립보드 보관함 (PC↔PC 무버튼 직결 · 폰↔PC 1탭 전송) 및 PC 상용구 동기화',
 ];
 
 const WORK_SOHO_BENEFITS: string[] = [

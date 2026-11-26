@@ -7,6 +7,7 @@ import {
   writeTextToLocalOsClipboard,
 } from '../../services/deviceIntegrationService';
 import { zCoreBridge } from '../../services/zCoreBridge';
+import { isCapacitorIosRuntime } from '../../services/ghostiMobileCareBridge';
 import { formatKoreaDateShort } from '../../services/subscriptionPlanCatalog';
 
 export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> = ({
@@ -134,7 +135,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
       {/* 1. 헤더 */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[14px] font-semibold text-slate-900">클립보드 공유</h3>
+          <h3 className="text-[14px] font-semibold text-slate-900">7일 통합 클립보드 보관함</h3>
           {isLoggedIn && (
             <span className="text-[12px] text-slate-500">
               {thisDeviceRevoked
@@ -401,9 +402,14 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </button>
       </form>
 
-      <p className="text-[11.5px] text-slate-500 leading-normal">
-        PC와 모바일 모두 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. PC에서 복사(Ctrl+C)하면 연결된 스마트폰으로 자동 전달되며, 스마트폰에서 복사한 글자는 귀신같이 앱을 열면(아이폰은 <strong>[붙여넣기 허용]</strong> 팝업 탭, 안드로이드는 글자 선택 <strong>[귀신 클립보드 저장]</strong>도 지원) PC로 바로 전송됩니다.
+      <p className="text-[11.5px] text-slate-500 leading-normal break-keep">
+        카톡 &lsquo;나에게 보내기&rsquo; 없이 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. <strong>PC끼리는 Ctrl+C만 누르면 바로 붙고</strong>, 스마트폰에서는 <strong>[드래그/공유 ➔ PC로 보내기] 1탭</strong>(또는 귀신같이 앱 열기)이면 PC Ctrl+V로 즉시 전송됩니다.
       </p>
+      {isCapacitorIosRuntime() && (
+        <p className="text-[11px] text-slate-400 leading-snug break-keep">
+          팁: 아이폰에서 복사 후 앱을 열 때 뜨는 팝업이 번거로우시면 <strong>[아이폰 설정 &gt; 귀신같이 &gt; 다른 앱에서 붙여넣기 &gt; 허용]</strong>으로 1회만 바꿔두면 팝업 없이 즉시 동기화됩니다.
+        </p>
+      )}
 
       {/* 4. 최근 공유 목록 (7일 보관 · 최대 500건) */}
       {isLoggedIn && syncedClipboardItems.length > 0 && (() => {
