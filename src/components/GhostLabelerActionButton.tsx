@@ -5,6 +5,7 @@ import {
   resolveSmartKoreanLabelForPhoto,
   stripCollisionKeySuffix,
 } from '../services/aiEngine';
+import { probePhotoExifTakenAtMs } from '../services/ai/aiSharedRuntime';
 import { formatQuickKoreanLabelForFile } from './searchModals/docAndVideoFormatUtils';
 import {
   copyTextSafeToClipboard,
@@ -115,48 +116,63 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           e.stopPropagation();
           const { seq: mySeq, signal } = beginGhostLabelerRequest();
           void verifyGate(vp.fullPath || vp.name).then(async (allowed) => {
-            if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
+            if (!allowed || signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
             useSaySeeStore.setState({
               lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
             });
+            const existingPhotoNames = (useSaySeeStore.getState().photos || [])
+              .map((p) => p?.name || '')
+              .filter(Boolean);
+            const exifMsPromise = probePhotoExifTakenAtMs(vp.fullUrl || vp.thumbUrl).catch(
+              () => null
+            );
             try {
-              const existingPhotoNames = useSaySeeStore.getState().photos.map((p) => p.name);
-              const fallbackLabel = formatQuickKoreanLabelForFile(
-                stripCollisionKeySuffix(vp.name || '사진.png'),
-                vp.date,
-                vp.tags || [],
-                { mtimeMs: vp.mtimeMs, existingNames: existingPhotoNames }
-              );
               const res = await Promise.race([
                 resolveSmartKoreanLabelForPhoto(vp, existingPhotoNames, signal),
                 new Promise<{ displaySourceName: string; label: string; enrichedTags: string[] }>(
                   (resolve) =>
-                    setTimeout(
-                      () =>
+                    setTimeout(() => {
+                      void exifMsPromise.then((exifMs) => {
                         resolve({
                           displaySourceName: stripCollisionKeySuffix(vp.name || '사진.png'),
-                          label: fallbackLabel,
+                          label: formatQuickKoreanLabelForFile(
+                            stripCollisionKeySuffix(vp.name || '사진.png'),
+                            vp.date,
+                            vp.ontologyPrimaryTags || [],
+                            {
+                              takenAtMs: exifMs ?? undefined,
+                              mtimeMs: vp.mtimeMs,
+                              existingNames: existingPhotoNames,
+                            }
+                          ),
                           enrichedTags: [],
-                        }),
-                      950
-                    )
+                        });
+                      });
+                    }, 1750)
                 ),
               ]);
-              if (mySeq !== _latestGhostLabelerSeq) return;
+              if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
               await copyTextSafeToClipboard(res.label);
-              if (mySeq !== _latestGhostLabelerSeq) return;
+              if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
               useSaySeeStore.setState({
                 lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
               });
             } catch {
-              if (mySeq !== _latestGhostLabelerSeq) return;
+              if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
+              const exifMs = await exifMsPromise;
+              if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
               const fallbackLabel = formatQuickKoreanLabelForFile(
                 stripCollisionKeySuffix(vp.name || '사진.png'),
                 vp.date,
-                vp.tags || []
+                vp.ontologyPrimaryTags || [],
+                {
+                  takenAtMs: exifMs ?? undefined,
+                  mtimeMs: vp.mtimeMs,
+                  existingNames: existingPhotoNames,
+                }
               );
               await copyTextSafeToClipboard(fallbackLabel);
-              if (mySeq !== _latestGhostLabelerSeq) return;
+              if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
               useSaySeeStore.setState({
                 lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${fallbackLabel} (복사됨)`,
               });
@@ -178,17 +194,16 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
         e.stopPropagation();
         const { seq: mySeq, signal } = beginGhostLabelerRequest();
         void verifyGate(targetPhoto.fullPath || targetPhoto.name).then(async (allowed) => {
-          if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
+          if (!allowed || signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
           useSaySeeStore.setState({
             lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
           });
-          const existingPhotoNames = useSaySeeStore.getState().photos.map((p) => p.name);
-          const fallbackLabel = formatQuickKoreanLabelForFile(
-            stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
-            targetPhoto.date,
-            targetPhoto.tags || [],
-            { mtimeMs: targetPhoto.mtimeMs, existingNames: existingPhotoNames }
-          );
+          const existingPhotoNames = (useSaySeeStore.getState().photos || [])
+            .map((p) => p?.name || '')
+            .filter(Boolean);
+          const exifMsPromise = probePhotoExifTakenAtMs(
+            targetPhoto.fullUrl || targetPhoto.thumbUrl
+          ).catch(() => null);
           try {
             const res = await Promise.race([
               resolveSmartKoreanLabelForPhoto(targetPhoto, existingPhotoNames, signal),
@@ -198,20 +213,29 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                 enrichedTags: string[];
                 ocrSnippet?: string;
               }>((resolve) =>
-                setTimeout(
-                  () =>
+                setTimeout(() => {
+                  void exifMsPromise.then((exifMs) => {
                     resolve({
                       displaySourceName: stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
-                      label: fallbackLabel,
+                      label: formatQuickKoreanLabelForFile(
+                        stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
+                        targetPhoto.date,
+                        targetPhoto.ontologyPrimaryTags || [],
+                        {
+                          takenAtMs: exifMs ?? undefined,
+                          mtimeMs: targetPhoto.mtimeMs,
+                          existingNames: existingPhotoNames,
+                        }
+                      ),
                       enrichedTags: [],
-                    }),
-                  950
-                )
+                    });
+                  });
+                }, 1750)
               ),
             ]);
-            if (mySeq !== _latestGhostLabelerSeq) return;
+            if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(res.label);
-            if (mySeq !== _latestGhostLabelerSeq) return;
+            if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
             markGhostDojoStep('labeler');
             const patchPhoto = (p: PhotoItem): PhotoItem =>
               p.id === targetPhoto.id
@@ -239,9 +263,21 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                 : {}),
             }));
           } catch {
-            if (mySeq !== _latestGhostLabelerSeq) return;
+            if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
+            const exifMs = await exifMsPromise;
+            if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
+            const fallbackLabel = formatQuickKoreanLabelForFile(
+              stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
+              targetPhoto.date,
+              targetPhoto.ontologyPrimaryTags || [],
+              {
+                takenAtMs: exifMs ?? undefined,
+                mtimeMs: targetPhoto.mtimeMs,
+                existingNames: existingPhotoNames,
+              }
+            );
             await copyTextSafeToClipboard(fallbackLabel);
-            if (mySeq !== _latestGhostLabelerSeq) return;
+            if (signal.aborted || mySeq !== _latestGhostLabelerSeq) return;
             useSaySeeStore.setState({
               lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${fallbackLabel} (복사됨)`,
             });
