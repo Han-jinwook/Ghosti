@@ -271,6 +271,34 @@ export const createSearchSlice: StateCreator<
           : stateSnap.hasExecutedUserSearch && stateSnap.activeQuery
           ? selectedVideoModal.matchedSeekSec ?? 0
           : 0;
+      const baseNavSource =
+        stateSnap.matchedVideoScenes.length > 0 &&
+        stateSnap.matchedVideoScenes.some((v) => v.id === selectedVideoModal.id)
+          ? stateSnap.matchedVideoScenes
+          : stateSnap.videoSceneItems;
+      const mobileNavList = baseNavSource.filter((v) =>
+        String(v?.id || '').startsWith('mobile_vid_')
+      );
+      const playlistSource =
+        mobileNavList.some((v) => v.id === selectedVideoModal.id)
+          ? mobileNavList
+          : [selectedVideoModal];
+      const initialIndex = Math.max(
+        0,
+        playlistSource.findIndex((v) => v.id === selectedVideoModal.id)
+      );
+      const playlistPayload = playlistSource.map((v) => ({
+        id: v.id,
+        title: v.title,
+        durationText: v.durationText,
+        seekSec:
+          v.id === selectedVideoModal.id
+            ? targetSeek
+            : stateSnap.hasExecutedUserSearch && stateSnap.activeQuery
+            ? v.matchedSeekSec ?? 0
+            : 0,
+        ocrLines: v.ocrLines,
+      }));
       void (async () => {
         const res = await openNativeMobileVideoPlayerModal({
           id: selectedVideoModal.id,
@@ -278,6 +306,8 @@ export const createSearchSlice: StateCreator<
           durationText: selectedVideoModal.durationText,
           seekSec: targetSeek,
           ocrLines: selectedVideoModal.ocrLines,
+          playlist: playlistPayload,
+          initialIndex,
         });
         if (!res.supported) {
           // 구버전 네이티브 래퍼 미지원 시 기존 WebView 모달로 자연 폴백
@@ -289,6 +319,7 @@ export const createSearchSlice: StateCreator<
           });
           return;
         }
+        const syncedVideoId = res.activeId || selectedVideoModal.id;
         if (res.hasText && res.ocrLines.length > 0) {
           const summaryLine = res.ocrLines
             .map((l) => l.text.trim())
@@ -303,7 +334,7 @@ export const createSearchSlice: StateCreator<
             .slice(0, 40);
           set((st) => ({
             videoSceneItems: st.videoSceneItems.map((v) =>
-              v.id === selectedVideoModal.id
+              v.id === syncedVideoId
                 ? {
                     ...v,
                     hasScreenOcrText: true,
@@ -316,7 +347,7 @@ export const createSearchSlice: StateCreator<
                 : v
             ),
             matchedVideoScenes: st.matchedVideoScenes.map((v) =>
-              v.id === selectedVideoModal.id
+              v.id === syncedVideoId
                 ? {
                     ...v,
                     hasScreenOcrText: true,

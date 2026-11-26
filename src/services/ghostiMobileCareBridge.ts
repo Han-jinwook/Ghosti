@@ -146,9 +146,18 @@ export interface GhostiMobileCarePluginInterface {
     durationText?: string;
     seekSec?: number;
     ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+    playlist?: Array<{
+      id: string;
+      title?: string;
+      durationText?: string;
+      seekSec?: number;
+      ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+    }>;
+    initialIndex?: number;
   }): Promise<{
     ok: boolean;
     closed?: boolean;
+    activeId?: string;
     hasText?: boolean;
     ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
     fullText?: string;
@@ -817,9 +826,18 @@ export async function openNativeMobileVideoPlayerModal(options: {
   durationText?: string;
   seekSec?: number;
   ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+  playlist?: Array<{
+    id: string;
+    title?: string;
+    durationText?: string;
+    seekSec?: number;
+    ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+  }>;
+  initialIndex?: number;
 }): Promise<{
   supported: boolean;
   ok: boolean;
+  activeId?: string;
   hasText: boolean;
   ocrLines: Array<{ timeSec: number; timestamp: string; text: string }>;
   fullText: string;
@@ -834,6 +852,12 @@ export async function openNativeMobileVideoPlayerModal(options: {
       durationText: options.durationText || '',
       seekSec: Math.max(0, Math.floor(options.seekSec || 0)),
       ocrLines: Array.isArray(options.ocrLines) ? options.ocrLines : [],
+      ...(Array.isArray(options.playlist) && options.playlist.length > 0
+        ? {
+            playlist: options.playlist,
+            initialIndex: Math.max(0, Math.floor(options.initialIndex || 0)),
+          }
+        : {}),
     });
     if (res && res.ok) {
       const lines = Array.isArray(res.ocrLines)
@@ -842,6 +866,7 @@ export async function openNativeMobileVideoPlayerModal(options: {
       return {
         supported: true,
         ok: true,
+        activeId: typeof res.activeId === 'string' && res.activeId ? res.activeId : options.id,
         hasText: Boolean(res.hasText && lines.length > 0),
         ocrLines: lines,
         fullText: typeof res.fullText === 'string' ? res.fullText : '',

@@ -14,6 +14,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -44,6 +45,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -61,6 +63,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.MediaController;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
@@ -2829,6 +2832,49 @@ public class GhostiMobileCarePlugin extends Plugin {
         return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, ctx.getResources().getDisplayMetrics()));
     }
 
+    private static final class NativeVideoPlaylistEntry {
+        final String rawId;
+        final long mediaId;
+        final String title;
+        final String durationText;
+        final int seekSec;
+        final List<NativeOcrLineEntry> initialLines;
+
+        NativeVideoPlaylistEntry(
+            String rawId,
+            long mediaId,
+            String title,
+            String durationText,
+            int seekSec,
+            List<NativeOcrLineEntry> initialLines
+        ) {
+            this.rawId = rawId;
+            this.mediaId = mediaId;
+            this.title = title;
+            this.durationText = durationText;
+            this.seekSec = seekSec;
+            this.initialLines = initialLines;
+        }
+    }
+
+    private List<NativeOcrLineEntry> parsePreloadedOcrLines(org.json.JSONArray preloadedArr) {
+        List<NativeOcrLineEntry> out = new ArrayList<>();
+        if (preloadedArr == null) return out;
+        try {
+            for (int i = 0; i < preloadedArr.length(); i++) {
+                JSONObject obj = preloadedArr.optJSONObject(i);
+                if (obj == null) continue;
+                String tx = obj.optString("text", "").trim();
+                if (tx.isEmpty()) continue;
+                int tsSec = Math.max(0, obj.optInt("timeSec", 0));
+                String tsStr = obj.optString("timestamp", formatMmSs(tsSec));
+                out.add(new NativeOcrLineEntry(tsSec, tsStr, tx));
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
     @PluginMethod
     public void openNativeVideoPlayerModal(PluginCall call) {
         final Activity activity = getActivity();
@@ -2837,46 +2883,74 @@ public class GhostiMobileCarePlugin extends Plugin {
         final String durationText = call.getString("durationText", "");
         final int initialSeekSec = Math.max(0, call.getInt("seekSec", 0));
         final JSArray preloadedArr = call.getArray("ocrLines");
-        final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
-        if (activity == null || activity.isFinishing() || digits.isEmpty()) {
-            JSObject fail = new JSObject();
-            fail.put("ok", false);
-            call.resolve(fail);
-            return;
-        }
-        final long mediaId;
-        try {
-            mediaId = Long.parseLong(digits);
-        } catch (NumberFormatException e) {
+        final JSArray playlistArr = call.getArray("playlist");
+        final int requestedInitialIdx = Math.max(0, call.getInt("initialIndex", 0));
+
+        if (activity == null || activity.isFinishing()) {
             JSObject fail = new JSObject();
             fail.put("ok", false);
             call.resolve(fail);
             return;
         }
 
-        final List<NativeOcrLineEntry> initialLines = new ArrayList<>();
-        if (preloadedArr != null) {
-            try {
-                for (int i = 0; i < preloadedArr.length(); i++) {
-                    JSONObject obj = preloadedArr.getJSONObject(i);
-                    if (obj == null) continue;
-                    String tx = obj.optString("text", "").trim();
-                    if (tx.isEmpty()) continue;
-                    int tsSec = Math.max(0, obj.optInt("timeSec", 0));
-                    String tsStr = obj.optString("timestamp", formatMmSs(tsSec));
-                    initialLines.add(new NativeOcrLineEntry(tsSec, tsStr, tx));
+        final List<NativeVideoPlaylistEntry> playlist = new ArrayList<>();
+        if (playlistArr != null && playlistArr.length() > 0) {
+            for (int i = 0; i < playlistArr.length(); i++) {
+                try {
+                    JSONObject itemObj = playlistArr.optJSONObject(i);
+                    if (itemObj == null) continue;
+                    String pRawId = itemObj.optString("id", "");
+                    String pDigits = pRawId.replaceAll("[^0-9]", "");
+                    if (pDigits.isEmpty()) continue;
+                    long pMediaId = Long.parseLong(pDigits);
+                    String pTitle = itemObj.optString("title", "내 스마트폰 동영상");
+                    String pDur = itemObj.optString("durationText", "");
+                    int pSeek = Math.max(0, itemObj.optInt("seekSec", 0));
+                    List<NativeOcrLineEntry> pLines = parsePreloadedOcrLines(itemObj.optJSONArray("ocrLines"));
+                    playlist.add(new NativeVideoPlaylistEntry(pRawId, pMediaId, pTitle, pDur, pSeek, pLines));
+                } catch (Throwable ignored) {
                 }
-            } catch (Throwable ignored) {
+            }
+        }
+        if (playlist.isEmpty()) {
+            final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
+            if (digits.isEmpty()) {
+                JSObject fail = new JSObject();
+                fail.put("ok", false);
+                call.resolve(fail);
+                return;
+            }
+            try {
+                long singleMediaId = Long.parseLong(digits);
+                playlist.add(
+                    new NativeVideoPlaylistEntry(
+                        rawId,
+                        singleMediaId,
+                        title,
+                        durationText,
+                        initialSeekSec,
+                        parsePreloadedOcrLines(preloadedArr)
+                    )
+                );
+            } catch (NumberFormatException e) {
+                JSObject fail = new JSObject();
+                fail.put("ok", false);
+                call.resolve(fail);
+                return;
             }
         }
 
+        final int startIdx = Math.min(requestedInitialIdx, playlist.size() - 1);
+
         activity.runOnUiThread(() -> {
             final boolean[] resolvedOnce = new boolean[] { false };
-            final NativeVideoOcrResult[] latestOcrHolder = new NativeVideoOcrResult[] {
-                !initialLines.isEmpty()
-                    ? new NativeVideoOcrResult(true, initialLines, "")
-                    : sNativeVideoOcrCache.get(mediaId)
-            };
+            final int[] currentIdxHolder = new int[] { startIdx };
+            final int[] loadSeqHolder = new int[] { 0 };
+            final NativeVideoOcrResult[] latestOcrHolder = new NativeVideoOcrResult[] { null };
+            final android.media.MediaPlayer[] mpHolder = new android.media.MediaPlayer[] { null };
+            final boolean[] userSeekingHolder = new boolean[] { false };
+            final int[] knownDurationMsHolder = new int[] { 0 };
+            final Handler uiHandler = new Handler(Looper.getMainLooper());
 
             final Dialog dialog = new Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
             dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -2913,7 +2987,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                 });
             }
 
-            // 1) 상단 헤더 (제목 + 길이 배지 + 닫기 버튼)
+            // 1) 상단 헤더 (제목 + 길이·순번 배지 + 닫기 버튼)
             LinearLayout header = new LinearLayout(activity);
             header.setOrientation(LinearLayout.HORIZONTAL);
             header.setGravity(Gravity.CENTER_VERTICAL);
@@ -2930,15 +3004,13 @@ public class GhostiMobileCarePlugin extends Plugin {
             titleCol.setLayoutParams(titleColLp);
 
             final TextView titleTv = new TextView(activity);
-            titleTv.setText(title);
             titleTv.setTextColor(Color.WHITE);
-            titleTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.5f);
+            titleTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.0f);
             titleTv.setTypeface(Typeface.DEFAULT_BOLD);
             titleTv.setMaxLines(2);
             titleCol.addView(titleTv);
 
-            TextView subTv = new TextView(activity);
-            subTv.setText(durationText.isEmpty() ? "🎬 스마트폰 원본 하드웨어 즉시 재생" : "⏱️ 전체 길이 " + durationText + " · 원본 무변환 즉시 재생");
+            final TextView subTv = new TextView(activity);
             subTv.setTextColor(Color.parseColor("#94A3B8"));
             subTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
             titleCol.addView(subTv);
@@ -2960,12 +3032,12 @@ public class GhostiMobileCarePlugin extends Plugin {
             header.addView(closeBtn);
             root.addView(header);
 
-            // 2) 중앙 OS 순정 하드웨어 VideoView 플레이어 영역
+            // 2) 중앙 OS 순정 하드웨어 VideoView 플레이어 영역 + 좌우 이전/다음 영상 버튼
             FrameLayout playerBox = new FrameLayout(activity);
             LinearLayout.LayoutParams playerBoxLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f
             );
-            playerBoxLp.bottomMargin = dpToPx(activity, 12);
+            playerBoxLp.bottomMargin = dpToPx(activity, 8);
             playerBox.setLayoutParams(playerBoxLp);
             GradientDrawable playerBg = new GradientDrawable();
             playerBg.setColor(Color.BLACK);
@@ -2982,35 +3054,223 @@ public class GhostiMobileCarePlugin extends Plugin {
             videoView.setLayoutParams(vvLp);
             playerBox.addView(videoView);
 
-            final MediaController mediaController = new MediaController(activity);
-            mediaController.setAnchorView(playerBox);
-            videoView.setMediaController(mediaController);
+            final TextView seekHudTv = new TextView(activity);
+            seekHudTv.setTextColor(Color.WHITE);
+            seekHudTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+            seekHudTv.setTypeface(Typeface.DEFAULT_BOLD);
+            seekHudTv.setPadding(dpToPx(activity, 14), dpToPx(activity, 6), dpToPx(activity, 14), dpToPx(activity, 6));
+            GradientDrawable hudBg = new GradientDrawable();
+            hudBg.setColor(Color.parseColor("#CC0F172A"));
+            hudBg.setCornerRadius(dpToPx(activity, 18));
+            hudBg.setStroke(dpToPx(activity, 1), Color.parseColor("#5EEAD4"));
+            seekHudTv.setBackground(hudBg);
+            seekHudTv.setVisibility(View.GONE);
+            FrameLayout.LayoutParams hudLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL
+            );
+            hudLp.topMargin = dpToPx(activity, 12);
+            seekHudTv.setLayoutParams(hudLp);
+            playerBox.addView(seekHudTv);
 
-            Uri directVideoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
-            final android.media.MediaPlayer[] mpHolder = new android.media.MediaPlayer[] { null };
-            videoView.setVideoURI(directVideoUri);
-            videoView.setOnPreparedListener(mp -> {
+            final Runnable hideSeekHudTask = () -> seekHudTv.setVisibility(View.GONE);
+            final java.util.function.Consumer<String> showSeekHud = msg -> {
+                seekHudTv.setText(msg);
+                seekHudTv.setVisibility(View.VISIBLE);
+                uiHandler.removeCallbacks(hideSeekHudTask);
+                uiHandler.postDelayed(hideSeekHudTask, 900);
+            };
+
+            root.addView(playerBox);
+
+            // 2-B) 직관적 동영상 컨트롤 바 (타임라인 시크바 + ↺ -10초 · ▶/⏸ · +10초 ↻)
+            LinearLayout ctrlCard = new LinearLayout(activity);
+            ctrlCard.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams ctrlCardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            ctrlCardLp.bottomMargin = dpToPx(activity, 10);
+            ctrlCard.setLayoutParams(ctrlCardLp);
+            ctrlCard.setPadding(dpToPx(activity, 12), dpToPx(activity, 8), dpToPx(activity, 12), dpToPx(activity, 10));
+            GradientDrawable ctrlBg = new GradientDrawable();
+            ctrlBg.setColor(Color.parseColor("#0F172A"));
+            ctrlBg.setCornerRadius(dpToPx(activity, 14));
+            ctrlBg.setStroke(dpToPx(activity, 1), Color.parseColor("#334155"));
+            ctrlCard.setBackground(ctrlBg);
+
+            LinearLayout seekRow = new LinearLayout(activity);
+            seekRow.setOrientation(LinearLayout.HORIZONTAL);
+            seekRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams seekRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            seekRowLp.bottomMargin = dpToPx(activity, 8);
+            seekRow.setLayoutParams(seekRowLp);
+
+            final TextView curTimeTv = new TextView(activity);
+            curTimeTv.setText("00:00");
+            curTimeTv.setTextColor(Color.parseColor("#E2E8F0"));
+            curTimeTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
+            curTimeTv.setTypeface(Typeface.MONOSPACE);
+            seekRow.addView(curTimeTv);
+
+            final SeekBar seekBar = new SeekBar(activity);
+            LinearLayout.LayoutParams sbLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            sbLp.leftMargin = dpToPx(activity, 6);
+            sbLp.rightMargin = dpToPx(activity, 6);
+            seekBar.setLayoutParams(sbLp);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                seekBar.setProgressTintList(ColorStateList.valueOf(Color.parseColor("#2DD4BF")));
+                seekBar.setThumbTintList(ColorStateList.valueOf(Color.parseColor("#2DD4BF")));
+                seekBar.setProgressBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#475569")));
+            }
+            seekRow.addView(seekBar);
+
+            final TextView totalTimeTv = new TextView(activity);
+            totalTimeTv.setText("00:00");
+            totalTimeTv.setTextColor(Color.parseColor("#94A3B8"));
+            totalTimeTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
+            totalTimeTv.setTypeface(Typeface.MONOSPACE);
+            seekRow.addView(totalTimeTv);
+            ctrlCard.addView(seekRow);
+
+            LinearLayout btnRow = new LinearLayout(activity);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
+            btnRow.setGravity(Gravity.CENTER);
+            btnRow.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ));
+
+            final TextView back10Btn = new TextView(activity);
+            back10Btn.setText("↺ -10초");
+            back10Btn.setTextColor(Color.parseColor("#E2E8F0"));
+            back10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+            back10Btn.setTypeface(Typeface.DEFAULT_BOLD);
+            back10Btn.setGravity(Gravity.CENTER);
+            back10Btn.setPadding(dpToPx(activity, 14), dpToPx(activity, 8), dpToPx(activity, 14), dpToPx(activity, 8));
+            GradientDrawable jumpBtnBg = new GradientDrawable();
+            jumpBtnBg.setColor(Color.parseColor("#1E293B"));
+            jumpBtnBg.setCornerRadius(dpToPx(activity, 18));
+            jumpBtnBg.setStroke(dpToPx(activity, 1), Color.parseColor("#475569"));
+            back10Btn.setBackground(jumpBtnBg);
+            btnRow.addView(back10Btn);
+
+            final TextView playPauseBtn = new TextView(activity);
+            playPauseBtn.setText("⏸ 일시정지");
+            playPauseBtn.setTextColor(Color.parseColor("#0F172A"));
+            playPauseBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            playPauseBtn.setTypeface(Typeface.DEFAULT_BOLD);
+            playPauseBtn.setGravity(Gravity.CENTER);
+            playPauseBtn.setPadding(dpToPx(activity, 20), dpToPx(activity, 8), dpToPx(activity, 20), dpToPx(activity, 8));
+            GradientDrawable playBtnBg = new GradientDrawable();
+            playBtnBg.setColor(Color.parseColor("#2DD4BF"));
+            playBtnBg.setCornerRadius(dpToPx(activity, 18));
+            playPauseBtn.setBackground(playBtnBg);
+            LinearLayout.LayoutParams ppLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            ppLp.leftMargin = dpToPx(activity, 12);
+            ppLp.rightMargin = dpToPx(activity, 12);
+            playPauseBtn.setLayoutParams(ppLp);
+            btnRow.addView(playPauseBtn);
+
+            final TextView fwd10Btn = new TextView(activity);
+            fwd10Btn.setText("+10초 ↻");
+            fwd10Btn.setTextColor(Color.parseColor("#E2E8F0"));
+            fwd10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+            fwd10Btn.setTypeface(Typeface.DEFAULT_BOLD);
+            fwd10Btn.setGravity(Gravity.CENTER);
+            fwd10Btn.setPadding(dpToPx(activity, 14), dpToPx(activity, 8), dpToPx(activity, 14), dpToPx(activity, 8));
+            GradientDrawable fwdBtnBg = new GradientDrawable();
+            fwdBtnBg.setColor(Color.parseColor("#1E293B"));
+            fwdBtnBg.setCornerRadius(dpToPx(activity, 18));
+            fwdBtnBg.setStroke(dpToPx(activity, 1), Color.parseColor("#475569"));
+            fwd10Btn.setBackground(fwdBtnBg);
+            btnRow.addView(fwd10Btn);
+
+            ctrlCard.addView(btnRow);
+            root.addView(ctrlCard);
+
+            final Runnable syncPlayPauseUi = () -> {
                 try {
-                    mpHolder[0] = mp;
-                    mp.setLooping(false);
-                    if (initialSeekSec > 0) {
-                        long targetMs = initialSeekSec * 1000L;
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            mp.seekTo(targetMs, android.media.MediaPlayer.SEEK_CLOSEST);
-                        } else {
-                            videoView.seekTo((int) targetMs);
-                        }
+                    if (videoView.isPlaying()) {
+                        playPauseBtn.setText("⏸ 일시정지");
+                    } else {
+                        playPauseBtn.setText("▶ 재생");
                     }
-                    videoView.start();
                 } catch (Throwable ignored) {
                 }
+            };
+
+            final java.util.function.IntConsumer seekRelativeMs = deltaMs -> {
+                try {
+                    int durMs = Math.max(knownDurationMsHolder[0], videoView.getDuration());
+                    int curMs = Math.max(0, videoView.getCurrentPosition());
+                    int targetMs = Math.max(0, durMs > 0 ? Math.min(durMs, curMs + deltaMs) : curMs + deltaMs);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mpHolder[0] != null) {
+                        mpHolder[0].seekTo(targetMs, android.media.MediaPlayer.SEEK_CLOSEST);
+                    } else {
+                        videoView.seekTo(targetMs);
+                    }
+                    curTimeTv.setText(formatMmSs(targetMs / 1000));
+                    if (durMs > 0) {
+                        seekBar.setMax(durMs);
+                        seekBar.setProgress(targetMs);
+                    }
+                    showSeekHud.accept(deltaMs < 0 ? "↺ -10초 이동" : "+10초 이동 ↻");
+                } catch (Throwable ignored) {
+                }
+            };
+
+            back10Btn.setOnClickListener(v -> seekRelativeMs.accept(-10000));
+            fwd10Btn.setOnClickListener(v -> seekRelativeMs.accept(10000));
+            final View.OnClickListener togglePlayPause = v -> {
+                try {
+                    if (videoView.isPlaying()) {
+                        videoView.pause();
+                    } else {
+                        videoView.start();
+                    }
+                    syncPlayPauseUi.run();
+                } catch (Throwable ignored) {
+                }
+            };
+            playPauseBtn.setOnClickListener(togglePlayPause);
+            videoView.setOnClickListener(togglePlayPause);
+
+            seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+                    if (fromUser) {
+                        curTimeTv.setText(formatMmSs(progress / 1000));
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar sb) {
+                    userSeekingHolder[0] = true;
+                }
+
+                @Override
+                public void onStopTrackingTouch(SeekBar sb) {
+                    userSeekingHolder[0] = false;
+                    try {
+                        int targetMs = Math.max(0, sb.getProgress());
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mpHolder[0] != null) {
+                            mpHolder[0].seekTo(targetMs, android.media.MediaPlayer.SEEK_CLOSEST);
+                        } else {
+                            videoView.seekTo(targetMs);
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
             });
-            root.addView(playerBox);
 
             // 3) 하단 영상 속 한글 추출 결과 & 복사 패널
             LinearLayout ocrCard = new LinearLayout(activity);
             ocrCard.setOrientation(LinearLayout.VERTICAL);
-            int cardMaxH = Math.round(activity.getResources().getDisplayMetrics().heightPixels * 0.31f);
+            int cardMaxH = Math.round(activity.getResources().getDisplayMetrics().heightPixels * 0.27f);
             LinearLayout.LayoutParams ocrCardLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3074,6 +3334,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                     linesContainer.removeAllViews();
                     NativeVideoOcrResult cur = latestOcrHolder[0];
                     if (cur == null) {
+                        ocrTitleTv.setText("📝 영상 화면 속 한글 자동 추출");
                         copyAllBtn.setVisibility(View.GONE);
                         TextView loadingTv = new TextView(activity);
                         loadingTv.setText("🔍 온디바이스 AI가 영상 화면 속 한글을 빠르게 읽고 있습니다...");
@@ -3083,6 +3344,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                         return;
                     }
                     if (!cur.hasText || cur.lines.isEmpty()) {
+                        ocrTitleTv.setText("📝 영상 화면 속 한글 자동 추출");
                         copyAllBtn.setVisibility(View.GONE);
                         TextView emptyTv = new TextView(activity);
                         emptyTv.setText("이 영상 화면에서는 인식된 글자가 없습니다.");
@@ -3122,6 +3384,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                                     videoView.seekTo((int) targetMs);
                                 }
                                 if (!videoView.isPlaying()) videoView.start();
+                                syncPlayPauseUi.run();
                                 ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
                                 if (cm != null) {
                                     sLastInjectedClipHash = sha256HexUtf8(entry.text);
@@ -3150,36 +3413,172 @@ public class GhostiMobileCarePlugin extends Plugin {
                 }
             };
 
-            renderOcrState.run();
-            if (latestOcrHolder[0] == null) {
-                final Context appCtx = activity.getApplicationContext();
-                new Thread(() -> {
-                    NativeVideoOcrResult extracted = extractNativeVideoOcrInternal(appCtx, mediaId, 8);
-                    latestOcrHolder[0] = extracted;
-                    activity.runOnUiThread(() -> {
-                        if (dialog.isShowing()) {
-                            renderOcrState.run();
+            final java.util.function.IntConsumer loadVideoAtIndex = targetIdx -> {
+                final int safeIdx = ((targetIdx % playlist.size()) + playlist.size()) % playlist.size();
+                currentIdxHolder[0] = safeIdx;
+                final int mySeq = ++loadSeqHolder[0];
+                final NativeVideoPlaylistEntry item = playlist.get(safeIdx);
+
+                titleTv.setText(item.title);
+                String idxPrefix = playlist.size() >= 2 ? ((safeIdx + 1) + " / " + playlist.size() + "  ·  ") : "";
+                subTv.setText(
+                    item.durationText.isEmpty()
+                        ? idxPrefix + "🎬 스마트폰 원본 즉시 재생"
+                        : idxPrefix + "⏱️ 길이 " + item.durationText + " · 원본 즉시 재생"
+                );
+                knownDurationMsHolder[0] = 0;
+                curTimeTv.setText(formatMmSs(item.seekSec));
+                totalTimeTv.setText(item.durationText.isEmpty() ? "00:00" : item.durationText);
+                seekBar.setProgress(0);
+                mpHolder[0] = null;
+
+                try {
+                    videoView.stopPlayback();
+                } catch (Throwable ignored) {
+                }
+
+                Uri directVideoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, item.mediaId);
+                videoView.setOnPreparedListener(mp -> {
+                    if (mySeq != loadSeqHolder[0]) return;
+                    try {
+                        mpHolder[0] = mp;
+                        mp.setLooping(false);
+                        int durMs = Math.max(0, mp.getDuration());
+                        knownDurationMsHolder[0] = durMs;
+                        if (durMs > 0) {
+                            seekBar.setMax(durMs);
+                            totalTimeTv.setText(formatMmSs(durMs / 1000));
                         }
-                    });
-                }, "GhostiDialogVideoOcr").start();
+                        if (item.seekSec > 0) {
+                            long targetMs = item.seekSec * 1000L;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                mp.seekTo(targetMs, android.media.MediaPlayer.SEEK_CLOSEST);
+                            } else {
+                                videoView.seekTo((int) targetMs);
+                            }
+                            seekBar.setProgress((int) Math.min(durMs > 0 ? durMs : targetMs, targetMs));
+                            curTimeTv.setText(formatMmSs(item.seekSec));
+                        }
+                        videoView.start();
+                        syncPlayPauseUi.run();
+                    } catch (Throwable ignored) {
+                    }
+                });
+                videoView.setOnCompletionListener(mp -> {
+                    if (mySeq != loadSeqHolder[0]) return;
+                    syncPlayPauseUi.run();
+                });
+                videoView.setVideoURI(directVideoUri);
+
+                latestOcrHolder[0] = !item.initialLines.isEmpty()
+                    ? new NativeVideoOcrResult(true, item.initialLines, "")
+                    : sNativeVideoOcrCache.get(item.mediaId);
+                renderOcrState.run();
+                if (latestOcrHolder[0] == null) {
+                    final Context appCtx = activity.getApplicationContext();
+                    new Thread(() -> {
+                        NativeVideoOcrResult extracted = extractNativeVideoOcrInternal(appCtx, item.mediaId, 8);
+                        activity.runOnUiThread(() -> {
+                            if (dialog.isShowing() && mySeq == loadSeqHolder[0]) {
+                                latestOcrHolder[0] = extracted;
+                                renderOcrState.run();
+                            }
+                        });
+                    }, "GhostiDialogVideoOcr").start();
+                }
+            };
+
+            // 사진 상세보기·PC 동영상 상세보기와 동일한 좌우 이전/다음 동영상 버튼 (2개 이상일 때 표시)
+            if (playlist.size() >= 2) {
+                int navSize = dpToPx(activity, 40);
+                GradientDrawable navBg = new GradientDrawable();
+                navBg.setColor(Color.parseColor("#990F172A"));
+                navBg.setShape(GradientDrawable.OVAL);
+                navBg.setStroke(dpToPx(activity, 1), Color.parseColor("#66FFFFFF"));
+
+                TextView prevVidBtn = new TextView(activity);
+                prevVidBtn.setText("‹");
+                prevVidBtn.setContentDescription("이전 동영상");
+                prevVidBtn.setTextColor(Color.WHITE);
+                prevVidBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24.0f);
+                prevVidBtn.setTypeface(Typeface.DEFAULT_BOLD);
+                prevVidBtn.setGravity(Gravity.CENTER);
+                prevVidBtn.setBackground(navBg);
+                FrameLayout.LayoutParams prevLp = new FrameLayout.LayoutParams(navSize, navSize, Gravity.START | Gravity.CENTER_VERTICAL);
+                prevLp.leftMargin = dpToPx(activity, 8);
+                prevVidBtn.setLayoutParams(prevLp);
+                prevVidBtn.setOnClickListener(v -> {
+                    loadVideoAtIndex.accept(currentIdxHolder[0] - 1);
+                    showSeekHud.accept("‹ 이전 동영상 (" + (currentIdxHolder[0] + 1) + "/" + playlist.size() + ")");
+                });
+                playerBox.addView(prevVidBtn);
+
+                GradientDrawable navBgRight = new GradientDrawable();
+                navBgRight.setColor(Color.parseColor("#990F172A"));
+                navBgRight.setShape(GradientDrawable.OVAL);
+                navBgRight.setStroke(dpToPx(activity, 1), Color.parseColor("#66FFFFFF"));
+
+                TextView nextVidBtn = new TextView(activity);
+                nextVidBtn.setText("›");
+                nextVidBtn.setContentDescription("다음 동영상");
+                nextVidBtn.setTextColor(Color.WHITE);
+                nextVidBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24.0f);
+                nextVidBtn.setTypeface(Typeface.DEFAULT_BOLD);
+                nextVidBtn.setGravity(Gravity.CENTER);
+                nextVidBtn.setBackground(navBgRight);
+                FrameLayout.LayoutParams nextLp = new FrameLayout.LayoutParams(navSize, navSize, Gravity.END | Gravity.CENTER_VERTICAL);
+                nextLp.rightMargin = dpToPx(activity, 8);
+                nextVidBtn.setLayoutParams(nextLp);
+                nextVidBtn.setOnClickListener(v -> {
+                    loadVideoAtIndex.accept(currentIdxHolder[0] + 1);
+                    showSeekHud.accept("다음 동영상 › (" + (currentIdxHolder[0] + 1) + "/" + playlist.size() + ")");
+                });
+                playerBox.addView(nextVidBtn);
             }
 
+            final Runnable progressPoller = new Runnable() {
+                @Override
+                public void run() {
+                    if (!dialog.isShowing()) return;
+                    try {
+                        int durMs = Math.max(knownDurationMsHolder[0], videoView.getDuration());
+                        int posMs = Math.max(0, videoView.getCurrentPosition());
+                        if (durMs > 0) {
+                            knownDurationMsHolder[0] = durMs;
+                            seekBar.setMax(durMs);
+                            totalTimeTv.setText(formatMmSs(durMs / 1000));
+                            if (!userSeekingHolder[0]) {
+                                seekBar.setProgress(Math.min(durMs, posMs));
+                                curTimeTv.setText(formatMmSs(posMs / 1000));
+                            }
+                        }
+                        syncPlayPauseUi.run();
+                    } catch (Throwable ignored) {
+                    }
+                    uiHandler.postDelayed(this, 250);
+                }
+            };
+
             dialog.setOnDismissListener(d -> {
+                uiHandler.removeCallbacksAndMessages(null);
                 try {
                     videoView.stopPlayback();
                 } catch (Throwable ignored) {
                 }
                 if (!resolvedOnce[0]) {
                     resolvedOnce[0] = true;
+                    NativeVideoPlaylistEntry activeItem = playlist.get(currentIdxHolder[0]);
                     NativeVideoOcrResult fin = latestOcrHolder[0];
                     if (fin != null) {
                         JSObject ret = fin.toJSObject();
                         ret.put("closed", true);
+                        ret.put("activeId", activeItem.rawId);
                         call.resolve(ret);
                     } else {
                         JSObject ret = new JSObject();
                         ret.put("ok", true);
                         ret.put("closed", true);
+                        ret.put("activeId", activeItem.rawId);
                         ret.put("hasText", false);
                         ret.put("ocrLines", new JSArray());
                         ret.put("fullText", "");
@@ -3190,6 +3589,8 @@ public class GhostiMobileCarePlugin extends Plugin {
 
             dialog.setContentView(root);
             dialog.show();
+            loadVideoAtIndex.accept(startIdx);
+            uiHandler.postDelayed(progressPoller, 250);
         });
     }
 
