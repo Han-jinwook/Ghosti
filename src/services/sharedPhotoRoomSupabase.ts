@@ -1543,14 +1543,59 @@ export interface SharedPhotoRoomMemberInfo {
 }
 
 /**
- * [정식 SQL SSOT] 공유방 참여 회원 목록 조회 (`ghosti_lounge_members`)
- * - 사진 업로드 여부와 무관하게 초대 링크로 방에 정식 합류한 모든 실제 멤버를 100% 반환합니다.
+ * [정식 SQL SSOT] 공유방 참여 회원 목록 조회 (`photo_list_room_members` 서버 브릿지 1순위 ➔ 직접 조회 2순위)
+ * - 사진 업로드 여부와 무관하게 초대 링크로 방에 정식 합류한 모든 실제 멤버를 RLS 누락 없이 100% 반환합니다.
  */
 export async function fetchSharedPhotoRoomMembers(
-  roomId: string
+  roomId: string,
+  opts?: { loungeType?: LoungeType; familyRoom?: FamilyRoomId }
 ): Promise<SharedPhotoRoomMemberInfo[]> {
   const cleanRoomId = (roomId || '').trim();
-  if (!cleanRoomId || !hasAuthenticatedHubAccountSession()) return [];
+  if (!hasAuthenticatedHubAccountSession()) return [];
+  if (!cleanRoomId && !opts?.loungeType) return [];
+
+  const mappedDb =
+    opts?.loungeType && (opts.loungeType === 'family' || opts.loungeType === 'club' || opts.loungeType === 'student')
+      ? mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom || '우리집')
+      : null;
+
+  try {
+    const bridgeRes = await callGhostiServerBridge<{
+      roomId?: string;
+      members?: Array<{
+        memberEmail?: string;
+        role?: string;
+        nickname?: string;
+        joinedAt?: string;
+      }>;
+    }>('photo_list_room_members', {
+      roomId: cleanRoomId,
+      dbLoungeType: mappedDb?.dbLoungeType || '',
+      dbSubType: mappedDb?.dbSubType || '',
+    });
+    if (bridgeRes.ok && Array.isArray(bridgeRes.members)) {
+      return bridgeRes.members
+        .map((m) => {
+          const email = String(m?.memberEmail || '').trim().toLowerCase();
+          if (!email) return null;
+          const roleRaw = String(m?.role || 'member').trim().toLowerCase();
+          const role: 'master' | 'admin' | 'member' =
+            roleRaw === 'master' ? 'master' : roleRaw === 'admin' ? 'admin' : 'member';
+          const fallbackNick = email.includes('@') ? email.split('@')[0] : email;
+          return {
+            memberEmail: email,
+            role,
+            nickname: String(m?.nickname || '').trim() || fallbackNick || '멤버',
+            joinedAt: String(m?.joinedAt || ''),
+          };
+        })
+        .filter((x): x is SharedPhotoRoomMemberInfo => Boolean(x));
+    }
+  } catch {
+    /* fallback to direct authed query */
+  }
+
+  if (!cleanRoomId) return [];
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return [];
   try {
@@ -1588,7 +1633,7 @@ export async function fetchSharedPhotoRoomMembers(
 
 /**
  * [Step 6 — 방장의 멤버 내보내기(강퇴)]
- * - 방장이 특정 멤버를 공유방에서 내보내면 서버 멤버십(ghosti_lounge_members)에서 즉시 제거합니다.
+ * - 서버 브릿지(`photo_kick_room_member`) 1순위로 `ghosti_lounge_members`에서 즉시 제거합니다.
  */
 export async function kickMemberFromSupabaseSharedPhotoRoom(
   roomId: string,
@@ -1600,6 +1645,16 @@ export async function kickMemberFromSupabaseSharedPhotoRoom(
   const cleanEmail = (memberEmail || '').trim().toLowerCase();
   if (!cleanRoomId || (!cleanNick && !cleanEmail) || !hasAuthenticatedHubAccountSession()) {
     return false;
+  }
+  try {
+    const bridgeRes = await callGhostiServerBridge('photo_kick_room_member', {
+      roomId: cleanRoomId,
+      memberNickname: cleanNick,
+      memberEmail: cleanEmail,
+    });
+    if (bridgeRes.ok) return true;
+  } catch {
+    /* fallback to direct authed delete */
   }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return false;

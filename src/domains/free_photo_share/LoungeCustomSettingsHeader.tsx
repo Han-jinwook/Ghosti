@@ -139,11 +139,10 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       }
       if (cancelled) return;
       setResolvedSettingsRoomId(targetRoomId);
-      if (!targetRoomId) {
-        setHasLoadedServerMembers(true);
-        return;
-      }
-      const members = await fetchSharedPhotoRoomMembers(targetRoomId);
+      const members = await fetchSharedPhotoRoomMembers(targetRoomId || '', {
+        loungeType: activeLoungeType,
+        familyRoom: activeFamilyRoom,
+      });
       if (cancelled) return;
       setServerRoomMembers(members);
       setHasLoadedServerMembers(true);

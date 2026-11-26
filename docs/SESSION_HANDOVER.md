@@ -65,8 +65,8 @@
 - **세션 창 제목**: `3귀신 재연결·v1.0.112`
 
 ## 완료 내역 (2026-11-25 ~ 11-26)
-1. **사진 공유 `[방 관리]` 정식 DB 멤버 목록(`ghosti_lounge_members`) 직접 조회 연동 (카드 `424f9ffd` `'재테스트 대기'`) (2026-11-26)**
-   - 기존 `[방 관리]`가 사진 업로더 문자열에서만 회원을 추론해 사진을 안 올린 정식 합류 회원('디자이너' 등)이 방장 화면에 누락되던 근본 원인을 해결: `sharedPhotoRoomSupabase.ts`에 `fetchSharedPhotoRoomMembers(roomId)` 추가 및 `kickMemberFromSupabaseSharedPhotoRoom` 이메일 기준 삭제 보강, `LoungeCustomSettingsHeader.tsx`에서 `ghosti_lounge_members`를 1순위 SSOT로 조회해 가족·동호회·동창회 방 모두 방장·참여 회원이 100% 일치 표시되도록 수정.
+1. **사진 공유 `[방 관리]` 정식 서버 브릿지 멤버 목록(`photo_list_room_members` · `photo_kick_room_member`) 직결 연동 (카드 `424f9ffd` `'재테스트 대기'`) (2026-11-26)**
+   - 1차 클라이언트 직접 `ghosti_lounge_members` 조회가 RLS(`ghosti_is_room_member`) 환경에서 방장 외 참여 회원을 누락하던 근본 원인을 해결: `workAndDeviceBridgeOps.mjs`에 `service_role` 기반 `photo_list_room_members`(요청자 방장/멤버 검증 + 동일 방 유형 중복 방 병합 + `public.users` 최신 별명 보강) 및 `photo_kick_room_member` 서버 브릿지를 개통하고 `sharedPhotoRoomSupabase.ts`·`LoungeCustomSettingsHeader.tsx`를 1순위로 연결해 가족·동호회·동창회 방 모두 방장·참여 회원('디자이너' 포함)이 100% 일치 표시되도록 완결.
 2. **아이폰·안드로이드 기기 연결 해제 시 `[다시 연결]` 미노출 & 상단 `연결된 기기 2대` 거짓 표시 근본 해결 및 양대 스토어 `v1.0.112 (112)` 배포 (카드 `422f9ffd` `'재테스트 대기'`) (2026-11-26)**
    - 아이폰에서 PC 기기를 `[연결 해제]`했을 때 PC 화면에만 `[다시 연결]`이 뜨고 아이폰 화면에는 안 보이던 문제와, 폰 1대만 남았는데 `pcAgentPairedMobile = hasMobile || devices.length >= 2` 조건으로 상단에 `연결된 기기 2대`가 잘못 표시되던 버그를 동시 해결.
    - 서버 `workAndDeviceBridgeOps.mjs`에 `device_reconnect_device` 추가 + `deviceIntegrationService.ts`(`reconnectConnectedDevice` + Realtime 브로드캐스트) + `paidDeviceSyncSlice.ts`(`lastRevokedPeerDevice` · `reconnectPeerDevice` · `hasMobile && devices.length >= 2`) + `CrossDeviceClipboardAndPairingBar.tsx`/`MobileAppView.tsx` 수정으로 아이폰에서 PC를 해제하든 본인 기기를 해제하든 어느 쪽이든 즉시 `[다시 연결]` 버튼이 노출되어 2~3초 내 양쪽 기기가 자동 복구되도록 완결.

@@ -3538,6 +3538,190 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'photo_list_room_members') {
+    const requestedRoomId = String(body.roomId || '').trim();
+    const dbLoungeType = body.dbLoungeType === 'club' ? 'club' : body.dbLoungeType === 'family' ? 'family' : '';
+    const dbSubType = String(body.dbSubType || '').trim();
+    if (!requestedRoomId && (!dbLoungeType || !dbSubType)) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_ID' } };
+    }
+
+    let primaryRoom = null;
+    if (requestedRoomId) {
+      const rmRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
+          requestedRoomId
+        )}&select=room_id,lounge_type,sub_type,master_email&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const rmRows = rmRes.ok ? await rmRes.json().catch(() => []) : [];
+      primaryRoom = Array.isArray(rmRows) ? rmRows[0] || null : null;
+    }
+
+    const candidateRoomIds = new Set();
+    if (requestedRoomId) candidateRoomIds.add(requestedRoomId);
+    if (primaryRoom?.room_id) candidateRoomIds.add(String(primaryRoom.room_id));
+
+    const masterEmailOfPrimary = String(primaryRoom?.master_email || '').trim().toLowerCase();
+    const isRequesterMasterOfPrimary =
+      Boolean(masterEmailOfPrimary && masterEmailOfPrimary === email) ||
+      (!primaryRoom && Boolean(dbLoungeType && dbSubType));
+    const lookupLt = String(primaryRoom?.lounge_type || dbLoungeType || '').trim();
+    const lookupSt = String(primaryRoom?.sub_type || dbSubType || '').trim();
+
+    if (isRequesterMasterOfPrimary && lookupLt && lookupSt) {
+      const sameKeyRoomsRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=ilike.${encodeURIComponent(
+          email
+        )}&lounge_type=eq.${encodeURIComponent(lookupLt)}&sub_type=eq.${encodeURIComponent(
+          lookupSt
+        )}&select=room_id,master_email&limit=10`,
+        { headers: srvHeaders(serviceKey) }
+      ).catch(() => null);
+      const sameRows =
+        sameKeyRoomsRes && sameKeyRoomsRes.ok ? await sameKeyRoomsRes.json().catch(() => []) : [];
+      if (Array.isArray(sameRows)) {
+        for (const r of sameRows) {
+          const rid = String(r?.room_id || '').trim();
+          if (rid) candidateRoomIds.add(rid);
+        }
+      }
+    }
+
+    const roomIdList = Array.from(candidateRoomIds);
+    if (roomIdList.length === 0) {
+      return { status: 200, body: { ok: true, roomId: requestedRoomId || '', members: [] } };
+    }
+
+    const inRooms = roomIdList.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
+    const memRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=in.(${encodeURIComponent(
+        inRooms
+      )})&select=room_id,member_email,role,room_persona_nickname,joined_at&order=joined_at.asc,member_email.asc&limit=300`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    if (!memRes.ok) {
+      return { status: 502, body: { ok: false, reason: 'MEMBER_LOOKUP_FAILED' } };
+    }
+    const rawMemRows = await memRes.json().catch(() => []);
+    const memRows = Array.isArray(rawMemRows) ? rawMemRows : [];
+
+    const requesterIsMember =
+      isRequesterMasterOfPrimary ||
+      memRows.some(
+        (m) => String(m?.member_email || '').trim().toLowerCase() === email
+      );
+    if (!requesterIsMember) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+
+    const uniqueEmails = Array.from(
+      new Set(
+        memRows
+          .map((m) => String(m?.member_email || '').trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+    const userNickByEmail = new Map();
+    if (uniqueEmails.length > 0) {
+      const inEmails = uniqueEmails.map((em) => `"${em.replace(/"/g, '')}"`).join(',');
+      const usersRes = await fetch(
+        `${supabaseUrl}/rest/v1/users?email=in.(${encodeURIComponent(
+          inEmails
+        )})&select=email,nickname&limit=300`,
+        { headers: srvHeaders(serviceKey) }
+      ).catch(() => null);
+      const userRows =
+        usersRes && usersRes.ok ? await usersRes.json().catch(() => []) : [];
+      if (Array.isArray(userRows)) {
+        for (const u of userRows) {
+          const em = String(u?.email || '').trim().toLowerCase();
+          const nk = String(u?.nickname || '').trim();
+          if (em && nk) userNickByEmail.set(em, nk);
+        }
+      }
+    }
+
+    const byEmail = new Map();
+    const genericMemberLabels = new Set(['새 멤버', '멤버', '초대 팀원', '방장', '가족방장', '모임방장']);
+    for (const row of memRows) {
+      const memEmail = String(row?.member_email || '').trim().toLowerCase();
+      if (!memEmail) continue;
+      const roleRaw = String(row?.role || 'member').trim().toLowerCase();
+      const role =
+        roleRaw === 'master' || (masterEmailOfPrimary && memEmail === masterEmailOfPrimary)
+          ? 'master'
+          : roleRaw === 'admin'
+          ? 'admin'
+          : 'member';
+      const emailPrefix = memEmail.includes('@') ? memEmail.split('@')[0] : memEmail;
+      const personaNick = String(row?.room_persona_nickname || '').trim();
+      const userNick = userNickByEmail.get(memEmail) || '';
+      const resolvedNick =
+        (personaNick && !genericMemberLabels.has(personaNick) && personaNick.toLowerCase() !== emailPrefix.toLowerCase()
+          ? personaNick
+          : '') ||
+        (userNick && !genericMemberLabels.has(userNick) ? userNick : '') ||
+        personaNick ||
+        emailPrefix ||
+        '멤버';
+      const prev = byEmail.get(memEmail);
+      if (!prev || role === 'master') {
+        byEmail.set(memEmail, {
+          memberEmail: memEmail,
+          role,
+          nickname: resolvedNick,
+          joinedAt: String(row?.joined_at || ''),
+        });
+      }
+    }
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId: requestedRoomId || roomIdList[0] || '',
+        members: Array.from(byEmail.values()),
+      },
+    };
+  }
+
+  if (action === 'photo_kick_room_member') {
+    const targetRoomId = String(body.roomId || '').trim();
+    const targetEmail = String(body.memberEmail || '').trim().toLowerCase();
+    const targetNick = String(body.memberNickname || '').trim();
+    if (!targetRoomId || (!targetEmail && !targetNick)) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_KICK_TARGET' } };
+    }
+    const rmRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
+        targetRoomId
+      )}&select=room_id,lounge_type,sub_type,master_email&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const rmRows = rmRes.ok ? await rmRes.json().catch(() => []) : [];
+    const targetRoom = Array.isArray(rmRows) ? rmRows[0] || null : null;
+    const masterEmail = String(targetRoom?.master_email || '').trim().toLowerCase();
+    if (!masterEmail || masterEmail !== email) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    const delQuery = targetEmail
+      ? `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(
+          targetRoomId
+        )}&member_email=ilike.${encodeURIComponent(targetEmail)}&role=neq.master`
+      : `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(
+          targetRoomId
+        )}&room_persona_nickname=eq.${encodeURIComponent(targetNick)}&role=neq.master`;
+    const delRes = await fetch(delQuery, {
+      method: 'DELETE',
+      headers: srvHeaders(serviceKey, { Prefer: 'return=minimal' }),
+    });
+    return {
+      status: delRes.ok ? 200 : 500,
+      body: { ok: delRes.ok, roomId: targetRoomId },
+    };
+  }
+
   if (action === 'photo_leave_shared_room') {
     const targetRoomId = String(body.roomId || '').trim();
     if (!targetRoomId) {
