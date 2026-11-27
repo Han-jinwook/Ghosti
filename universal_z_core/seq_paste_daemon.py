@@ -4780,11 +4780,14 @@ def _toast_worker() -> None:
                 _CURRENT_OPEN_WIN_HWND = int(hwnd_t)
                 ex_st = u32.GetWindowLongW(hwnd_t, GWL_EXSTYLE)
                 SWP_FRAMECHANGED = 0x0020
+                _is_interactive_ui = active_mode[0] in ("ui2", "ui3", "ui4")
+                _WS_EX_LAYERED_BIT = 0x00080000
+                _clean_ex = (ex_st & ~_WS_EX_LAYERED_BIT) if active_mode[0] == "ui2" else ex_st
                 if activate:
                     # [AttachThreadInput·win.update() 영구 배제 + 비할당 더미 키업 포커스 잠금 해제]:
                     # WH_MOUSE_LL(Ctrl+우클릭)이나 장시간 유휴 직후 첫 호출 시 Windows Foreground Lock으로
                     # SetForegroundWindow가 거부되는 현상을 부작용 0%(비할당 VK 0x0E KEYUP)으로 해제합니다.
-                    u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (ex_st & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
+                    u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (_clean_ex & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
                     u32.ShowWindow(hwnd_t, 5)  # SW_SHOW
                     u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_FRAMECHANGED | SWP_SHOWWINDOW)
                     try:
@@ -4794,8 +4797,15 @@ def _toast_worker() -> None:
                         pass
                     u32.BringWindowToTop(hwnd_t)
                     u32.SetForegroundWindow(hwnd_t)
+                elif _is_interactive_ui:
+                    # [오캠 녹화 테두리 안 클릭 먹통 근본 방지]:
+                    # 귀신검색창(ui2)·OCR창(ui3) 리사이즈(activate=False) 시 WS_EX_NOACTIVATE가
+                    # 다시 붙어 마우스 클릭 활성화가 차단되는 현상을 원천 제거합니다.
+                    u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (_clean_ex & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
+                    u32.ShowWindow(hwnd_t, 4)  # SW_SHOWNOACTIVATE
+                    u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)
                 else:
-                    u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, ex_st | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
+                    u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, _clean_ex | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
                     u32.ShowWindow(hwnd_t, 4)  # SW_SHOWNOACTIVATE
                     u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)
                 rc_live = wintypes.RECT()
@@ -5590,27 +5600,49 @@ def _toast_worker() -> None:
                     try:
                         _now_heal = time.time()
                         _fresh_click = lbtn_down and not was_mouse_down[0]
-                        if _fresh_click or (_now_heal - last_topmost_heal_ts[0]) >= 0.06:
+                        if _fresh_click or (_now_heal - last_topmost_heal_ts[0]) >= 0.08:
+                            _need_z_heal = False
                             _h_pt = u32.WindowFromPoint(pt_click)
                             _r_pt = int(u32.GetAncestor(_h_pt, 2) or _h_pt) if _h_pt else 0
                             if _r_pt and _r_pt != int(_CURRENT_OPEN_WIN_HWND):
                                 _pid_pt = wintypes.DWORD(0)
                                 u32.GetWindowThreadProcessId(_r_pt, ctypes.byref(_pid_pt))
                                 if int(_pid_pt.value) != os.getpid():
-                                    last_topmost_heal_ts[0] = _now_heal
-                                    u32.SetWindowPos(
-                                        _CURRENT_OPEN_WIN_HWND,
-                                        HWND_TOPMOST,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
-                                    )
-                                    u32.BringWindowToTop(_CURRENT_OPEN_WIN_HWND)
-                                    if _fresh_click and active_mode[0] in ("ui2", "ui3", "ui4"):
-                                        u32.SetForegroundWindow(_CURRENT_OPEN_WIN_HWND)
-                                    current_win[0].lift()
+                                    _need_z_heal = True
+                            # SetWindowRgn으로 가운데가 뚫린 오캠 녹화 테두리 등 타 프로세스 TOPMOST 창이
+                            # GW_HWNDPREV(바로 위 Z-Order)에 올라와 있는 경우도 함께 감지해 최상단 복원
+                            if not _need_z_heal and active_mode[0] in ("ui2", "ui3", "ui4"):
+                                _prev_h = u32.GetWindow(_CURRENT_OPEN_WIN_HWND, 3)  # GW_HWNDPREV
+                                _steps = 0
+                                while _prev_h and _steps < 6:
+                                    _steps += 1
+                                    if u32.IsWindowVisible(_prev_h):
+                                        _prev_ex = u32.GetWindowLongW(_prev_h, GWL_EXSTYLE)
+                                        if (_prev_ex & WS_EX_TOPMOST) != 0:
+                                            _pid_prev = wintypes.DWORD(0)
+                                            u32.GetWindowThreadProcessId(_prev_h, ctypes.byref(_pid_prev))
+                                            if int(_pid_prev.value) != os.getpid():
+                                                _rc_prev = wintypes.RECT()
+                                                if u32.GetWindowRect(_prev_h, ctypes.byref(_rc_prev)):
+                                                    if not (_rc_prev.right < wx1 or _rc_prev.left > wx2 or _rc_prev.bottom < wy1 or _rc_prev.top > wy2):
+                                                        _need_z_heal = True
+                                                        break
+                                    _prev_h = u32.GetWindow(_prev_h, 3)
+                            if _need_z_heal:
+                                last_topmost_heal_ts[0] = _now_heal
+                                u32.SetWindowPos(
+                                    _CURRENT_OPEN_WIN_HWND,
+                                    HWND_TOPMOST,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                                )
+                                u32.BringWindowToTop(_CURRENT_OPEN_WIN_HWND)
+                                if _fresh_click and active_mode[0] in ("ui2", "ui3", "ui4"):
+                                    u32.SetForegroundWindow(_CURRENT_OPEN_WIN_HWND)
+                                current_win[0].lift()
                     except Exception:
                         pass
                 if is_hovered[0] and not inside_rect and active_mode[0] == "toast":
@@ -5684,7 +5716,11 @@ def _toast_worker() -> None:
                     was_mouse_down[0] = True
                     win.overrideredirect(True)
                     win.attributes("-topmost", True)
-                    win.attributes("-alpha", 0.98)
+                    # [오캠(oCam) UpdateLayeredWindow/SetWindowRgn DWM 히트테스트 충돌 원천 제거]:
+                    # ui2 귀신검색창은 불필요한 -alpha 0.98(WS_EX_LAYERED 강제 부착)을 제거해
+                    # 파일탐색기와 동일한 순정 불투명 창으로 클릭 100% 정상 작동을 보장합니다.
+                    if not message.startswith("__UI2_SEARCH__|"):
+                        win.attributes("-alpha", 0.98)
                     win.configure(bg="#0B1120")
 
                     # ── 분기 2: [창 UI ②] 👻 귀신검색창 (소·중·대 독립 창, 타이머 자동 닫힘 없이 외부클릭/ESC까지 유지) ──
