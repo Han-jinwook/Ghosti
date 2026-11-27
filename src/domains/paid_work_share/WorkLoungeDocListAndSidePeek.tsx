@@ -314,41 +314,43 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[12px] text-slate-700 font-semibold">
-              표 요약
-            </span>
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    {selectedDoc.tableHeaders.map((h, hIdx) => (
-                      <th
-                        key={`${h}-${hIdx}`}
-                        className="px-2.5 py-2 text-[11.5px] text-slate-700 font-semibold whitespace-nowrap"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {selectedDoc.tableRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50">
-                      {row.map((cell, cIdx) => (
-                        <td
-                          key={cIdx}
-                          className="px-2.5 py-1.5 text-[12px] text-slate-800"
+          {selectedDoc.tableHeaders.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[12px] text-slate-700 font-semibold">
+                표 요약
+              </span>
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      {selectedDoc.tableHeaders.map((h, hIdx) => (
+                        <th
+                          key={`${h}-${hIdx}`}
+                          className="px-2.5 py-2 text-[11.5px] text-slate-700 font-semibold whitespace-nowrap"
                         >
-                          {cell}
-                        </td>
+                          {h}
+                        </th>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedDoc.tableRows.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        {row.map((cell, cIdx) => (
+                          <td
+                            key={cIdx}
+                            className="px-2.5 py-1.5 text-[12px] text-slate-800"
+                          >
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col gap-1 max-h-56 overflow-y-auto">
             <span className="text-[11.5px] text-slate-600 font-semibold">

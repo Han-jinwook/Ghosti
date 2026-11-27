@@ -1635,15 +1635,15 @@ def _make_lightweight_image_data_url(file_path: Path, size_bytes: int) -> str:
 
 
 def _preview_sig_key(file_path: Path, st: os.stat_result) -> str:
-    return f"{os.path.normcase(os.path.abspath(str(file_path)))}|{st.st_size}|{st.st_mtime_ns}|v2_gdfs"
+    return f"{os.path.normcase(os.path.abspath(str(file_path)))}|{st.st_size}|{st.st_mtime_ns}|v3_gdfs_xlsx"
 
 
-def _get_cached_preview(sig_key: str) -> Optional[Dict[str, Any]]:
+def _get_cached_preview(sig_key: str, *, force_recheck_unexported: bool = False) -> Optional[Dict[str, Any]]:
     with _PREVIEW_LOCK:
         hit = _PREVIEW_CACHE.get(sig_key)
         if hit is not None:
             retry_after = float(hit.get("_gdoc_retry_after_mono") or 0.0)
-            if retry_after > 0.0 and time.monotonic() >= retry_after:
+            if retry_after > 0.0 and (force_recheck_unexported or time.monotonic() >= retry_after):
                 _PREVIEW_CACHE.pop(sig_key, None)
                 return None
             _PREVIEW_CACHE.move_to_end(sig_key)
@@ -1756,7 +1756,8 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
                     table_headers = list(exp_res.get("table_headers") or [])
                     table_rows = list(exp_res.get("table_rows") or [])
                     exported_body = str(exp_res.get("body_text") or "")
-            gdoc_retry_after = 0.0 if exported_body else (time.monotonic() + 20.0)
+            gdoc_is_owner = bool(g_meta.get("is_owner", True))
+            gdoc_retry_after = 0.0 if exported_body else (time.monotonic() + 10.0)
             preview_text = (
                 f"[{kind_ko} 바로가기 — {file_path.stem}]\n"
                 + (f"원본 열기: {g_url}\n" if g_url else "")
@@ -1764,8 +1765,15 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
                     f"{exported_body}"
                     if exported_body
                     else (
-                        "현재 구글 문서·시트 공유 상태가 '제한됨(비공개)'이므로 파일명으로 즉시 검색되며, 우측 [Google 문서·시트 웹에서 열기 ↗] 버튼으로 바로 열 수 있습니다. "
-                        "(구글 시트 우측 상단 [공유] → 일반 액세스를 '링크가 있는 모든 사용자'로 설정하면 시트 셀 본문과 표 단어까지 자동 검색됩니다.)"
+                        (
+                            "현재 구글 문서·시트 공유 상태가 '제한됨(비공개)'입니다. "
+                            + (
+                                "(다른 계정이 만든 문서는 만든 계정에서만 공유 범위를 바꿀 수 있습니다. "
+                                if not gdoc_is_owner
+                                else "("
+                            )
+                            + "구글 시트 우측 상단 [공유] → 일반 액세스를 '링크가 있는 모든 사용자'로 설정하고 [완료]를 누르면 모든 시트 탭의 표와 셀 단어까지 자동 검색됩니다.)"
+                        )
                         if is_private_gdoc
                         else "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며(링크 공유 시트·문서는 본문·표까지 자동 인덱싱) 원본 열기로 웹에서 바로 편집할 수 있습니다."
                     )
@@ -2117,7 +2125,7 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     for full_p, rel_p, st in entries:
         s_full_str = (_drive_root(mounted_letter) + rel_p.replace("/", "\\")) if mounted_letter else str(full_p)
         key = _preview_sig_key(full_p, st)
-        meta = _get_cached_preview(key)
+        meta = _get_cached_preview(key, force_recheck_unexported=not bool(known_sig))
         if meta is None and _time.monotonic() < deadline:
             meta = _compute_rich_preview(full_p, st)
             _put_cached_preview(key, meta)

@@ -1964,6 +1964,7 @@ _DRIVEFS_INDEX_CACHE: Dict[str, Any] = {
     "db_sig": "",
     "by_parent_and_title": {},
     "by_title": {},
+    "owner_by_cid": {},
 }
 
 
@@ -1998,17 +1999,18 @@ def _canonical_google_workspace_url(doc_id: str, ext_low: str) -> str:
     return f"https://docs.google.com/document/d/{clean_id}/edit"
 
 
-def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str, str]]:
+def _load_drivefs_cloud_id_index(*, force: bool = False) -> Tuple[Dict[Tuple[str, str], str], Dict[str, str], Dict[str, bool]]:
     now_m = time.monotonic()
     with _DRIVEFS_INDEX_LOCK:
-        if (now_m - float(_DRIVEFS_INDEX_CACHE["checked_mono"])) < 15.0 and _DRIVEFS_INDEX_CACHE["db_sig"]:
-            return _DRIVEFS_INDEX_CACHE["by_parent_and_title"], _DRIVEFS_INDEX_CACHE["by_title"]
-
         local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
         dfs_root = Path(local_app) / "Google" / "DriveFS"
         if not dfs_root.is_dir():
             _DRIVEFS_INDEX_CACHE["checked_mono"] = now_m
-            return _DRIVEFS_INDEX_CACHE["by_parent_and_title"], _DRIVEFS_INDEX_CACHE["by_title"]
+            return (
+                _DRIVEFS_INDEX_CACHE["by_parent_and_title"],
+                _DRIVEFS_INDEX_CACHE["by_title"],
+                _DRIVEFS_INDEX_CACHE["owner_by_cid"],
+            )
 
         db_candidates: List[Path] = []
         sig_parts: List[str] = []
@@ -2033,12 +2035,17 @@ def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str
             pass
 
         cur_sig = "|".join(sig_parts)
-        if cur_sig and cur_sig == _DRIVEFS_INDEX_CACHE["db_sig"]:
+        if not force and cur_sig and cur_sig == _DRIVEFS_INDEX_CACHE["db_sig"]:
             _DRIVEFS_INDEX_CACHE["checked_mono"] = now_m
-            return _DRIVEFS_INDEX_CACHE["by_parent_and_title"], _DRIVEFS_INDEX_CACHE["by_title"]
+            return (
+                _DRIVEFS_INDEX_CACHE["by_parent_and_title"],
+                _DRIVEFS_INDEX_CACHE["by_title"],
+                _DRIVEFS_INDEX_CACHE["owner_by_cid"],
+            )
 
         by_parent: Dict[Tuple[str, str], str] = {}
         by_title: Dict[str, str] = {}
+        owner_by_cid: Dict[str, bool] = {}
         try:
             import sqlite3
             import tempfile
@@ -2063,11 +2070,12 @@ def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str
                         if "shortcut_details" in tables:
                             sql = (
                                 "SELECT COALESCE(ts.cloud_id, s.cloud_id), i.local_title, pi.local_title, "
-                                "COALESCE(sd.target_mime_type, i.mime_type) "
+                                "COALESCE(sd.target_mime_type, i.mime_type), COALESCE(ti.is_owner, i.is_owner) "
                                 "FROM items i "
                                 "LEFT JOIN stable_ids s ON s.stable_id = i.stable_id "
                                 "LEFT JOIN shortcut_details sd ON sd.shortcut_stable_id = i.stable_id "
                                 "LEFT JOIN stable_ids ts ON ts.stable_id = sd.target_stable_id "
+                                "LEFT JOIN items ti ON ti.stable_id = sd.target_stable_id "
                                 "LEFT JOIN stable_parents p ON p.item_stable_id = i.stable_id "
                                 "LEFT JOIN items pi ON pi.stable_id = p.parent_stable_id "
                                 "WHERE i.trashed = 0 AND i.is_tombstone = 0 "
@@ -2076,7 +2084,7 @@ def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str
                             )
                         else:
                             sql = (
-                                "SELECT s.cloud_id, i.local_title, pi.local_title, i.mime_type "
+                                "SELECT s.cloud_id, i.local_title, pi.local_title, i.mime_type, i.is_owner "
                                 "FROM items i "
                                 "LEFT JOIN stable_ids s ON s.stable_id = i.stable_id "
                                 "LEFT JOIN stable_parents p ON p.item_stable_id = i.stable_id "
@@ -2085,13 +2093,15 @@ def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str
                                 "AND (i.mime_type LIKE 'application/vnd.google-apps.%' "
                                 "OR i.local_title LIKE '%.gsheet' OR i.local_title LIKE '%.gdoc' OR i.local_title LIKE '%.gslides')"
                             )
-                        for cid_raw, ltitle_raw, ptitle_raw, mime_raw in cur.execute(sql).fetchall():
+                        for cid_raw, ltitle_raw, ptitle_raw, mime_raw, is_owner_raw in cur.execute(sql).fetchall():
                             cid = str(cid_raw or "").strip()
                             ltitle = unicodedata.normalize("NFC", str(ltitle_raw or "").strip())
                             ptitle = unicodedata.normalize("NFC", str(ptitle_raw or "").strip())
                             mime_s = str(mime_raw or "").lower()
                             if not cid or not ltitle or "folder" in mime_s:
                                 continue
+                            if is_owner_raw is not None:
+                                owner_by_cid[cid] = bool(int(is_owner_raw)) or owner_by_cid.get(cid, False)
                             lt_low = ltitle.lower()
                             stem_low = Path(ltitle).stem.lower()
                             key_variants = {lt_low, stem_low}
@@ -2121,7 +2131,8 @@ def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str
         _DRIVEFS_INDEX_CACHE["db_sig"] = cur_sig or "loaded"
         _DRIVEFS_INDEX_CACHE["by_parent_and_title"] = by_parent
         _DRIVEFS_INDEX_CACHE["by_title"] = by_title
-        return by_parent, by_title
+        _DRIVEFS_INDEX_CACHE["owner_by_cid"] = owner_by_cid
+        return by_parent, by_title, owner_by_cid
 
 
 def resolve_google_workspace_shortcut_meta(file_path: Path | str, text_hint: str = "") -> Dict[str, Any]:
@@ -2172,16 +2183,25 @@ def resolve_google_workspace_shortcut_meta(file_path: Path | str, text_hint: str
             if m_id:
                 doc_id = m_id.group(1)
 
+    is_owner = True
     if not doc_id:
         real_p = unwrap_subst_drive_path(orig_p)
         parent_low = unicodedata.normalize("NFC", real_p.parent.name).strip().lower()
         name_low = unicodedata.normalize("NFC", real_p.name).strip().lower()
         stem_low = unicodedata.normalize("NFC", real_p.stem).strip().lower()
-        by_parent, by_title = _load_drivefs_cloud_id_index()
+        by_parent, by_title, owner_by_cid = _load_drivefs_cloud_id_index()
         if parent_low:
             doc_id = by_parent.get((parent_low, name_low)) or by_parent.get((parent_low, stem_low)) or ""
         if not doc_id:
             doc_id = by_title.get(name_low) or by_title.get(stem_low) or ""
+        if not doc_id:
+            by_parent, by_title, owner_by_cid = _load_drivefs_cloud_id_index(force=True)
+            if parent_low:
+                doc_id = by_parent.get((parent_low, name_low)) or by_parent.get((parent_low, stem_low)) or ""
+            if not doc_id:
+                doc_id = by_title.get(name_low) or by_title.get(stem_low) or ""
+        if doc_id and doc_id in owner_by_cid:
+            is_owner = bool(owner_by_cid[doc_id])
 
     if doc_id and not g_url:
         g_url = _canonical_google_workspace_url(doc_id, ext_low)
@@ -2199,13 +2219,21 @@ def resolve_google_workspace_shortcut_meta(file_path: Path | str, text_hint: str
                 break
 
     if g_url:
-        return {"doc_id": doc_id, "url": g_url, "is_direct_url": True, "ext": ext_low, "kind_ko": kind_ko}
+        return {
+            "doc_id": doc_id,
+            "url": g_url,
+            "is_direct_url": True,
+            "is_owner": is_owner,
+            "ext": ext_low,
+            "kind_ko": kind_ko,
+        }
 
     stem_q = urllib.parse.quote(orig_p.stem or orig_p.name)
     return {
         "doc_id": "",
         "url": f"https://drive.google.com/drive/search?q={stem_q}",
         "is_direct_url": False,
+        "is_owner": True,
         "ext": ext_low,
         "kind_ko": kind_ko,
     }
@@ -2239,6 +2267,59 @@ def export_public_google_workspace_body(
     import io
     import urllib.error
     import urllib.request
+    import zipfile
+
+    def _trim_trailing_empty(cells: List[str]) -> List[str]:
+        trimmed = [c.strip() for c in cells]
+        while trimmed and not trimmed[-1]:
+            trimmed.pop()
+        return trimmed
+
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+    # 1순위 (.gsheet): /export?format=xlsx 로 시트1·시트2 등 전체 시트 탭의 모든 셀 텍스트와 표 요약을 일괄 추출
+    if ext_low == ".gsheet":
+        xlsx_url = f"https://docs.google.com/spreadsheets/d/{clean_id}/export?format=xlsx"
+        try:
+            req_x = urllib.request.Request(xlsx_url, headers={"User-Agent": "Mozilla/5.0"})
+            with opener.open(req_x, timeout=timeout_sec) as resp_x:
+                final_x = str(resp_x.geturl() or "").lower()
+                if "accounts.google.com" in final_x or "/servicelogin" in final_x or "/v3/signin" in final_x:
+                    out["is_private"] = True
+                    return out
+                ctype_x = str(resp_x.headers.get("Content-Type") or "").lower()
+                if "spreadsheetml" in ctype_x or "octet-stream" in ctype_x or "zip" in ctype_x:
+                    raw_xlsx = resp_x.read(2 * 1024 * 1024)
+                    if raw_xlsx[:4] == b"PK\x03\x04":
+                        import merlin_z_core_os as _zos
+
+                        with zipfile.ZipFile(io.BytesIO(raw_xlsx), "r") as zf:
+                            ordered_lines = _zos.extract_xlsx_ordered_rows(zf, max_rows=max_rows, max_chars=max_chars)
+                        parsed_rows: List[List[str]] = []
+                        for ln in ordered_lines:
+                            parts = _trim_trailing_empty(ln.split(" | "))
+                            if parts:
+                                parsed_rows.append(parts)
+                        if parsed_rows:
+                            h_src = parsed_rows[0][:8]
+                            headers = [c or f"열 {i + 1}" for i, c in enumerate(h_src)]
+                            col_n = len(headers)
+                            rows_out: List[List[str]] = []
+                            for r in parsed_rows[1:11]:
+                                rows_out.append([(r[i] if i < len(r) else "") for i in range(col_n)])
+                            out["table_headers"] = headers
+                            out["table_rows"] = rows_out
+                            out["body_text"] = "\n".join(ordered_lines)[:max_chars]
+                            out["exported"] = bool(out["body_text"])
+                            if out["exported"]:
+                                return out
+        except urllib.error.HTTPError as he_x:
+            if he_x.code in (401, 403):
+                out["is_private"] = True
+                return out
+        except Exception:
+            pass
 
     if ext_low == ".gsheet":
         urls = [
@@ -2249,9 +2330,6 @@ def export_public_google_workspace_body(
         urls = [f"https://docs.google.com/presentation/d/{clean_id}/export/txt"]
     else:
         urls = [f"https://docs.google.com/document/d/{clean_id}/export?format=txt"]
-
-    jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
     for exp_url in urls:
         try:
@@ -2269,19 +2347,15 @@ def export_public_google_workspace_body(
                     continue
                 if ext_low == ".gsheet":
                     reader = list(csv.reader(io.StringIO(data_txt)))
-                    non_empty = [r for r in reader if any(c.strip() for c in r)]
+                    non_empty = [_trim_trailing_empty(r) for r in reader]
+                    non_empty = [r for r in non_empty if r]
                     if non_empty:
-                        headers = [c.strip() or f"열 {i + 1}" for i, c in enumerate(non_empty[0][:8])]
+                        headers = [c or f"열 {i + 1}" for i, c in enumerate(non_empty[0][:8])]
                         col_n = len(headers)
-                        rows_out: List[List[str]] = []
+                        rows_out = []
                         for r in non_empty[1:11]:
-                            rows_out.append(
-                                [(c.strip() if i < len(r) else "") for i, c in enumerate((r + [""] * col_n)[:col_n])]
-                            )
-                        body_lines = [
-                            " | ".join(c.strip() for c in r[:16] if c.strip() or len(r) <= 8)
-                            for r in non_empty[:max_rows]
-                        ]
+                            rows_out.append([(r[i] if i < len(r) else "") for i in range(col_n)])
+                        body_lines = [" | ".join(r[:16]) for r in non_empty[:max_rows]]
                         out["table_headers"] = headers
                         out["table_rows"] = rows_out
                         out["body_text"] = "\n".join(line for line in body_lines if line)[:max_chars]
