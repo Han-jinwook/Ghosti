@@ -2987,7 +2987,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
 const _smartPhotoLabelMemo = new Map<
   string,
-  { tokens: string[]; enrichedTags: string[]; ocrSnippet?: string }
+  { tokens: string[]; enrichedTags: string[]; ocrSnippet?: string; exifTakenAtMs?: number | null }
 >();
 
 export async function resolveSmartKoreanLabelForPhoto(
@@ -3001,10 +3001,16 @@ export async function resolveSmartKoreanLabelForPhoto(
   ocrSnippet?: string;
 }> {
   const displaySourceName = stripCollisionKeySuffix(photo.name || '사진.png');
-  // 원본 JPEG 헤더(64KB)에서 EXIF 실제 촬영일(DateTimeOriginal)을 병렬 초고속(~2ms) 추출
-  const exifTakenAtPromise = probePhotoExifTakenAtMs(photo.fullUrl || photo.thumbUrl);
   const memoKey = photo.id || `${photo.name}|${photo.size || 0}`;
   const memoHit = _smartPhotoLabelMemo.get(memoKey);
+  // 원본 JPEG 헤더(64KB)에서 EXIF 실제 촬영일(DateTimeOriginal)을 병렬 초고속(~2ms) 추출 (메모 히트 시 0ms)
+  const exifTakenAtPromise =
+    memoHit && memoHit.exifTakenAtMs !== undefined
+      ? Promise.resolve(memoHit.exifTakenAtMs)
+      : Promise.race([
+          probePhotoExifTakenAtMs(photo.fullUrl || photo.thumbUrl).catch(() => null),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 150)),
+        ]);
 
   const ocrFromCaption = (photo.captionKo || '').includes('OCR:')
     ? (photo.captionKo || '').split(/(?:📝\s*)?OCR:/)[1] || ''
@@ -3045,7 +3051,7 @@ export async function resolveSmartKoreanLabelForPhoto(
         photo.trashCategory === 'screenshot' ||
         photo.trashCategory === 'memo'
     );
-    const ocrBudgetMs = isTextHeavyPhoto ? 780 : 480;
+    const ocrBudgetMs = isTextHeavyPhoto ? 480 : 300;
 
     const mapEnglishOcrWordsToKo = (rawText: string): string[] => {
       const enDict: Array<[RegExp, string]> = [
@@ -3181,7 +3187,7 @@ export async function resolveSmartKoreanLabelForPhoto(
             const imgCtrl = new AbortController();
             const onOuterAbort = () => imgCtrl.abort();
             signal?.addEventListener('abort', onOuterAbort, { once: true });
-            const imgTid = setTimeout(() => imgCtrl.abort(), 750);
+            const imgTid = setTimeout(() => imgCtrl.abort(), 380);
             const imgRes = await fetch(srcUrl, { signal: imgCtrl.signal }).finally(() => {
               clearTimeout(imgTid);
               signal?.removeEventListener('abort', onOuterAbort);
@@ -3300,26 +3306,69 @@ export async function resolveSmartKoreanLabelForPhoto(
       }
     };
 
-    const [ocrRes, visRes] = await Promise.all([
-      runZCoreOcr(),
-      Promise.race([
-        runVisionConceptMatch(),
-        new Promise<Awaited<ReturnType<typeof runVisionConceptMatch>>>((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                tokens: [],
-                tags: [],
-                isNaturalOrPortrait: false,
-                isDocOrReceipt: false,
-                paddleOcrTokens: [],
-                paddleOcrSnippet: '',
-              }),
-            1350
-          )
-        ),
-      ]),
+    type OcrTaskRes = Awaited<ReturnType<typeof runZCoreOcr>>;
+    type VisTaskRes = Awaited<ReturnType<typeof runVisionConceptMatch>>;
+    const emptyOcr: OcrTaskRes = { tokens: [], snippet: '', cleanCharCount: 0 };
+    const emptyVis: VisTaskRes = {
+      tokens: [],
+      tags: [],
+      isNaturalOrPortrait: false,
+      isDocOrReceipt: false,
+      paddleOcrTokens: [],
+      paddleOcrSnippet: '',
+    };
+
+    // 선착순 조기 확정(Early-Resolve Race):
+    // 기존 Promise.all은 두 작업 중 가장 느린 쪽(최대 1,350ms)까지 무조건 대기했으나,
+    // 한쪽이 유효한 한글 태그를 먼저 찾으면 다른 쪽은 최대 90ms만 추가 대기 후 즉시 확정합니다.
+    const ocrP = runZCoreOcr().catch(() => emptyOcr);
+    const visP = Promise.race([
+      runVisionConceptMatch().catch(() => emptyVis),
+      new Promise<VisTaskRes>((resolve) => setTimeout(() => resolve(emptyVis), 520)),
     ]);
+
+    const [ocrRes, visRes] = await new Promise<[OcrTaskRes, VisTaskRes]>((resolve) => {
+      let ocrDone: OcrTaskRes | null = null;
+      let visDone: VisTaskRes | null = null;
+      let settled = false;
+      let graceTimer = 0;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (graceTimer) clearTimeout(graceTimer);
+        resolve([ocrDone ?? emptyOcr, visDone ?? emptyVis]);
+      };
+
+      const scheduleGrace = (ms: number) => {
+        if (settled || graceTimer) return;
+        graceTimer = window.setTimeout(finish, ms);
+      };
+
+      void ocrP.then((r) => {
+        ocrDone = r;
+        if (visDone !== null) {
+          finish();
+        } else if (r.tokens.length > 0 && (isTextHeavyPhoto || r.cleanCharCount >= 8)) {
+          // 문서/영수증 등 글자가 뚜렷하면 비전 모델 로딩을 기다리지 않고 60ms 후 즉시 확정
+          scheduleGrace(60);
+        } else if (r.tokens.length > 0) {
+          scheduleGrace(120);
+        }
+      });
+
+      void visP.then((v) => {
+        visDone = v;
+        if (ocrDone !== null) {
+          finish();
+        } else if (v.tokens.length > 0 && !isTextHeavyPhoto && v.isNaturalOrPortrait) {
+          // 캐시된 비전 벡터(<2ms)로 인물/풍경이 확정되면 OCR 타임아웃을 기다리지 않고 40ms 후 즉시 확정
+          scheduleGrace(40);
+        } else if (v.tokens.length > 0 || v.paddleOcrTokens.length > 0) {
+          scheduleGrace(110);
+        }
+      });
+    });
 
     const useVisualOverNoisyOcr =
       !isTextHeavyPhoto &&
@@ -3377,16 +3426,17 @@ export async function resolveSmartKoreanLabelForPhoto(
     tokens = [photo.trashCategory === 'screenshot' ? '화면캡처' : '사진기록'];
   }
 
+  const exifTakenAtMs = await exifTakenAtPromise.catch(() => null);
   if (!memoHit && !signal?.aborted) {
     if (_smartPhotoLabelMemo.size > 400) _smartPhotoLabelMemo.clear();
     _smartPhotoLabelMemo.set(memoKey, {
       tokens: [...tokens],
       enrichedTags: Array.from(discoveredTagSet),
+      exifTakenAtMs,
       ...(discoveredOcrSnippet ? { ocrSnippet: discoveredOcrSnippet } : {}),
     });
   }
 
-  const exifTakenAtMs = await exifTakenAtPromise.catch(() => null);
   const label = formatQuickKoreanLabelCore(displaySourceName, photo.date, tokens, {
     takenAtMs: exifTakenAtMs ?? undefined,
     mtimeMs: photo.mtimeMs,
