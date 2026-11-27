@@ -1225,6 +1225,7 @@ export async function mountWorkSDriveNative(opts?: {
   isCustomTarget?: boolean;
   copiedCount?: number;
   gdocCopiedCount?: number;
+  copiedRelPaths?: string[];
   message?: string;
 }> {
   if (isLocalPcBlockedByOtherAccount()) {
@@ -1268,6 +1269,7 @@ export async function mountWorkSDriveNative(opts?: {
       isCustomTarget?: boolean;
       copiedCount?: number;
       gdocCopiedCount?: number;
+      copiedRelPaths?: string[];
       message?: string;
     } | null;
     if (parsed && typeof parsed === 'object') {
@@ -1280,6 +1282,7 @@ export async function mountWorkSDriveNative(opts?: {
         isCustomTarget: parsed.isCustomTarget,
         copiedCount: parsed.copiedCount,
         gdocCopiedCount: parsed.gdocCopiedCount,
+        copiedRelPaths: Array.isArray(parsed.copiedRelPaths) ? parsed.copiedRelPaths : undefined,
         message: parsed.message,
       };
     }

@@ -2779,6 +2779,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
       openExplorer: true,
       accountEmail: merlinAuth?.email || undefined,
     });
+    if (res.ok && res.copiedRelPaths && res.copiedRelPaths.length > 0) {
+      mergeAndPersistTombstones({}, res.copiedRelPaths);
+    }
     await applyFolderSwitchResult(res);
     if (res.ok && res.message) {
       showToast(res.message);
@@ -2791,7 +2794,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
     showToast(
-      '현재 로컬 폴더로 가져올 원본 구글 드라이브 폴더를 선택해 주세요. 윈도우 탐색기에서 복사가 막히던 .gsheet·.gdoc 파일까지 자동으로 복사됩니다!'
+      '열린 창에서 구글 드라이브 폴더로 들어가 .gsheet·.gdoc 파일을 눈으로 확인한 뒤 바로 [파일·시트 가져오기]를 누르거나 원하는 파일을 선택해 주세요!'
     );
     const res = await mountWorkSDriveNative({
       action: 'import_from_cloud',
@@ -2802,6 +2805,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (!res.ok) {
       showToast(res.message || '구글 드라이브 파일을 가져오지 못했습니다.');
       return;
+    }
+    if (res.copiedRelPaths && res.copiedRelPaths.length > 0) {
+      mergeAndPersistTombstones({}, res.copiedRelPaths);
     }
     lastWorkFilesSigRef.current = '';
     await syncRealWorkFiles(true);

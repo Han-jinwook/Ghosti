@@ -1210,14 +1210,309 @@ def _is_google_drive_or_virtual_cloud_path(p: Path) -> bool:
     return False
 
 
-def _copy_work_folder_with_gdoc_synthesis(src_dir: Path, dst_dir: Path) -> Dict[str, int]:
+def _pick_cloud_files_or_folder_dialog_win32(
+    initial_dir: str = "",
+    dialog_title: str = "",
+    ok_label: str = "",
+) -> Tuple[Optional[str], List[str], Optional[str]]:
+    """구글 드라이브 등에서 파일을 가져올 때, 기존 FOS_PICKFOLDERS(폴더만 보이고 .gsheet/.gdoc 등 내부 파일이 숨겨지는 OS 한계) 대신
+    폴더 안의 .gsheet·.gdoc·일반 문서 파일들이 모두 눈에 보이게 표시하며,
+    ① 파일 선택 없이 바로 [파일·시트 가져오기]를 누르면 현재 열린 폴더 전체를 통째로 가져오고,
+    ② 특정 파일(.gsheet 등 1~여러 개)을 직접 클릭·선택해 누르면 선택한 파일들을 가져옵니다.
+    반환: (폴더전체경로 또는 None, 개별선택파일경로목록, 오류메시지) — 취소 시 (None, [], None)"""
+    if os.name != "nt":
+        return None, [], "Windows 환경에서만 사용할 수 있습니다."
+
+    with _PICKER_SINGLE_FLIGHT_LOCK:
+        if _ACTIVE_PICKER_STATE.get("running") and isinstance(_ACTIVE_PICKER_STATE.get("done"), threading.Event):
+            existing_owner = int(_ACTIVE_PICKER_STATE.get("owner_hwnd") or 0)
+            _bring_picker_window_to_front(existing_owner)
+            return None, [], "이미 열려 있는 선택창에서 먼저 선택을 완료해 주세요."
+        done_ev = threading.Event()
+        _ACTIVE_PICKER_STATE["running"] = True
+        _ACTIVE_PICKER_STATE["owner_hwnd"] = 0
+        _ACTIVE_PICKER_STATE["done"] = done_ev
+        _ACTIVE_PICKER_STATE["result"] = (None, [], None)
+
+    start_dir = _suggest_initial_picker_dir(initial_dir)
+    placeholder_token = "[이 폴더 전체 파일·시트 일괄 가져오기]"
+
+    def _sta_file_visible_worker() -> None:
+        from ctypes import wintypes as _wt
+
+        class _COMDLG_FILTERSPEC(ctypes.Structure):
+            _fields_ = [("pszName", _wt.LPCWSTR), ("pszSpec", _wt.LPCWSTR)]
+
+        folder_out: Optional[str] = None
+        files_out: List[str] = []
+        err_out: Optional[str] = None
+        owner_hwnd_val = 0
+        co_init_ok = False
+        u32 = ctypes.windll.user32
+        ole32 = ctypes.windll.ole32
+        sh32 = ctypes.windll.shell32
+
+        def _extract_shell_item_path(si_ptr: ctypes.c_void_p) -> str:
+            if not si_ptr or not si_ptr.value:
+                return ""
+            si_vt = ctypes.cast(
+                ctypes.cast(si_ptr, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p),
+            )
+            GetDisp = ctypes.WINFUNCTYPE(
+                ctypes.c_long, ctypes.c_void_p, _wt.DWORD, ctypes.POINTER(ctypes.c_void_p)
+            )(si_vt[5])
+            for sigdn in (0x80058000, 0x80028000):
+                psz = ctypes.c_void_p()
+                if GetDisp(si_ptr, sigdn, ctypes.byref(psz)) == 0 and psz.value:
+                    s = ctypes.wstring_at(psz.value).strip()
+                    ole32.CoTaskMemFree(psz)
+                    if s:
+                        return s
+            return ""
+
+        def _release_com(ptr: ctypes.c_void_p) -> None:
+            if ptr and ptr.value:
+                vt = ctypes.cast(
+                    ctypes.cast(ptr, ctypes.POINTER(ctypes.c_void_p))[0],
+                    ctypes.POINTER(ctypes.c_void_p),
+                )
+                ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vt[2])(ptr)
+
+        try:
+            try:
+                import merlin_z_core_os as _zos_pk2
+
+                _zos_pk2.attach_thread_to_interactive_desktop()
+            except Exception:
+                pass
+
+            hr_ci = ole32.CoInitializeEx(None, 0x2)
+            co_init_ok = hr_ci in (0, 1)
+
+            u32.GetForegroundWindow.restype = _wt.HWND
+            u32.MonitorFromWindow.argtypes = [_wt.HWND, _wt.DWORD]
+            u32.MonitorFromWindow.restype = _wt.HANDLE
+            u32.GetMonitorInfoW.argtypes = [_wt.HANDLE, ctypes.POINTER(_WIN_MONITORINFO)]
+            u32.GetMonitorInfoW.restype = _wt.BOOL
+            u32.CreateWindowExW.argtypes = [
+                _wt.DWORD, _wt.LPCWSTR, _wt.LPCWSTR, _wt.DWORD,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                _wt.HWND, _wt.HMENU, _wt.HINSTANCE, _wt.LPVOID,
+            ]
+            u32.CreateWindowExW.restype = _wt.HWND
+            u32.DestroyWindow.argtypes = [_wt.HWND]
+            u32.DestroyWindow.restype = _wt.BOOL
+
+            cx, cy = 640, 380
+            fg_hwnd = u32.GetForegroundWindow()
+            if fg_hwnd:
+                hmon = u32.MonitorFromWindow(fg_hwnd, 2)
+                if hmon:
+                    mi = _WIN_MONITORINFO()
+                    mi.cbSize = ctypes.sizeof(_WIN_MONITORINFO)
+                    if u32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+                        cx = int((mi.rcWork.left + mi.rcWork.right) // 2)
+                        cy = int((mi.rcWork.top + mi.rcWork.bottom) // 2)
+
+            owner_hw = u32.CreateWindowExW(
+                0x00000008 | 0x00040000,
+                "STATIC",
+                "귀신같이 구글 드라이브 파일·시트 가져오기",
+                0x80000000 | 0x10000000,
+                cx, cy, 1, 1, None, None, None, None,
+            )
+            owner_hwnd_val = int(owner_hw) if owner_hw else 0
+            _ACTIVE_PICKER_STATE["owner_hwnd"] = owner_hwnd_val
+            if owner_hwnd_val:
+                _bring_picker_window_to_front(owner_hwnd_val)
+
+            ole32.CoCreateInstance.argtypes = [
+                ctypes.POINTER(_COM_GUID), ctypes.c_void_p, _wt.DWORD,
+                ctypes.POINTER(_COM_GUID), ctypes.POINTER(ctypes.c_void_p),
+            ]
+            ole32.CoCreateInstance.restype = ctypes.c_long
+            sh32.SHCreateItemFromParsingName.argtypes = [
+                _wt.LPCWSTR, ctypes.c_void_p, ctypes.POINTER(_COM_GUID), ctypes.POINTER(ctypes.c_void_p),
+            ]
+            sh32.SHCreateItemFromParsingName.restype = ctypes.c_long
+
+            dlg = ctypes.c_void_p()
+            hr = ole32.CoCreateInstance(
+                ctypes.byref(_CLSID_FileOpenDialog), None, 1,
+                ctypes.byref(_IID_IFileOpenDialog), ctypes.byref(dlg),
+            )
+            if hr != 0 or not dlg.value:
+                err_out = "윈도우 탐색기 선택창을 열지 못했습니다."
+                return
+
+            vtbl = ctypes.cast(
+                ctypes.cast(dlg, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p),
+            )
+            ShowDlg = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.HWND)(vtbl[3])
+            SetFileTypes = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(_COMDLG_FILTERSPEC))(vtbl[4])
+            SetOptions = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.DWORD)(vtbl[9])
+            GetOptions = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(_wt.DWORD))(vtbl[10])
+            SetFolder = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_void_p)(vtbl[12])
+            GetFolder = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(vtbl[13])
+            SetFileName = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.LPCWSTR)(vtbl[15])
+            SetTitle = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.LPCWSTR)(vtbl[17])
+            SetOkButtonLabel = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.LPCWSTR)(vtbl[18])
+            SetFileNameLabel = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.LPCWSTR)(vtbl[19])
+            GetResult = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(vtbl[20])
+            GetResults = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(vtbl[27])
+
+            try:
+                cur_opts = _wt.DWORD(0)
+                GetOptions(dlg, ctypes.byref(cur_opts))
+                # ~FOS_PICKFOLDERS(~0x20)로 .gsheet/.gdoc/.txt 등 모든 파일 표시 + FOS_NOVALIDATE(0x100) + ~FOS_FILEMUSTEXIST(~0x1000) + FOS_ALLOWMULTISELECT(0x200) + FOS_NODEREFERENCELINKS(0x100000)
+                new_opts = (cur_opts.value | 0x08 | 0x40 | 0x100 | 0x200 | 0x100000 | 0x02000000) & ~0x20 & ~0x1000
+                SetOptions(dlg, new_opts)
+                specs = (_COMDLG_FILTERSPEC * 2)(
+                    _COMDLG_FILTERSPEC("모든 업무 파일 및 구글 시트·문서 (*.*)", "*.*"),
+                    _COMDLG_FILTERSPEC("구글 시트·문서·프레젠테이션 (*.gsheet;*.gdoc;*.gslides)", "*.gsheet;*.gdoc;*.gslides"),
+                )
+                SetFileTypes(dlg, 2, specs)
+                SetFileName(dlg, placeholder_token)
+                SetFileNameLabel(dlg, "가져올 대상:")
+                SetTitle(dlg, dialog_title or "가져올 구글 드라이브 폴더 열기 (.gsheet·.gdoc 확인 후 바로 [파일·시트 가져오기] 클릭)")
+                SetOkButtonLabel(dlg, ok_label or "파일·시트 가져오기")
+
+                if start_dir:
+                    si_init = ctypes.c_void_p()
+                    if sh32.SHCreateItemFromParsingName(start_dir, None, ctypes.byref(_IID_IShellItem), ctypes.byref(si_init)) == 0 and si_init.value:
+                        try:
+                            SetFolder(dlg, si_init)
+                        finally:
+                            _release_com(si_init)
+
+                if owner_hwnd_val:
+                    for delay_s in (0.12, 0.35):
+                        t_front = threading.Timer(delay_s, _bring_picker_window_to_front, args=(owner_hwnd_val,))
+                        t_front.daemon = True
+                        t_front.start()
+
+                hr_show = ShowDlg(dlg, _wt.HWND(owner_hwnd_val) if owner_hwnd_val else None)
+                hr_u32 = hr_show & 0xFFFFFFFF
+                if hr_show == 0:
+                    raw_candidates: List[str] = []
+                    psi_arr = ctypes.c_void_p()
+                    if GetResults(dlg, ctypes.byref(psi_arr)) == 0 and psi_arr.value:
+                        try:
+                            arr_vt = ctypes.cast(
+                                ctypes.cast(psi_arr, ctypes.POINTER(ctypes.c_void_p))[0],
+                                ctypes.POINTER(ctypes.c_void_p),
+                            )
+                            GetCount = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(_wt.DWORD))(arr_vt[7])
+                            GetItemAt = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, _wt.DWORD, ctypes.POINTER(ctypes.c_void_p))(arr_vt[8])
+                            cnt = _wt.DWORD(0)
+                            if GetCount(psi_arr, ctypes.byref(cnt)) == 0:
+                                for i_idx in range(int(cnt.value)):
+                                    si_it = ctypes.c_void_p()
+                                    if GetItemAt(psi_arr, i_idx, ctypes.byref(si_it)) == 0 and si_it.value:
+                                        try:
+                                            p_s = _extract_shell_item_path(si_it)
+                                            if p_s:
+                                                raw_candidates.append(p_s)
+                                        finally:
+                                            _release_com(si_it)
+                        finally:
+                            _release_com(psi_arr)
+
+                    if not raw_candidates:
+                        si_one = ctypes.c_void_p()
+                        if GetResult(dlg, ctypes.byref(si_one)) == 0 and si_one.value:
+                            try:
+                                p_one = _extract_shell_item_path(si_one)
+                                if p_one:
+                                    raw_candidates.append(p_one)
+                            finally:
+                                _release_com(si_one)
+
+                    real_selected = [
+                        c for c in raw_candidates
+                        if placeholder_token not in os.path.basename(c) and os.path.exists(c)
+                    ]
+                    if real_selected:
+                        if len(real_selected) == 1 and os.path.isdir(real_selected[0]):
+                            folder_out = real_selected[0]
+                        else:
+                            files_out = real_selected
+                    else:
+                        si_cur_dir = ctypes.c_void_p()
+                        if GetFolder(dlg, ctypes.byref(si_cur_dir)) == 0 and si_cur_dir.value:
+                            try:
+                                folder_out = _extract_shell_item_path(si_cur_dir) or None
+                            finally:
+                                _release_com(si_cur_dir)
+                        if not folder_out and raw_candidates:
+                            parent_cand = os.path.dirname(raw_candidates[0])
+                            if parent_cand and os.path.isdir(parent_cand):
+                                folder_out = parent_cand
+                elif hr_u32 == 0x800704C7:
+                    folder_out = None
+                    files_out = []
+                    err_out = None
+                else:
+                    err_out = f"선택창 호출 중 오류가 발생했습니다 (0x{hr_u32:08X})."
+            finally:
+                _release_com(dlg)
+        except Exception as exc:
+            err_out = f"선택창 실행 오류: {exc}"
+        finally:
+            if owner_hwnd_val:
+                try:
+                    u32.DestroyWindow(_wt.HWND(owner_hwnd_val))
+                except Exception:
+                    pass
+            if co_init_ok:
+                try:
+                    ole32.CoUninitialize()
+                except Exception:
+                    pass
+            with _PICKER_SINGLE_FLIGHT_LOCK:
+                _ACTIVE_PICKER_STATE["result"] = (folder_out, files_out, err_out)
+                _ACTIVE_PICKER_STATE["running"] = False
+                _ACTIVE_PICKER_STATE["owner_hwnd"] = 0
+                done_ref = _ACTIVE_PICKER_STATE.get("done")
+                if isinstance(done_ref, threading.Event):
+                    done_ref.set()
+
+    th = threading.Thread(target=_sta_file_visible_worker, name="ghosti-sdrive-cloud-import-picker", daemon=True)
+    th.start()
+    done_ev.wait(timeout=182.0)
+    res_triple = _ACTIVE_PICKER_STATE.get("result") or (None, [], "선택 응답 시간이 초과되었습니다.")
+    return res_triple[0], res_triple[1], res_triple[2]
+
+
+def _copy_work_folder_with_gdoc_synthesis(
+    src_dir: Path,
+    dst_dir: Path,
+    explicit_files: Optional[List[Path]] = None,
+) -> Dict[str, Any]:
     """구글 드라이브(DriveFS 가상 스텁 WinError 1 / 잘못된 MS-DOS 함수) 내 .gsheet/.gdoc/.gslides 파일을
     정식 URL·doc_id JSON 바로가기 파일로 자동 합성 복사하고 일반 업무 파일·서브폴더도 무손실 이관합니다."""
     dst_dir.mkdir(parents=True, exist_ok=True)
-    entries, _, _ = _scan_work_vault(src_dir, set(), include_hidden=False)
+    if explicit_files:
+        entries: List[Tuple[Path, str, os.stat_result]] = []
+        for ef in explicit_files:
+            try:
+                if ef.is_dir():
+                    sub_entries, _, _ = _scan_work_vault(ef, set(), include_hidden=False)
+                    for sf, srel, sst in sub_entries:
+                        entries.append((sf, f"{ef.name}/{srel}", sst))
+                elif ef.exists():
+                    entries.append((ef, ef.name, ef.stat()))
+            except Exception:
+                continue
+    else:
+        entries, _, _ = _scan_work_vault(src_dir, set(), include_hidden=False)
+
     regular_copied = 0
     gdoc_copied = 0
     copied_rels: List[str] = []
+    now_ts = time.time()
 
     for src_full, rel_p, st in entries:
         dst_full = _safe_resolve_inside_vault(dst_dir, rel_p)
@@ -1230,6 +1525,7 @@ def _copy_work_folder_with_gdoc_synthesis(src_dir: Path, dst_dir: Path) -> Dict[
             pass
         dst_full.parent.mkdir(parents=True, exist_ok=True)
         ext_low = src_full.suffix.lower()
+        fresh_ts = max(float(st.st_mtime), now_ts)
         try:
             if ext_low in (".gsheet", ".gdoc", ".gslides"):
                 g_bytes = read_work_file_bytes_safe(src_full)
@@ -1237,7 +1533,7 @@ def _copy_work_folder_with_gdoc_synthesis(src_dir: Path, dst_dir: Path) -> Dict[
                     continue
                 dst_full.write_bytes(g_bytes)
                 try:
-                    os.utime(dst_full, (st.st_mtime, st.st_mtime))
+                    os.utime(dst_full, (fresh_ts, fresh_ts))
                 except Exception:
                     pass
                 gdoc_copied += 1
@@ -1245,11 +1541,15 @@ def _copy_work_folder_with_gdoc_synthesis(src_dir: Path, dst_dir: Path) -> Dict[
             else:
                 try:
                     shutil.copy2(src_full, dst_full)
+                    try:
+                        os.utime(dst_full, (fresh_ts, fresh_ts))
+                    except Exception:
+                        pass
                 except OSError:
                     fallback_b = read_work_file_bytes_safe(src_full)
                     dst_full.write_bytes(fallback_b)
                     try:
-                        os.utime(dst_full, (st.st_mtime, st.st_mtime))
+                        os.utime(dst_full, (fresh_ts, fresh_ts))
                     except Exception:
                         pass
                 regular_copied += 1
@@ -1272,6 +1572,7 @@ def _copy_work_folder_with_gdoc_synthesis(src_dir: Path, dst_dir: Path) -> Dict[
         "copiedCount": regular_copied + gdoc_copied,
         "gdocCopiedCount": gdoc_copied,
         "regularCopiedCount": regular_copied,
+        "copiedRelPaths": copied_rels,
     }
 
 
@@ -1373,11 +1674,12 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         )
     elif action == "import_from_cloud":
         src_cand = source_dir_raw
+        explicit_src_files: List[Path] = []
         if not src_cand:
-            picked_src, src_err = _pick_folder_dialog_win32(
+            picked_folder, picked_files, src_err = _pick_cloud_files_or_folder_dialog_win32(
                 _suggest_google_drive_picker_dir(),
-                dialog_title=f"현재 로컬 폴더({prev_vault_dir})로 통째 복사해 올 구글 드라이브 폴더 선택 (.gsheet·.gdoc 포함)",
-                ok_label="이 폴더의 파일·시트 가져오기",
+                dialog_title=f"가져올 구글 드라이브 폴더 열기 (.gsheet·.gdoc 파일 확인 후 바로 [파일·시트 가져오기] 클릭)",
+                ok_label="파일·시트 가져오기",
             )
             if src_err:
                 return {
@@ -1386,34 +1688,42 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
                     "targetDir": str(prev_vault_dir),
                     "message": src_err,
                 }
-            if not picked_src:
+            if picked_files:
+                explicit_src_files = [Path(fp) for fp in picked_files]
+                src_cand = str(explicit_src_files[0].parent)
+            elif picked_folder:
+                src_cand = picked_folder
+            else:
                 return {
                     "ok": False,
                     "cancelled": True,
                     "targetDir": str(prev_vault_dir),
-                    "message": "원본 구글 드라이브 폴더 선택이 취소되었습니다.",
+                    "message": "원본 구글 드라이브 폴더·파일 선택이 취소되었습니다.",
                 }
-            src_cand = picked_src
         src_p = Path(src_cand)
-        if not src_p.exists() or not src_p.is_dir():
+        if not explicit_src_files and (not src_p.exists() or not src_p.is_dir()):
             return {
                 "ok": False,
                 "error": "SOURCE_DIR_NOT_FOUND",
                 "targetDir": str(prev_vault_dir),
                 "message": "선택한 원본 폴더를 찾을 수 없습니다. 구글 드라이브가 열려 있는지 확인해 주세요.",
             }
-        if _same_path(src_p, prev_vault_dir):
+        if not explicit_src_files and _same_path(src_p, prev_vault_dir):
             return {
                 "ok": False,
                 "error": "SAME_SOURCE_AND_TARGET",
                 "targetDir": str(prev_vault_dir),
                 "message": "현재 연결된 로컬 폴더와 다른 원본 구글 드라이브 폴더를 선택해 주세요.",
             }
-        migration_stats = _copy_work_folder_with_gdoc_synthesis(src_p, prev_vault_dir)
+        migration_stats = _copy_work_folder_with_gdoc_synthesis(
+            src_p,
+            prev_vault_dir,
+            explicit_files=explicit_src_files if explicit_src_files else None,
+        )
         custom_target = str(prev_vault_dir)
         action = "mount"
         migration_msg_override = (
-            f"✓ [{src_p}] 안의 구글 시트·문서({migration_stats['gdocCopiedCount']}건) 포함 총 {migration_stats['copiedCount']}개 파일을 "
+            f"✓ 구글 시트·문서({migration_stats['gdocCopiedCount']}건) 포함 총 {migration_stats['copiedCount']}개 파일을 "
             f"현재 로컬 폴더([{prev_vault_dir}])로 안전하게 가져왔습니다!"
         )
     elif action in ("reset_default", "reset_default_folder"):
@@ -1570,6 +1880,7 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         "openedExplorer": open_explorer,
         "copiedCount": int(migration_stats["copiedCount"]) if migration_stats else 0,
         "gdocCopiedCount": int(migration_stats["gdocCopiedCount"]) if migration_stats else 0,
+        "copiedRelPaths": list(migration_stats.get("copiedRelPaths") or []) if migration_stats else [],
         "message": msg,
     }
 
@@ -2771,6 +3082,17 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 skipped += 1
                 continue
             st = target.stat()
+            if target.suffix.lower() in (".gsheet", ".gdoc", ".gslides"):
+                local_meta_g = _extract_rich_preview_cached(target, st)
+                if (
+                    (remote_sha and str(local_meta_g.get("sha256") or "").lower() == remote_sha.lower())
+                    or _is_google_drive_or_virtual_cloud_path(vault_dir)
+                ):
+                    if uploader and up_map.get(rel_p) != uploader:
+                        up_map[rel_p] = uploader
+                    added_rel_set.add(rel_p)
+                    skipped += 1
+                    continue
             is_valid_hex_sha = len(remote_sha) == 64 and all(c in "0123456789abcdefABCDEF" for c in remote_sha)
             if is_valid_hex_sha:
                 local_meta = _extract_rich_preview_cached(target, st)
