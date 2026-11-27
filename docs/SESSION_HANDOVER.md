@@ -111,22 +111,32 @@
 
 ﻿# 🟠 `[3귀신]` 세션 인계장 (`SESSION_HANDOVER_3.md` — 사진 공유 · 내 기기 통합 · 모바일 앱)
 
-- **최종 갱신 일시**: 2026-11-27 16:20 (KST)
+- **최종 갱신 일시**: 2026-11-27 22:56 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정 · 3·4귀신 테스터는 해나라님이 아닌 달나라님으로 호칭)
-- **최신 배포 버전**: **`Merlin Z-Core v2.12.9`** · 양대 스토어 **`v1.0.130 (130)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
+- **최신 배포 버전**: **`Merlin Z-Core v2.13.39`** · 양대 스토어 **`v1.0.130 (130)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
 - **세션 창 제목**: `3귀신 사진공유·모바일통합`
 
 ## 완료 내역 (2026-11-25 ~ 11-27)
-1. **모바일 `[모니터로 크게 보기]` 라이트모드 팝업 배경 복원 및 `고스트 모니터 캐스트 (Ghost Monitor Cast)` 알약 배지 1줄 정합화 (`v1.0.130 (130)` 양대 스토어 동시 출시, 카드 `425f9ffd-2c1d-81b3-a578-eafec6ee5822` `'재테스트 대기'`) (2026-11-27)**
-   - 달나라님 피드백 반영: 화면 전체가 까맣게 덮여 앱이 멈춘 것처럼 보이던 전역 다크 오버레이를 라이트모드 반투명 딤드 + 흰색 카드 팝업으로 정상 복원(사진 뷰어 내부만 다크 유지).
-   - 달나라님이 언급하셨던 `고스트 모니터 캐스트 (Ghost Monitor Cast)` 원본 배지명을 복원하고 모바일 360px에서도 단어 쪼개짐 없이 1줄로 표시되도록 UI 정합화 완료.
-2. **Apple APNs HTTP/2 · Google FCM HTTP v1 정식 백그라운드 & 앱종료 푸시 직결 (`v1.0.129 (129)` 양대 스토어 출시, 카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`) (2026-11-27)**
+1. **사진 공유 누락 4건 멀린님 최종 확정 정공법 일괄 완결 (`Z-Core v2.13.39`, `[즉시실행]` 공문 완결) (2026-11-27)**
+   - **① 중복 사진 `EXIF + 픽셀 해상도(width × height)` 비교·고화질 자동 교체**: `sharedPhotoRoomSupabase.ts`(`isHigherQualityOriginalCandidate` · `upgradeHigherQualitySharedPhoto`), `workAndDeviceBridgeOps.mjs`(`photo_upgrade_higher_quality`), `FreePhotoShareOverlays.tsx`, `freePhotoShareSlice.ts` 구현으로 `dHash` 일치 시 기존 댓글·하트 100% 보존하며 고화질 원본 자동 교체.
+   - **② 모바일 24시간 삭제 제한 적용 & 방장 권한 설정 서버 동기화**: `MobileAppView.tsx`에 PC와 동일한 `evaluateSharedPhotoDeletePermission` 연결 + `workAndDeviceBridgeOps.mjs`(`photo_get_room_settings` / `photo_set_room_settings`) · `ghosti_zero_cloud_schema.sql`(`host_retains_hide_permission`) · `LoungeCustomSettingsHeader.tsx` · `GhostSearchPane.tsx` 방별 서버 동기화 완결.
+   - **③ 동창회 연도 제보 반쪽 버튼 1차 출시 숨김(2웨이브 이관)**: `AlumniRetroBannerAndTwoTrackBar.tsx` 미작동 `연도 제보 승인` 버튼 제거 및 `기능명세.md` In-Place 반영.
+   - **④ 타 멤버 `[원본 동기화]` 듀얼 엔진 아웃바운드 HTTPS 직통 터널 고화질 원본(5~20MB) 스트리밍 다운로드 (`Z-Core v2.13.39`)**: `plugin_ghosti_os.py`(`ensure_photo_room_outbound_tunnel` · `resolve_shared_room_original_file` · `_save_shared_room_items_to_dir` 13KB 썸네일 저장 금지), `merlin_z_core_daemon.py`(`POST /__club/tunnel` · `GET /__club/original-file` `X-Ghosti-Photo-Key` 256-bit 인증), `workAndDeviceBridgeOps.mjs`(`photo_register_room_tunnel` · `photo_get_room_tunnel`), `LoungeFeedContextBanner.tsx`(방장 PC 오프라인 시 정직한 대기 안내 + 45초 자동 이어받기) 완결.
+   - **⑤ `PaidDeviceSyncPane.tsx` 하단 미사용 `else` 죽은 코드 청소** 및 `tsc --noEmit` · `vite build` · `node --check` · `py_compile` 전수 통과.
+2. **Apple APNs HTTP/2 · Google FCM HTTP v1 정식 백그라운드 & 앱종료 푸시 직결 (`v1.0.130 (130)` 양대 스토어 출시, 카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`) (2026-11-27)**
    - 멀린님 지침 1안 승인에 따라 1호컴 비서(`Secretary`)와 협업하여 `APNs Key (.p8 / 39TQVWY2YM)` 및 `Firebase FCM(google-services.json + 서비스 계정)` 전사 키 확보 및 Netlify 환경변수 4종 세팅 완료.
    - 외부 의존성 0개의 정식 서버 발송 엔진(`netlify/functions/lib/mobilePushDispatcher.mjs`) 탑재. PC `[📱 폰으로 보내기]` 클릭 시 기기별 `APNs / FCM` 토큰으로 즉시 원격 신호 발사.
    - Android `GhostiFirebaseMessagingService` + iOS `AppDelegate.swift` 백그라운드 수신기 구현으로 앱이 닫혀 있거나 화면이 꺼져 있어도 0.5초 내 기기 내 복호화 후 `[📋 복사]` 1탭 알림 표시 완결.
    - `MerlinHub` 전담 에이전트에 우체국 공문 발송(`MerlinHub_Ghosti_3귀신_전사모바일백그라운드푸시_원소스규격및허브SDK통합제안_20261127_1519.md`)하여 전사 24개 앱 공용 푸시 SDK 관제 이관 준비 완료.
-3. **스마트폰 사진 `[PC로 텍스트 전송]`(`Ctrl+V`·7일 보관함 직송 정합화) & `[모니터로 크게 보기]` 무선 리모컨 정합화 (`v1.0.128 (128)` 양대 스토어 동시 출시, 카드 `425f9ffd-2c1d-81b3-a578-eafec6ee5822`) (2026-11-27)**
+2. **모바일 `[모니터로 크게 보기]` 라이트모드 팝업 배경 복원 및 `고스트 모니터 캐스트 (Ghost Monitor Cast)` 알약 배지 1줄 정합화 (`v1.0.130 (130)` 양대 스토어 동시 출시, 카드 `425f9ffd-2c1d-81b3-a578-eafec6ee5822` `'재테스트 대기'`) (2026-11-27)**
+   - 달나라님 피드백 반영: 화면 전체가 까맣게 덮여 앱이 멈춘 것처럼 보이던 전역 다크 오버레이를 라이트모드 반투명 딤드 + 흰색 카드 팝업으로 정상 복원(사진 뷰어 내부만 다크 유지).
+   - 달나라님이 언급하셨던 `고스트 모니터 캐스트 (Ghost Monitor Cast)` 원본 배지명을 복원하고 모바일 360px에서도 단어 쪼개짐 없이 1줄로 표시되도록 UI 정합화 완료.
+3. **달나라님 전용 100% 완결 QA 테스트 미션 3건 신설 (2026-11-27)**
+   - 미션 1 (`425f9ffd-2c1d-819e-bb02-f361fa6d3126`): `⚡ [정식 APNs·FCM] 앱 종료·화면 꺼짐 시 PC ➔ 폰 선택 푸시 & [📋 복사] 1탭 검증 (앱 v1.0.130)`
+   - 미션 2 (`425f9ffd-2c1d-81ee-976e-c52532bd1b10`): `💻 [모니터로 크게 보기] 밝은 팝업 배경 및 '고스트 모니터 캐스트' 알약 배지 1줄 확인 (앱 v1.0.130)`
+   - 미션 3 (`425f9ffd-2c1d-8175-a783-db7104e7e451`): `🚀 [4. 내 기기 통합] Before/After 4대 실전 사례 펼치기 & 비즈니스 관문 점검`
+4. **스마트폰 사진 `[PC로 텍스트 전송]`(`Ctrl+V`·7일 보관함 직송 정합화) & `[모니터로 크게 보기]` 무선 리모컨 정합화 (`v1.0.128 (128)` 양대 스토어 동시 출시, 카드 `425f9ffd-2c1d-81b3-a578-eafec6ee5822`) (2026-11-27)**
    - **① `[PC로 텍스트 전송]` (`PhotoDetailModal.tsx` · `기능명세.md`)**: 구 `귀신Key` 분리 정책(`4. 내 기기 통합` 웹 화면 & `Ctrl+V` 표준)에 맞춰 구 `'Ctrl+0 폰 전송 도착 안내줄'` 오안내를 제거하고, 모바일 미인덱싱 사진 온디바이스 OCR(`recognizeDataUrlWithPaddleOcr`) 폴백 + 7일 E2EE 우체통(`pushCrossDeviceClipboardText`) 동시 전송으로 PC 크롬 실행 여부와 무관하게 `Ctrl+V`와 `[4. 내 기기 통합]` 7일 보관함 최상단에 즉시 도착하도록 완결.
    - **② `[모니터로 크게 보기]` 모바일 알약 글자 끊김 해결 (`GhostCastAndLiveSystem.tsx`)**: 라이트 테마 전역 오버라이드 누락(`data-keep-dark="true"` 추가 및 1167행 속성 따옴표 오타 교정)과 비-래핑 행 압착으로 `고스트 모니터 캐스 / 트`가 어색하게 쪼개지던 현상을 `flex-wrap` + `shrink-0 whitespace-nowrap` 1줄 고정(`모니터로 크게 보기`) 및 `break-keep`으로 깔끔히 해결.
 1. **`4. 내 기기 통합` 탭 상단 `[💡 이런 순간, 이렇게 달라집니다 (Before vs After)]` 접기/펼치기 실전 사례 탑재 (`[즉시실행]` 공문 완결, `DeviceIntegrationBeforeAfterShowcase.tsx`) (2026-11-27)**
@@ -200,28 +210,27 @@
 
 # 🟣 `[4귀신]` 세션 인계장 (`SESSION_HANDOVER_4.md` — 업무 공유 `S:` · 1PC 단일 계정 점유 · 배포 트랙 이원화)
 
-- **최종 갱신 일시**: 2026-11-27 16:44 (KST)
+- **최종 갱신 일시**: 2026-11-27 23:22 (KST)
 - **담당 역할**: `[4귀신]` (`5. 업무 공유 (S:)` 전담 + 귀신비서 제미니 에이전트 PC 자가케어 1·2차 고도화)
 - **QA 담당 테스터**: **달나라님** (`담당 = 달나라` 고정)
-- **최신 배포 버전**: **`Merlin Z-Core v2.13.19`** (MS 공인 코드서명 `CN=썬드림주식회사` · `https://krc.codesigning.azure.net/` 개통) · Netlify 웹 배포 `8cf9b8fb` · 양대 모바일 스토어 **`v1.0.129 (129)`**
-- **세션 창 제목**: `4귀신 업무공유S`
+- **최신 배포 버전**: **`Merlin Z-Core v2.13.49`** (MS 공인 코드서명 `CN=썬드림주식회사` · `https://krc.codesigning.azure.net/` 개통) · Netlify 웹 배포 실시간 최신 번들 빌드 완료 · 양대 모바일 스토어 **`v1.0.129 (129)`**
+- **세션 창 제목**: `4귀신 7종확정구현완결`
 
 ## 1. 금일(2026-11-27) 주요 해결 이슈 및 완료 내역
-1. **외부망(LTE/외부 WiFi) 직통 터널 & 모바일 현장 업로드 / 진행률·저장경로 안내 완료 (`8cf9b8fb`, 카드 `422f9ffd-2c1d-81e6-8dc3-ca38d35aae0e` `'재테스트 대기'`)**
-   - **Cloudflare HTTP 429 레이트 리밋 극복**: Windows 기본 내장 OpenSSH 역방향 TLS 터널(`nokey@localhost.run` -> `*.lhr.life`) 이중화 폴백 가동(`ensure_outbound_work_tunnel`).
-   - **터널 시작 레이스 컨디션 해결**: 22초 기동 유예(`startingMono`) 적용으로 `get_outbound_work_tunnel_status()`가 미성숙 프로세스를 임의로 `stopped`로 간주하는 결함 원천 차단.
-   - **모바일/외부망 업로드 브리지 정합화**: 모바일 앱에서 로컬 Z-Core 부재 시에도 방장 터널 URL(`tunnelUrl`)을 통해 즉시 S: 폴더로 원본 직접 업로드되도록 경로 정합.
-   - **다운로드 실시간 진행률(0~100%) 및 저장위치 안내**: 스트림 청크 수신 기반 진행률 게이지 및 모바일 DownloadManager(`내 파일 > 다운로드` 폴더) / iOS `navigator.share` OS 공유창 연동 완비.
-2. **구글 드라이브 ➔ PC 로컬 폴더 원클릭 이전 및 가상 스텁 정리 기능 구현 (`fb68faf` -> `0e87bbc`, `Z-Core v2.12.99`)**
-   - Windows 폴더 피커(`IFileOpenDialog` + `~FOS_PICKFOLDERS`) 연동 및 이전 완료 시 가상 스텁 톰스톤 소거 완비.
-3. **B2B 랜딩/비교 쇼케이스 구현 (`a78dbcb`)**
-   - `[💡 구글 드라이브 월세 탈출 & 5대 Before vs After 실전 사례]` 전용 아코디언 컴포넌트(`WorkLoungeBeforeAfterShowcase.tsx`) 탑재 완료.
-4. **동적 폴더 탭 0초 즉시 렌더링 & 하드코딩 제거 (`6a688d2` -> `1b5eb9d`)**
-   - `dynamicWorkFolders` + `localStorage` 사전 하이드레이션으로 새로고침 시 화면 깜빡임/폴더 덮어쓰기 해결.
-5. **팀원 PC 윈도우 탐색기 `S:\` 1:1 권위 미러링 및 고스트 폴더 자동 가지치기 (`86a2121`, `Z-Core v2.12.59`)**
-   - 방장 폴더 구조와 팀원 PC 탐색기간 불일치 시 실시간 삭제/동기화(`mirrorAuthoritative`) 구현.
-6. **소호·무료체험(5인) 정원 초과 시 미검증 초대 선해금 차단 (`cac4792`, 카드 `422f9ffd-2c1d-8127-a6bf-da89de78afac` `'재테스트 대기'`)**
-   - 6번째 계정 합류 차단 및 영구 모달 안내 배너 완비.
+1. **업무 공유 누락 7건 멀린님 최종 확정안 전수 구현 완료 (`v2.13.49`)**
+   - **① 🛡️ 백업 PC(예비 서버 1·2호) 정공법 완결**: 단방향 증분 백업 미러링 + 파일당 최근 5개 버전 타임머신(`_versions/`) 보관 + `<10GB` 사전 경고 및 2호기 자동 우회 + Split-Brain 방지를 위한 **`[⚡ 이 백업 PC를 대장 PC로 즉시 승격]` 1클릭 수동 승격** 완비.
+   - **② `[↩️ 1초 실행 취소(Undo)]` 100% 실물 파일 복원**: `/__work/restore-deleted` 엔드포인트 신설, 대장 PC 로컬 및 직통 터널을 통해 임시 금고(`work_undo_vault`)에서 실물 원본 복원 및 Tombstone 해제 완비.
+   - **③ `S:` 점유 폴백(`Y:`~`P:`) 및 실제 업무 폴더 `🏷️ 귀신 라벨러` 무료 예외 보장**: `proFeatureGate.ts`의 `/^[sS]:/` 하드코딩 제거 및 로컬 캐시 마운트 메타(`driveLetter`, `targetDir`, 기본 업무공유폴더) 통합 판별 적용.
+   - **④ `5. 업무 공유` 우측 미리보기(Side Peek)에 `[🏷️ 귀신 라벨링]`(팀원 무료) · `[📝 사진·표 OCR]`(Pro 게이트) 버튼 직결**: 이미지/문서 파일별 1클릭 호출 지원.
+   - **⑤ `5. 업무 공유` 검색창 `최근 검색어` 전사 표준(`recentSearchHistory.ts`) 통일**: 최대 5개 FIFO 자동 밀어내기, 검색어 미입력 시에만 1줄 노출, 타이핑 즉시 숨김 연동.
+   - **⑥ `[팀원 초대 링크 복사]` 토스트 문구 보강**: `(발급 후 14일간 유효)` 안내 명시.
+   - **⑦ 구버전 잔재 3곳 일괄 교정**: `WorkLoungeHostAdminPanels.tsx`(`'👑 방장'`), `workAndDeviceBridgeOps.mjs`(`[4. 내 기기 통합] / [5. 업무 공유]`), `docs/기능명세.md`(`[2웨이브 예정]` 배지 표기).
+2. **외부망(LTE/외부 WiFi) 직통 터널 & 모바일 현장 업로드 / 진행률·저장경로 안내 완료 (`8cf9b8fb`, 카드 `422f9ffd-2c1d-81e6-8dc3-ca38d35aae0e` `'재테스트 대기'`)**
+3. **구글 드라이브 ➔ PC 로컬 폴더 원클릭 이전 및 가상 스텁 정리 기능 구현 (`0e87bbc`, `Z-Core v2.12.99`)**
+4. **B2B 랜딩/비교 쇼케이스 구현 (`a78dbcb`)**
+5. **동적 폴더 탭 0초 즉시 렌더링 & 하드코딩 제거 (`1b5eb9d`)**
+6. **팀원 PC 윈도우 탐색기 `S:\` 1:1 권위 미러링 및 고스트 폴더 자동 가지치기 (`86a2121`, `Z-Core v2.12.59`)**
+7. **소호·무료체험(5인) 정원 초과 시 미검증 초대 선해금 차단 (`cac4792`, 카드 `422f9ffd-2c1d-8127-a6bf-da89de78afac` `'재테스트 대기'`)**
 
 ## 2. 4귀신 QA 테스트 커버리지 100% 미션 구성 완비 (총 4대 신규 엣지 미션)
 - `🟣 [4귀신] 💼 [업무 공유 S: 동시 편집 및 잠금 충돌 검증]` (`425f9ffd-8153`)
@@ -231,4 +240,4 @@
 
 ## 3. 다음 체크인 Todo
 - [ ] 노션 QA `'재테스트 대기'` 3건(정원 차단, 방 나가기 잔상 소거, LTE 터널/모바일 다운로드) 달나라님 최종 피드백 확인.
-- [ ] 신규 출제된 4대 엣지 케이스 미션(동시 편집 잠금, 대용량 LTE 업로드, 대량 삭제 안전핀, 야간 초절전 24시간 터널) 테스터 수행 결과 추적.
+- [ ] 신규 구현된 7종 스펙(백업 PC 1클릭 대장 승격, 100% 실물 파일 Undo, Side Peek OCR/라벨링 버튼) 동작 확인.

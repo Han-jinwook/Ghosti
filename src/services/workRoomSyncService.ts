@@ -2426,18 +2426,24 @@ export async function setWorkNightPowerSaveNative(
 }
 
 export async function manageWorkBackupServersNative(opts: {
-  subAction: 'get' | 'save' | 'sync-now';
+  subAction: 'get' | 'save' | 'sync-now' | 'promote-master';
   masterServerName?: string;
+  newMasterServerName?: string;
   backupServers?: WorkBackupServerNodeDto[];
   localBackupServerDir?: string;
 }): Promise<{
   ok: boolean;
   masterServerName?: string;
+  isPromotedMaster?: boolean;
   backupServers?: WorkBackupServerNodeDto[];
   localBackupServerDir?: string;
   lastBackupSyncedAt?: string;
   lastBackupSyncedCount?: number;
   newlyCopiedCount?: number;
+  warningLowDisk?: boolean;
+  warningDiskMsg?: string;
+  targetSlotUsed?: number;
+  message?: string;
 }> {
   if (!zCoreBridge.isConnected) {
     return { ok: false };
@@ -2452,15 +2458,76 @@ export async function manageWorkBackupServersNative(opts: {
     return (await res.json()) as {
       ok: boolean;
       masterServerName?: string;
+      isPromotedMaster?: boolean;
       backupServers?: WorkBackupServerNodeDto[];
       localBackupServerDir?: string;
       lastBackupSyncedAt?: string;
       lastBackupSyncedCount?: number;
       newlyCopiedCount?: number;
+      warningLowDisk?: boolean;
+      warningDiskMsg?: string;
+      targetSlotUsed?: number;
+      message?: string;
     };
   } catch {
     return { ok: false };
   }
+}
+
+export async function restoreDeletedWorkFileShared(opts: {
+  relPath: string;
+}): Promise<{ ok: boolean; restoredRealFile?: boolean; localDeletedTombstones?: WorkDeletedTombstoneMap; message?: string }> {
+  const cleanRel = (opts.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+  if (!cleanRel) return { ok: false };
+
+  // 1) 로컬 Z-코어 직결 시도
+  if (zCoreBridge.isConnected) {
+    try {
+      const res = await fetch(getZCoreUrl('/__work/restore-deleted'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relPath: cleanRel }),
+      });
+      if (res.ok) {
+        return (await res.json()) as {
+          ok: boolean;
+          restoredRealFile?: boolean;
+          localDeletedTombstones?: WorkDeletedTombstoneMap;
+          message?: string;
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2) 원격 팀원인 경우 대장 PC 직통 터널을 통해 대장 PC 로컬 금고에서 실물 원복
+  if (activeHostTunnelSession?.tunnelUrl) {
+    try {
+      const res = await fetch(`${activeHostTunnelSession.tunnelUrl}/__work/restore-deleted`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeHostTunnelSession.accessKey
+            ? { 'X-Ghosti-Work-Key': activeHostTunnelSession.accessKey }
+            : {}),
+        },
+        body: JSON.stringify({ relPath: cleanRel }),
+      });
+      if (res.ok) {
+        return (await res.json()) as {
+          ok: boolean;
+          restoredRealFile?: boolean;
+          localDeletedTombstones?: WorkDeletedTombstoneMap;
+          message?: string;
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return { ok: false, message: '복원 엔드포인트에 연결할 수 없습니다.' };
 }
 
 export async function updateWorkRoomMemberRoleOnServer(opts: {

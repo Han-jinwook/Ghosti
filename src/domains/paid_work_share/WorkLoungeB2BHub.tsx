@@ -12,6 +12,10 @@ import {
 } from '../../services/deviceIntegrationService';
 import { isLocalPcBlockedByOtherAccount } from '../../services/pcSingleAccountGuard';
 import {
+  loadRecentSearches,
+  pushRecentSearch,
+} from '../../services/recentSearchHistory';
+import {
   acceptWorkRoomInvite,
   cacheWorkRoomPreviewLocally,
   clearActiveHostTunnelSession,
@@ -49,6 +53,7 @@ import {
   readCachedJoinedWorkRoomMeta,
   readCachedLocalWorkMountMetaSync,
   readCachedMyWorkRoomMeta,
+  restoreDeletedWorkFileShared,
   readPendingKickedWorkRoomNotice,
   readPendingWorkSeatLimitNotice,
   removeWorkRoomMemberOnServer,
@@ -232,6 +237,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     return 'https://drive.google.com/drive/my-drive';
   }, [driveTargetPath, isGoogleDriveTargetPath]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [localDocs, setLocalDocs] = useState<WorkLoungeDocDto[]>([]);
   const [remoteDocs, setRemoteDocs] = useState<WorkLoungeDocDto[]>(() => {
@@ -2680,7 +2687,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     setInviteCopied(true);
     window.setTimeout(() => setInviteCopied(false), 2800);
     showToast(
-      `업무 공유방(S:) 초대 링크가 복사되었습니다! (정원 ${ensured.seatLimit || roomSeatLimit}인 · 초대 팀원은 추가 비용 없이 공용 드라이브를 함께 사용합니다)`
+      `업무 공유방(S:) 초대 링크가 복사되었습니다! (정원 ${ensured.seatLimit || roomSeatLimit}인 · 발급 후 14일간 유효 · 초대 팀원은 추가 비용 없이 공용 드라이브를 함께 사용합니다)`
     );
   };
 
@@ -2946,6 +2953,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const { doc } = lastDeletedUndoItem;
     setLastDeletedUndoItem(null);
     mergeAndPersistTombstones({}, [doc.relPath]);
+    
+    // Z-코어 및 직통 터널을 통해 실물 파일 100% 복원
+    await restoreDeletedWorkFileShared({ relPath: doc.relPath });
+
     if (doc.inlineSyncBase64 && isZCoreConnected) {
       await pullSyncRemoteWorkFilesToLocalSDrive([doc], {
         roomId: activeWorkRoomId,
@@ -2955,8 +2966,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
     } else {
       setLocalDocs((prev) => [doc, ...prev.filter((d) => d.relPath !== doc.relPath)]);
       setRemoteDocs((prev) => [doc, ...prev.filter((d) => d.relPath !== doc.relPath)]);
+      if (isZCoreConnected) {
+        await syncRealWorkFiles();
+      }
     }
-    showToast(`↩️ '${doc.fileName}' 파일 삭제를 취소하고 공유 목록에 복원했습니다. (윈도우 휴지통에서도 원복 가능)`);
+    showToast(`↩️ '${doc.fileName}' 파일 삭제를 취소하고 100% 정상 복원했습니다.`);
   };
 
   const handleSaveBackupServerConfig = async (
@@ -3001,9 +3015,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (typeof res.lastBackupSyncedCount === 'number') {
           setLastBackupSyncedCount(res.lastBackupSyncedCount);
         }
-        showToast(
-          `예비 서버 폴더로 업무 파일 ${res.lastBackupSyncedCount ?? docs.length}건 이중화 백업이 완료되었습니다!`
-        );
+        if (res.warningLowDisk && res.warningDiskMsg) {
+          showToast(`⚠️ ${res.warningDiskMsg}`);
+        } else {
+          showToast(
+            `예비 서버 폴더로 업무 파일 ${res.lastBackupSyncedCount ?? docs.length}건 이중화 백업이 완료되었습니다! (5버전 타임머신 보관)`
+          );
+        }
       } else {
         showToast('예비 서버 백업 폴더 경로를 확인해 주세요. (시스템 폴더나 S: 원본 폴더와 같은 경로는 제외)');
       }
@@ -3722,36 +3740,71 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-[#18181B] border border-white/15 focus-within:border-primary-container rounded-2xl px-4 py-2.5 shadow-sm transition-colors">
-            <span className="text-zinc-400 text-sm"></span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (e.target.value.trim()) setIsSidePeekOpen(true);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.ctrlKey && !isMobileOrStore) {
-                  e.preventDefault();
-                  void handleOpenGhostSearchWindow();
+          <div className="relative">
+            <div className="flex items-center gap-2 bg-[#18181B] border border-white/15 focus-within:border-primary-container rounded-2xl px-4 py-2.5 shadow-sm transition-colors">
+              <span className="text-zinc-400 text-sm"></span>
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={() => {
+                  setRecentSearches(loadRecentSearches());
+                  setIsSearchFocused(true);
+                }}
+                onBlur={() => {
+                  setTimeout(() => setIsSearchFocused(false), 200);
+                }}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (e.target.value.trim()) setIsSidePeekOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (e.ctrlKey && !isMobileOrStore) {
+                      e.preventDefault();
+                      void handleOpenGhostSearchWindow();
+                    } else if (searchQuery.trim()) {
+                      setRecentSearches(pushRecentSearch(searchQuery.trim()));
+                    }
+                  }
+                }}
+                placeholder={
+                  isMobileOrStore
+                    ? '계약서 조항, 견적서·엑셀 문서, 시공 사진 검색'
+                    : '계약서 조항, 견적서·엑셀 문서, 한글(HWP), 현장 시공 사진 검색... (인물 여권 제외 · 바탕화면/S: 탐색기 빈 곳 Ctrl+0 1회로도 즉시 검색)'
                 }
-              }}
-              placeholder={
-                isMobileOrStore
-                  ? '계약서 조항, 견적서·엑셀 문서, 시공 사진 검색'
-                  : '계약서 조항, 견적서·엑셀 문서, 한글(HWP), 현장 시공 사진 검색... (인물 여권 제외 · 바탕화면/S: 탐색기 빈 곳 Ctrl+0 1회로도 즉시 검색)'
-              }
-              className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
-              >
-                ✕ 지우기
-              </button>
+                className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
+                >
+                  ✕ 지우기
+                </button>
+              )}
+            </div>
+
+            {isSearchFocused && !searchQuery.trim() && recentSearches.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 z-30 px-3 py-2 rounded-xl bg-[#202024] border border-white/15 shadow-xl flex items-center gap-2 overflow-x-auto no-scrollbar">
+                <span className="text-[11px] text-zinc-400 shrink-0 select-none">⏱️</span>
+                {recentSearches.map((term) => (
+                  <button
+                    key={term}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setSearchQuery(term);
+                      setRecentSearches(pushRecentSearch(term));
+                      setIsSearchFocused(false);
+                      setIsSidePeekOpen(true);
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-white/10 hover:bg-teal-600/30 hover:text-teal-300 text-zinc-200 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 

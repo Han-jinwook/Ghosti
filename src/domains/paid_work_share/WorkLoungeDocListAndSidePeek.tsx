@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import type { PricingPlanId } from '../../types/saysee';
+import type { LocalDocumentFile, PhotoItem, PricingPlanId } from '../../types/saysee';
+import { GhostLabelerActionButton } from '../../components/GhostLabelerActionButton';
+import { GhostPhotoOcrTeleportModal } from '../../components/GhostPhotoOcrTeleportModal';
 import {
   cacheWorkRoomPreviewLocally,
   deleteWorkFileShared,
@@ -88,6 +90,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
   const merlinAuth = { email: merlinAuthEmail };
   const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<WorkFileDownloadProgressInfo | null>(null);
+  const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
   const [lastDownloadedShareFile, setLastDownloadedShareFile] = useState<{
     docId: string;
     fileName: string;
@@ -458,6 +461,48 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                 : '원본 파일 다운로드'}
             </button>
 
+            {/* 귀신 라벨링 버튼 (업무 공유 파일 팀원 무료) */}
+            <GhostLabelerActionButton
+              variant="doc"
+              doc={{
+                id: selectedDoc.id,
+                fileName: selectedDoc.fileName,
+                path: selectedDoc.relPath,
+                ext: selectedDoc.ext,
+                title: selectedDoc.summaryTitle || selectedDoc.fileName,
+                categoryBadge: selectedDoc.ext,
+                extractedText: selectedDoc.fullTextPreview || selectedDoc.matchedSnippet || '',
+                keywords: [],
+                date: selectedDoc.updatedAt || selectedDoc.fileMtimeIso || '',
+                sizeKB: Math.round(selectedDoc.byteSize / 1024),
+                deviceSource: 'S: 업무 공유 드라이브',
+              }}
+            />
+
+            {/* 사진·표 글자 추출 OCR 버튼 (이미지 파일인 경우 Pro 게이트 모달 연결) */}
+            {Boolean(selectedDoc.isImage || /\.(png|jpe?g|webp|bmp|gif)$/i.test(selectedDoc.fileName)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const imgUrl = selectedDoc.imageBase64 || '';
+                  setOcrModalPhoto({
+                    id: selectedDoc.id,
+                    name: selectedDoc.fileName,
+                    fullPath: selectedDoc.relPath,
+                    size: selectedDoc.byteSize,
+                    date: selectedDoc.updatedAt || selectedDoc.fileMtimeIso || '',
+                    mtimeMs: Date.now(),
+                    thumbUrl: imgUrl,
+                    fullUrl: imgUrl,
+                    tags: [],
+                  });
+                }}
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-medium cursor-pointer transition-colors"
+              >
+                📝 사진·표 OCR
+              </button>
+            )}
+
             {myRoomRole !== 'viewer' && (
               <button
                 type="button"
@@ -621,6 +666,12 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
             </div>
           </div>
         </div>
+      )}
+      {ocrModalPhoto && (
+        <GhostPhotoOcrTeleportModal
+          photo={ocrModalPhoto}
+          onClose={() => setOcrModalPhoto(null)}
+        />
       )}
     </div>
   );

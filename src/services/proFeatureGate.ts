@@ -91,7 +91,38 @@ export function isWorkShareDriveExempt(filePath?: string): boolean {
   const fp = String(filePath || '').trim();
   if (!fp) return false;
   const normFp = fp.replace(/\\/g, '/').toLowerCase();
-  return /^[sS]:/.test(fp) || normFp.includes('/s:/');
+  
+  // 1) 기본 S: 드라이브 매칭
+  if (/^[sS]:/.test(fp) || normFp.includes('/s:/')) return true;
+
+  // 2) S: 점유 충돌로 인한 폴백 드라이브(Y:~P:) 및 실제 업무 공유 타겟 폴더 매칭
+  if (typeof window !== 'undefined') {
+    try {
+      // 로컬 스토리지에 캐시된 마운트 메타 확인
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('ghosti_work_sdrive_mount_meta_v1::')) {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const meta = JSON.parse(raw);
+            if (meta?.mounted) {
+              const driveLetter = String(meta?.driveLetter || '').trim().toLowerCase();
+              if (driveLetter && normFp.startsWith(`${driveLetter}:`)) return true;
+              const targetDir = String(meta?.targetDir || '').replace(/\\/g, '/').toLowerCase();
+              if (targetDir && normFp.startsWith(targetDir)) return true;
+            }
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 3) 폴더 경로명에 기본 업무공유폴더가 포함된 경우
+  if (normFp.includes('업무공유폴더_s') || normFp.includes('merlin/업무공유폴더')) return true;
+
+  return false;
 }
 
 export function isNotStartedTrialResponse(gj: Record<string, unknown> | null): boolean {

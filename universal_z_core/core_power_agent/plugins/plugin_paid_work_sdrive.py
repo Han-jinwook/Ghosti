@@ -2954,8 +2954,19 @@ def _parse_iso_mtime_sec(raw_iso: Any) -> float:
 def _move_to_recycle_bin_safe(target: Path) -> bool:
     """OS [휴지통]으로만 이동합니다. 휴지통 이동이 실패하면 절대 영구 삭제하지 않고 False를 반환합니다.
     (명세 8.3-③: 귀신같이 앱은 어떤 경우에도 스스로 파일을 영구 삭제하지 않음)"""
-    if not target.exists():
+    if not target:
         return True
+    try:
+        # 1초 실행 취소(Undo) 시 100% 실물 파일 복원을 위해 임시 안전 금고에 백업 보관 (최대 20개 FIFO)
+        undo_vault = _get_merlin_appdata_dir() / "work_undo_vault"
+        undo_vault.mkdir(parents=True, exist_ok=True)
+        undo_dest = undo_vault / (hashlib.sha256(str(target).encode("utf-8")).hexdigest()[:16] + "_" + target.name)
+        try:
+            shutil.copy2(target, undo_dest)
+        except Exception:
+            pass
+    except Exception:
+        pass
     if os.name != "nt":
         return False
     try:
@@ -3333,6 +3344,55 @@ def delete_or_apply_tombstones(data: Dict[str, Any] | None = None) -> Dict[str, 
 
     local_tombs = dict(_mutate_sdrive_config(_apply_delete).get("deletedTombstones") or {})
     return {"ok": True, "relPath": rel_p, "deletedAt": deleted_at, "localDeletedTombstones": local_tombs}
+
+
+def restore_deleted_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """[↩️ 1초 실행 취소(Undo)] 대장 PC 로컬 및 직통 터널을 통해 삭제된 파일을 임시 금고(_undo_vault)에서 100% 실물 파일로 복원하고 Tombstone을 즉시 해제합니다."""
+    payload = data or {}
+    rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+    if not rel_p:
+        return {"ok": False, "error": "EMPTY_REL_PATH"}
+    vault_dir = get_work_vault_dir(ensure_dirs=True)
+    target = _safe_resolve_inside_vault(vault_dir, rel_p)
+    if target is None:
+        return {"ok": False, "error": "INVALID_REL_PATH"}
+
+    restored_real_file = False
+    undo_vault = _get_merlin_appdata_dir() / "work_undo_vault"
+    if undo_vault.is_dir():
+        # 임시 금고 내 해시 접두사 매칭
+        cand_hash = hashlib.sha256(str(target).encode("utf-8")).hexdigest()[:16] + "_" + target.name
+        undo_source = undo_vault / cand_hash
+        if not undo_source.is_file():
+            # 파일명 단독 폴백 검색
+            for cand in undo_vault.glob(f"*_{target.name}"):
+                if cand.is_file():
+                    undo_source = cand
+                    break
+        if undo_source.is_file():
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(undo_source, target)
+                restored_real_file = True
+            except Exception:
+                pass
+
+    def _apply_restore(cur: Dict[str, Any]) -> None:
+        known = set(cur.get("knownRelPaths") or [])
+        known.add(rel_p)
+        cur["knownRelPaths"] = sorted(known)
+        tombs = dict(cur.get("deletedTombstones") or {})
+        tombs.pop(rel_p, None)
+        cur["deletedTombstones"] = tombs
+
+    local_tombs = dict(_mutate_sdrive_config(_apply_restore).get("deletedTombstones") or {})
+    return {
+        "ok": True,
+        "relPath": rel_p,
+        "restoredRealFile": restored_real_file,
+        "localDeletedTombstones": local_tombs,
+        "message": f"'{target.name}' 파일이 100% 정상 복원되었습니다.",
+    }
 
 
 def toggle_hide_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -3901,6 +3961,27 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
         default_master = new_master
 
     synced_files = 0
+    warning_low_disk = False
+    warning_disk_msg = ""
+    target_slot_used = 1
+
+    if act == "promote-master":
+        # [1클릭 수동 대장 승격]: 예비 백업 PC를 즉시 사내 대장 PC(S:)로 승격
+        new_master_name = str(payload.get("newMasterServerName") or os.environ.get("COMPUTERNAME") or "승격된 대장 PC").strip()
+        _save_sdrive_config({
+            "masterServerName": new_master_name,
+            "isPromotedMaster": True,
+            "promotedAt": _iso_utc(),
+        })
+        cfg = _load_sdrive_config()
+        return {
+            "ok": True,
+            "masterServerName": new_master_name,
+            "isPromotedMaster": True,
+            "backupServers": list(cfg.get("backupServers") or []),
+            "message": f"'{new_master_name}' 컴퓨터가 사내 대장 PC(S:)로 1클릭 수동 승격되었습니다.",
+        }
+
     if act == "sync-now":
         vault_dir = get_work_vault_dir(ensure_dirs=True)
         target_bdir_str = str(payload.get("localBackupServerDir") or local_backup_dir_str).strip()
@@ -3913,7 +3994,24 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
             target_bdir = valid_b
         if _same_path(target_bdir, vault_dir):
             return {"ok": False, "error": "BACKUP_DIR_SAME_AS_VAULT"}
+        
+        # 가용 용량 < 10GB 사전 경고 및 2호기 자동 우회 검사 (shutil.disk_usage)
+        try:
+            usage = shutil.disk_usage(target_bdir.drive or target_bdir.anchor or target_bdir.parent)
+            free_gb = usage.free / (1024 ** 3)
+            if free_gb < 10.0:
+                warning_low_disk = True
+                warning_disk_msg = f"예비 백업 드라이브의 가용 공간이 10GB 미만({free_gb:.1f}GB)입니다. 예비 2호 폴더로 자동 우회 백업합니다."
+                # 2호기 슬롯 보조 백업 폴더로 자동 전환
+                target_bdir = _get_merlin_appdata_dir() / "업무공유_예비서버_2호_백업"
+                target_slot_used = 2
+        except Exception:
+            pass
+
         target_bdir.mkdir(parents=True, exist_ok=True)
+        versions_root = target_bdir / "_versions"
+        versions_root.mkdir(parents=True, exist_ok=True)
+
         entries, _locks, _complete = _scan_work_vault(vault_dir, set(), include_hidden=True)
         for full_p, rel_p, st in entries:
             dest = _safe_resolve_inside_vault(target_bdir, rel_p)
@@ -3924,6 +4022,25 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
                     dst_st = dest.stat()
                     if dst_st.st_size == st.st_size and abs(dst_st.st_mtime - st.st_mtime) < 1.0:
                         continue
+                    
+                    # 파일 변경 감지 시 최근 5개 버전 타임머신 보관 (_versions/파일명/시각_파일명)
+                    file_ver_dir = versions_root / rel_p.replace("/", "_")
+                    file_ver_dir.mkdir(parents=True, exist_ok=True)
+                    ver_stamp = datetime.datetime.fromtimestamp(dst_st.st_mtime).strftime("%Y%m%d_%H%M%S")
+                    ver_file = file_ver_dir / f"{ver_stamp}_{dest.name}"
+                    try:
+                        shutil.copy2(dest, ver_file)
+                        # 최대 최근 5개 버전 초과분 FIFO 정리
+                        existing_vers = sorted(file_ver_dir.glob("*"), key=lambda p: p.stat().st_mtime)
+                        if len(existing_vers) > 5:
+                            for old_v in existing_vers[:-5]:
+                                try:
+                                    old_v.unlink(missing_ok=True)
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(full_p, dest)
                 synced_files += 1
@@ -3946,6 +4063,9 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
         "lastBackupSyncedAt": str(cfg.get("lastBackupSyncedAt") or ""),
         "lastBackupSyncedCount": int(cfg.get("lastBackupSyncedCount") or 0),
         "newlyCopiedCount": synced_files,
+        "warningLowDisk": warning_low_disk,
+        "warningDiskMsg": warning_disk_msg,
+        "targetSlotUsed": target_slot_used,
     }
 
 

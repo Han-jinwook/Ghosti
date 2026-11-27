@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.39"
+CORE_VERSION = "2.13.49"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -571,6 +571,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         "/api/work/upload",
         "/__work/delete-file",
         "/api/work/delete-file",
+        "/__work/restore-deleted",
+        "/api/work/restore-deleted",
     }
 
     _TUNNEL_ALLOWED_PHOTO_PATHS = {
@@ -1548,6 +1550,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__work/delete-file", "/api/work/delete-file"):
             self._send_json(plugin_paid_work_sdrive.delete_or_apply_tombstones(body))
+            return
+
+        if path in ("/__work/restore-deleted", "/api/work/restore-deleted"):
+            self._send_json(plugin_paid_work_sdrive.restore_deleted_work_file(body))
             return
 
         if path in ("/__work/toggle-hide", "/api/work/toggle-hide"):

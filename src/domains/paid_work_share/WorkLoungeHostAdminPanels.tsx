@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  manageWorkBackupServersNative,
   removeWorkRoomMemberOnServer,
   updateWorkRoomMemberRoleOnServer,
   type WorkBackupServerNodeDto,
@@ -285,16 +286,36 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                           {node.status}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = backupServers.filter((item) => item.id !== node.id);
-                          void handleSaveBackupServerConfig(masterWorkPcName, next);
-                        }}
-                        className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 text-[11px] font-medium shrink-0 cursor-pointer"
-                      >
-                        해제
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm(`'${node.label}' 컴퓨터를 사내 대장 PC(S:)로 1클릭 수동 승격하시겠습니까?`)) return;
+                            const res = await manageWorkBackupServersNative({
+                              subAction: 'promote-master',
+                              newMasterServerName: node.label,
+                            });
+                            if (res.ok) {
+                              void handleSaveBackupServerConfig(node.label, backupServers);
+                              showToast(`⚡ '${node.label}' 컴퓨터가 사내 대장 PC(S:)로 즉시 승격되었습니다!`);
+                            }
+                          }}
+                          className="px-2 py-1 rounded-md bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-[11px] font-bold shrink-0 cursor-pointer transition-colors"
+                          title="대장 PC 고장·부재 시 이 백업 PC를 사내 대장 PC로 즉시 승격합니다"
+                        >
+                          ⚡ 대장 승격
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = backupServers.filter((item) => item.id !== node.id);
+                            void handleSaveBackupServerConfig(masterWorkPcName, next);
+                          }}
+                          className="px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 text-[11px] font-medium shrink-0 cursor-pointer"
+                        >
+                          해제
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -386,7 +407,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                   </div>
                   <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-[10.5px] font-medium shrink-0">
                     {member.role === 'host'
-                      ? '방장 (호스트)'
+                      ? '👑 방장'
                       : isStoreAppMode
                       ? '연결된 팀원'
                       : '팀원'}
