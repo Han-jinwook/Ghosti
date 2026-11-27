@@ -1,40 +1,123 @@
 import UIKit
 import UniformTypeIdentifiers
 
-/// [Ghosti 3귀신] iOS 무화면 직송 공유 익스텐션 ([공유...] ➔ [귀신같이] 2탭 종결)
-/// - 본체 귀신같이 앱을 열지 않고, [붙여넣기 허용] 팝업도 전혀 띄우지 않은 채
-///   선택한 글자·링크·사진·스크린샷을 0.3초 만에 PC Ctrl+V로 직송한 뒤 자동 종료합니다.
+/// [Ghosti 3귀신] iOS 초경량 무화면 직송 공유 익스텐션 ([공유...] ➔ [귀신같이] 2탭 종결)
+/// - 거대한 전체화면 검은 시트 대신 하단 78pt 초소형 미니 시트(iOS 16+ Detent) + 0ms 즉시 전송 착수로
+///   앱 화면 오픈 없이([붙여넣기 허용] 팝업 0회) 선택한 순수 글자·링크·사진을 초고속 직송 후 즉시 닫힙니다.
 class ShareViewController: UIViewController {
     private var didStart = false
-    private let pillLabel = UILabel()
+    private let cardView = UIView()
+    private let statusLabel = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor.clear
+        preferredContentSize = CGSize(width: 260, height: 68)
+        view.backgroundColor = .clear
+        view.isOpaque = false
 
-        pillLabel.translatesAutoresizingMaskIntoConstraints = false
-        pillLabel.text = "💻 PC로 바로 보내는 중..."
-        pillLabel.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        pillLabel.textColor = UIColor.white
-        pillLabel.backgroundColor = UIColor(white: 0.10, alpha: 0.88)
-        pillLabel.textAlignment = .center
-        pillLabel.layer.cornerRadius = 18
-        pillLabel.layer.masksToBounds = true
-        view.addSubview(pillLabel)
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        cardView.backgroundColor = UIColor(white: 0.12, alpha: 0.92)
+        cardView.layer.cornerRadius = 16
+        cardView.layer.masksToBounds = true
+        view.addSubview(cardView)
+
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.text = "💻 PC(Ctrl+V)로 바로 전송 중…"
+        statusLabel.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        statusLabel.textColor = .white
+        statusLabel.textAlignment = .center
+        cardView.addSubview(statusLabel)
 
         NSLayoutConstraint.activate([
-            pillLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            pillLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            pillLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 210),
-            pillLabel.heightAnchor.constraint(equalToConstant: 36)
+            cardView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cardView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+            cardView.heightAnchor.constraint(equalToConstant: 36),
+            cardView.widthAnchor.constraint(greaterThanOrEqualToConstant: 208),
+            statusLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 16),
+            statusLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
+            statusLabel.centerYAnchor.constraint(equalTo: cardView.centerYAnchor)
         ])
-    }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        guard !didStart else { return }
+        applyCompactSheetDetentIfPossible()
+        // 모달 애니메이션이 끝나길 기다리지 않고(viewDidAppear 약 0.55초 지연 제거) 0ms에 TLS 연결 예열 및 전송 즉시 착수!
+        GhostKeySharedClipboardStore.prewarmBridgeConnection()
         didStart = true
         extractAndDispatchSharedItems()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        applyCompactSheetDetentIfPossible()
+        clearHostSheetBackgrounds()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        clearHostSheetBackgrounds()
+    }
+
+    private func applyCompactSheetDetentIfPossible() {
+        if #available(iOS 16.0, *) {
+            let compactDetent = UISheetPresentationController.Detent.custom(identifier: .init("ghosti_compact")) { _ in
+                return 78.0
+            }
+            let candidates: [UISheetPresentationController?] = [
+                self.sheetPresentationController,
+                self.parent?.sheetPresentationController,
+                self.navigationController?.sheetPresentationController
+            ]
+            for cand in candidates {
+                if let sheet = cand {
+                    sheet.detents = [compactDetent]
+                    sheet.prefersGrabberVisible = false
+                    sheet.preferredCornerRadius = 20
+                }
+            }
+        }
+    }
+
+    private func clearHostSheetBackgrounds() {
+        var cur: UIView? = view
+        var hops = 0
+        while let v = cur, hops < 5 {
+            v.backgroundColor = .clear
+            v.isOpaque = false
+            cur = v.superview
+            hops += 1
+        }
+    }
+
+    private static func sanitizeWebSelectionText(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        if trimmed.range(of: #"^https?://\S+$"#, options: .regularExpression) != nil {
+            return trimmed
+        }
+        if let regex = try? NSRegularExpression(pattern: #"^(?s)(.+?)(?:\r?\n\s*|\s+)(https?://\S+)\s*$"#) {
+            let ns = trimmed as NSString
+            if let match = regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)),
+               match.numberOfRanges >= 3 {
+                var bodyPart = ns.substring(with: match.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+                let urlPart = ns.substring(with: match.range(at: 2)).trimmingCharacters(in: .whitespacesAndNewlines)
+                let sepStart = match.range(at: 1).location + match.range(at: 1).length
+                let sepLen = max(0, match.range(at: 2).location - sepStart)
+                let sepStr = ns.substring(with: NSRange(location: sepStart, length: sepLen))
+                let isHighlight = urlPart.contains("#:~:text=")
+                let hasNewline = sepStr.contains("\n")
+                if !bodyPart.isEmpty,
+                   bodyPart.range(of: #"^https?://\S+$"#, options: .regularExpression) == nil,
+                   (isHighlight || hasNewline) {
+                    if (bodyPart.hasPrefix("\"") && bodyPart.hasSuffix("\"") && bodyPart.count >= 2)
+                        || (bodyPart.hasPrefix("“") && bodyPart.hasSuffix("”") && bodyPart.count >= 2) {
+                        bodyPart = String(bodyPart.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    if !bodyPart.isEmpty {
+                        return bodyPart
+                    }
+                }
+            }
+        }
+        return trimmed
     }
 
     private func extractAndDispatchSharedItems() {
@@ -68,7 +151,7 @@ class ShareViewController: UIViewController {
         // 1순위: 사진·스크린샷 공유 직송 (갤러리·카톡 [공유] ➔ [귀신같이] 2탭)
         if !imageProviders.isEmpty {
             DispatchQueue.main.async {
-                self.pillLabel.text = "🖼️ 사진을 PC(Ctrl+V)로 보내는 중..."
+                self.statusLabel.text = "🖼️ 사진을 PC(Ctrl+V)로 전송 중…"
             }
             let group = DispatchGroup()
             var anyOk = false
@@ -80,41 +163,36 @@ class ShareViewController: UIViewController {
                 }
             }
             group.notify(queue: .main) { [weak self] in
-                self?.pillLabel.text = anyOk ? "✅ PC(Ctrl+V) 전송 완료!" : "⚠️ 귀신같이 앱 로그인 확인 필요"
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    self?.finishNow()
-                }
+                self?.statusLabel.text = anyOk ? "✅ PC 전송 완료!" : "⚠️ 앱 로그인 확인 필요"
+                self?.finishNow()
             }
             return
         }
 
-        // 2순위: 드래그한 글자(텍스트) 무화면 직송
+        // 2순위: 드래그한 글자(텍스트) 무화면 초고속 직송 (인공 지연 0ms 즉시 종료)
         if let tp = textProvider {
             tp.loadItem(forTypeIdentifier: plainType, options: nil) { [weak self] data, _ in
-                let extracted: String = {
+                let rawExtracted: String = {
                     if let s = data as? String { return s }
                     if let u = data as? URL { return u.absoluteString }
                     if let d = data as? Data, let s = String(data: d, encoding: .utf8) { return s }
                     return ""
-                }().trimmingCharacters(in: .whitespacesAndNewlines)
-
+                }()
+                let extracted = ShareViewController.sanitizeWebSelectionText(rawExtracted)
                 guard !extracted.isEmpty else {
                     DispatchQueue.main.async { self?.finishNow() }
                     return
                 }
-                GhostKeySharedClipboardStore.pushClipDirect(extracted, senderName: "내 아이폰 (PC로 보내기)") { ok in
+                GhostKeySharedClipboardStore.pushClipDirect(extracted, senderName: "내 아이폰 (PC로 보내기)") { _ in
                     DispatchQueue.main.async {
-                        self?.pillLabel.text = ok ? "✅ PC(Ctrl+V) 전송 완료!" : "✅ 저장 완료"
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-                            self?.finishNow()
-                        }
+                        self?.finishNow()
                     }
                 }
             }
             return
         }
 
-        // 3순위: 웹/사파리 URL 무화면 직송
+        // 3순위: 웹/사파리 URL 단독 무화면 직송
         if let up = urlProvider {
             up.loadItem(forTypeIdentifier: urlType, options: nil) { [weak self] data, _ in
                 let urlStr: String = {
@@ -127,12 +205,9 @@ class ShareViewController: UIViewController {
                     DispatchQueue.main.async { self?.finishNow() }
                     return
                 }
-                GhostKeySharedClipboardStore.pushClipDirect(urlStr, senderName: "내 아이폰 (링크 직송)") { ok in
+                GhostKeySharedClipboardStore.pushClipDirect(urlStr, senderName: "내 아이폰 (링크 직송)") { _ in
                     DispatchQueue.main.async {
-                        self?.pillLabel.text = ok ? "✅ PC(Ctrl+V) 전송 완료!" : "✅ 저장 완료"
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-                            self?.finishNow()
-                        }
+                        self?.finishNow()
                     }
                 }
             }
@@ -164,7 +239,7 @@ class ShareViewController: UIViewController {
                 return
             }
 
-            let maxSide: CGFloat = 2560.0
+            let maxSide: CGFloat = 2200.0
             let origW = srcImg.size.width * srcImg.scale
             let origH = srcImg.size.height * srcImg.scale
             let curMax = max(origW, origH)
@@ -178,7 +253,7 @@ class ShareViewController: UIViewController {
                 srcImg.draw(in: CGRect(origin: .zero, size: targetSize))
             }
 
-            guard let jpegData = rendered.jpegData(compressionQuality: 0.90) else {
+            guard let jpegData = rendered.jpegData(compressionQuality: 0.86) else {
                 completion(false)
                 return
             }

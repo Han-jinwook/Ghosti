@@ -106,10 +106,12 @@
 - **최종 갱신 일시**: 2026-11-27 12:15 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정 · 3·4귀신 테스터는 해나라님이 아닌 달나라님으로 호칭)
-- **최신 배포 버전**: **`Merlin Z-Core v2.12.9`** · 양대 스토어 **`v1.0.124 (124)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
-- **세션 창 제목**: `3귀신 원본폴더열기·v2.12.9`
+- **최신 배포 버전**: **`Merlin Z-Core v2.12.9`** · 양대 스토어 **`v1.0.126 (126)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
+- **세션 창 제목**: `3귀신 모바일푸시·v1.0.126`
 
 ## 완료 내역 (2026-11-25 ~ 11-27)
+1. **폰↔PC 무화면 직송 및 PC➔폰 선택 푸시 실기기 피드백 4건 근본 해결 (`v1.0.126 (126)` 양대 스토어 출시, 카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`) (2026-11-27)**
+   - Android 크롬 웹 드래그 공유 시 `#:~:text=` 링크·따옴표 자동 정제, Android `NotificationCompat` + 단색 벡터 아이콘(`ic_stat_ghosti_clip`) 적용으로 `[📱 폰으로 보내기]` 헤드업 알림 즉시 표시, iOS `GhostKeyShareExtension` `78pt` 컴팩트 시트 + Keychain 파생키 캐시·`0ms` 즉시 발사 고속화, iOS `GhostiPcClipNotificationProxy` 위임 보존으로 알림 아래로 당길 때 `[📋 복사]` 버튼 노출 및 배너 1탭 즉시 복사 동시 완결.
 1. **사진 공유 `[내 기기 원본 폴더 열기]` 윈도우 탐색기 미오픈 근본 해결 (`Z-Core v2.12.9`, 카드 `425f9ffd-2c1d-8149-ade8-f53e486b8365` `'재테스트 대기'`) (2026-11-27)**
    - **원인**: `LoungeFeedContextBanner.tsx`가 상대 경로 `fetch('/__club/download-originals')`(로컬 Vite 개발서버 전용 목업) 및 하드코딩 `D:\Ghosti\다운로드_원본`을 호출해 실운영(`https://ghosti.sundreamer.app`)에서 Netlify 404로 무응답 처리되던 문제 규명.
    - **해결**: `plugin_ghosti_os.py`(`sync_and_open_shared_room_originals`) 및 `merlin_z_core_daemon.py`(`POST /__club/download-originals`, `v2.12.9`)에 내 PC 공식 `[사진]\Ghosti_Shared_Rooms\<방이름>`(또는 사용자 지정 경로) 실물 폴더 생성·공유방 사진 자동 저장 및 `open_file_location_on_interactive_desktop` 윈도우 탐색기 `0.05초` 즉시 오픈을 정식 구현하고, `LoungeFeedContextBanner.tsx`에서 `getZCoreUrl('/__club/download-originals')` 직결 및 방별 경로 영속화 반영 완료.

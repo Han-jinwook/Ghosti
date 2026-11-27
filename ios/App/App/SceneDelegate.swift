@@ -22,6 +22,7 @@ class GhostiBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GhostiMobileCarePlugin())
+        GhostiPcClipNotificationProxy.shared.installIfNeeded()
         view.backgroundColor = UIColor.white
         webView?.isOpaque = true
         webView?.backgroundColor = UIColor.white
@@ -340,6 +341,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             deviceName: deviceName,
             bridgeUrl: bridgeUrl
         )
+        AppDelegate.ensureNotificationPermissionIfNeeded()
         call.resolve(["ok": true])
     }
 

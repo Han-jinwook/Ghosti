@@ -2826,7 +2826,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     });
   }
 
-  // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 후 더블클릭·우클릭 1초 압축 풀기 바로 써보기
+  // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 또는 즉시 압축 풀기·새 압축(암호 압축 포함) 실행
   if (/다운로드\s*폴더\s*열어.*?(우클릭|더블클릭|압축|써\s*보|확인)|1초\s*압축\s*풀기\s*써\s*보/i.test(clean)) {
     const openRes = await fetch(getZCoreUrl('/api/care/open-downloads'), {
       method: 'POST',
@@ -2839,18 +2839,166 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     const selectedFile = String(openRes?.selectedFile || '').trim();
     const msgKo = selectedFile
       ? ` **다운로드 폴더를 열고 가장 최근 압축파일(\`${selectedFile}\`)에 파란색 선택 포커스를 딱 맞춰 두었습니다!**\n` +
-        `헤매실 필요 없이 지금 파랗게 선택되어 있는 **\`${selectedFile}\`**을 **그대로 더블클릭**하시거나, **마우스 우클릭 메뉴에서 [귀신같이로 깔끔하게 풀기]**를 눌러보세요! 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`
+        `헤매실 필요 없이 지금 파랗게 선택되어 있는 **\`${selectedFile}\`**을 **그대로 더블클릭**하시거나, 아래 **[📦 다운로드 최근 ZIP 바로 풀기]** 버튼을 누르시면 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`
       : ` **다운로드 폴더를 바로 열어드렸습니다!**\n` +
-        `폴더 안에 있는 압축파일을 **그대로 더블클릭**하시거나 **마우스 우클릭 메뉴에서 [귀신같이로 깔끔하게 풀기]**를 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
+        `폴더 안에 있는 압축파일을 **그대로 더블클릭**하시거나 아래 **[📦 다운로드 최근 ZIP 바로 풀기]** 버튼을 눌러보시면, 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 걱정 없이 깔끔하게 한 폴더로 풀어드립니다.`;
 
     speak(
       selectedFile
-        ? `다운로드 폴더를 열고 ${selectedFile} 파일에 선택 표시를 맞춰 두었습니다. 그대로 더블클릭하거나 우클릭 메뉴에서 귀신같이로 깔끔하게 풀기를 누르시면 바로 풀립니다.`
-        : '다운로드 폴더를 열어드렸습니다. 압축파일을 더블클릭하거나 우클릭 메뉴에서 귀신같이로 깔끔하게 풀기를 누르시면 바로 풀립니다.'
+        ? `다운로드 폴더를 열고 ${selectedFile} 파일에 선택 표시를 맞춰 두었습니다. 그대로 더블클릭하거나 아래 바로 풀기 버튼을 누르시면 즉시 풀립니다.`
+        : '다운로드 폴더를 열어드렸습니다. 압축파일을 더블클릭하거나 아래 바로 풀기 버튼을 누르시면 즉시 풀립니다.'
     );
     return reply(sourceTab, msgKo, {
-      followUpSuggestions: [        '윈도우 기본 압축 앱으로 연결하기',
-        '그동안 모아둔 비서 실적 보고서 보여줘',
+      followUpSuggestions: [
+        '다운로드 최근 ZIP 바로 풀기',
+        '이 폴더 압축해줘',
+        '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+      ],
+    });
+  }
+
+  // 3-1) 대화형 1초 스마트 압축·해제 ("압축", "압축하기", "압축 풀기", "이 폴더 압축해줘", "사진 압축해줘", "암호 압축해줘" 등 전면 실행)
+  const isSmartArchiveCommand =
+    !/압축\s*파일.*?(?:정리|삭제|지워|치워)|설치.*?압축\s*파일|기본\s*압축\s*앱/i.test(clean) &&
+    (/^(?:압축|압축하기|압축\s*풀기|압축\s*해제|1초\s*스마트\s*압축|스마트\s*압축|암호\s*압축)$/i.test(clean) ||
+      /(?:다운로드.*?zip.*?풀|압축\s*(?:풀어|풀기|해제)|(?:이\s*폴더|폴더|사진|파일|문서)\s*(?:zip\s*)?압축\s*(?:해\s*줘|해\s*주세요|하기|할래| 묶어)|암호.*?(?:zip\s*)?압축|비밀번호.*?(?:zip\s*)?압축|zip\s*압축\s*(?:해\s*줘|해\s*주세요|만들|묶어))/i.test(
+        clean
+      ));
+
+  if (isSmartArchiveCommand) {
+    const wantsUnzip = /풀어|풀기|해제/i.test(clean) && !/압축하기|압축\s*해\s*줘|압축할래/i.test(clean);
+    const wantsCreateZip =
+      !wantsUnzip &&
+      (/(?:이\s*폴더|폴더|사진|파일|문서)\s*(?:zip\s*)?압축|압축\s*(?:해\s*줘|해\s*주세요|하기|할래|묶어|만들)|암호.*?압축|비밀번호.*?압축/i.test(
+        clean
+      ));
+
+    // 3-1A) 단순히 "압축"이라고만 입력했을 때: 압축 풀기 vs 폴더 압축 vs 암호 압축 3대 실행 선택지를 친절히 안내
+    if (!wantsUnzip && !wantsCreateZip) {
+      const defRes = await fetch(getZCoreUrl('/api/care/defender/history'))
+        .then((r) => r.json())
+        .catch(() => null);
+      const zipCnt = Math.max(0, Number(defRes?.downloadsArchiveCount ?? 0));
+      const zipSamples: string[] = Array.isArray(defRes?.downloadsArchiveSamples)
+        ? defRes.downloadsArchiveSamples
+        : [];
+      const sampleTxt = zipSamples.length > 0 ? ` (최근 파일: \`${zipSamples[0]}\`)` : '';
+      const guideKo =
+        `📦 **[귀신비서 무광고 1초 스마트 압축 · 해제]**\n` +
+        `• **압축 풀기**: 다운로드 폴더에 있는 ZIP 압축파일(**현재 ${zipCnt}건**${sampleTxt})을 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 없이 깔끔하게 한 폴더로 풀어드립니다.\n` +
+        `• **새 압축 / 암호 압축 만들기**: 현재 탐색기에서 선택한 파일·폴더(또는 바탕화면·다운로드 최근 폴더)를 1초 만에 **일반 ZIP** 또는 **AES-256 암호 ZIP**으로 묶어드립니다.\n\n` +
+        `아래 버튼 중 원하시는 작업을 눌러 바로 실행해 보세요!`;
+      speak('무광고 일 초 스마트 압축 및 해제 기능입니다. 아래 버튼에서 다운로드 압축 풀기나 폴더 압축, 암호 압축을 선택해 주세요.');
+      return reply(sourceTab, guideKo, {
+        followUpSuggestions: [
+          '다운로드 최근 ZIP 바로 풀기',
+          '이 폴더 압축해줘',
+          '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+        ],
+      });
+    }
+
+    // 3-1B) 다운로드 폴더 ZIP 압축 바로 풀기 실행
+    if (wantsUnzip) {
+      const pwMatch = clean.match(/(?:비밀번호|암호|비번)\s*[:=]?\s*([0-9A-Za-z!@#$%^&*_-]{1,32})/i);
+      const extRes = await fetch(getZCoreUrl('/api/care/extract-archive'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: pwMatch?.[1] || undefined,
+          openExplorer: true,
+        }),
+      })
+        .then((r) => r.json())
+        .catch(() => null);
+
+      if (!extRes || !extRes.ok) {
+        const errMsg = extRes?.needsPassword
+          ? `🔒 **암호가 걸린 압축파일입니다!**\n채팅창에 **"암호 1234로 압축 풀어줘"**처럼 비밀번호를 함께 말씀해 주시면 즉시 풀어드립니다.`
+          : `⚠️ ${extRes?.message || '내 컴퓨터 연결(멀린 Z-코어) 상태를 확인한 뒤 다시 시도해 주세요.'}`;
+        speak('압축 해제 결과를 확인해 주세요.');
+        return reply(sourceTab, errMsg, {
+          followUpSuggestions: [
+            '다운로드 폴더 열어서 1초 압축 풀기 써보기',
+            '이 폴더 압축해줘',
+            '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+          ],
+        });
+      }
+
+      const outDir = String(extRes.outputDir || '').trim();
+      const outName = outDir.split(/[\\/]/).pop() || outDir;
+      const fileCnt = Number(extRes.extractedCount ?? 1);
+      const msgKo =
+        `✅ **[1초 스마트 압축 풀기 완료]**\n` +
+        `• **풀린 폴더**: \`${outName}\` (총 **${fileCnt}개** 파일 · 맥북 한글 자소 복원 및 압축폭탄 방지 적용)\n` +
+        `• **저장 위치**: \`${outDir}\`\n\n` +
+        `방금 압축이 풀린 폴더를 파일 탐색기에서 바로 열어드렸습니다!`;
+      speak(`압축파일을 깔끔하게 풀어 ${outName} 폴더를 열어드렸습니다.`);
+      return reply(sourceTab, msgKo, {
+        followUpSuggestions: [
+          '이 폴더 압축해줘',
+          '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+          '다운로드 폴더 열어서 1초 압축 풀기 써보기',
+        ],
+      });
+    }
+
+    // 3-1C) 폴더/파일/사진 새 ZIP 압축 (일반 압축 & AES-256 암호 압축) 실행
+    const pwMatch = clean.match(/(?:비밀번호|암호|비번)\s*(?:걸어서|설정해서|넣어서|는|은|:|=)?\s*([0-9A-Za-z!@#$%^&*_-]{2,32})/i);
+    const hasEncryptionCue = /암호|비밀번호|비번/i.test(clean);
+    const zipPassword =
+      pwMatch && !/^(?:압축|걸어|걸어서|설정|해줘|해주세요)$/i.test(pwMatch[1])
+        ? pwMatch[1]
+        : hasEncryptionCue
+        ? '1234'
+        : undefined;
+
+    const zipRes = await fetch(getZCoreUrl('/api/care/create-zip'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: zipPassword,
+        openExplorer: true,
+      }),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (!zipRes || !zipRes.ok) {
+      const failKo =
+        `⚠️ ${zipRes?.message || '내 컴퓨터 연결(멀린 Z-코어)을 확인한 뒤 다시 눌러주세요.'}`;
+      speak(failKo);
+      return reply(sourceTab, failKo, {
+        followUpSuggestions: [
+          '다운로드 최근 ZIP 바로 풀기',
+          '다운로드 폴더 열어서 1초 압축 풀기 써보기',
+        ],
+      });
+    }
+
+    const zName = String(zipRes.zipName || '새_압축파일.zip');
+    const zPath = String(zipRes.zipPath || '');
+    const addedCnt = Number(zipRes.addedCount ?? 1);
+    const isEnc = Boolean(zipRes.encrypted);
+    const srcList: string[] = Array.isArray(zipRes.sourceNames) ? zipRes.sourceNames : [];
+    const srcHint = srcList.length > 0 ? ` (원본: \`${srcList.slice(0, 3).join(', ')}\`)` : '';
+    const msgKo =
+      `✅ **[${isEnc ? '🔒 AES-256 암호 ZIP 압축' : '📦 1초 스마트 ZIP 압축'} 생성 완료]**\n` +
+      `• **생성된 압축파일**: **\`${zName}\`** (총 **${addedCnt}개** 파일 포함${srcHint})\n` +
+      (isEnc ? `• **적용된 암호**: \`${zipPassword}\` (AES-256 표준 암호화 적용)\n` : '') +
+      `• **저장 위치**: \`${zPath}\`\n\n` +
+      `방금 만들어진 **\`${zName}\`** 파일에 탐색기 선택 표시를 맞춰 열어드렸습니다!`;
+    speak(
+      isEnc
+        ? `비밀번호 ${zipPassword}번으로 암호 압축파일 ${zName}을 만들고 폴더를 열어드렸습니다.`
+        : `압축파일 ${zName}을 만들고 폴더를 열어드렸습니다.`
+    );
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: [
+        '다운로드 최근 ZIP 바로 풀기',
+        isEnc ? '이 폴더 압축해줘' : '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+        '다운로드 폴더 열어서 1초 압축 풀기 써보기',
       ],
     });
   }
@@ -4645,7 +4793,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 아래 2) 휴지통($Recycle.Bin)·실종 파일 추적 엔진이 직접 스캔하도록 통과시킵니다!
   const hasExplicitRecycleOrDeletedFileCue =
     !/복원\s*기록|복원\s*지점|히스토리/i.test(clean) &&
-    /지운|지웠|지워진|삭제|버린|버렸|휴지통|정리\s*보관함|미저장|구출|사라진|사라졌|없어진|없어졌|날아간|날아갔/i.test(clean);
+    /지운|지웠|지워진|삭제|버린|버렸|휴지통|정리\s*보관함|미저장|저장\s*(?:못|안)\s*하|꺼졌.*?(?:살릴|살려|복구|찾아)|구출|사라진|사라졌|없어진|없어졌|날아간|날아갔/i.test(clean);
 
   const isGeneralRestoreRequest =
     !hasExplicitRecycleOrDeletedFileCue &&
@@ -5306,7 +5454,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
   if (
     earlySearchIntent.isSimpleSearchIntent &&
-    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|사라진|없어졌|없어진|날아갔|날아간|지운|지웠|지워진|삭제|버린|버렸|증발|어디\s*갔|못\s*찾겠|저장\s*안\s*하고|휴지통|정리|치워|복원|복구|되돌|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|복사\s*기록|실적|보고서/i.test(
+    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|사라진|없어졌|없어진|날아갔|날아간|지운|지웠|지워진|삭제|버린|버렸|증발|어디\s*갔|못\s*찾겠|저장\s*(?:안|못)\s*하|미저장|꺼졌|살릴\s*수|살려|구출|압축|휴지통|정리|치워|복원|복구|되돌|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|복사\s*기록|실적|보고서/i.test(
       clean
     )
   ) {
@@ -5391,7 +5539,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     isDirectSlowOrAdwareFix ||
     /복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#\d+/i.test(clean) ||
     isSyntheticMissingTest ||
-    /없어졌|없어진|사라졌|사라진|증발|지웠|지운|지워진|삭제한|삭제된|삭제했|버린|버렸|날아갔|날아간|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean) ||
+    /없어졌|없어진|사라졌|사라진|증발|지웠|지운|지워진|삭제한|삭제된|삭제했|버린|버렸|날아갔|날아간|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*(?:안|못)\s*하|미저장|꺼졌.*?(?:살릴|살려|복구)/i.test(clean) ||
     /바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(카페|사이트|유튜브|은행)/i.test(clean) ||
     (!isSpeedOrStatusQuestionFastCheck &&
       /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려|시작\s*프로그램|자동\s*실행/i.test(
@@ -5557,16 +5705,16 @@ export async function processUnifiedMonsterChatQuery(params: {
     llmDecision?.zCoreCommand?.endpoint === '/__zcore/omni-trace' ||
     llmDecision?.zCoreCommand?.endpoint === '/__zcore/forensic-scan' ||
     (!hasLlm &&
-      /없어졌|없어진|사라졌|사라진|증발|지웠|지운|지워진|삭제|버린|버렸|날아갔|날아간|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(
+      /없어졌|없어진|사라졌|사라진|증발|지웠|지운|지워진|삭제|버린|버렸|날아갔|날아간|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*(?:안|못)\s*하|미저장|꺼졌.*?(?:살릴|살려|복구)/i.test(
         clean
       ))
   ) {
     const verdictHeader = '100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.';
-    const hasRecycleOrRescueCue = /휴지통|정리\s*보관함|구출|지운|지웠|지워진|삭제|버린|버렸/i.test(clean);
+    const hasRecycleOrRescueCue = /휴지통|정리\s*보관함|지운|지웠|지워진|삭제|버린|버렸/i.test(clean);
     const isOfficeCrash =
       !isSyntheticMissingTest &&
       !hasRecycleOrRescueCue &&
-      (/저장\s*안\s*하고|작업하던\s*(엑셀|워드|한글|파워포인트)|꺼졌/i.test(clean) ||
+      (/저장\s*(?:안|못)\s*하|미저장|작업하던\s*(엑셀|워드|한글|파워포인트|문서)|꺼졌/i.test(clean) ||
         llmDecision?.intent === 'OFFICE_CRASH_RECOVER');
 
     const actionJson: MonsterLlmActionJson = llmDecision || {
@@ -5593,8 +5741,26 @@ export async function processUnifiedMonsterChatQuery(params: {
           preview5Lines: string[];
         }>;
       }>('/__zcore/forensic-scan', postJson({ query: '' }), 3000);
-      const autoRecover = r.ok ? (r.data.files || []).filter((f) => f.vaultLabel.startsWith('1순위')) : [];
-      if (!r.ok || autoRecover.length === 0) {
+      const allForensicFiles = r.ok ? r.data.files || [] : [];
+      const autoRecover = allForensicFiles.filter((f) => f.vaultLabel.startsWith('1순위'));
+      const docTypeMatch = /엑셀|excel/i.test(clean)
+        ? /\.(?:xlsx|xls|xlsm|xlsb|xar|csv)$/i
+        : /한글|hwp/i.test(clean)
+        ? /\.(?:hwp|hwpx)$/i
+        : /워드|word/i.test(clean)
+        ? /\.(?:docx|doc|asd|wbk)$/i
+        : /파워포인트|ppt/i.test(clean)
+        ? /\.(?:pptx|ppt)$/i
+        : null;
+      const candidatesPool =
+        autoRecover.length > 0
+          ? (docTypeMatch ? autoRecover.filter((f) => docTypeMatch.test(f.fileName)) : autoRecover)
+          : docTypeMatch
+          ? allForensicFiles.filter((f) => docTypeMatch.test(f.fileName))
+          : allForensicFiles;
+      const effectiveCandidates = candidatesPool.length > 0 ? candidatesPool : allForensicFiles;
+
+      if (!r.ok || effectiveCandidates.length === 0) {
         speak('내 PC 5대 은닉 금고와 휴지통을 모두 스캔했으나 흔적이 없습니다.');
         return reply(
           sourceTab,
@@ -5602,26 +5768,26 @@ export async function processUnifiedMonsterChatQuery(params: {
           { llmActionJson: actionJson, followUpSuggestions: defaultFollowUps }
         );
       }
-      const top = autoRecover[0];
+      const top = effectiveCandidates[0];
       const payload: MonsterMissingFilePayload = {
         query: clean,
         caseType: 'CASE_C_OFFICE_AUTORECOVER',
         fileName: top.fileName,
         currentLocation: top.fullPath,
-        originalLocation: '바탕화면에 "(복구본)"으로 복사 (자동복구 원본은 그대로 둠)',
+        originalLocation: '바탕화면에 "(복구본)"으로 복사 (원본은 그대로 보존)',
         deletedAtOrSavedAt: `마지막 저장 ${top.modifiedAt} · ${top.sizeFormatted}`,
         recoverFullPath: top.fullPath,
-        fiveLinePreview: (top.preview5Lines || []).slice(0, 5),
-        briefingKo: `${llmIntro} **[자동복구 금고 실측 — ${top.vaultLabel}]**\n자동복구 폴더에서 **${top.fileName}** (${top.modifiedAt})을 찾았습니다${
-          autoRecover.length > 1 ? `(후보 ${autoRecover.length}건 중 가장 최근 파일)` : ''
-        }. 아래는 파일 안에서 실제로 읽은 내용입니다. 찾던 문서가 맞으면 채팅창에 **"응 복구해줘"**라고 입력해 주세요.`,
+        fiveLinePreview: (Array.isArray(top.preview5Lines) ? top.preview5Lines : [String(top.preview5Lines || '')]).slice(0, 5),
+        briefingKo: `${llmIntro} **[3초 문서 구출 실측 — ${top.vaultLabel}]**\n내 PC 자동복구·문서 금고에서 가장 최근에 작업된 **${top.fileName}** (${top.modifiedAt})을 찾았습니다${
+          effectiveCandidates.length > 1 ? ` (후보 ${effectiveCandidates.length}건 중 가장 최근 문서)` : ''
+        }. 아래 **5줄 미리보기 카드**에서 내용을 확인하시고 **[폴더 열기]** 또는 **[↩️ 원위치/바탕화면 복원]** 버튼을 누르시거나 **"응 복구해줘"**라고 입력해 주세요!`,
       };
-      speak('자동복구 폴더에서 파일을 찾았습니다. 미리보기를 확인하시고 복구해달라고 입력해 주세요.');
+      speak('자동복구 및 문서 금고에서 최근 작업 파일을 찾았습니다. 미리보기 카드에서 복원 버튼을 눌러 주세요.');
       return reply(sourceTab, payload.briefingKo, {
         cardKind: 'MISSING_FILE_EXONERATION',
         missingFilePayload: payload,
         llmActionJson: actionJson,
-        followUpSuggestions: defaultFollowUps,
+        followUpSuggestions: defaultFollowUps || ['응 복구해줘', '최근 복원 기록 보여줘'],
       });
     }
 

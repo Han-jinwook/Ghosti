@@ -103,7 +103,7 @@ public class GhostiQuickClipActivity extends Activity {
                 captured = intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT);
             }
         }
-        String text = captured != null ? captured.toString().trim() : "";
+        String text = sanitizeSharedWebSelectionText(captured != null ? captured.toString() : "", action);
         if (text.isEmpty()) {
             Toast.makeText(getApplicationContext(), "전송할 글자가 비어 있습니다.", Toast.LENGTH_SHORT).show();
             finishSilently();
@@ -116,6 +116,44 @@ public class GhostiQuickClipActivity extends Activity {
         );
         Toast.makeText(getApplicationContext(), "💻 PC 클립보드(Ctrl+V)로 바로 보냈습니다!", Toast.LENGTH_SHORT).show();
         finishSilently();
+    }
+
+    /**
+     * 안드로이드 크롬·삼성 브라우저에서 웹 본문을 드래그한 뒤 [공유 ➔ 귀신같이]를 눌렀을 때
+     * 브라우저가 자동으로 덧붙이는 하단 페이지 링크(https://...#:~:text=...) 및 감싸는 따옴표("...")를 제거해
+     * 드래그한 순수 글자만 깔끔하게 전송합니다. (순수 URL 단독 공유 시에는 URL 그대로 보존)
+     */
+    private static String sanitizeSharedWebSelectionText(String raw, String action) {
+        if (raw == null) return "";
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) return "";
+        if (!Intent.ACTION_SEND.equals(action)) {
+            return trimmed;
+        }
+        // 순수 단일 URL 공유(주소창 공유 등)는 그대로 보존
+        if (trimmed.matches("^https?://\\S+$")) {
+            return trimmed;
+        }
+        // 1순위: Chrome Highlight Share ("드래그한 문장"\n https://...#:~:text=...) 또는 본문 뒤 줄바꿈 URL 제거
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("(?s)^(.+?)(?:\\r?\\n\\s*|\\s+)(https?://\\S+)\\s*$")
+            .matcher(trimmed);
+        if (m.matches()) {
+            String bodyPart = m.group(1) != null ? m.group(1).trim() : "";
+            String trailingUrl = m.group(2) != null ? m.group(2).trim() : "";
+            boolean isHighlightFragment = trailingUrl.contains("#:~:text=");
+            boolean wasNewlineSeparated = trimmed.substring(m.end(1), m.start(2)).contains("\n");
+            if (!bodyPart.isEmpty() && !bodyPart.matches("^https?://\\S+$") && (isHighlightFragment || wasNewlineSeparated)) {
+                if ((bodyPart.startsWith("\"") && bodyPart.endsWith("\"") && bodyPart.length() >= 2)
+                    || (bodyPart.startsWith("“") && bodyPart.endsWith("”") && bodyPart.length() >= 2)) {
+                    bodyPart = bodyPart.substring(1, bodyPart.length() - 1).trim();
+                }
+                if (!bodyPart.isEmpty()) {
+                    return bodyPart;
+                }
+            }
+        }
+        return trimmed;
     }
 
     private static final class RawSharedImage {

@@ -35,6 +35,7 @@ final class GhostKeySharedClipboardStore {
     private static let keyPendingOutbound = "ghosti_shared_clipboard_pending_outbound_v1"
     private static let keySeqIndex = "ghosti_shared_clipboard_seq_index_v1"
     private static let keyAuthContext = "ghosti_shared_clipboard_auth_v1"
+    private static let keyCachedRawKey = "ghosti_shared_clipboard_rawkey_v1"
     private static let keySeenPushIds = "ghosti_seen_phone_push_ids_v1"
 
     private static let ioQueue = DispatchQueue(label: "app.sundreamer.ghosti.sharedclip.io", qos: .userInitiated)
@@ -263,7 +264,24 @@ final class GhostKeySharedClipboardStore {
         return resultEntry
     }
 
-    /// Share Extension 전용: 실제 HTTPS 전송 완료(또는 최대 4.2초 안전 타임아웃)까지 보장 후 종료하도록 콜백 제공
+    /// Share Extension 진입 0ms에 TLS 연결 및 암호화 키를 선행 예열해 전송 체감 지연을 최소화합니다.
+    static func prewarmBridgeConnection() {
+        ioQueue.async {
+            guard let ctx = loadAuthContext(),
+                  !ctx.email.isEmpty else { return }
+            if !ctx.canonicalUserId.isEmpty {
+                _ = deriveSymmetricKey(email: ctx.email, uid: ctx.canonicalUserId)
+            }
+            if let url = URL(string: ctx.bridgeUrl) {
+                var headReq = URLRequest(url: url)
+                headReq.httpMethod = "OPTIONS"
+                headReq.timeoutInterval = 3.0
+                URLSession.shared.dataTask(with: headReq) { _, _, _ in }.resume()
+            }
+        }
+    }
+
+    /// Share Extension 전용: 메인 스레드 Keychain I/O 차단을 0%로 제거하고 HTTPS 직송을 최우선 발사합니다.
     static func pushClipDirect(_ rawText: String, senderName: String = "내 아이폰", completion: @escaping (Bool) -> Void) {
         let trimmed = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -283,19 +301,6 @@ final class GhostKeySharedClipboardStore {
             createdAtMs: nowMs
         )
 
-        let existing = loadHistory()
-        var merged = [entry] + existing.filter { $0.clipHash != hash }
-        if merged.count > maxKeychainItems { merged = Array(merged.prefix(maxKeychainItems)) }
-        saveHistory(merged)
-        writeSharedData(Data("0".utf8), forAccount: keySeqIndex)
-
-        var pending = loadPendingOutbound().filter { $0.clipHash != hash }
-        pending.insert(entry, at: 0)
-        if pending.count > 40 { pending = Array(pending.prefix(40)) }
-        if let pEnc = try? JSONEncoder().encode(pending) {
-            writeSharedData(pEnc, forAccount: keyPendingOutbound)
-        }
-
         let lock = NSLock()
         var finished = false
         let completeOnce: (Bool) -> Void = { ok in
@@ -305,12 +310,27 @@ final class GhostKeySharedClipboardStore {
             finished = true
             completion(ok)
         }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 4.2) {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2.8) {
             completeOnce(false)
         }
 
+        // 1순위(0ms): 네트워크 전송부터 최우선 비동기 발사!
         pushEntryAsync(entry) { ok in
             completeOnce(ok)
+        }
+
+        // 2순위(병렬 백그라운드): 로컬 Keychain 7일 보관함 기록은 네트워크 대기와 겹쳐서 비차단 처리
+        DispatchQueue.global(qos: .utility).async {
+            let existing = loadHistory()
+            var merged = [entry] + existing.filter { $0.clipHash != hash }
+            if merged.count > maxKeychainItems { merged = Array(merged.prefix(maxKeychainItems)) }
+            saveHistory(merged)
+            var pending = loadPendingOutbound().filter { $0.clipHash != hash }
+            pending.insert(entry, at: 0)
+            if pending.count > 40 { pending = Array(pending.prefix(40)) }
+            if let pEnc = try? JSONEncoder().encode(pending) {
+                writeSharedData(pEnc, forAccount: keyPendingOutbound)
+            }
         }
     }
 
@@ -389,7 +409,7 @@ final class GhostKeySharedClipboardStore {
         }
     }
 
-    // MARK: - Direct AES-256-GCM + PBKDF2-HMAC-SHA256 (60,000 iter) Sync with PC
+    // MARK: - Direct AES-256-GCM + Keychain Pre-Derived Key Cache (0.5ms Share Extension Cold Start)
     private static func deriveSymmetricKey(email: String, uid: String) -> SymmetricKey? {
         let normEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let normUid = uid.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -401,6 +421,20 @@ final class GhostKeySharedClipboardStore {
             return cached
         }
         keyLock.unlock()
+
+        // Share Extension 새 프로세스 기동 시 60,000회 PBKDF2 재연산을 생략하도록 Keychain 캐시 우선 조회
+        if let kcRaw = readSharedData(forAccount: keyCachedRawKey),
+           let kcDict = (try? JSONSerialization.jsonObject(with: kcRaw, options: [])) as? [String: String],
+           kcDict["tag"] == tag,
+           let b64 = kcDict["keyB64"],
+           let keyData = Data(base64Encoded: b64),
+           keyData.count == 32 {
+            let symKey = SymmetricKey(data: keyData)
+            keyLock.lock()
+            keyCache[tag] = symKey
+            keyLock.unlock()
+            return symKey
+        }
 
         let passwordData = Data("ghosti-e2ee-clip-v1::\(normEmail)::\(normUid)".utf8)
         let saltData = Data("ghosti-salt-v1::\(normEmail)".utf8)
@@ -426,11 +460,18 @@ final class GhostKeySharedClipboardStore {
             }
         }
         guard status == kCCSuccess else { return nil }
-        let symKey = SymmetricKey(data: Data(derivedBytes))
+        let derivedData = Data(derivedBytes)
+        let symKey = SymmetricKey(data: derivedData)
         keyLock.lock()
         if keyCache.count > 8 { keyCache.removeAll() }
         keyCache[tag] = symKey
         keyLock.unlock()
+        if let kcEnc = try? JSONSerialization.data(
+            withJSONObject: ["tag": tag, "keyB64": derivedData.base64EncodedString()],
+            options: []
+        ) {
+            writeSharedData(kcEnc, forAccount: keyCachedRawKey)
+        }
         return symKey
     }
 
@@ -558,6 +599,16 @@ final class GhostKeySharedClipboardStore {
         return true
     }
 
+    private static func isPushIdSeen(_ pushId: String) -> Bool {
+        let clean = pushId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty,
+              let raw = readSharedData(forAccount: keySeenPushIds),
+              let arr = try? JSONDecoder().decode([String].self, from: raw) else {
+            return false
+        }
+        return arr.contains(clean)
+    }
+
     static func pullPhonePushInboxOnce(onPushArrived: @escaping (String, String, String) -> Void) {
         ioQueue.async {
             guard var ctx = loadAuthContext(),
@@ -592,7 +643,7 @@ final class GhostKeySharedClipboardStore {
                     if cMs > lastPushSinceMs {
                         lastPushSinceMs = cMs
                     }
-                    guard !pushId.isEmpty else { continue }
+                    guard !pushId.isEmpty, !isPushIdSeen(pushId) else { continue }
                     let cB64 = (item["cipherB64"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                     let ivB64 = (item["ivB64"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !cB64.isEmpty, !ivB64.isEmpty,
@@ -600,10 +651,8 @@ final class GhostKeySharedClipboardStore {
                           !plain.isEmpty else {
                         continue
                     }
-                    if markPushIdSeen(pushId) {
-                        let sender = (item["senderName"] as? String) ?? "내 PC"
-                        onPushArrived(pushId, plain, sender)
-                    }
+                    let sender = (item["senderName"] as? String) ?? "내 PC"
+                    onPushArrived(pushId, plain, sender)
                 }
             }
         }

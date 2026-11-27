@@ -81,7 +81,14 @@ public class MainActivity extends BridgeActivity {
         });
         registerPlugin(GhostiMobileCarePlugin.class);
         super.onCreate(savedInstanceState);
+        GhostiNativeClipboardSync.ensurePcClipPushChannel(getApplicationContext());
         GhostiNativeClipboardSync.startPhonePushInboxWatcher(getApplicationContext());
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[] { android.Manifest.permission.POST_NOTIFICATIONS }, 51992);
+            }
+        }
         captureIncomingDeepLinkIntent(getIntent());
 
         // [2귀신] 안드로이드 하드웨어/제스처 뒤로가기 시 앱 즉시 종료 방지:

@@ -1035,13 +1035,14 @@ def run_3sec_forensic_scan(query: str = "", max_results: int = 12) -> Dict[str, 
     desktop_known = USERPROFILE / "Desktop"
     downloads_known = USERPROFILE / "Downloads"
     documents_known = USERPROFILE / "Documents"
-    if _SAFE_OPS_AVAILABLE and ghosti_safe_ops is not None:
-        try:
-            desktop_known = ghosti_safe_ops.known_folder("desktop")
-            downloads_known = ghosti_safe_ops.known_folder("downloads")
-            documents_known = ghosti_safe_ops.known_folder("documents")
-        except Exception:
-            pass
+    try:
+        import ghosti_safe_ops as _gso_f
+
+        desktop_known = _gso_f.known_folder("desktop")
+        downloads_known = _gso_f.known_folder("downloads")
+        documents_known = _gso_f.known_folder("documents")
+    except Exception:
+        pass
 
     vault_locations = [
         ("0순위: PC 바탕화면(Desktop) 폴더 (LIFO 선행 개통)", desktop_known),

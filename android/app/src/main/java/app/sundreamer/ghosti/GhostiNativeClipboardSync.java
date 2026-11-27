@@ -12,6 +12,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.util.Base64;
+import android.util.Log;
+import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedReader;
@@ -43,7 +45,7 @@ import javax.crypto.spec.SecretKeySpec;
 public final class GhostiNativeClipboardSync {
     private static final String AUTH_PREFS = "ghosti_native_clip_auth_v1";
     private static final String PUSH_STATE_PREFS = "ghosti_phone_push_inbox_state_v1";
-    private static final String CHANNEL_PC_CLIP_PUSH = "ghosti_pc_clip_push_v1";
+    private static final String CHANNEL_PC_CLIP_PUSH = "ghosti_pc_clip_push_v2";
     private static final String DEFAULT_BRIDGE_URL =
         "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge";
 
@@ -273,6 +275,7 @@ public final class GhostiNativeClipboardSync {
                     JSONObject resp = postBridgeJson(endpoint, hubToken, req, 6500);
                     if (resp != null && resp.optBoolean("ok", false)) {
                         String srvUid = resp.optString("canonicalUserId", "").trim();
+                        String prevUid = uid;
                         if (!srvUid.isEmpty() && !srvUid.equals(uid)) {
                             authPrefs.edit().putString("canonicalUserId", srvUid).apply();
                             uid = srvUid;
@@ -280,26 +283,24 @@ public final class GhostiNativeClipboardSync {
                         JSONArray items = resp.optJSONArray("items");
                         if (items != null && items.length() > 0 && !uid.isEmpty()) {
                             SecretKey primaryKey = deriveAesKey(email, uid);
-                            SharedPreferences stPrefs = appCtx.getSharedPreferences(PUSH_STATE_PREFS, Context.MODE_PRIVATE);
-                            Set<String> seenSet = new HashSet<>(stPrefs.getStringSet("seen_ids", new HashSet<>()));
-                            boolean updatedSeen = false;
-
+                            SecretKey fallbackKey = (!prevUid.isEmpty() && !prevUid.equals(uid))
+                                ? deriveAesKey(email, prevUid)
+                                : null;
                             for (int i = items.length() - 1; i >= 0; i--) {
                                 JSONObject it = items.optJSONObject(i);
                                 if (it == null) continue;
                                 String pushId = it.optString("pushId", "").trim();
                                 long createdAtMs = it.optLong("createdAtMs", 0L);
                                 if (createdAtMs > sinceMs) sinceMs = createdAtMs;
-                                if (pushId.isEmpty() || seenSet.contains(pushId)) continue;
+                                if (pushId.isEmpty() || isPushIdAlreadyNotified(appCtx, pushId)) continue;
 
-                                String plain = tryDecrypt(
-                                    primaryKey,
-                                    it.optString("cipherB64", ""),
-                                    it.optString("ivB64", "")
-                                );
+                                String cB64 = it.optString("cipherB64", "");
+                                String ivB64 = it.optString("ivB64", "");
+                                String plain = tryDecrypt(primaryKey, cB64, ivB64);
+                                if (plain == null && fallbackKey != null) {
+                                    plain = tryDecrypt(fallbackKey, cB64, ivB64);
+                                }
                                 if (plain != null && !plain.trim().isEmpty()) {
-                                    seenSet.add(pushId);
-                                    updatedSeen = true;
                                     postOneTapCopyNotification(
                                         appCtx,
                                         pushId,
@@ -307,18 +308,6 @@ public final class GhostiNativeClipboardSync {
                                         it.optString("senderName", "내 PC")
                                     );
                                 }
-                            }
-                            if (updatedSeen) {
-                                if (seenSet.size() > 80) {
-                                    Set<String> trimmed = new HashSet<>();
-                                    int k = 0;
-                                    for (String id : seenSet) {
-                                        trimmed.add(id);
-                                        if (++k >= 50) break;
-                                    }
-                                    seenSet = trimmed;
-                                }
-                                stPrefs.edit().putStringSet("seen_ids", seenSet).apply();
                             }
                         }
                     }
@@ -335,8 +324,37 @@ public final class GhostiNativeClipboardSync {
         watcher.start();
     }
 
-    private static void ensurePcClipPushChannel(Context appCtx) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+    private static synchronized boolean isPushIdAlreadyNotified(Context appCtx, String pushId) {
+        if (appCtx == null || pushId == null || pushId.trim().isEmpty()) return false;
+        SharedPreferences stPrefs = appCtx.getSharedPreferences(PUSH_STATE_PREFS, Context.MODE_PRIVATE);
+        Set<String> seenSet = stPrefs.getStringSet("seen_ids", null);
+        return seenSet != null && seenSet.contains(pushId.trim());
+    }
+
+    private static synchronized boolean markPushIdNotified(Context appCtx, String pushId) {
+        if (appCtx == null || pushId == null || pushId.trim().isEmpty()) return true;
+        String cleanId = pushId.trim();
+        SharedPreferences stPrefs = appCtx.getSharedPreferences(PUSH_STATE_PREFS, Context.MODE_PRIVATE);
+        Set<String> seenSet = new HashSet<>(stPrefs.getStringSet("seen_ids", new HashSet<>()));
+        if (seenSet.contains(cleanId)) {
+            return false;
+        }
+        seenSet.add(cleanId);
+        if (seenSet.size() > 80) {
+            Set<String> trimmed = new HashSet<>();
+            int k = 0;
+            for (String id : seenSet) {
+                trimmed.add(id);
+                if (++k >= 50) break;
+            }
+            seenSet = trimmed;
+        }
+        stPrefs.edit().putStringSet("seen_ids", seenSet).apply();
+        return true;
+    }
+
+    public static void ensurePcClipPushChannel(Context appCtx) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || appCtx == null) return;
         try {
             NotificationManager nm = (NotificationManager) appCtx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
@@ -346,19 +364,25 @@ public final class GhostiNativeClipboardSync {
                 NotificationManager.IMPORTANCE_HIGH
             );
             ch.setDescription("PC에서 [폰으로 보내기]를 눌렀을 때 상단 알림의 [복사] 버튼 1탭으로 앱을 열지 않고 복사합니다.");
+            ch.enableVibration(true);
+            ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             nm.createNotificationChannel(ch);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.w("GhostiClipPush", "ensurePcClipPushChannel failed", t);
         }
     }
 
     public static void postOneTapCopyNotification(Context appCtx, String pushId, String plainText, String senderName) {
         if (appCtx == null || plainText == null || plainText.trim().isEmpty()) return;
         try {
+            if (pushId != null && !pushId.trim().isEmpty() && !markPushIdNotified(appCtx, pushId)) {
+                return;
+            }
             ensurePcClipPushChannel(appCtx);
             NotificationManager nm = (NotificationManager) appCtx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            int notifId = Math.abs((pushId != null ? pushId : plainText).hashCode() & 0x0FFFFFFF) + 51000;
+            int notifId = Math.abs((pushId != null && !pushId.isEmpty() ? pushId : plainText).hashCode() & 0x0FFFFFFF) + 51000;
             Intent copyIntent = new Intent(appCtx, GhostiNotificationCopyActivity.class);
             copyIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NO_ANIMATION);
             copyIntent.putExtra(GhostiNotificationCopyActivity.EXTRA_CLIP_TEXT, plainText);
@@ -371,39 +395,33 @@ public final class GhostiNativeClipboardSync {
             PendingIntent copyPendingIntent = PendingIntent.getActivity(appCtx, notifId, copyIntent, piFlags);
 
             String oneLinePreview = plainText.replace('\n', ' ').trim();
-            if (oneLinePreview.length() > 90) {
-                oneLinePreview = oneLinePreview.substring(0, 90) + "…";
+            if (oneLinePreview.length() > 96) {
+                oneLinePreview = oneLinePreview.substring(0, 96) + "…";
             }
             String cleanSender = (senderName != null && !senderName.trim().isEmpty()) ? senderName.trim() : "내 PC";
 
-            Notification.Builder builder = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? new Notification.Builder(appCtx, CHANNEL_PC_CLIP_PUSH)
-                : new Notification.Builder(appCtx);
-
-            int smallIcon = appCtx.getApplicationInfo().icon;
-            if (smallIcon == 0) smallIcon = android.R.drawable.stat_notify_chat;
-
-            Notification.Action copyAction = new Notification.Action.Builder(
+            NotificationCompat.Action copyAction = new NotificationCompat.Action.Builder(
                 0,
                 "📋 복사",
                 copyPendingIntent
             ).build();
 
-            builder
-                .setSmallIcon(smallIcon)
-                .setContentTitle("📱 " + cleanSender + "에서 보낸 클립보드")
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(appCtx, CHANNEL_PC_CLIP_PUSH)
+                .setSmallIcon(R.drawable.ic_stat_ghosti_clip)
+                .setContentTitle("📋 " + cleanSender + "에서 보낸 클립보드")
                 .setContentText(oneLinePreview)
-                .setStyle(new Notification.BigTextStyle().bigText(oneLinePreview))
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(oneLinePreview))
                 .setContentIntent(copyPendingIntent)
                 .setAutoCancel(true)
-                .setOnlyAlertOnce(true)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .addAction(copyAction);
 
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-                builder.setPriority(Notification.PRIORITY_HIGH);
-            }
             nm.notify(notifId, builder.build());
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Log.e("GhostiClipPush", "postOneTapCopyNotification failed", t);
         }
     }
 
