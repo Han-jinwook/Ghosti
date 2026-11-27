@@ -12,6 +12,7 @@
     padding: 0;
     background-color: #F8F7F4;
     color: #1E293B;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
     overscroll-behavior-y: auto;
     -webkit-tap-highlight-color: transparent;
     transition: background-color 0.2s ease, color 0.2s ease;

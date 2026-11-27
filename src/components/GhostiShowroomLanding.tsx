@@ -930,7 +930,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             <div
               ref={chatScrollRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-[220px] max-h-[300px] bg-white"
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5 min-h-[220px] max-h-[300px] bg-white"
             >
               {chatMessages.map((msg) => {
                 const isUser = msg.role === 'user';
@@ -939,7 +939,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     key={msg.id}
                     className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                   >
-                    <div className="flex items-center gap-1.5 mb-1 px-1 text-[11.5px] text-slate-400">
+                    <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] text-slate-400">
                       {isUser ? (
                         <>
                           <span>{msg.timestamp}</span>
@@ -953,7 +953,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       )}
                     </div>
                     <div
-                      className={`max-w-[92%] rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line break-keep ${
+                      className={`max-w-[92%] rounded-xl px-3 py-2 text-[12px] leading-relaxed whitespace-pre-line break-keep ${
                         isUser
                           ? 'bg-slate-900 text-white'
                           : 'bg-slate-50 border border-slate-200 text-slate-800'
@@ -966,8 +966,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               })}
             </div>
 
-            <div className="p-3.5 bg-slate-50 border-t border-slate-200 space-y-2">
-              <div className="text-[12px] font-medium text-slate-500 flex items-center justify-between px-0.5">
+            <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-2">
+              <div className="text-[11.5px] font-medium text-slate-500 flex items-center justify-between px-0.5">
                 <span>체험할 기능을 선택하세요</span>
                 <span>우측 화면 연동</span>
               </div>
@@ -980,23 +980,23 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       key={tabKey}
                       type="button"
                       onClick={() => handleSelectWeaponChip(tabKey)}
-                      className={`p-3 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
+                      className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
                           ? 'bg-teal-600 border-teal-600 text-white'
                           : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-900'
                       }`}
                     >
                       <span
-                        className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10.5px] font-medium ${
+                        className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-medium ${
                           isActive ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'
                         }`}
                       >
                         {item.keywordBadge}
                       </span>
-                      <div className="text-[13px] font-semibold break-keep leading-snug mt-0.5">
+                      <div className="text-[12px] font-semibold break-keep leading-snug mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className={`text-[11.5px] break-keep leading-snug ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
+                      <div className={`text-[11px] break-keep leading-snug ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
                         {item.chipSub}
                       </div>
                     </button>
@@ -1014,11 +1014,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 placeholder="궁금한 기능 입력 (예: 영상 검색, 영수증 찾기, 사진 공유)"
-                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 text-[13px] text-slate-900 placeholder-slate-400 outline-none"
+                className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 text-[12px] text-slate-900 placeholder-slate-400 outline-none"
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] shrink-0 cursor-pointer transition-colors"
+                className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[12px] shrink-0 cursor-pointer transition-colors"
               >
                 전송
               </button>
@@ -1202,7 +1202,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               </button>
                             </div>
                             {videoOcrExtracted && (
-                              <div className="rounded-md bg-slate-50 border border-slate-200 p-2.5 text-[12px] text-slate-700 font-mono space-y-1">
+                              <div className="rounded-md bg-slate-50 border border-slate-200 p-2.5 text-[12px] text-slate-700 font-sans tracking-normal space-y-1">
                                 {INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].screenOcrLines.map((ln, lIdx) => (
                                   <div key={lIdx}>{ln}</div>
                                 ))}
