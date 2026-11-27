@@ -3998,13 +3998,17 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
 
   // 0-0A1) ["사진 정리했는데 왜 C드라이브 용량이 바로 안 늘어나?" 등 휴지통 보관으로 인한 용량 미증가 이유 질문 0토큰 즉답]
+  const isMobileClientEarly =
+    typeof navigator !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+      (/Macintosh/i.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1));
   const isWhyCapacityNotIncreasingAfterCleanup =
     /(?:c\s*드라이브|용량|공간)/i.test(clean) &&
     /(?:왜|어째서)?\s*(?:바로\s*)?(?:안\s*(?:늘|늘어나|줄|줄어들|바뀌|변해)|그대로|차이가\s*없)/i.test(clean);
   if (isWhyCapacityNotIncreasingAfterCleanup) {
     let rbDetailLine =
       '• **용량이 바로 안 늘어나는 이유**: 파일이 윈도우 **[휴지통]** 안에 보관되어 있는 동안에는 언제든 1초 만에 되돌릴 수 있도록 C드라이브 용량을 잠시 유지합니다.';
-    if (!isMobileClient) {
+    if (!isMobileClientEarly) {
       const rbSt = await zcoreJson<any>('/__zcore/recycle-bin-status');
       if (rbSt.ok && rbSt.data?.ok) {
         const cnt = Number(rbSt.data.itemCount ?? 0);
