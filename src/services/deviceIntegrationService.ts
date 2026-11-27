@@ -1135,7 +1135,6 @@ export function isCurrentAccountWorkShareUnlocked(email?: string): boolean {
 
 import { isLocalPcBlockedByOtherAccount } from './pcSingleAccountGuard';
 import {
-  readActiveWorkRoomInviteMeta,
   readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
   resolveCurrentWorkAccountEmail,
@@ -1162,8 +1161,8 @@ export async function syncEntitlementToLocalPcEngine(
   const resolvedWorkEmail = resolveCurrentWorkAccountEmail(accountEmail);
   const cleanEmail = resolvedWorkEmail !== 'anonymous' ? resolvedWorkEmail : '';
 
-  // 업무 공유 탭 밖(내 기기 통합·구독 결제창 등)에서 호출되더라도 기존 소속 업무방(방장방·초대팀원방) 권한·roomId가 덮어써지지 않게 보호
-  const activeInvite = readActiveWorkRoomInviteMeta();
+  // 업무 공유 탭 밖(내 기기 통합·구독 결제창 등)에서 호출되더라도 기존 소속 업무방(방장방·정식 합류 팀원방) 권한·roomId가 덮어써지지 않게 보호
+  // (주의: 미검증 URL 초대 파라미터 activeInvite.hasWorkInvite만으로는 절대 선해금하지 않으며, 서버 work_accept_invite/work_list_my_rooms 검증 후 저장된 cachedJoinedRoom만 신뢰!)
   const cachedHostRoom = readCachedMyWorkRoomMeta(cleanEmail || undefined);
   const cachedJoinedRoom = readCachedJoinedWorkRoomMeta(cleanEmail || undefined);
   const ownWorkUnlocked = Boolean(
@@ -1172,26 +1171,23 @@ export async function syncEntitlementToLocalPcEngine(
       entitlement?.workTrialActive
   );
   const invitedWorkUnlocked = Boolean(
-    activeInvite.hasWorkInvite ||
-      (cachedJoinedRoom && !cachedJoinedRoom.isHost && cachedJoinedRoom.ownerUnlocked !== false)
+    cachedJoinedRoom && !cachedJoinedRoom.isHost && cachedJoinedRoom.ownerUnlocked !== false
   );
   const isWorkUnlocked =
     workOverride?.unlocked !== undefined
       ? Boolean(workOverride.unlocked)
       : Boolean(ownWorkUnlocked || invitedWorkUnlocked);
 
-  const fallbackRoomId = activeInvite.hasWorkInvite
-    ? activeInvite.roomId
-    : ownWorkUnlocked && cachedHostRoom?.roomId
-    ? cachedHostRoom.roomId
-    : cachedJoinedRoom?.roomId || cachedHostRoom?.roomId || '';
+  const fallbackRoomId =
+    ownWorkUnlocked && cachedHostRoom?.roomId
+      ? cachedHostRoom.roomId
+      : cachedJoinedRoom?.roomId || cachedHostRoom?.roomId || '';
   const roomId = (workOverride?.roomId ?? fallbackRoomId).trim();
 
-  const fallbackIsHost = activeInvite.hasWorkInvite
-    ? false
-    : cachedJoinedRoom && !cachedJoinedRoom.isHost && roomId === cachedJoinedRoom.roomId
-    ? false
-    : Boolean(ownWorkUnlocked);
+  const fallbackIsHost =
+    cachedJoinedRoom && !cachedJoinedRoom.isHost && roomId === cachedJoinedRoom.roomId
+      ? false
+      : Boolean(ownWorkUnlocked);
   const isHost =
     workOverride?.isHost !== undefined ? Boolean(workOverride.isHost) : fallbackIsHost;
 

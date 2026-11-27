@@ -1068,7 +1068,8 @@ export async function handleAuthedWorkAndDeviceAction({
       return ownerGate.response;
     }
 
-    const isMaster = String(verified.room.master_email || '').toLowerCase() === email;
+    const cleanMasterEmail = String(verified.room.master_email || '').trim().toLowerCase();
+    const isMaster = cleanMasterEmail === email;
     const memRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&select=member_email,role,room_persona_nickname,joined_at&order=joined_at.asc,member_email.asc`,
       { headers: srvHeaders(serviceKey) }
@@ -1076,20 +1077,31 @@ export async function handleAuthedWorkAndDeviceAction({
     const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
     const members = Array.isArray(memRows) ? [...memRows] : [];
     const existingMember = members.find(
-      (r) => String(r.member_email || '').toLowerCase() === email
+      (r) => String(r.member_email || '').trim().toLowerCase() === email
     );
+
+    const effectiveMemberEmails = new Set(
+      members
+        .map((r) => String(r?.member_email || '').trim().toLowerCase())
+        .filter((em) => em && em.includes('@'))
+    );
+    if (cleanMasterEmail && cleanMasterEmail.includes('@')) {
+      effectiveMemberEmails.add(cleanMasterEmail);
+    }
 
     const seatLimit = ownerGate.entitlement.workSeatLimit || 5;
     if (!isMaster && !existingMember) {
-      if (members.length >= seatLimit) {
+      if (effectiveMemberEmails.size >= seatLimit) {
         return {
           status: 403,
           body: {
             ok: false,
             reason: 'WORK_SEAT_LIMIT_EXCEEDED',
             seatLimit,
-            currentMemberCount: members.length,
-            message: `이 업무 공유방의 이용권 정원(${seatLimit}인)이 모두 찼습니다. 방장님이 상위 이용권으로 변경하면 추가 합류할 수 있습니다.`,
+            currentMemberCount: effectiveMemberEmails.size,
+            roomTitle: verified.room.room_title || '우리팀 업무 공유방 (S:)',
+            hostNickname: verified.hostNickname || '방장',
+            message: `이 업무 공유방의 이용권 정원(${seatLimit}명)이 모두 찼습니다. 방장님이 상위 이용권으로 변경하거나 기존 팀원을 정리한 뒤 다시 합류할 수 있습니다.`,
           },
         };
       }

@@ -748,6 +748,7 @@ export async function acceptWorkRoomInvite(opts: {
   hostNickname?: string;
   role?: 'host' | 'editor' | 'viewer';
   seatLimit?: number;
+  currentMemberCount?: number;
   members?: WorkRoomServerMemberDto[];
   deletedTombstones?: WorkDeletedTombstoneMap;
   hostTunnel?: WorkHostTunnelEndpointDto;
@@ -765,6 +766,7 @@ export async function acceptWorkRoomInvite(opts: {
     hostNickname?: string;
     role?: 'host' | 'editor' | 'viewer';
     seatLimit?: number;
+    currentMemberCount?: number;
     members?: WorkRoomServerMemberDto[];
     deletedTombstones?: WorkDeletedTombstoneMap;
     hostTunnel?: WorkHostTunnelEndpointDto;
@@ -788,6 +790,7 @@ export async function acceptWorkRoomInvite(opts: {
     hostNickname: res.hostNickname,
     role: res.role,
     seatLimit: res.seatLimit,
+    currentMemberCount: res.currentMemberCount,
     members: sortedMembers,
     deletedTombstones: normalizeWorkTombstoneMap(res.deletedTombstones),
     hostTunnel: res.hostTunnel,
@@ -967,6 +970,67 @@ export function syncCachedMyWorkRoomMetaFromServer(
 }
 
 const KICKED_WORK_ROOM_NOTICE_PREFIX = 'ghosti_kicked_work_room_notice_v1::';
+const SEAT_LIMIT_WORK_ROOM_NOTICE_PREFIX = 'ghosti_seat_limit_work_room_notice_v1::';
+
+export interface WorkSeatLimitExceededNotice {
+  roomTitle: string;
+  hostNickname: string;
+  seatLimit: number;
+  currentMemberCount?: number;
+  message: string;
+}
+
+export function readPendingWorkSeatLimitNotice(
+  accountEmail?: string
+): WorkSeatLimitExceededNotice | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return null;
+    const raw = sessionStorage.getItem(`${SEAT_LIMIT_WORK_ROOM_NOTICE_PREFIX}${scopeEmail}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<WorkSeatLimitExceededNotice>;
+    if (!parsed?.roomTitle) return null;
+    return {
+      roomTitle: String(parsed.roomTitle).trim(),
+      hostNickname: String(parsed.hostNickname || '방장').trim(),
+      seatLimit: Number(parsed.seatLimit || 5),
+      currentMemberCount: parsed.currentMemberCount ? Number(parsed.currentMemberCount) : undefined,
+      message: String(parsed.message || '').trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function savePendingWorkSeatLimitNotice(
+  notice: WorkSeatLimitExceededNotice,
+  accountEmail?: string
+): void {
+  if (typeof window === 'undefined' || !notice?.roomTitle) return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return;
+    sessionStorage.setItem(
+      `${SEAT_LIMIT_WORK_ROOM_NOTICE_PREFIX}${scopeEmail}`,
+      JSON.stringify({ ...notice, savedAt: new Date().toISOString() })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearPendingWorkSeatLimitNotice(accountEmail?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (scopeEmail && scopeEmail !== 'anonymous') {
+      sessionStorage.removeItem(`${SEAT_LIMIT_WORK_ROOM_NOTICE_PREFIX}${scopeEmail}`);
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export function readPendingKickedWorkRoomNotice(accountEmail?: string): string | null {
   if (typeof window === 'undefined') return null;

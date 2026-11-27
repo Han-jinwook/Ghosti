@@ -18,6 +18,7 @@ import {
   clearActiveWorkRoomInviteMeta,
   clearCachedJoinedWorkRoomMeta,
   clearPendingKickedWorkRoomNotice,
+  clearPendingWorkSeatLimitNotice,
   connectWorkRoomRealtimeChannel,
   consumePendingInvitedVaultPurge,
   deleteWorkFileShared,
@@ -45,6 +46,7 @@ import {
   readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
   readPendingKickedWorkRoomNotice,
+  readPendingWorkSeatLimitNotice,
   removeWorkRoomMemberOnServer,
   resolveCleanWorkClientNickname,
   resolveCurrentWorkAccountEmail,
@@ -52,6 +54,7 @@ import {
   saveCachedJoinedWorkRoomMeta,
   saveCachedWorkTombstones,
   savePendingKickedWorkRoomNotice,
+  savePendingWorkSeatLimitNotice,
   setWorkNightPowerSaveNative,
   sortWorkRoomServerMembers,
   syncCachedMyWorkRoomMetaFromServer,
@@ -64,6 +67,7 @@ import {
   type WorkLoungeDocDto,
   type WorkRoomPresenceMember,
   type WorkRoomServerMemberDto,
+  type WorkSeatLimitExceededNotice,
 } from '../../services/workRoomSyncService';
 import { PLAN_BADGE_LABELS } from '../shared/loungeHelpers';
 import { purgeLocalWorkRoomDocs } from '../../services/sharedRoomLocalVault';
@@ -180,20 +184,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
   );
   const [activeWorkRoomId, setActiveWorkRoomId] = useState<string>(() => {
     const inv = readActiveWorkRoomInviteMeta();
-    if (inv.hasWorkInvite && inv.roomId) return inv.roomId;
-    return (
-      readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
-      readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
-      ''
-    );
+    const cachedHost = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    if (inv.hasWorkInvite && inv.roomId) {
+      return cachedJoined === inv.roomId || cachedHost === inv.roomId ? inv.roomId : '';
+    }
+    return cachedHost || cachedJoined || '';
   });
   const [deletedTombstones, setDeletedTombstones] = useState<WorkDeletedTombstoneMap>(() => {
     const inv = readActiveWorkRoomInviteMeta();
+    const cachedHost = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
     const initRoom =
-      (inv.hasWorkInvite && inv.roomId
-        ? inv.roomId
-        : readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
-          readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId) || '';
+      inv.hasWorkInvite && inv.roomId
+        ? cachedJoined === inv.roomId || cachedHost === inv.roomId
+          ? inv.roomId
+          : ''
+        : cachedHost || cachedJoined || '';
     return initRoom ? loadCachedWorkTombstones(initRoom, merlinAuth?.email || undefined) : {};
   });
   const [hasAuthoritativeRemoteState, setHasAuthoritativeRemoteState] = useState<boolean>(false);
@@ -231,11 +238,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
   }, []);
   const [serverMembers, setServerMembers] = useState<WorkRoomServerMemberDto[]>(() => {
     const inv = readActiveWorkRoomInviteMeta();
+    const cachedHost = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
     const initRoom =
-      (inv.hasWorkInvite && inv.roomId) ||
-      readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
-      readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
-      '';
+      inv.hasWorkInvite && inv.roomId
+        ? cachedJoined === inv.roomId || cachedHost === inv.roomId
+          ? inv.roomId
+          : ''
+        : cachedHost || cachedJoined || '';
     const scopeEmail = resolveCurrentWorkAccountEmail(merlinAuth?.email || undefined);
     if (typeof window === 'undefined' || !initRoom || scopeEmail === 'anonymous') return [];
     try {
@@ -330,6 +340,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
     return readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
   });
+  const [seatLimitExceededNotice, setSeatLimitExceededNotice] =
+    useState<WorkSeatLimitExceededNotice | null>(() => {
+      if (readActiveWorkRoomInviteMeta().hasWorkInvite) {
+        clearPendingWorkSeatLimitNotice(merlinAuth?.email || undefined);
+        return null;
+      }
+      return readPendingWorkSeatLimitNotice(merlinAuth?.email || undefined);
+    });
   const isAcceptingInviteRef = useRef<boolean>(false);
   const memberMutationEpochRef = useRef<number>(0);
   const roomCleanupEpochRef = useRef<number>(0);
@@ -340,6 +358,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const handleConfirmKickedNotice = useCallback(() => {
     clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
     setKickedFromRoomTitle(null);
+  }, [merlinAuth?.email]);
+
+  const handleConfirmSeatLimitNotice = useCallback(() => {
+    clearPendingWorkSeatLimitNotice(merlinAuth?.email || undefined);
+    setSeatLimitExceededNotice(null);
   }, [merlinAuth?.email]);
 
   const inviteMeta = useMemo(
@@ -357,8 +380,15 @@ export const WorkLoungeB2BHub: React.FC = () => {
       authoritativeMembersRoomRef.current = '';
       clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
       setKickedFromRoomTitle(null);
+      clearPendingWorkSeatLimitNotice(merlinAuth?.email || undefined);
+      setSeatLimitExceededNotice(null);
       setWorkInviteTick((v) => v + 1);
-      if (detail?.roomId) {
+      const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+      const cachedHost = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined);
+      if (
+        detail?.roomId &&
+        (cachedJoined?.roomId === detail.roomId || cachedHost?.roomId === detail.roomId)
+      ) {
         setActiveWorkRoomId(detail.roomId);
       }
     };
@@ -373,9 +403,15 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
   }, [merlinAuth?.email]);
 
-  // ── 과금·30일 무료체험·만료 잠금 판정 (Fail-Closed 3중 게이트 · 팀원 초대도 이메일 로그인 필수) ──
+  // ── 과금·30일 무료체험·만료 잠금·정원(5/20/50인) 판정 (Fail-Closed 3중 게이트 · 미검증 초대 URL 선해금 금지) ──
   const isAuthenticated = Boolean(merlinAuth?.email && hasAuthenticatedHubAccountSession());
   const isGuestInvitePending = inviteMeta.hasWorkInvite && !isAuthenticated;
+  const isPendingWorkInviteVerification = Boolean(
+    isAuthenticated &&
+      inviteMeta.hasWorkInvite &&
+      (inviteMeta.inviteToken || inviteMeta.roomId) &&
+      (!joinedInvitedRoom || joinedInvitedRoom.roomId !== inviteMeta.roomId)
+  );
   const isWorkPaidActive = Boolean(deviceEntitlement?.workPaidActive);
   const isWorkTrialActive = Boolean(deviceEntitlement?.workTrialActive);
   const isWorkTrialExpired = Boolean(deviceEntitlement?.workTrialExpired);
@@ -383,12 +419,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const isOwnWorkUnlocked = Boolean(
     isWorkPaidActive || isWorkTrialActive || deviceEntitlement?.workSubscriptionUnlocked
   );
-  const isJoinedInvitedMember = isAuthenticated && (inviteMeta.hasWorkInvite || Boolean(joinedInvitedRoom));
-  const isWorkUnlocked = isAuthenticated && (
-    isJoinedInvitedMember
-      ? !remoteRoomLockReason
-      : isOwnWorkUnlocked
-  );
+  const isJoinedInvitedMember = isAuthenticated && Boolean(joinedInvitedRoom);
+  const isWorkUnlocked =
+    isAuthenticated &&
+    !isPendingWorkInviteVerification &&
+    (isJoinedInvitedMember ? !remoteRoomLockReason : isOwnWorkUnlocked);
   const hasOwnExpiredHostVault = Boolean(
     isAuthenticated &&
       !isJoinedInvitedMember &&
@@ -553,15 +588,22 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (inv.hasWorkInvite && inv.roomId) {
       clearPendingKickedWorkRoomNotice(effectiveEmail);
       setKickedFromRoomTitle(null);
-      setJoinedInvitedRoom(null);
-      setActiveWorkRoomId(inv.roomId);
-      const cachedMems = effectiveEmail
-        ? readCachedServerMembers(inv.roomId, effectiveEmail)
-        : [];
-      setServerMembers(cachedMems);
+      clearPendingWorkSeatLimitNotice(effectiveEmail);
+      setSeatLimitExceededNotice(null);
+      const cachedJoinedForInv = readCachedJoinedWorkRoomMeta(effectiveEmail);
+      if (cachedJoinedForInv && !cachedJoinedForInv.isHost && cachedJoinedForInv.roomId === inv.roomId) {
+        setJoinedInvitedRoom(cachedJoinedForInv);
+        setActiveWorkRoomId(inv.roomId);
+        setServerMembers(effectiveEmail ? readCachedServerMembers(inv.roomId, effectiveEmail) : []);
+      } else {
+        setJoinedInvitedRoom(null);
+        setActiveWorkRoomId('');
+        setServerMembers([]);
+      }
       return;
     }
     setKickedFromRoomTitle(readPendingKickedWorkRoomNotice(effectiveEmail));
+    setSeatLimitExceededNotice(readPendingWorkSeatLimitNotice(effectiveEmail));
     const cachedHostMeta = readCachedMyWorkRoomMeta(effectiveEmail);
     const cachedJoinedMeta = readCachedJoinedWorkRoomMeta(effectiveEmail);
     if (cachedJoinedMeta && !cachedJoinedMeta.isHost && !cachedHostMeta) {
@@ -1206,8 +1248,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
             roomId: pendingPurge.roomId || undefined,
           });
         }
-        // 로그인된 초대 팀원이 첫 진입 시 소속 업무방 조회(fetchMyJoinedWorkRooms) 완료 전에 오잠금/해제되는 현상 방지
-        if (!isWorkUnlocked && isAuthenticated && isCheckingJoinedRooms) {
+        // 로그인된 초대 팀원이 첫 진입·초대 링크 검증(acceptWorkRoomInvite / fetchMyJoinedWorkRooms) 완료 전에 오마운트/오잠금되는 현상 방지
+        if (
+          isPendingWorkInviteVerification ||
+          (!isWorkUnlocked && isAuthenticated && isCheckingJoinedRooms)
+        ) {
           return;
         }
         if (isZCoreConnected) {
@@ -1287,6 +1332,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     isZCoreConnected,
     isMobileOrStore,
     isAuthenticated,
+    isPendingWorkInviteVerification,
     isCheckingJoinedRooms,
     isWorkUnlocked,
     isWorkTrialActive,
@@ -1406,6 +1452,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
       resolvedEmailAtCall !== 'anonymous' ? resolvedEmailAtCall : undefined;
     clearPendingKickedWorkRoomNotice(effectiveEmailAtCall);
     setKickedFromRoomTitle(null);
+    clearPendingWorkSeatLimitNotice(effectiveEmailAtCall);
+    setSeatLimitExceededNotice(null);
 
     const reqInviteToken = inviteMeta.inviteToken;
     const reqRoomId = inviteMeta.roomId;
@@ -1425,11 +1473,56 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (!accepted.ok) {
           if (accepted.reason === 'WORK_SEAT_LIMIT_EXCEEDED') {
             completedInviteKeyRef.current = inviteKey;
-            showToast(
-              accepted.message ||
-                '이 업무 공유방의 이용권 정원이 모두 찼습니다. 방장님께 이용권 업그레이드를 요청해 주세요.'
-            );
-          } else if (accepted.reason === 'INVALID_OR_EXPIRED_INVITE') {
+            const limitNum = accepted.seatLimit || 5;
+            const notice: WorkSeatLimitExceededNotice = {
+              roomTitle: accepted.roomTitle || reqRoomTitle || '우리팀 업무 공유방 (S:)',
+              hostNickname: accepted.hostNickname || reqHostNickname || '방장',
+              seatLimit: limitNum,
+              currentMemberCount: accepted.currentMemberCount || limitNum,
+              message:
+                accepted.message ||
+                `이 업무 공유방의 이용권 정원(${limitNum}명)이 모두 찼습니다. 방장님이 상위 이용권으로 변경하거나 기존 팀원을 정리한 뒤 다시 합류할 수 있습니다.`,
+            };
+            savePendingWorkSeatLimitNotice(notice, saveEmail);
+            setSeatLimitExceededNotice(notice);
+            clearActiveWorkRoomInviteMeta();
+            clearCachedJoinedWorkRoomMeta(saveEmail);
+            setJoinedInvitedRoom(null);
+            setServerMembers([]);
+            setRemoteDocs([]);
+            const ownHostRoomId = isOwnWorkUnlocked
+              ? readCachedMyWorkRoomMeta(saveEmail)?.roomId || ''
+              : '';
+            if (!ownHostRoomId) {
+              localDocsRef.current = [];
+              setLocalDocs([]);
+              setActiveWorkRoomId('');
+              setMyRoomRole('host');
+              setSDriveMounted(false);
+              if (zCoreBridge.isConnected && !isLocalPcBlockedByOtherAccount()) {
+                void syncEntitlementToLocalPcEngine(deviceEntitlement || null, saveEmail, {
+                  unlocked: false,
+                  roomId: '',
+                  isHost: false,
+                  purgeInvitedVault: true,
+                  force: true,
+                });
+                void mountWorkSDriveNative({
+                  action: 'unmount',
+                  openExplorer: false,
+                  accountEmail: saveEmail,
+                  purgeInvitedVault: true,
+                  roomId: reqRoomId || undefined,
+                });
+              }
+            } else {
+              setActiveWorkRoomId(ownHostRoomId);
+            }
+            showToast(notice.message);
+          } else if (
+            accepted.reason === 'INVALID_OR_EXPIRED_INVITE' ||
+            accepted.reason === 'NOT_A_WORK_ROOM_MEMBER'
+          ) {
             completedInviteKeyRef.current = inviteKey;
             clearActiveWorkRoomInviteMeta();
             showToast(
@@ -1440,13 +1533,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             accepted.reason === 'WORK_SUBSCRIPTION_REQUIRED'
           ) {
             completedInviteKeyRef.current = inviteKey;
+            clearActiveWorkRoomInviteMeta();
             setRemoteRoomLockReason(accepted.reason);
+            showToast(
+              '초대받은 업무 공유방의 이용 기간이 종료되어 현재 합류할 수 없습니다. 방장님께 이용권 갱신을 요청해 주세요.'
+            );
           }
           return;
         }
         completedInviteKeyRef.current = inviteKey;
         clearPendingKickedWorkRoomNotice(saveEmail);
         setKickedFromRoomTitle(null);
+        clearPendingWorkSeatLimitNotice(saveEmail);
+        setSeatLimitExceededNotice(null);
         const targetRoomId = accepted.roomId || reqRoomId || activeWorkRoomIdRef.current;
         if (targetRoomId && targetRoomId !== activeWorkRoomIdRef.current) {
           setActiveWorkRoomId(targetRoomId);
@@ -1538,6 +1637,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     merlinAuth?.userId,
     merlinAuth?.email,
     authSyncTick,
+    deviceEntitlement,
+    isOwnWorkUnlocked,
     filterOutRecentlyKicked,
     saveCachedServerMembers,
     mergeAndPersistTombstones,
@@ -2165,7 +2266,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         };
       });
     }
-    if (!isWorkUnlocked && !activeWorkRoomId) {
+    if (!isWorkUnlocked && !hasOwnExpiredHostVault) {
       return [];
     }
     const hostDisplayName = isJoinedInvitedMember
@@ -2570,6 +2671,44 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }}
       />
 
+      {/* 정원 초과(5/20/50인) 합류 제한 확인 안내 창 — 사용자가 직접 [확인] 버튼을 누르기 전까지 자동 소멸·덮어쓰기 금지 */}
+      {seatLimitExceededNotice && !inviteMeta.hasWorkInvite && (
+        <div
+          data-testid="work-room-seat-limit-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="work-room-seat-limit-modal-title"
+          className="fixed inset-0 z-[125] bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-950 border border-amber-300 dark:border-amber-400/55 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/90 border border-amber-200 dark:border-amber-400/50 text-amber-800 dark:text-amber-200 text-[11.5px] font-extrabold">
+                정원 초과 · 업무 공유방 합류 제한 ({seatLimitExceededNotice.currentMemberCount ?? seatLimitExceededNotice.seatLimit}/{seatLimitExceededNotice.seatLimit}명)
+              </span>
+              <h3
+                id="work-room-seat-limit-modal-title"
+                className="text-[17px] text-slate-900 dark:text-white font-extrabold leading-snug break-keep"
+              >
+                [{seatLimitExceededNotice.roomTitle}] 업무 공유방의 정원({seatLimitExceededNotice.seatLimit}명)이 모두 찼습니다
+              </h3>
+              <p className="text-[13px] text-slate-600 dark:text-zinc-300 leading-relaxed break-keep">
+                현재 방장({seatLimitExceededNotice.hostNickname})님 포함 최대 {seatLimitExceededNotice.seatLimit}명이 모두 등록되어 있어 추가 계정으로 입장할 수 없습니다. 방장님이 상위 이용권(소기업 20인 · 중소기업 50인)으로 변경하거나 기존 팀원을 정리한 뒤 다시 초대 링크로 합류해 주세요.
+              </p>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                data-testid="work-room-seat-limit-confirm-btn"
+                onClick={handleConfirmSeatLimitNotice}
+                className="w-full sm:w-auto min-w-[110px] px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[13.5px] font-extrabold cursor-pointer shadow-sm transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 공유방 연결 해제(내보내기) 확인 안내 창 — 사용자가 직접 [확인] 버튼을 누르기 전까지 자동 소멸 금지 */}
       {kickedFromRoomTitle && !inviteMeta.hasWorkInvite && (
         <div
@@ -2660,6 +2799,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </button>
           </div>
         </div>
+      ) : isPendingWorkInviteVerification ? (
+        <div
+          data-testid="work-invite-verifying-card"
+          className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center gap-3 max-w-2xl"
+        >
+          <span className="inline-block w-4 h-4 rounded-full border-2 border-teal-600 border-t-transparent animate-spin shrink-0" />
+          <span className="text-[13.5px] text-slate-700 font-semibold break-keep">
+            초대받은 [{inviteMeta.roomTitle}] 업무 공유방의 정원 및 참여 권한을 확인하고 있습니다...
+          </span>
+        </div>
       ) : isMobileOrStore && (!isAuthenticated || !activeWorkRoomId || !isWorkUnlocked) ? (
         <div
           data-testid="mobile-work-share-empty-guide"
@@ -2709,6 +2858,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
+              {seatLimitExceededNotice && (
+                <div
+                  data-testid="mobile-work-room-seat-limit-banner"
+                  className="mb-1.5 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-2"
+                >
+                  <p className="text-[12px] text-amber-900 font-bold leading-relaxed break-keep">
+                    [{seatLimitExceededNotice.roomTitle}] 업무 공유방의 정원({seatLimitExceededNotice.seatLimit}명)이 모두 차서 합류가 제한되었습니다. 방장({seatLimitExceededNotice.hostNickname})님께 이용권 업그레이드 또는 팀원 정리를 요청해 주세요.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSeatLimitNotice}
+                    className="px-2 py-0.5 rounded-md bg-white border border-amber-200 text-amber-800 text-[11px] font-bold shrink-0 cursor-pointer"
+                  >
+                    확인
+                  </button>
+                </div>
+              )}
               {kickedFromRoomTitle && (
                 <div className="mb-1.5 p-3 rounded-xl bg-rose-50 border border-rose-200 flex items-start justify-between gap-2">
                   <p className="text-[12px] text-rose-800 font-bold leading-relaxed break-keep">
@@ -2737,6 +2903,28 @@ export const WorkLoungeB2BHub: React.FC = () => {
         </div>
       ) : (
         <>
+      {seatLimitExceededNotice && (
+        <div
+          data-testid="work-room-seat-limit-banner"
+          className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/90 border border-amber-300 dark:border-amber-400/60 flex flex-wrap items-center justify-between gap-3 shadow-md"
+        >
+          <div className="flex flex-col gap-1">
+            <span className="text-[13.5px] text-amber-950 dark:text-amber-100 font-extrabold break-keep">
+              [{seatLimitExceededNotice.roomTitle}] 업무 공유방 정원({seatLimitExceededNotice.seatLimit}명) 초과로 입장이 차단되었습니다.
+            </span>
+            <span className="text-[12px] text-amber-800 dark:text-amber-200/90 break-keep">
+              현재 방장({seatLimitExceededNotice.hostNickname})님 포함 최대 {seatLimitExceededNotice.seatLimit}명이 모두 등록되어 있습니다. 방장님이 상위 이용권으로 변경하거나 기존 팀원을 정리한 뒤 다시 초대 링크로 합류해 주세요.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleConfirmSeatLimitNotice}
+            className="px-3 py-1.5 rounded-xl bg-white dark:bg-black/35 hover:bg-amber-100 dark:hover:bg-black/55 border border-amber-300 dark:border-amber-300/35 text-amber-900 dark:text-amber-100 text-[11.5px] font-bold cursor-pointer shrink-0"
+          >
+            확인
+          </button>
+        </div>
+      )}
       {kickedFromRoomTitle && (
         <div
           data-testid="work-room-kicked-banner"
