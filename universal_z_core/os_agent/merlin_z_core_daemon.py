@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.29"
+CORE_VERSION = "2.13.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -529,7 +529,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",
-            "Content-Type, Authorization, X-Merlin-App, X-Ghosti-Work-Key, Range",
+            "Content-Type, Authorization, X-Merlin-App, X-Ghosti-Work-Key, X-Ghosti-Photo-Key, Range",
         )
         if expose_range:
             self.send_header(
@@ -573,10 +573,25 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         "/api/work/delete-file",
     }
 
+    _TUNNEL_ALLOWED_PHOTO_PATHS = {
+        "/__club/original-file",
+        "/api/ghosti/club/original-file",
+    }
+
     def _reject_if_unauthorized_tunnel(self, path: str, params_or_body: Dict[str, Any] | None = None) -> bool:
-        """외부 터널 경유 요청일 때: ① 업무 공유 파일 엔드포인트 외(종료·개인 사진·시스템 제어 등) 100% 차단,
-        ② 방 전용 비밀 접근 키(X-Ghosti-Work-Key) 불일치 시 403 차단."""
+        """외부 터널 경유 요청일 때: ① 업무 공유·사진 원본 직통 엔드포인트 외 100% 차단,
+        ② 전용 256-bit 비밀 접근 키(X-Ghosti-Work-Key / X-Ghosti-Photo-Key) 불일치 시 403 차단."""
         if not self._is_external_tunnel_request():
+            return False
+        if path in self._TUNNEL_ALLOWED_PHOTO_PATHS:
+            provided_photo = (
+                self.headers.get("X-Ghosti-Photo-Key")
+                or (params_or_body or {}).get("photoKey")
+                or ""
+            )
+            if not plugin_ghosti_os.verify_photo_tunnel_access_key(str(provided_photo)):
+                self._send_json({"ok": False, "error": "PHOTO_TUNNEL_KEY_INVALID"}, status=403)
+                return True
             return False
         if path not in self._TUNNEL_ALLOWED_WORK_PATHS:
             self._send_json({"ok": False, "error": "TUNNEL_PATH_FORBIDDEN", "path": path}, status=403)
@@ -1087,6 +1102,25 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_paid_work_sdrive.get_single_work_file_sync_payload(qp))
             return
 
+        if path in ("/__club/original-file", "/api/ghosti/club/original-file"):
+            f_path, mime, status = plugin_ghosti_os.resolve_shared_room_original_file(qp)
+            if f_path is not None and status == 200:
+                try:
+                    data_bytes = f_path.read_bytes()
+                    encoded_name = urllib.parse.quote(f_path.name)
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime)
+                    self.send_header("Content-Length", str(len(data_bytes)))
+                    self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{encoded_name}")
+                    self._write_cors_headers(expose_range=False)
+                    self.end_headers()
+                    self.wfile.write(data_bytes)
+                except Exception:
+                    self._send_json({"ok": False, "error": "ORIGINAL_READ_FAILED"}, status=500)
+            else:
+                self._send_json({"ok": False, "error": "ORIGINAL_PHOTO_NOT_FOUND"}, status=status)
+            return
+
         if path in ("/__work/download", "/api/work/download"):
             f_path, mime, status = plugin_paid_work_sdrive.resolve_work_download_file(qp)
             if f_path is not None and status == 200:
@@ -1264,6 +1298,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if sub.lower() in ("move", "restore") and self._reject_untrusted():
                 return
             self._send_json(plugin_ghosti_os.handle_quarantine(sub, body))
+            return
+
+        if path in ("/__club/tunnel", "/api/ghosti/club/tunnel"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_ghosti_os.ensure_photo_room_outbound_tunnel(body))
             return
 
         if path in ("/__club/download-originals", "/api/ghosti/club/download-originals"):

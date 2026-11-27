@@ -1897,3 +1897,163 @@ export async function kickMemberFromSupabaseSharedPhotoRoom(
   }
   return true;
 }
+
+/**
+ * [EXIF + 실제 픽셀 해상도(width × height) 고화질 원본 비교 판별기 (SSOT)]
+ * - dHash가 같은 중복 사진일 때, 새 사진이 기존 사진보다 EXIF가 살아있고 실제 픽셀 해상도가 더 큰 진짜 원본인지 판별합니다.
+ */
+export function isHigherQualityOriginalCandidate(
+  candidate: PhotoItem,
+  existing: PhotoItem
+): boolean {
+  const newW = Number(candidate.widthPx || 0);
+  const newH = Number(candidate.heightPx || 0);
+  const oldW = Number(existing.widthPx || 0);
+  const oldH = Number(existing.heightPx || 0);
+  const newPixels = newW * newH;
+  const oldPixels = oldW * oldH;
+  const newHasExif = Boolean(
+    candidate.hasOriginalExif ?? (candidate.date || candidate.locationKo)
+  );
+  const oldHasExif = Boolean(existing.hasOriginalExif ?? (existing.date || existing.locationKo));
+  const newBytes = Number(candidate.size || 0);
+  const oldBytes = Number(existing.size || 0);
+
+  if (newPixels > 0 && oldPixels > 0) {
+    if (newPixels > oldPixels && (newHasExif || !oldHasExif)) return true;
+    if (newHasExif && !oldHasExif && newPixels >= oldPixels) return true;
+    if (newPixels === oldPixels && newHasExif && newBytes > oldBytes * 1.15) return true;
+    return false;
+  }
+  if (newPixels > 0 && oldPixels === 0) return true;
+  if (newHasExif && !oldHasExif && newBytes >= oldBytes) return true;
+  if (newHasExif && newBytes > Math.max(oldBytes * 1.25, 100_000) && oldBytes <= 30_000) {
+    return true;
+  }
+  return false;
+}
+
+export async function upgradeHigherQualitySharedPhoto(opts: {
+  roomId: string;
+  existingPhotoId: string;
+  newPhoto: PhotoItem;
+}): Promise<{ ok: boolean; upgraded: boolean; widthPx?: number; heightPx?: number }> {
+  if (!hasAuthenticatedHubAccountSession() || !opts.roomId || !opts.existingPhotoId) {
+    return { ok: false, upgraded: false };
+  }
+  const compressed = await compressPhotoTo13KbWebpDataUrl(opts.newPhoto);
+  if (!compressed.thumbWebpUrl) {
+    return { ok: false, upgraded: false };
+  }
+  const res = await callGhostiServerBridge<{
+    upgraded?: boolean;
+    widthPx?: number;
+    heightPx?: number;
+  }>('photo_upgrade_higher_quality', {
+    roomId: opts.roomId,
+    existingPhotoId: opts.existingPhotoId.replace(/^shared_sb_/, ''),
+    thumbWebpUrl: compressed.thumbWebpUrl,
+    widthPx: compressed.widthPx || opts.newPhoto.widthPx || 0,
+    heightPx: compressed.heightPx || opts.newPhoto.heightPx || 0,
+    originalByteSize: opts.newPhoto.size || 0,
+    hasOriginalExif: Boolean(
+      opts.newPhoto.hasOriginalExif ?? (opts.newPhoto.date || opts.newPhoto.locationKo)
+    ),
+    shotDateDisplay: opts.newPhoto.date || null,
+    shotPlaceDisplay: opts.newPhoto.locationKo || null,
+    captionKo: opts.newPhoto.captionKo || undefined,
+  });
+  return {
+    ok: Boolean(res.ok),
+    upgraded: Boolean(res.ok && res.upgraded),
+    widthPx: res.widthPx || compressed.widthPx,
+    heightPx: res.heightPx || compressed.heightPx,
+  };
+}
+
+export async function fetchSharedPhotoRoomSettings(
+  roomId: string
+): Promise<{ ok: boolean; hostRetainsHidePermission?: boolean; isMaster?: boolean }> {
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanRoomId || !hasAuthenticatedHubAccountSession()) return { ok: false };
+  const res = await callGhostiServerBridge<{
+    hostRetainsHidePermission?: boolean;
+    isMaster?: boolean;
+  }>('photo_get_room_settings', { roomId: cleanRoomId });
+  if (!res.ok) return { ok: false };
+  return {
+    ok: true,
+    hostRetainsHidePermission:
+      typeof res.hostRetainsHidePermission === 'boolean' ? res.hostRetainsHidePermission : true,
+    isMaster: Boolean(res.isMaster),
+  };
+}
+
+export async function updateSharedPhotoRoomSettings(
+  roomId: string,
+  hostRetainsHidePermission: boolean
+): Promise<boolean> {
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanRoomId || !hasAuthenticatedHubAccountSession()) return false;
+  const res = await callGhostiServerBridge('photo_set_room_settings', {
+    roomId: cleanRoomId,
+    hostRetainsHidePermission: Boolean(hostRetainsHidePermission),
+  });
+  return Boolean(res.ok);
+}
+
+export async function registerSharedPhotoRoomTunnel(opts: {
+  roomId: string;
+  tunnelUrl: string;
+  photoTunnelKey: string;
+}): Promise<boolean> {
+  const cleanRoomId = (opts.roomId || '').trim();
+  if (!cleanRoomId || !opts.tunnelUrl || !opts.photoTunnelKey || !hasAuthenticatedHubAccountSession()) {
+    return false;
+  }
+  const res = await callGhostiServerBridge('photo_register_room_tunnel', {
+    roomId: cleanRoomId,
+    tunnelUrl: opts.tunnelUrl,
+    photoTunnelKey: opts.photoTunnelKey,
+  });
+  return Boolean(res.ok);
+}
+
+export interface SharedPhotoRoomTunnelInfo {
+  ok: boolean;
+  tunnelUrl: string;
+  photoTunnelKey: string;
+  hostOnline: boolean;
+  peers: Array<{
+    email: string;
+    tunnelUrl: string;
+    photoTunnelKey: string;
+    updatedAt: string;
+    isMaster: boolean;
+  }>;
+}
+
+export async function fetchSharedPhotoRoomTunnel(
+  roomId: string
+): Promise<SharedPhotoRoomTunnelInfo> {
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanRoomId || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false, tunnelUrl: '', photoTunnelKey: '', hostOnline: false, peers: [] };
+  }
+  const res = await callGhostiServerBridge<{
+    tunnelUrl?: string;
+    photoTunnelKey?: string;
+    hostOnline?: boolean;
+    peers?: SharedPhotoRoomTunnelInfo['peers'];
+  }>('photo_get_room_tunnel', { roomId: cleanRoomId });
+  if (!res.ok) {
+    return { ok: false, tunnelUrl: '', photoTunnelKey: '', hostOnline: false, peers: [] };
+  }
+  return {
+    ok: true,
+    tunnelUrl: String(res.tunnelUrl || '').trim(),
+    photoTunnelKey: String(res.photoTunnelKey || '').trim(),
+    hostOnline: Boolean(res.hostOnline),
+    peers: Array.isArray(res.peers) ? res.peers : [],
+  };
+}

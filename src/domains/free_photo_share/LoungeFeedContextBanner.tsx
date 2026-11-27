@@ -32,8 +32,10 @@ import {
 } from '../../services/shareInviteDeepLinkBridge';
 import {
   ensureMyRoomAndInviteToken,
+  fetchSharedPhotoRoomTunnel,
   getPrewarmedRoomInviteTokenSync,
   kickMemberFromSupabaseSharedPhotoRoom,
+  registerSharedPhotoRoomTunnel,
   reseedRoomPhotosForInvite,
 } from '../../services/sharedPhotoRoomSupabase';
 import { resolveAccountScopedNickname } from '../../services/ghostSecretaryEngine';
@@ -101,6 +103,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
     `내 PC [사진]\\Ghosti_Shared_Rooms\\${defaultRoomFolderLabel}`
   );
   const [openingOriginalDir, setOpeningOriginalDir] = useState(false);
+  const [pendingHostOriginalCount, setPendingHostOriginalCount] = useState(0);
+  const [waitingForHostPcNotice, setWaitingForHostPcNotice] = useState(false);
+  const [syncedOriginalFileCount, setSyncedOriginalFileCount] = useState(0);
   const [showClubCover, setShowClubCover] = useState(false);
   const [clubBannerBgTheme, setClubBannerBgTheme] = useState<'forest' | 'sunset'>('forest');
   const [clubBannerTitle, setClubBannerTitle] = useState('주말 산악 · 골프 · 취미 동호회 모임방');
@@ -199,18 +204,70 @@ export const LoungeFeedContextBanner: React.FC = () => {
       ? '0장 (0MB)'
       : `${activeRoomPhotoCount}장 (약 ${(activeRoomPhotoCount * 3.2).toFixed(1)}MB)`;
 
+  const activeTargetRoomId =
+    activeJoinedRoomMeta?.roomId ||
+    activeSharedRoomId ||
+    getPrewarmedRoomInviteTokenSync(activeLoungeType, activeFamilyRoom)?.roomId ||
+    '';
+
+  // 방장/업로더 PC에서 사진 공유방 진입 시 듀얼 엔진 아웃바운드 HTTPS 직통 터널을 백그라운드 등록 (타 멤버 고화질 원본 직통 다운로드용)
+  useEffect(() => {
+    if (
+      !activeTargetRoomId ||
+      isGuestPreviewMode ||
+      !hasAuthenticatedHubAccountSession() ||
+      !zCoreBridge.isConnected
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const resp = await fetch(getZCoreUrl('/__club/tunnel'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: activeTargetRoomId }),
+        });
+        if (!resp.ok || cancelled) return;
+        const data = (await resp.json().catch(() => null)) as {
+          ok?: boolean;
+          tunnelUrl?: string;
+          photoTunnelKey?: string;
+        } | null;
+        if (!cancelled && data?.ok && data.tunnelUrl && data.photoTunnelKey) {
+          await registerSharedPhotoRoomTunnel({
+            roomId: activeTargetRoomId,
+            tunnelUrl: data.tunnelUrl,
+            photoTunnelKey: data.photoTunnelKey,
+          });
+        }
+      } catch {
+        /* ignore transient tunnel startup */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTargetRoomId, isGuestPreviewMode]);
+
   const callZCoreSharedRoomOriginals = async (opts: {
     openExplorer: boolean;
     customDirOverride?: string;
-  }): Promise<{ ok: boolean; downloadDir?: string }> => {
+  }): Promise<{ ok: boolean; downloadDir?: string; pendingHostCount?: number }> => {
     const rawDir = (opts.customDirOverride ?? downloadDirPath).trim();
     const effectiveCustomDir = rawDir.startsWith('내 PC [사진]') ? '' : rawDir;
     const itemsPayload = visibleRoomPhotos.slice(0, 300).map((p) => ({
       name: p.name,
+      originalName: p.name,
       fullPath: p.fullPath || '',
       fullUrl: p.fullUrl || '',
       thumbUrl: p.thumbUrl || '',
     }));
+
+    // 서버에서 방장/업로더 PC의 활성 듀얼 엔진 직통 HTTPS 터널 정보 조회 (정식 멤버 인증 통과 시에만 반환)
+    const tunnelInfo = activeTargetRoomId
+      ? await fetchSharedPhotoRoomTunnel(activeTargetRoomId)
+      : { ok: false, tunnelUrl: '', photoTunnelKey: '', hostOnline: false, peers: [] };
 
     try {
       const resp = await fetch(getZCoreUrl('/__club/download-originals'), {
@@ -220,6 +277,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
           openExplorer: opts.openExplorer,
           roomLabel: defaultRoomFolderLabel,
           customDir: effectiveCustomDir,
+          tunnelUrl: tunnelInfo.tunnelUrl,
+          photoTunnelKey: tunnelInfo.photoTunnelKey,
+          peers: tunnelInfo.peers,
           items: itemsPayload,
         }),
       });
@@ -227,13 +287,25 @@ export const LoungeFeedContextBanner: React.FC = () => {
         const data = (await resp.json().catch(() => null)) as {
           ok?: boolean;
           downloadDir?: string;
+          fileCount?: number;
+          savedCount?: number;
+          alreadySyncedCount?: number;
+          pendingHostCount?: number;
+          waitingForHostPc?: boolean;
         } | null;
         if (data?.ok) {
           if (data.downloadDir) {
             setDownloadDirPath(data.downloadDir);
             persistRoomSyncSetting(true, data.downloadDir);
           }
-          return { ok: true, downloadDir: data.downloadDir };
+          const pend = Number(data.pendingHostCount || 0);
+          const syncedCnt = Number(data.savedCount || 0) + Number(data.alreadySyncedCount || 0);
+          setPendingHostOriginalCount(pend);
+          setWaitingForHostPcNotice(Boolean(data.waitingForHostPc || pend > 0));
+          if (syncedCnt > 0 || typeof data.fileCount === 'number') {
+            setSyncedOriginalFileCount(syncedCnt || Number(data.fileCount || 0));
+          }
+          return { ok: true, downloadDir: data.downloadDir, pendingHostCount: pend };
         }
       }
     } catch {
@@ -268,14 +340,40 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return { ok: false };
   };
 
+  // 방장 PC가 꺼져 대기 중인 고화질 원본이 있을 때 탭 가시 상태에서만 45초 주기로 자동 이어받기 재시도
+  useEffect(() => {
+    if (!p2pOriginalSummoned || !waitingForHostPcNotice || !activeTargetRoomId || !zCoreBridge.isConnected) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      void callZCoreSharedRoomOriginals({ openExplorer: false });
+    }, 45_000);
+    return () => window.clearInterval(timer);
+  }, [p2pOriginalSummoned, waitingForHostPcNotice, activeTargetRoomId]);
+
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
-      {/* 실제 공유 사진이 있고 사용자가 원본 동기화를 켰을 때만 실제 장수로 표시 */}
+      {/* 실제 공유 사진이 있고 사용자가 원본 동기화를 켰을 때: 고화질 완료 vs 방장 PC 연결 대기 정직 구분 */}
       {p2pOriginalSummoned && activeRoomPhotoCount > 0 && (
-        <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs shrink-0">
-          <span className="sm:hidden">동기화 ({activeRoomPhotoCount}장)</span>
-          <span className="hidden sm:inline">원본 동기화 완료 ({activeRoomPhotoCount}장)</span>
-        </span>
+        waitingForHostPcNotice && pendingHostOriginalCount > 0 ? (
+          <span
+            title="방장 PC가 꺼져 있어 13KB 미리보기 대신 고화질 원본 자동 다운로드를 대기 중입니다"
+            className="px-2 sm:px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs shrink-0"
+          >
+            <span className="sm:hidden">원본 대기 ({pendingHostOriginalCount}장)</span>
+            <span className="hidden sm:inline">
+              방장 PC 연결 시 고화질 원본 자동 다운로드 대기 ({pendingHostOriginalCount}장)
+            </span>
+          </span>
+        ) : (
+          <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs shrink-0">
+            <span className="sm:hidden">동기화 ({syncedOriginalFileCount || activeRoomPhotoCount}장)</span>
+            <span className="hidden sm:inline">
+              고화질 원본 동기화 완료 ({syncedOriginalFileCount || activeRoomPhotoCount}장)
+            </span>
+          </span>
+        )
       )}
 
       <button
@@ -331,9 +429,11 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   <strong className="text-emerald-300">{estimatedFreeStorageGb}</strong>
                 </>
               ) : null}{' '}
-              — {activeRoomPhotoCount === 0
-                ? '새 사진이 올라오면 내 기기 원본 동기화 폴더에 자동으로 저장됩니다.'
-                : '내 기기 동기화 폴더에 원본 사진을 안전하게 자동 보관합니다.'}
+              — {waitingForHostPcNotice && pendingHostOriginalCount > 0
+                ? `방장 PC가 현재 오프라인입니다. 13KB 미리보기는 원본 폴더에 저장하지 않으며, 방장 PC 연결 시 고화질 원본 ${pendingHostOriginalCount}장을 자동으로 이어받습니다.`
+                : activeRoomPhotoCount === 0
+                ? '새 사진이 올라오면 내 기기 원본 동기화 폴더에 고화질 원본이 자동으로 저장됩니다.'
+                : '방장 PC 직통 터널을 통해 내 기기 동기화 폴더에 고화질 원본 사진을 안전하게 자동 보관합니다.'}
             </span>
           </div>
 

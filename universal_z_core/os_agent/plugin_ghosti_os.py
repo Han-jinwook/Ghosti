@@ -6681,12 +6681,137 @@ def _resolve_shared_room_sync_dir(room_label: str, custom_dir: str = "") -> Path
         return fallback
 
 
-def _save_shared_room_items_to_dir(target_dir: Path, items: list[Any]) -> int:
-    import base64
+def _photo_tunnel_key_path() -> Path:
+    local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    p = Path(local_app) / "Merlin_Z_Core" / "photo_tunnel_key.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def get_or_create_photo_tunnel_key() -> str:
+    """사진 공유방 고화질 원본 직통 터널 전용 256-bit 비밀 접근 키를 영구 생성·조회합니다."""
+    import secrets
+
+    kp = _photo_tunnel_key_path()
+    try:
+        if kp.exists():
+            obj = json.loads(kp.read_text(encoding="utf-8", errors="ignore"))
+            key = str(obj.get("photoTunnelKey") or "").strip()
+            if len(key) >= 32:
+                return key
+    except Exception:
+        pass
+    new_key = secrets.token_urlsafe(32)
+    try:
+        kp.write_text(json.dumps({"photoTunnelKey": new_key}, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return new_key
+
+
+def verify_photo_tunnel_access_key(provided: str) -> bool:
+    import hmac
+
+    clean = str(provided or "").strip()
+    if not clean or len(clean) < 16:
+        return False
+    expected = get_or_create_photo_tunnel_key()
+    return hmac.compare_digest(clean, expected)
+
+
+def ensure_photo_room_outbound_tunnel(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """이미 구축된 듀얼 엔진 아웃바운드 HTTPS 직통 터널(*.trycloudflare.com + *.lhr.life 폴백)을
+    사진 공유방 고화질 원본 스트리밍 용도로 재사용하여 터널 URL + 전용 키를 반환합니다."""
+    photo_key = get_or_create_photo_tunnel_key()
+    try:
+        from plugins import plugin_paid_work_sdrive as _work_plugin  # type: ignore
+
+        st = _work_plugin.get_outbound_work_tunnel_status()
+        url = str(st.get("tunnelUrl") or "").strip()
+        if not url:
+            ensured = _work_plugin.ensure_outbound_work_tunnel({"force": False})
+            url = str(ensured.get("tunnelUrl") or "").strip()
+            st = ensured
+        if url:
+            return {
+                "ok": True,
+                "tunnelUrl": url,
+                "photoTunnelKey": photo_key,
+                "provider": str(st.get("provider") or "dual_tunnel"),
+                "running": True,
+            }
+        return {
+            "ok": False,
+            "tunnelUrl": "",
+            "photoTunnelKey": photo_key,
+            "running": False,
+            "status": str(st.get("status") or "starting"),
+        }
+    except Exception as exc:
+        return {"ok": False, "tunnelUrl": "", "photoTunnelKey": photo_key, "error": str(exc)}
+
+
+def resolve_shared_room_original_file(qp: Dict[str, Any] | None = None) -> tuple[Optional[Path], str, int]:
+    """외부 터널 경유 타 멤버 요청 시 방장/업로더 PC의 실제 고화질 원본 사진 파일만 안전하게 해석합니다."""
+    import mimetypes
+
+    params = qp or {}
+    raw_name = os.path.basename(str(params.get("name") or "").strip())
+    if not raw_name or ".." in raw_name:
+        return (None, "application/octet-stream", 400)
+
+    # 1순위: 로컬 사진 인덱스
+    cand = _resolve_listed_photo(raw_name)
+    # 2순위: 사진 공유 원본 동기화 폴더(Pictures\Ghosti_Shared_Rooms\*)
+    if cand is None:
+        try:
+            shared_root = safe.known_folder("pictures") / "Ghosti_Shared_Rooms"
+            if shared_root.exists():
+                for sub_f in shared_root.rglob(raw_name):
+                    if sub_f.is_file() and sub_f.suffix.lower() in _IMAGE_EXTS:
+                        cand = sub_f
+                        break
+        except Exception:
+            pass
+    if cand is None or not cand.exists() or not cand.is_file():
+        return (None, "application/octet-stream", 404)
+    if cand.suffix.lower() not in _IMAGE_EXTS:
+        return (None, "application/octet-stream", 403)
+    mime = mimetypes.guess_type(str(cand))[0] or "image/jpeg"
+    return (cand, mime, 200)
+
+
+def _save_shared_room_items_to_dir(
+    target_dir: Path,
+    items: list[Any],
+    tunnel_url: str = "",
+    photo_tunnel_key: str = "",
+    peers: list[Any] | None = None,
+) -> Dict[str, int]:
+    """[정공법] 내 PC 원본 복사 또는 방장/업로더 PC 듀얼 직통 HTTPS 터널에서만 진짜 고화질 원본(5~20MB)을 저장합니다.
+    13KB 썸네일(data:image/webp 등)은 절대 원본인 것처럼 저장하지 않으며, 방장 PC 오프라인 시 pendingCount로 정직 보고합니다."""
     import shutil
+    import urllib.parse
     import urllib.request
 
     saved = 0
+    already_synced = 0
+    pending_host = 0
+
+    peer_list: list[tuple[str, str]] = []
+    clean_t_url = (tunnel_url or "").strip().rstrip("/")
+    clean_t_key = (photo_tunnel_key or "").strip()
+    if clean_t_url and clean_t_key:
+        peer_list.append((clean_t_url, clean_t_key))
+    if isinstance(peers, list):
+        for p_entry in peers:
+            if not isinstance(p_entry, dict):
+                continue
+            pu = str(p_entry.get("tunnelUrl") or "").strip().rstrip("/")
+            pk = str(p_entry.get("photoTunnelKey") or "").strip()
+            if pu and pk and (pu, pk) not in peer_list:
+                peer_list.append((pu, pk))
+
     for idx, it in enumerate(items[:300]):
         if not isinstance(it, dict):
             continue
@@ -6697,51 +6822,80 @@ def _save_shared_room_items_to_dir(target_dir: Path, items: list[Any]) -> int:
         if not Path(safe_name).suffix:
             safe_name = f"{safe_name}.jpg"
         dest = target_dir / safe_name
-        if dest.exists() and dest.stat().st_size > 0:
+        # 이미 저장된 고화질 파일(> 35KB)이면 스킵
+        if dest.exists() and dest.stat().st_size > 35_000:
+            already_synced += 1
             continue
 
+        # 1순위: 내 PC에 실제 원본 파일(fullPath 또는 _PHOTO_PATH_INDEX)이 존재하면 즉시 원본 복사
         full_path = str(it.get("fullPath") or "").strip()
-        if full_path:
-            src_p = Path(full_path)
-            if src_p.exists() and src_p.is_file():
-                try:
-                    shutil.copy2(str(src_p), str(dest))
-                    saved += 1
-                    continue
-                except Exception:
-                    pass
-
-        url_cand = str(it.get("fullUrl") or it.get("thumbUrl") or "").strip()
-        if url_cand.startswith("data:image/") and "," in url_cand:
+        src_p: Optional[Path] = Path(full_path) if full_path else _resolve_listed_photo(raw_name)
+        if src_p is not None and src_p.exists() and src_p.is_file():
             try:
-                b64_part = url_cand.split(",", 1)[1]
-                raw_bytes = base64.b64decode(b64_part)
-                if raw_bytes:
-                    dest.write_bytes(raw_bytes)
-                    saved += 1
-                    continue
+                shutil.copy2(str(src_p), str(dest))
+                saved += 1
+                continue
             except Exception:
                 pass
-        elif url_cand.startswith(("https://", "http://127.0.0.1:", "http://localhost:")):
+
+        # 2순위: 방장/업로더 PC 듀얼 직통 HTTPS 터널에서 진짜 고화질 원본 스트리밍 다운로드
+        downloaded_original = False
+        orig_query_name = os.path.basename(str(it.get("originalName") or raw_name).strip())
+        for t_url, t_key in peer_list:
             try:
-                req = urllib.request.Request(url_cand, headers={"User-Agent": "MerlinZCore/2.12"})
+                ep = f"{t_url}/__club/original-file?name={urllib.parse.quote(orig_query_name)}"
+                req = urllib.request.Request(
+                    ep,
+                    headers={
+                        "User-Agent": "MerlinZCore/2.13",
+                        "X-Ghosti-Photo-Key": t_key,
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    if 200 <= getattr(resp, "status", 200) < 300:
+                        raw_bytes = resp.read()
+                        if raw_bytes and len(raw_bytes) > 0:
+                            tmp_dest = dest.with_name(f".{dest.name}.tmp")
+                            tmp_dest.write_bytes(raw_bytes)
+                            os.replace(tmp_dest, dest)
+                            saved += 1
+                            downloaded_original = True
+                            break
+            except Exception:
+                continue
+
+        if downloaded_original:
+            continue
+
+        # 3순위: 127.0.0.1 로컬 원본 URL 직접 서빙(방장 본인 PC)만 허용 — 13KB data:image 썸네일은 절대 원본으로 저장 금지!
+        url_cand = str(it.get("fullUrl") or "").strip()
+        if url_cand.startswith(("http://127.0.0.1:", "http://localhost:")) and "thumb=1" not in url_cand:
+            try:
+                req = urllib.request.Request(url_cand, headers={"User-Agent": "MerlinZCore/2.13"})
                 with urllib.request.urlopen(req, timeout=15) as resp:
                     raw_bytes = resp.read()
-                if raw_bytes:
+                if raw_bytes and len(raw_bytes) > 0:
                     dest.write_bytes(raw_bytes)
                     saved += 1
                     continue
             except Exception:
                 pass
-    return saved
+
+        # 방장/업로더 PC가 꺼져 있거나 아직 터널 미연결인 경우: 13KB 썸네일 대신 정직하게 대기 카운트 기록
+        pending_host += 1
+
+    return {"saved": saved, "alreadySynced": already_synced, "pendingHost": pending_host}
 
 
 def sync_and_open_shared_room_originals(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """3. 사진 공유(가족·동호회·동창회) 원본 동기화 로컬 폴더 생성·사진 자동 저장 및 윈도우 탐색기 즉시 오픈"""
+    """3. 사진 공유(가족·동호회·동창회) 원본 동기화 로컬 폴더 생성·고화질 원본 직통 다운로드 및 윈도우 탐색기 즉시 오픈"""
     payload = data or {}
     room_label = str(payload.get("roomLabel") or payload.get("roomTitle") or "가족_모임_공유방").strip()
     custom_dir = str(payload.get("customDir") or payload.get("targetPath") or "").strip()
     open_explorer = bool(payload.get("openExplorer"))
+    tunnel_url = str(payload.get("tunnelUrl") or "").strip()
+    photo_tunnel_key = str(payload.get("photoTunnelKey") or "").strip()
+    peers = payload.get("peers") if isinstance(payload.get("peers"), list) else []
     raw_items = payload.get("items")
     items = raw_items if isinstance(raw_items, list) else []
 
@@ -6750,15 +6904,18 @@ def sync_and_open_shared_room_originals(data: Dict[str, Any] | None = None) -> D
     if open_explorer:
         zos.open_file_location_on_interactive_desktop(target_dir, mode="open_file_location")
 
+    stats = {"saved": 0, "alreadySynced": 0, "pendingHost": 0}
     if items:
         if open_explorer:
             threading.Thread(
                 target=_save_shared_room_items_to_dir,
-                args=(target_dir, items),
+                args=(target_dir, items, tunnel_url, photo_tunnel_key, peers),
                 daemon=True,
             ).start()
         else:
-            _save_shared_room_items_to_dir(target_dir, items)
+            stats = _save_shared_room_items_to_dir(
+                target_dir, items, tunnel_url, photo_tunnel_key, peers
+            )
 
     try:
         file_count = sum(1 for p in target_dir.iterdir() if p.is_file())
@@ -6770,6 +6927,10 @@ def sync_and_open_shared_room_originals(data: Dict[str, Any] | None = None) -> D
         "downloadDir": str(target_dir),
         "opened": open_explorer,
         "fileCount": file_count,
+        "savedCount": stats["saved"],
+        "alreadySyncedCount": stats["alreadySynced"],
+        "pendingHostCount": stats["pendingHost"],
+        "waitingForHostPc": stats["pendingHost"] > 0,
     }
 
 
