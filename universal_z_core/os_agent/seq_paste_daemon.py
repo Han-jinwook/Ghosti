@@ -4686,6 +4686,7 @@ def _toast_worker() -> None:
     win_rect: list[tuple[int, int, int, int]] = [(0, 0, 0, 0)]
     ui_dragging: list[bool] = [False]
     was_mouse_down: list[bool] = [False]
+    last_topmost_heal_ts: list[float] = [0.0]
     opened_at: list[float] = [0.0]
     thumb_refs: list = []
 
@@ -5577,6 +5578,41 @@ def _toast_worker() -> None:
                     if u32.GetWindowRect(_CURRENT_OPEN_WIN_HWND, ctypes.byref(rc_chk)) and rc_chk.right > rc_chk.left and rc_chk.bottom > rc_chk.top:
                         wx1, wy1, wx2, wy2 = int(rc_chk.left), int(rc_chk.top), int(rc_chk.right), int(rc_chk.bottom)
                 inside_rect = (wx1 <= pt_click.x <= wx2 and wy1 <= pt_click.y <= wy2)
+                # [오캠(oCam) 녹화 테두리 등 타 프로세스 TOPMOST 오버레이 Z-Order 탈취 자가치유]:
+                # 마우스가 귀신창/귀신검색창 좌표 안(inside_rect)에 있는데 WindowFromPoint가
+                # 타 프로세스 오버레이 창(oCam 캡처 프레임 등)에 가로막혀 클릭이 안 먹히는 현상을
+                # 0.005ms 히트체크 + 즉시 HWND_TOPMOST 복원으로 원천 차단합니다.
+                if (
+                    inside_rect
+                    and _CURRENT_OPEN_WIN_HWND
+                    and active_mode[0] in ("ui1", "ui2", "ui3", "ui4")
+                ):
+                    try:
+                        _now_heal = time.time()
+                        _fresh_click = lbtn_down and not was_mouse_down[0]
+                        if _fresh_click or (_now_heal - last_topmost_heal_ts[0]) >= 0.06:
+                            _h_pt = u32.WindowFromPoint(pt_click)
+                            _r_pt = int(u32.GetAncestor(_h_pt, 2) or _h_pt) if _h_pt else 0
+                            if _r_pt and _r_pt != int(_CURRENT_OPEN_WIN_HWND):
+                                _pid_pt = wintypes.DWORD(0)
+                                u32.GetWindowThreadProcessId(_r_pt, ctypes.byref(_pid_pt))
+                                if int(_pid_pt.value) != os.getpid():
+                                    last_topmost_heal_ts[0] = _now_heal
+                                    u32.SetWindowPos(
+                                        _CURRENT_OPEN_WIN_HWND,
+                                        HWND_TOPMOST,
+                                        0,
+                                        0,
+                                        0,
+                                        0,
+                                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW,
+                                    )
+                                    u32.BringWindowToTop(_CURRENT_OPEN_WIN_HWND)
+                                    if _fresh_click and active_mode[0] in ("ui2", "ui3", "ui4"):
+                                        u32.SetForegroundWindow(_CURRENT_OPEN_WIN_HWND)
+                                    current_win[0].lift()
+                    except Exception:
+                        pass
                 if is_hovered[0] and not inside_rect and active_mode[0] == "toast":
                     _schedule_close(1800)
                 is_hovered[0] = inside_rect
