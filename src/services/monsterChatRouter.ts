@@ -5397,6 +5397,50 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 0-0F) [[🎯 찾기] ↔ [👻 귀신비서] 양방향 0토큰 통합 음성/텍스트 자동 라우터]
   // [✋ 손보기 대화창]에서 문서 카톡 전달, 문서 핵심 수치 Q&A("보증금 얼마야?"), 키워드 문장 낭독, 문서 요약, 또는 단순 사진·서류 찾기를 말했을 때
   // "다른 메뉴로 가세요"라고 거절하지 않고 0.00[🎯 찾기] 엔진으로 자동 토스(Toss) 및 음성 브리핑까지 원스톱 실행합니다!
+  const buildContextualDocFollowUpSuggestions = (
+    docTitleOrKeyword: string,
+    currentIntent: string
+  ): string[] => {
+    const rawRef = (docTitleOrKeyword || '').trim();
+    const isEstimate = /견적/i.test(rawRef);
+    const isStatementOrTax = /명세|세금\s*계산|영수증|전표|청구/i.test(rawRef);
+    const docLabel = isEstimate
+      ? '견적서'
+      : isStatementOrTax
+      ? /세금\s*계산/.test(rawRef)
+        ? '세금계산서'
+        : /명세/.test(rawRef)
+        ? '명세서'
+        : '영수증'
+      : '계약서';
+
+    const chips: string[] = [];
+    if (currentIntent !== 'DOC_FACT_QA_READ') {
+      chips.push(
+        isEstimate
+          ? '견적서에서 총액이나 공급가액 얼마야?'
+          : isStatementOrTax
+          ? `${docLabel}에서 합계 금액이나 세액 얼마야?`
+          : '이 계약서 보증금이랑 월세 얼마야?'
+      );
+    } else {
+      chips.push(
+        isEstimate
+          ? '견적서에서 공급가액이나 품목 나오는 문장 읽어줘'
+          : isStatementOrTax
+          ? `${docLabel}에서 공급가액 나오는 문장 읽어줘`
+          : '계약서에서 위약금이나 특약 나오는 문장 다 읽어줘'
+      );
+    }
+    if (currentIntent !== 'DOC_SUMMARY_READ') {
+      chips.push(`${docLabel} 핵심 내용 3줄로 요약해서 읽어줘`);
+    }
+    if (currentIntent !== 'KAKAO_REAL_CHATROOM_SEND') {
+      chips.push(`${docLabel === '계약서' ? '사무실 계약서' : docLabel} 찾아서 김 대리님에게 카톡 전달해줘`);
+    }
+    return chips.slice(0, 3);
+  };
+
   const voiceDocCmd = parseZeroLlmVoiceDocCommand(clean);
   if (voiceDocCmd.intentType === 'KAKAO_REAL_CHATROOM_SEND') {
     const store = useSaySeeStore.getState();
@@ -5414,6 +5458,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     const kakaoHeader = kakaoRes.ok
       ? ` **[양방향 자동 토스  카카오톡 '${kakaoRes.recipientName}'대화방 파일 장전 완료]**`
       : ` **[카카오톡 '${kakaoRes.recipientName}'대화방 연결 대기 (엔진·카톡 확인 필요)]**`;
+    const refLabel = matchedDoc?.title || matchedDoc?.fileName || voiceDocCmd.targetDocKeyword;
     return reply(
       sourceTab,
       `${kakaoHeader}\n` +
@@ -5422,11 +5467,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: voiceDocCmd.targetDocKeyword,
-        followUpSuggestions: [
-          '이 계약서 보증금이랑 월세 얼마야?',
-          '계약서에서 위약금이나 해지 나오는 문장 다 읽어줘',
-          '계약서 핵심 내용 3줄로 요약해서 읽어줘',
-        ],
+        followUpSuggestions: buildContextualDocFollowUpSuggestions(refLabel, 'KAKAO_REAL_CHATROOM_SEND'),
       }
     );
   }
@@ -5439,6 +5480,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       voiceDocCmd.extractKeywords
     );
     if (ttsEnabled) void speakWithHyunsuOrSunhi(factAnswerKo, voiceRole);
+    const refLabel = matchedDoc?.title || matchedDoc?.fileName || voiceDocCmd.targetDocKeyword;
     return reply(
       sourceTab,
       ` **[양방향 자동 토스  스마트 서류함 핵심 수치 즉답]**\n` +
@@ -5446,11 +5488,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
-        followUpSuggestions: [
-          '사무실 계약서 찾아서 김 대리님에게 카톡 전달해줘',
-          '계약서에서 위약금이나 해지 나오는 문장 다 읽어줘',
-          '계약서 핵심 내용 3줄로 요약해서 읽어줘',
-        ],
+        followUpSuggestions: buildContextualDocFollowUpSuggestions(refLabel, 'DOC_FACT_QA_READ'),
       }
     );
   }
@@ -5460,9 +5498,11 @@ export async function processUnifiedMonsterChatQuery(params: {
     const { matchedDoc, factAnswerKo } = resolveTargetDocAndBuildFactAnswer(
       store.localDocuments,
       voiceDocCmd.targetDocKeyword,
-      voiceDocCmd.extractKeywords
+      voiceDocCmd.extractKeywords,
+      voiceDocCmd.intentType
     );
     const fullText = matchedDoc?.extractedText || factAnswerKo;
+    const refLabel = matchedDoc?.title || matchedDoc?.fileName || voiceDocCmd.targetDocKeyword;
     if (voiceDocCmd.intentType === 'DOC_KEYWORD_SENTENCE_READ') {
       const extracted = extractKeywordSentencesZeroLlm(fullText, voiceDocCmd.extractKeywords);
       const readScript =
@@ -5481,6 +5521,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         {
           cardKind: 'SEARCH_ROUTING',
           searchKeyword: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
+          followUpSuggestions: buildContextualDocFollowUpSuggestions(refLabel, 'DOC_KEYWORD_SENTENCE_READ'),
         }
       );
     } else {
@@ -5490,7 +5531,8 @@ export async function processUnifiedMonsterChatQuery(params: {
         ` **[양방향 자동 토스  스마트 서류함 요약 낭독]**\n ${factAnswerKo}`,
         {
           cardKind: 'SEARCH_ROUTING',
-          searchKeyword: voiceDocCmd.targetDocKeyword,
+          searchKeyword: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
+          followUpSuggestions: buildContextualDocFollowUpSuggestions(refLabel, 'DOC_SUMMARY_READ'),
         }
       );
     }
