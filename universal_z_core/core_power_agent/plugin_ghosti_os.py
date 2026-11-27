@@ -693,7 +693,7 @@ _PHOTO_PATH_INDEX: Dict[str, Path] = {}
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic"}
 _VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".wmv", ".3gp", ".ts", ".mts", ".flv"}
 _PHOTO_EXTS = _IMAGE_EXTS | _VIDEO_EXTS
-_DOC_EXTS = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".csv"}
+_DOC_EXTS = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".csv", ".gsheet", ".gdoc", ".gslides"}
 _SKIP_DIR_NAMES = {
     "node_modules",
     ".git",
@@ -3797,7 +3797,10 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                     if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
                         continue
                     st = dent.stat(follow_symlinks=False)
-                    if int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK:
+                    if (
+                        nm_low[dot:] not in (".gsheet", ".gdoc", ".gslides")
+                        and (int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK)
+                    ):
                         continue
                     abs_doc = os.path.abspath(dent.path)
                     norm_doc = abs_doc.lower()
@@ -3838,6 +3841,9 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
         ".xls": ("XLS", "📊 엑셀 시트"),
         ".pptx": ("PPTX", "📙 파워포인트 발표자료"),
         ".ppt": ("PPT", "📙 파워포인트 발표자료"),
+        ".gsheet": ("GSHEET", "📊 구글 스프레드시트(.gsheet)"),
+        ".gdoc": ("GDOC", "📘 구글 문서(.gdoc)"),
+        ".gslides": ("GSLIDES", "📙 구글 프레젠테이션(.gslides)"),
     }
 
     if len(_DOCS_ENTRY_MEM_CACHE) > 20000:

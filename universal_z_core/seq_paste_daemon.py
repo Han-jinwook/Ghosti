@@ -3150,6 +3150,7 @@ def _quick_probe_external_drive_candidate(drv_root: str) -> tuple[bool, int, str
     """
     target_exts = {
         ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
+        ".gsheet", ".gdoc", ".gslides",
         ".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif",
         ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
     }
@@ -3284,7 +3285,7 @@ def _index_external_volume_to_local_cache_worker(vol_id: str, drv_letter: str, d
         duration_ms=4200,
     )
 
-    doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
+    doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md", ".gsheet", ".gdoc", ".gslides"}
     img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
     vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
 
@@ -3913,6 +3914,7 @@ def _compute_watched_folders_fast_sig(scan_dirs: list[Path] | None = None) -> st
     """
     target_exts = {
         ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
+        ".gsheet", ".gdoc", ".gslides",
         ".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif",
         ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
     }
@@ -4051,7 +4053,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         ):
             return _LOCAL_FILE_CACHE["items"]
 
-        doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
+        doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md", ".gsheet", ".gdoc", ".gslides"}
         img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
         vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
 
