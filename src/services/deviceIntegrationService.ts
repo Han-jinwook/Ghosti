@@ -873,7 +873,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.129',
+    appVersion: '1.0.130',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
@@ -1958,7 +1958,7 @@ export async function registerNativeMobilePushToken(rawToken: string): Promise<b
     platform: plat,
     deviceId: ident.deviceId,
     apnsEnv: 'production',
-    appVersion: '1.0.129',
+    appVersion: '1.0.130',
   });
   if (res.ok) {
     lastRegisteredNativePushKey = dedupeKey;

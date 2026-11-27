@@ -1082,26 +1082,24 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       ==================================================================== */}
       {monitorCastOpen && currentCastPhoto && (
         <div
-          data-keep-dark="true"
-          className="fixed inset-0 z-[140] bg-black/95 backdrop-blur-2xl flex flex-col p-3 md:p-6 pt-safe pb-safe overflow-y-auto"
+          className="fixed inset-0 z-[140] bg-slate-900/55 backdrop-blur-sm flex flex-col p-3 md:p-6 pt-safe pb-safe overflow-y-auto"
           onClick={() => {
             updateCastState({ active: false });
             setMonitorCastOpen(false);
           }}
         >
           <div
-            data-keep-dark="true"
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-6xl mx-auto my-auto rounded-3xl bg-zinc-950 border border-white/15 shadow-lg p-4 md:p-6 flex flex-col gap-4 text-white"
+            className="w-full max-w-6xl mx-auto my-auto rounded-3xl bg-white border border-slate-200 shadow-2xl p-4 md:p-6 flex flex-col gap-4 text-slate-900"
           >
             {/* 상단 상태 표시바 & 뷰 모드 전환 */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-white/10">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-slate-200">
               <div className="flex flex-wrap items-center gap-2 min-w-0">
-                <span className="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                  <span>모니터로 크게 보기</span>
+                <span className="px-2.5 py-1 rounded-full bg-cyan-50 border border-cyan-300 text-cyan-800 text-[11px] sm:text-xs font-extrabold inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-cyan-500 shrink-0" />
+                  <span>고스트 모니터 캐스트 (Ghost Monitor Cast)</span>
                 </span>
-                <span className="text-xs md:text-sm text-zinc-200 font-bold break-keep leading-snug min-w-0">
+                <span className="text-xs md:text-sm text-slate-600 font-bold break-keep leading-snug min-w-0">
                   이메일({merlinAuth?.email || '내 계정'}) 자동 연결됨 — 메신저 알림이 보이지 않는 전체화면 뷰어
                 </span>
               </div>
@@ -1110,10 +1108,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setMonitorViewMode('split_demo')}
-                  className={`px-3 py-1 rounded-xl text-xs font-extrabold border cursor-pointer whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border cursor-pointer whitespace-nowrap ${
                     monitorViewMode === 'split_demo'
-                      ? 'bg-slate-900 text-white border-cyan-300'
-                      : 'bg-zinc-900 text-zinc-300 border-white/15'
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                   }`}
                 >
                   +모니터 &amp; 폰 리모컨 동시 보기
@@ -1121,10 +1119,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setMonitorViewMode('fullscreen_monitor')}
-                  className={`px-3 py-1 rounded-xl text-xs font-extrabold border cursor-pointer whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border cursor-pointer whitespace-nowrap ${
                     monitorViewMode === 'fullscreen_monitor'
-                      ? 'bg-slate-900 text-white border-cyan-300'
-                      : 'bg-zinc-900 text-zinc-300 border-white/15'
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                   }`}
                 >
                   PC 모니터 단독 전체화면
@@ -1132,10 +1130,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setMonitorViewMode('phone_remote')}
-                  className={`px-3 py-1 rounded-xl text-xs font-extrabold border cursor-pointer whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold border cursor-pointer whitespace-nowrap ${
                     monitorViewMode === 'phone_remote'
-                      ? 'bg-slate-900 text-white border-cyan-300'
-                      : 'bg-zinc-900 text-zinc-300 border-white/15'
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
                   }`}
                 >
                   내 폰 무선 리모컨 단독
@@ -1146,7 +1144,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                     updateCastState({ active: false });
                     setMonitorCastOpen(false);
                   }}
-                  className="px-3 py-1 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200 text-xs font-extrabold cursor-pointer whitespace-nowrap"
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold cursor-pointer whitespace-nowrap"
                 >
                   ✕ 모니터 창 닫기
                 </button>
@@ -1211,21 +1209,20 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               {/* 스마트폰 무선 리모컨 컨트롤러 */}
               {monitorViewMode !== 'fullscreen_monitor' && (
                 <div
-                  data-keep-dark="true"
                   className={`${
                     monitorViewMode === 'split_demo' ? 'lg:col-span-4' : 'max-w-md mx-auto w-full'
-                  } rounded-3xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-slate-200/40 p-5 flex flex-col justify-between gap-4 shadow-xl`}
+                  } rounded-3xl bg-slate-50 border border-slate-200 p-5 flex flex-col justify-between gap-4 shadow-sm`}
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-3">
                     <div className="min-w-0">
-                      <div className="text-xs text-cyan-300 font-semibold break-keep">
+                      <div className="text-xs text-cyan-700 font-bold break-keep">
                         내 스마트폰 무선 리모컨
                       </div>
-                      <div className="text-sm text-white font-extrabold mt-0.5 break-keep leading-snug">
+                      <div className="text-sm text-slate-900 font-extrabold mt-0.5 break-keep leading-snug">
                         버튼을 누르면 모니터 화면이 바뀝니다
                       </div>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10.5px] font-extrabold shrink-0 whitespace-nowrap">
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-700 text-[10.5px] font-extrabold shrink-0 whitespace-nowrap">
                       실시간 직결
                     </span>
                   </div>
@@ -1242,7 +1239,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                           zoom: 1,
                         })
                       }
-                      className="py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 active:scale-95 border border-white/15 text-white font-extrabold text-sm flex flex-col items-center gap-1 cursor-pointer transition-all"
+                      className="py-4 rounded-2xl bg-white hover:bg-slate-100 active:scale-95 border border-slate-200 text-slate-800 font-extrabold text-sm flex flex-col items-center gap-1 cursor-pointer transition-all shadow-xs"
                     >
                       <span className="text-xl">◀</span>
                       <span>이전 사진</span>
@@ -1256,7 +1253,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                           zoom: 1,
                         })
                       }
-                      className="py-4 rounded-2xl bg-cyan-500/25 hover:bg-cyan-500/35 active:scale-95 border border-cyan-400/60 text-cyan-200 font-extrabold text-sm flex flex-col items-center gap-1 cursor-pointer transition-all"
+                      className="py-4 rounded-2xl bg-cyan-600 hover:bg-cyan-700 active:scale-95 border border-cyan-700 text-white font-extrabold text-sm flex flex-col items-center gap-1 cursor-pointer transition-all shadow-xs"
                     >
                       <span className="text-xl">▶</span>
                       <span>다음 사진</span>
@@ -1270,7 +1267,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       onClick={() =>
                         updateCastState({ zoom: Math.min(3, Number((castState.zoom + 0.5).toFixed(1))) })
                       }
-                      className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-extrabold cursor-pointer"
                     >
                       확대 (+0.5x)
                     </button>
@@ -1279,7 +1276,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       onClick={() =>
                         updateCastState({ zoom: Math.max(0.5, Number((castState.zoom - 0.5).toFixed(1))) })
                       }
-                      className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-extrabold cursor-pointer"
                     >
                       축소 (-0.5x)
                     </button>
@@ -1288,14 +1285,14 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       onClick={() =>
                         updateCastState({ rotation: (castState.rotation + 90) % 360 })
                       }
-                      className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-extrabold cursor-pointer"
                     >
                       90° 회전
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCastState({ zoom: 1, rotation: 0 })}
-                      className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
+                      className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 text-xs font-extrabold cursor-pointer"
                     >
                       원본 크기(1.0x)
                     </button>
@@ -1306,8 +1303,8 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                     onClick={() => updateCastState({ isPlaying: !castState.isPlaying })}
                     className={`w-full py-3 rounded-2xl font-extrabold text-xs border transition-all cursor-pointer ${
                       castState.isPlaying
-                        ? 'bg-slate-900 text-white border-amber-300'
-                        : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
+                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
                     }`}
                   >
                     {castState.isPlaying
@@ -1321,7 +1318,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       updateCastState({ active: false });
                       setMonitorCastOpen(false);
                     }}
-                    className="w-full py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 text-rose-200 text-xs font-extrabold cursor-pointer"
+                    className="w-full py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold cursor-pointer"
                   >
                     ✕ 내 폰에서 모니터 팝업 창 즉시 닫기
                   </button>
