@@ -179,6 +179,7 @@ export interface GhostiMobileCarePluginInterface {
   }>;
   getNativeClipboardImeStatus(): Promise<{ ok: boolean; enabled?: boolean; selected?: boolean }>;
   openNativeClipboardImeSettings(options: { mode: 'settings' | 'picker' }): Promise<{ ok: boolean }>;
+  extractPdfText(options: { base64: string }): Promise<{ ok: boolean; text?: string }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -959,5 +960,24 @@ export async function openNativeClipboardImeSettings(mode: 'settings' | 'picker'
     return Boolean(res?.ok);
   } catch {
     return false;
+  }
+}
+
+export async function extractNativeIosPdfText(buffer: ArrayBuffer): Promise<string> {
+  if (!isCapacitorIosRuntime()) return '';
+  if (!buffer || buffer.byteLength === 0 || buffer.byteLength > 18 * 1024 * 1024) return '';
+  try {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const sub = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(sub));
+    }
+    const base64 = btoa(binary);
+    const res = await GhostiMobileCareNative.extractPdfText({ base64 });
+    return res?.ok && typeof res.text === 'string' ? res.text.trim() : '';
+  } catch {
+    return '';
   }
 }

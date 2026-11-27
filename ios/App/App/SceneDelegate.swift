@@ -6,6 +6,7 @@ import PhotosUI
 import AVFoundation
 import AVKit
 import Vision
+import PDFKit
 
 @objc(GhostiBridgeViewController)
 class GhostiBridgeViewController: CAPBridgeViewController {
@@ -187,8 +188,38 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "syncSharedClipboardHistory", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "consumePendingNativeClipboardOutbound", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "extractVideoNativeOcr", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openNativeVideoPlayerModal", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openNativeVideoPlayerModal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "extractPdfText", returnType: CAPPluginReturnPromise)
     ]
+
+    @objc func extractPdfText(_ call: CAPPluginCall) {
+        guard let b64 = call.getString("base64"), !b64.isEmpty else {
+            call.resolve(["ok": false, "text": ""])
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters),
+                  let doc = PDFDocument(data: data) else {
+                call.resolve(["ok": false, "text": ""])
+                return
+            }
+            var parts: [String] = []
+            var totalChars = 0
+            let pageLimit = min(doc.pageCount, 80)
+            for idx in 0..<pageLimit {
+                if let pageStr = doc.page(at: idx)?.string {
+                    let trimmed = pageStr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        parts.append(trimmed)
+                        totalChars += trimmed.count
+                        if totalChars >= 45000 { break }
+                    }
+                }
+            }
+            let joined = String(parts.joined(separator: "\n").prefix(45000))
+            call.resolve(["ok": !joined.isEmpty, "text": joined])
+        }
+    }
 
     private var lastInjectedChangeCount: Int = -1
     private var lastObservedChangeCount: Int = -1
