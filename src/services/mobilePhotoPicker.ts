@@ -1259,6 +1259,77 @@ function openOpticalAuditDb(): Promise<IDBDatabase | null> {
   return opticalAuditDbPromise;
 }
 
+const OPTICAL_CLUSTER_SESSION_CACHE_KEY = 'ghosti_pc_optical_cluster_snapshot_v2';
+
+export interface CachedPcCleanupSnapshot {
+  photos: PhotoItem[];
+  duplicateGroups: DuplicateGroup[];
+  savedAt: number;
+}
+
+export function loadSessionCachedPcCleanupSnapshot(): CachedPcCleanupSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(OPTICAL_CLUSTER_SESSION_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedPcCleanupSnapshot;
+    if (
+      !parsed ||
+      !Array.isArray(parsed.photos) ||
+      parsed.photos.length === 0 ||
+      !Array.isArray(parsed.duplicateGroups)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSessionCachedPcCleanupSnapshot(
+  photos: PhotoItem[],
+  duplicateGroups: DuplicateGroup[]
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!Array.isArray(photos) || photos.length === 0) return;
+    const payload: CachedPcCleanupSnapshot = {
+      photos: photos.slice(0, 1500).map((p) => ({
+        id: p.id,
+        name: p.name,
+        fullPath: p.fullPath,
+        folderName: p.folderName,
+        deviceSource: p.deviceSource,
+        size: p.size,
+        date: p.date,
+        mtimeMs: p.mtimeMs,
+        thumbUrl: p.thumbUrl,
+        fullUrl: p.fullUrl,
+        tags: p.tags,
+        locationKo: p.locationKo,
+        isVaultDocument: p.isVaultDocument,
+        vaultCategoryLabel: p.vaultCategoryLabel,
+        trashCategory: p.trashCategory,
+        intrinsicTrashCategory: p.intrinsicTrashCategory,
+        trashConfidence: p.trashConfidence,
+        duplicateGroupId: p.duplicateGroupId,
+        lastDuplicateGroupId: p.lastDuplicateGroupId,
+        isBestInDuplicateGroup: p.isBestInDuplicateGroup,
+        userKeptAsBest: p.userKeptAsBest,
+        opticalSharpness: p.opticalSharpness,
+        dhash: p.dhash,
+        quarantined: p.quarantined,
+      })),
+      duplicateGroups,
+      savedAt: Date.now(),
+    };
+    sessionStorage.setItem(OPTICAL_CLUSTER_SESSION_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore quota error */
+  }
+}
+
 function hydratePcOpticalAuditCacheOnce(): Promise<void> {
   if (isOpticalPageUnloading) return Promise.resolve();
   if (opticalAuditHydratePromise) return opticalAuditHydratePromise;
@@ -1266,54 +1337,59 @@ function hydratePcOpticalAuditCacheOnce(): Promise<void> {
     const db = await openOpticalAuditDb();
     if (!db || isOpticalPageUnloading) return;
 
-    let lastKey: string | null = null;
-    const SLICE_LIMIT = 240;
-    while (!isOpticalPageUnloading) {
-      const sliceRes = await new Promise<{ finished: boolean; nextKey: string | null }>((resolve) => {
-        try {
-          const tx = db.transaction(OPTICAL_AUDIT_IDB_STORE, 'readonly');
-          const st = tx.objectStore(OPTICAL_AUDIT_IDB_STORE);
-          const range = lastKey !== null ? IDBKeyRange.lowerBound(lastKey, true) : undefined;
-          const req = st.openCursor(range);
-          let count = 0;
-          let latestKey: string | null = null;
-          req.onsuccess = () => {
-            if (isOpticalPageUnloading) {
-              resolve({ finished: true, nextKey: null });
-              return;
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(OPTICAL_AUDIT_IDB_STORE, 'readonly');
+        const st = tx.objectStore(OPTICAL_AUDIT_IDB_STORE);
+        if (typeof st.getAll === 'function') {
+          const reqAll = st.getAll();
+          reqAll.onsuccess = () => {
+            if (!isOpticalPageUnloading && Array.isArray(reqAll.result)) {
+              for (const row of reqAll.result as Array<{ key?: string; meta?: OpticalSignatureMeta }>) {
+                if (row?.key && row.meta && !pcOpticalAuditCache.has(row.key)) {
+                  pcOpticalAuditCache.set(row.key, {
+                    ...row.meta,
+                    rgbGrid:
+                      row.meta.rgbGrid instanceof Uint8Array
+                        ? row.meta.rgbGrid
+                        : new Uint8Array(Object.values(row.meta.rgbGrid || {})),
+                  });
+                }
+              }
             }
-            const cursor = req.result;
-            if (!cursor) {
-              resolve({ finished: true, nextKey: null });
-              return;
-            }
-            const row = cursor.value as { key: string; meta: OpticalSignatureMeta } | undefined;
-            if (row?.key && row.meta && !pcOpticalAuditCache.has(row.key)) {
-              pcOpticalAuditCache.set(row.key, {
-                ...row.meta,
-                rgbGrid:
-                  row.meta.rgbGrid instanceof Uint8Array
-                    ? row.meta.rgbGrid
-                    : new Uint8Array(Object.values(row.meta.rgbGrid || {})),
-              });
-            }
-            latestKey = String(cursor.key);
-            count += 1;
-            if (count >= SLICE_LIMIT) {
-              resolve({ finished: false, nextKey: latestKey });
-              return;
-            }
-            cursor.continue();
+            resolve();
           };
-          req.onerror = () => resolve({ finished: true, nextKey: null });
-        } catch {
-          resolve({ finished: true, nextKey: null });
+          reqAll.onerror = () => resolve();
+          return;
         }
-      });
-      if (sliceRes.finished || !sliceRes.nextKey) break;
-      lastKey = sliceRes.nextKey;
-      await new Promise<void>((r) => setTimeout(r, 0));
-    }
+        const req = st.openCursor();
+        req.onsuccess = () => {
+          if (isOpticalPageUnloading) {
+            resolve();
+            return;
+          }
+          const cursor = req.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          const row = cursor.value as { key: string; meta: OpticalSignatureMeta } | undefined;
+          if (row?.key && row.meta && !pcOpticalAuditCache.has(row.key)) {
+            pcOpticalAuditCache.set(row.key, {
+              ...row.meta,
+              rgbGrid:
+                row.meta.rgbGrid instanceof Uint8Array
+                  ? row.meta.rgbGrid
+                  : new Uint8Array(Object.values(row.meta.rgbGrid || {})),
+            });
+          }
+          cursor.continue();
+        };
+        req.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
   })();
   return opticalAuditHydratePromise;
 }
@@ -1456,11 +1532,13 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
   );
   // 원격/공유/업무공유 S: 사진은 개인 정리 클러스터링 대상에서 제외하되 photos 배열 내 검색용 항목은 손실 없이 유지
   const remoteOrSharedKept = cloned.filter((p) => isRemoteOrShared(p));
+  const finalPhotos =
+    remoteOrSharedKept.length > 0
+      ? [...clustered.updatedPhotos, ...remoteOrSharedKept]
+      : clustered.updatedPhotos;
+  saveSessionCachedPcCleanupSnapshot(clustered.updatedPhotos, clustered.duplicateGroups);
   return {
-    updatedPhotos:
-      remoteOrSharedKept.length > 0
-        ? [...clustered.updatedPhotos, ...remoteOrSharedKept]
-        : clustered.updatedPhotos,
+    updatedPhotos: finalPhotos,
     duplicateGroups: clustered.duplicateGroups,
     cachedHits,
     uncachedCount,
@@ -1582,6 +1660,7 @@ export async function auditRealPcPhotosAndCluster(
         cloned.filter((p) => !isSample(p.name) && !isRemoteOrShared(p))
       );
       const remoteOrSharedKept = cloned.filter((p) => isRemoteOrShared(p));
+      saveSessionCachedPcCleanupSnapshot(clustered.updatedPhotos, clustered.duplicateGroups);
       return {
         updatedPhotos:
           remoteOrSharedKept.length > 0

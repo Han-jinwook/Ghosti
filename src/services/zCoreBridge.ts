@@ -96,6 +96,9 @@ export interface ZCoreHealthResponse {
   photoCount?: number;
 }
 
+const ZCORE_CONNECTED_SESSION_KEY = 'ghosti_zcore_last_connected_v1';
+const ZCORE_VERSION_SESSION_KEY = 'ghosti_zcore_last_version_v1';
+
 class ZCoreBridgeManager {
   private static instance: ZCoreBridgeManager;
   public isConnected: boolean = false;
@@ -119,6 +122,13 @@ class ZCoreBridgeManager {
         if (parentBridge?.isConnected) {
           this.isConnected = true;
           this.version = parentBridge.version || LATEST_Z_CORE_VERSION;
+        } else if (
+          !isMobileBrowserRuntime() &&
+          hasActiveGhostiLoginSession() &&
+          sessionStorage.getItem(ZCORE_CONNECTED_SESSION_KEY) === '1'
+        ) {
+          this.isConnected = true;
+          this.version = sessionStorage.getItem(ZCORE_VERSION_SESSION_KEY) || LATEST_Z_CORE_VERSION;
         }
         (window as any).__GHOSTI_ZCORE_BRIDGE__ = this;
       } catch {
@@ -209,6 +219,10 @@ class ZCoreBridgeManager {
       this.version = data.version !== undefined ? (data.version || null) : (this.version ?? null);
       try {
         sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+        sessionStorage.setItem(ZCORE_CONNECTED_SESSION_KEY, '1');
+        if (this.version) {
+          sessionStorage.setItem(ZCORE_VERSION_SESSION_KEY, this.version);
+        }
       } catch {
         /* ignore storage error */
       }
@@ -290,6 +304,11 @@ class ZCoreBridgeManager {
     // CPU 과부하 시 일시적 지연으로 연결/해제가 깜빡이며 토스트가 반복되는 현상 방어: 3회 연속 실패 시에만 해제 판정
     if (this.isConnected && this.consecutiveFailures >= 3) {
       this.isConnected = false;
+      try {
+        sessionStorage.removeItem(ZCORE_CONNECTED_SESSION_KEY);
+      } catch {
+        /* ignore */
+      }
       this.notify();
       window.dispatchEvent(new CustomEvent('zCoreDisconnected'));
     }

@@ -16,9 +16,11 @@ import {
   computeLocalPhotoCleanupSummary,
   convertNativeGalleryVideos,
   loadCachedMobileGalleryIndex,
+  loadSessionCachedPcCleanupSnapshot,
   migrateOpticalSigPhotoId,
   pruneQuarantinedFromDuplicateGroups,
   saveCachedMobileGalleryIndex,
+  saveSessionCachedPcCleanupSnapshot,
   scheduleSaveCachedMobileGalleryIndex,
 } from '../../services/mobilePhotoPicker';
 import {
@@ -433,6 +435,7 @@ function buildQuarantineMoveStatePatch(opts: {
   // [세트 경계 불변 정공법]: 정리 시 전체 사진을 처음부터 다시 클러스터링하지 않고 해당 세트에서만 버린 사진을 O(N) 제거!
   const { updatedPhotos, duplicateGroups: nextDupGroups } =
     pruneQuarantinedFromDuplicateGroups(afterMovePhotos, state.duplicateGroups, newlyKeptIds);
+  saveSessionCachedPcCleanupSnapshot(updatedPhotos, nextDupGroups);
   const cleanedSelected = new Set<string>(state.selectedTrashIds);
   movedSet.forEach((id) => cleanedSelected.delete(id));
   updatedPhotos.forEach((p) => {
@@ -616,18 +619,50 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     const runSingleInitApp = async (): Promise<void> => {
       activeInitAppStartedConnected = zCoreBridge.isConnected && hasActiveGhostiLoginSession();
-      set({ initializing: true });
 
-    const isStandaloneSearchWin =
-      typeof window !== 'undefined' &&
-      Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow')) &&
-      (() => {
-        try {
-          return window.self === window.top;
-        } catch {
-          return false;
+      const isStandaloneSearchWin =
+        typeof window !== 'undefined' &&
+        Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow')) &&
+        (() => {
+          try {
+            return window.self === window.top;
+          } catch {
+            return false;
+          }
+        })();
+
+      // [새로고침(F5) 0.01초 즉시 세트 렌더링]:
+      // 직전 세션에서 이미 계산된 중복·연사 세트 및 4대 사진 정리 스냅샷이 있으면
+      // 네트워크 응답을 기다리는 동안 빈 화면('로딩 중')을 띄우지 않고 첫 프레임(0ms)에 즉시 세트를 복원한 뒤 뒤에서 무소음 동기화합니다.
+      if (
+        !isCapacitorNativeMobileRuntime() &&
+        !isStandaloneSearchWin &&
+        hasActiveGhostiLoginSession() &&
+        get().photos.length === 0
+      ) {
+        const instantSnap = loadSessionCachedPcCleanupSnapshot();
+        if (instantSnap && instantSnap.photos.length > 0) {
+          const snapTrashIds = new Set<string>(
+            instantSnap.photos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
+          );
+          set((st) => ({
+            photos: instantSnap.photos,
+            duplicateGroups: instantSnap.duplicateGroups,
+            selectedTrashIds: snapTrashIds,
+            activeTrashCategoryFilter: userManuallySelectedTrashTab
+              ? st.activeTrashCategoryFilter
+              : instantSnap.duplicateGroups.length > 0
+              ? 'duplicate'
+              : st.activeTrashCategoryFilter,
+            initialized: true,
+            initializing: false,
+          }));
+        } else {
+          set({ initializing: true });
         }
-      })();
+      } else {
+        set({ initializing: true });
+      }
 
     // 데스크톱(본 웹 화면 + 독립 귀신검색창 공통) 첫 기동·새로고침 시 헬스체크 응답 전에 빈 상태(0장)로 1차 initApp() 후
     // 재연결 2차 initApp(true)가 이중 실행되어 화면이 멈추거나 깜빡이는 현상을 원천 차단합니다.
@@ -2715,6 +2750,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         updatedPhotos = clustered.updatedPhotos;
         nextDupGroups = clustered.duplicateGroups;
       }
+      saveSessionCachedPcCleanupSnapshot(updatedPhotos, nextDupGroups);
 
       const nextSelectedTrashIds = new Set<string>(state.selectedTrashIds);
       let restoredFocusCategory: TrashCategory | null = null;
