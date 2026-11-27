@@ -1433,7 +1433,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           (m.cardKind === 'DEEP_UNINSTALL_GATE' && m.deepUninstallPayload && !m.deepUninstallPayload.executed) ||
           (m.cardKind === 'AGENT_CARE_BATCH_CARD' && m.agentCareCardPayload && !m.agentCareCardPayload.executed) ||
           m.cardKind === 'RESTORE_POINTS_LIST' ||
-          /은행·관공서\s*보안프로그램.*?깨워드릴까요|(?:숨은\s*초능력|편의\s*기능).*?알려드릴까요/.test(m.text || '')
+          /은행·관공서\s*보안프로그램.*?깨워드릴까요|(?:숨은\s*초능력|편의\s*기능).*?알려드릴까요|1초\s*스마트\s*(?:ZIP\s*)?압축/.test(m.text || '')
       );
     const isDirectCareOrStatusCommand =
       parseConversationalCareScheduleCommand(raw).matched ||

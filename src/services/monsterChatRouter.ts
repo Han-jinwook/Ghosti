@@ -2857,95 +2857,372 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     });
   }
 
+interface SmartArchiveCandidateItem {
+  no: number;
+  name: string;
+  fullPath: string;
+  scope: string;
+  kind: 'FOLDER' | 'FILE' | 'ARCHIVE';
+  sizeMb: number;
+  modifiedAt: string;
+}
+
+interface SmartArchivePendingState {
+  mode: 'COMPRESS' | 'EXTRACT';
+  selectedPaths: string[];
+  candidates: SmartArchiveCandidateItem[];
+  pendingPassword?: string;
+  updatedAt: number;
+}
+
+let lastSmartArchivePendingState: SmartArchivePendingState | null =
+  ((globalThis as any).__ghostiSmartArchivePendingState as SmartArchivePendingState | null) || null;
+const updateSmartArchivePendingState = (st: SmartArchivePendingState | null): void => {
+  lastSmartArchivePendingState = st;
+  (globalThis as any).__ghostiSmartArchivePendingState = st;
+};
+
+async function fetchSmartArchiveWorkspaceState(): Promise<{
+  selectedPaths: string[];
+  compressCandidates: SmartArchiveCandidateItem[];
+  archiveCandidates: SmartArchiveCandidateItem[];
+}> {
+  const archiveExtRe = /\.(?:zip|7z|rar|tar|gz|tgz|bz2|xz)$/i;
+  const skipExtRe = /\.(?:lnk|url|ini|tmp)$/i;
+
+  const [selRes, deskRes, dlRes] = await Promise.all([
+    fetch(getZCoreUrl('/api/care/explorer-selected'))
+      .then((r) => r.json())
+      .catch(() => null),
+    fetch(getZCoreUrl('/api/care/desktop-detail-scan'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetPath: 'Desktop' }),
+    })
+      .then((r) => r.json())
+      .catch(() => null),
+    fetch(getZCoreUrl('/api/care/desktop-detail-scan'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetPath: 'Downloads' }),
+    })
+      .then((r) => r.json())
+      .catch(() => null),
+  ]);
+
+  const selectedPaths: string[] = Array.isArray(selRes?.selectedPaths)
+    ? selRes.selectedPaths
+        .map((p: unknown) => (typeof p === 'string' ? p.trim() : ''))
+        .filter(Boolean)
+    : [];
+
+  const rawDeskItems: any[] = Array.isArray(deskRes?.items) ? deskRes.items : [];
+  const rawDlItems: any[] = Array.isArray(dlRes?.items) ? dlRes.items : [];
+  const combinedRaw = [
+    ...rawDeskItems.map((it) => ({ ...it, _scope: it.scope || '바탕화면' })),
+    ...rawDlItems.map((it) => ({ ...it, _scope: '다운로드' })),
+  ];
+
+  const compressCandidates: SmartArchiveCandidateItem[] = [];
+  const archiveCandidates: SmartArchiveCandidateItem[] = [];
+  const seenCompressPaths = new Set<string>();
+  const seenArchivePaths = new Set<string>();
+
+  // 탐색기에서 현재 선택된 압축파일이 있다면 1순위로 archiveCandidates에 등록
+  for (const sp of selectedPaths) {
+    const fn = sp.split(/[\\/]/).pop() || sp;
+    if (archiveExtRe.test(fn)) {
+      const key = sp.toLowerCase();
+      if (!seenArchivePaths.has(key)) {
+        seenArchivePaths.add(key);
+        archiveCandidates.push({
+          no: archiveCandidates.length + 1,
+          name: fn,
+          fullPath: sp,
+          scope: '탐색기 선택',
+          kind: 'ARCHIVE',
+          sizeMb: 0,
+          modifiedAt: '현재 선택됨',
+        });
+      }
+    }
+  }
+
+  // 다운로드 폴더의 압축파일을 우선 배치하고, 바탕화면 압축파일을 이어서 배치
+  const rawForArchives = [
+    ...rawDlItems.map((it) => ({ ...it, _scope: '다운로드' })),
+    ...rawDeskItems.map((it) => ({ ...it, _scope: it.scope || '바탕화면' })),
+  ];
+  for (const it of rawForArchives) {
+    const nm = String(it?.name || '').trim();
+    const fp = String(it?.fullPath || '').trim();
+    if (!nm || !fp || it?.kind === 'FOLDER') continue;
+    if (archiveExtRe.test(nm)) {
+      const key = fp.toLowerCase();
+      if (!seenArchivePaths.has(key)) {
+        seenArchivePaths.add(key);
+        archiveCandidates.push({
+          no: archiveCandidates.length + 1,
+          name: nm,
+          fullPath: fp,
+          scope: String(it._scope || '다운로드').replace(/^내\s*/, ''),
+          kind: 'ARCHIVE',
+          sizeMb: Number(it?.sizeMb ?? 0),
+          modifiedAt: String(it?.modifiedAt || ''),
+        });
+      }
+    }
+  }
+
+  // 압축 대상 후보: 공용 바탕화면 바로가기(.lnk/.url)와 이미 압축된 파일(.zip 등)을 제외하고 폴더 우선 + 일반 파일 순으로 정렬
+  const sortedForCompress = [...combinedRaw].sort((a, b) => {
+    const aIsUserDesk = String(a._scope).includes('바탕화면') && !String(a._scope).includes('공용');
+    const bIsUserDesk = String(b._scope).includes('바탕화면') && !String(b._scope).includes('공용');
+    if (a.kind === 'FOLDER' && b.kind !== 'FOLDER') return -1;
+    if (a.kind !== 'FOLDER' && b.kind === 'FOLDER') return 1;
+    if (aIsUserDesk && !bIsUserDesk) return -1;
+    if (!aIsUserDesk && bIsUserDesk) return 1;
+    return String(b.modifiedAt || '').localeCompare(String(a.modifiedAt || ''));
+  });
+
+  for (const it of sortedForCompress) {
+    const nm = String(it?.name || '').trim();
+    const fp = String(it?.fullPath || '').trim();
+    if (!nm || !fp) continue;
+    if (it?.kind === 'SHORTCUT' || skipExtRe.test(nm) || archiveExtRe.test(nm)) continue;
+    if (String(it._scope).includes('공용') && it?.kind !== 'FOLDER') continue;
+    const key = fp.toLowerCase();
+    if (seenCompressPaths.has(key)) continue;
+    seenCompressPaths.add(key);
+    compressCandidates.push({
+      no: compressCandidates.length + 1,
+      name: nm,
+      fullPath: fp,
+      scope: String(it._scope || '바탕화면').replace(/^내\s*/, ''),
+      kind: it?.kind === 'FOLDER' ? 'FOLDER' : 'FILE',
+      sizeMb: Number(it?.sizeMb ?? 0),
+      modifiedAt: String(it?.modifiedAt || ''),
+    });
+  }
+
+  return {
+    selectedPaths,
+    compressCandidates: compressCandidates.slice(0, 12),
+    archiveCandidates: archiveCandidates.slice(0, 12),
+  };
+}
+
   // 3-1) 대화형 1초 스마트 압축·해제 ("압축", "파일 압축", "폴더 압축", "압축하기", "압축 풀기", "이 폴더 압축해줘", "암호 압축해줘" 등 전면 처리)
+  //      + 직전 턴에 압축/해제 후보 목록이 제시된 상태에서 "1번", "테스트폴더", "응" 등으로 대상을 선택한 경우도 즉시 연결!
+  const hasActiveArchivePending =
+    Boolean(lastSmartArchivePendingState) &&
+    Date.now() - (lastSmartArchivePendingState?.updatedAt ?? 0) < 10 * 60 * 1000;
+  const isPendingArchiveFollowUpReply =
+    hasActiveArchivePending &&
+    !/(?:정리|삭제|지워|치워|백신|보안|부팅|시작\s*프로그램|사양|스펙|여권|휴지통)/i.test(clean) &&
+    (/^\s*(?:#?\d+\s*번?(?:\s*(?:이랑|하고|,|\s)\s*#?\d+\s*번?)*)\s*(?:압축|풀어|풀기|해제|해\s*줘|해\s*주세요|선택|할래)?[.!~]*$/i.test(
+      clean
+    ) ||
+      /^(?:응|네|예|그래|좋아|오케이|ok|진행|실행)\s*(?:선택한\s*(?:항목|파일|폴더)\s*)?(?:바로\s*)?(?:압축|풀어|풀기|해제|해\s*줘|해\s*주세요|할래)?[.!~]*$/i.test(
+        clean
+      ) ||
+      Boolean(
+        lastSmartArchivePendingState?.candidates.some((c) => {
+          const cLow = c.name.toLowerCase();
+          const stemLow = cLow.replace(/\.[a-z0-9]{1,5}$/i, '');
+          const qLow = clean.toLowerCase();
+          return (cLow.length >= 2 && qLow.includes(cLow)) || (stemLow.length >= 2 && qLow.includes(stemLow));
+        })
+      ));
+
   const isSmartArchiveCommand =
     !/압축\s*파일.*?(?:정리|삭제|지워|치워)|설치.*?압축\s*파일|기본\s*압축\s*앱/i.test(clean) &&
-    (/압축/i.test(clean) ||
+    (isPendingArchiveFollowUpReply ||
+      /압축/i.test(clean) ||
       /\b(?:zip|7z)\b.*?(?:묶|만들|생성|풀|해제)/i.test(clean) ||
       /(?:묶|만들|생성|풀|해제).*?\b(?:zip|7z)\b/i.test(clean));
 
   if (isSmartArchiveCommand) {
+    const isExplicitRefreshSelectionCheck =
+      /드래그.*?(?:확인|압축|풀기)|선택\s*항목\s*확인\s*후/i.test(clean);
     const wantsUnzip =
-      /풀어|풀기|해제/i.test(clean) &&
-      !/압축하기|압축\s*묶|새\s*압축/i.test(clean);
+      (/풀어|풀기|해제/i.test(clean) && !/압축하기|압축\s*묶|새\s*압축|ZIP\s*압축(?:해\s*줘|하기|\s*실행)/i.test(clean)) ||
+      (!/압축/i.test(clean) && lastSmartArchivePendingState?.mode === 'EXTRACT');
+
+    const ws = await fetchSmartArchiveWorkspaceState();
+    const pwMatch = clean.match(
+      /(?:비밀번호|암호|비번)\s*(?:걸어서|설정해서|넣어서|는|은|:|=|로)?\s*([0-9A-Za-z!@#$%^&*_-]{2,32})/i
+    );
     const hasEncryptionCue = /암호|비밀번호|비번/i.test(clean);
-    const hasExplicitTargetCue =
-      /(?:이\s*폴더|이\s*파일|현재\s*탐색기|선택한\s*(?:파일|폴더|항목)|바탕\s*화면|다운로드|내\s*문서|사진)/i.test(
-        clean
-      );
-    const residualSpecificTarget = clean
-      .replace(
-        /1초|스마트|새|일반|zip|7z|파일|폴더|문서|항목|압축|하기|해\s*줘|해\s*주세요|해\s*줄래|할래|하고\s*싶어|묶어\s*줘|묶어|묶기|만들어\s*줘|만들어|만들기|생성|어떻게|방법|하는\s*법|해|좀|을|를|로|으로|[.?~!,\s]/gi,
-        ''
-      )
-      .trim();
-    const isHowToOrGeneralZipRequest =
-      !wantsUnzip &&
-      (/어떻게|방법|하는\s*법|어떤|뭐|무슨/i.test(clean) ||
-        (!hasEncryptionCue && !hasExplicitTargetCue && residualSpecificTarget.length < 2));
-    const wantsCreateZip = !wantsUnzip && !isHowToOrGeneralZipRequest;
+    const zipPassword =
+      pwMatch && !/^(?:압축|걸어|걸어서|설정|해줘|해주세요|풀어|풀어줘|풀기)$/i.test(pwMatch[1])
+        ? pwMatch[1]
+        : hasEncryptionCue
+        ? '1234'
+        : lastSmartArchivePendingState?.pendingPassword;
 
-    // 3-1A) "압축", "파일 압축", "폴더 압축", "압축해줘", "파일 압축해줘" 등 대상을 아직 특정하지 않은 일반 압축 요청:
-    //       정리 카드로 빠지지 않고 어떤 파일·폴더를 압축할지 물어보며 3가지 압축 방법과 1클릭 실행 버튼을 친절히 안내!
-    if (!wantsUnzip && !wantsCreateZip) {
-      const [defRes, selRes] = await Promise.all([
-        fetch(getZCoreUrl('/api/care/defender/history'))
-          .then((r) => r.json())
-          .catch(() => null),
-        fetch(getZCoreUrl('/api/care/explorer-selected'))
-          .then((r) => r.json())
-          .catch(() => null),
-      ]);
-      const zipCnt = Math.max(0, Number(defRes?.downloadsArchiveCount ?? 0));
-      const zipSamples: string[] = Array.isArray(defRes?.downloadsArchiveSamples)
-        ? defRes.downloadsArchiveSamples
-        : [];
-      const selectedPaths: string[] = Array.isArray(selRes?.selectedPaths)
-        ? selRes.selectedPaths.filter((p: unknown) => typeof p === 'string' && p.trim().length > 0)
-        : [];
-      const selectedNames = selectedPaths
-        .map((p) => p.split(/[\\/]/).pop() || p)
-        .filter(Boolean);
-      const selectedHint =
-        selectedNames.length > 0
-          ? `\n  *(현재 탐색기에서 선택 감지됨: **\`${selectedNames.slice(0, 3).join(', ')}\`${selectedNames.length > 3 ? ` 외 ${selectedNames.length - 3}건` : ''}**)*`
-          : '';
-      const sampleTxt =
-        zipCnt > 0
-          ? ` (현재 다운로드 폴더 ZIP **${zipCnt}건**${zipSamples.length > 0 ? ` · 최근: \`${zipSamples[0]}\`` : ''})`
-          : '';
-      const guideKo =
-        `📦 **[1초 스마트 ZIP 압축 · 해제 — 어떤 파일이나 폴더를 압축해 드릴까요?]**\n\n` +
-        `원하시는 압축 대상과 방법을 아래에서 고르시거나, 채팅창에 바로 말씀해 주세요!\n\n` +
-        `1️⃣ **파일 탐색기에서 직접 골라 압축**: 윈도우 파일 탐색기에서 압축할 파일·폴더를 클릭(선택)한 뒤 아래 **` +
-        `[현재 탐색기에서 선택한 파일·폴더 바로 ZIP 압축]` +
-        `** 버튼을 누르시면 선택하신 항목만 즉시 ZIP으로 묶어드립니다.${selectedHint}\n` +
-        `2️⃣ **바탕화면·다운로드 최근 폴더 압축 / 암호 압축**: 아래 **` +
-        `[이 폴더 압축해줘]` +
-        `** 또는 **` +
-        `[암호 걸어서 ZIP 압축해줘 (비밀번호 1234)]` +
-        `** 버튼을 누르시면 바로 압축 파일을 만들고 저장된 폴더를 열어드립니다.\n` +
-        `3️⃣ **탐색기 마우스 우클릭 & 압축 풀기**: 아무 파일·폴더에서 마우스 우클릭 ➔ **` +
-        `[👻 귀신같이로 ZIP 압축 묶기]` +
-        `**를 누르시거나, 아래 버튼으로 다운로드 폴더의 압축파일을 한글 깨짐 없이 1초 만에 풀 수 있습니다.${sampleTxt}`;
-      speak('어떤 파일이나 폴더를 압축할지 아래 버튼에서 선택하시거나 탐색기에서 파일을 선택한 뒤 압축 버튼을 눌러 주세요.');
-      return reply(sourceTab, guideKo, {
-        followUpSuggestions: [
-          '현재 탐색기에서 선택한 파일·폴더 바로 ZIP 압축',
-          '이 폴더 압축해줘',
-          '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
-          '다운로드 최근 ZIP 바로 풀기',
-        ],
-      });
-    }
-
-    // 3-1B) 다운로드 폴더 ZIP 압축 바로 풀기 실행
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3-1B) [압축 풀기 (EXTRACT)] — 유저가 지정하지 않은 압축파일을 임의로 풀지 않고,
+    //       ① 탐색기 드래그(선택) 압축파일 또는 ② 다운로드·바탕화면 압축파일 목록을 먼저 보여주고 선택한 파일만 해제!
+    //       해제 완료 시에는 [원본 압축파일 · 풀린 폴더 이름 · 풀려 나온 파일 목록 · 저장 경로]를 투명하게 표시하고 탐색기를 오픈!
+    // ─────────────────────────────────────────────────────────────────────────
     if (wantsUnzip) {
-      const pwMatch = clean.match(/(?:비밀번호|암호|비번)\s*[:=]?\s*([0-9A-Za-z!@#$%^&*_-]{1,32})/i);
+      const archiveExtRe = /\.(?:zip|7z|rar|tar|gz|tgz|bz2|xz)$/i;
+      const selectedArchives = ws.selectedPaths.filter((p) => archiveExtRe.test(p));
+      const activeArchivePool =
+        ws.archiveCandidates.length > 0
+          ? ws.archiveCandidates
+          : lastSmartArchivePendingState?.mode === 'EXTRACT'
+          ? lastSmartArchivePendingState.candidates
+          : [];
+
+      let targetArchivePath = '';
+
+      if (!isExplicitRefreshSelectionCheck) {
+        // 1) "✅ 선택한 'OOO.zip' 바로 압축 풀기" 또는 탐색기 선택 상태에서 "응 풀어줘" 승인
+        const isConfirmingSelectedArchive =
+          /선택한.*?(?:바로\s*)?압축\s*풀|^(?:응|네|예|그래|좋아|진행)\s*(?:바로\s*)?(?:압축\s*)?(?:풀어|풀기|해제|해\s*줘|해\s*주세요)?[.!~]*$/i.test(
+            clean
+          );
+        if (isConfirmingSelectedArchive) {
+          const quotedMatch = clean.match(/['"`]([^'"`]+\.(?:zip|7z|rar|tar|gz|tgz))['"`]/i);
+          if (quotedMatch) {
+            const qName = quotedMatch[1].toLowerCase();
+            const hit = activeArchivePool.find((c) => c.name.toLowerCase() === qName);
+            if (hit) targetArchivePath = hit.fullPath;
+          }
+          if (!targetArchivePath && selectedArchives.length > 0) {
+            targetArchivePath = selectedArchives[0];
+          } else if (
+            !targetArchivePath &&
+            lastSmartArchivePendingState?.mode === 'EXTRACT' &&
+            lastSmartArchivePendingState.selectedPaths.length > 0
+          ) {
+            targetArchivePath = lastSmartArchivePendingState.selectedPaths[0];
+          } else if (!targetArchivePath && activeArchivePool.length === 1) {
+            targetArchivePath = activeArchivePool[0].fullPath;
+          }
+        }
+
+        // 2) 번호로 선택 ("1번 풀어줘", "2번 압축 풀기", "1번")
+        if (!targetArchivePath) {
+          const numMatch = clean.match(/^\s*#?(\d+)\s*번?(?:\s*(?:압축\s*)?(?:풀어|풀기|해제|해\s*줘|해\s*주세요|할래|선택))?[.!~]*$/i);
+          if (numMatch) {
+            const idx = parseInt(numMatch[1], 10) - 1;
+            if (idx >= 0 && idx < activeArchivePool.length) {
+              targetArchivePath = activeArchivePool[idx].fullPath;
+            }
+          }
+        }
+
+        // 3) 버튼 클릭("📦 [다운로드] 'OOO.zip' 압축 풀기") 또는 파일명 직접 입력("261127_캡처3_외1건.zip 풀어줘")
+        if (!targetArchivePath) {
+          const quotedArch = clean.match(/['"`]([^'"`]+)['"`]/);
+          if (quotedArch) {
+            const qLow = quotedArch[1].trim().toLowerCase();
+            const hit = activeArchivePool.find(
+              (c) => c.name.toLowerCase() === qLow || c.name.toLowerCase().includes(qLow)
+            );
+            if (hit) targetArchivePath = hit.fullPath;
+          }
+        }
+        if (!targetArchivePath) {
+          const qLow = clean.toLowerCase();
+          const hitByName = activeArchivePool.find((c) => {
+            const cLow = c.name.toLowerCase();
+            const stemLow = cLow.replace(/\.(?:zip|7z|rar|tar|gz|tgz|bz2|xz)$/i, '');
+            return (cLow.length >= 3 && qLow.includes(cLow)) || (stemLow.length >= 3 && qLow.includes(stemLow));
+          });
+          if (hitByName) {
+            targetArchivePath = hitByName.fullPath;
+          }
+        }
+      }
+
+      // 아직 어떤 압축파일을 풀지 지정하지 않은 경우 ("압축 풀기", "압축 해제", "압축 풀어줘" 등):
+      // 임의로 아무 파일이나 풀지 않고, 현재 탐색기 선택 압축파일 또는 다운로드·바탕화면 압축파일 목록을 나열해 물어봅니다!
+      if (!targetArchivePath) {
+        updateSmartArchivePendingState({
+          mode: 'EXTRACT',
+          selectedPaths: selectedArchives,
+          candidates: activeArchivePool,
+          pendingPassword: zipPassword,
+          updatedAt: Date.now(),
+        });
+
+        if (selectedArchives.length > 0) {
+          const selNames = selectedArchives.map((p) => p.split(/[\\/]/).pop() || p);
+          const firstSelName = selNames[0];
+          const otherArchives = activeArchivePool.filter(
+            (c) => !selectedArchives.some((sp) => sp.toLowerCase() === c.fullPath.toLowerCase())
+          );
+          const otherLines =
+            otherArchives.length > 0
+              ? `\n\n**다른 압축파일을 푸시려면 아래 목록에서 골라주세요:**\n` +
+                otherArchives
+                  .slice(0, 5)
+                  .map((c, i) => `  ${i + 1}. 🗜️ **\`${c.name}\`** (${c.scope}${c.sizeMb > 0 ? ` · ${c.sizeMb}MB` : ''})`)
+                  .join('\n')
+              : '';
+          const askSelExtractKo =
+            `📦 **[1초 스마트 압축 풀기 — 탐색기에서 선택하신 압축파일 확인]**\n` +
+            `현재 파일 탐색기에서 선택(드래그)해 두신 압축파일이 감지되었습니다. 아래 압축파일을 바로 풀까요?\n\n` +
+            `• **선택된 압축파일**: **\`${selNames.join(', ')}\`**\n` +
+            `• **저장될 위치**: 원본 압축파일과 같은 폴더 안에 깔끔하게 하위 폴더로 생성됩니다 (바탕화면·다운로드 파일 흩뿌림 0%).` +
+            `${otherLines}\n\n` +
+            `아래 **[✅ 선택한 '${firstSelName}' 바로 압축 풀기]** 버튼을 누르시거나 채팅창에 **"응 풀어줘"**라고 입력해 주세요!`;
+          speak(`탐색기에서 선택하신 ${firstSelName} 압축파일을 바로 풀까요? 아래 버튼을 누르거나 응 풀어줘라고 말씀해 주세요.`);
+          return reply(sourceTab, askSelExtractKo, {
+            followUpSuggestions: [
+              `✅ 선택한 '${firstSelName}' 바로 압축 풀기`,
+              ...otherArchives.slice(0, 2).map((c) => `📦 [${c.scope}] '${c.name}' 압축 풀기`),
+            ],
+          });
+        }
+
+        if (activeArchivePool.length === 0) {
+          const noArchKo =
+            `📦 **[1초 스마트 압축 풀기 — 압축파일을 선택해 주세요]**\n` +
+            `현재 다운로드 폴더와 바탕화면에서 바로 풀 수 있는 압축파일(\`.zip\`, \`.7z\`, \`.rar\`)이 보이지 않아요.\n\n` +
+            `• **압축 푸는 방법**: 윈도우 파일 탐색기에서 풀고 싶은 압축파일을 마우스로 클릭(선택)해 둔 뒤 아래 **[드래그·선택해 둔 압축파일 확인 후 풀기]** 버튼을 누르시거나, 탐색기에서 압축파일을 **더블클릭(또는 우클릭 ➔ 귀신같이로 깔끔하게 풀기)**해 주세요!`;
+          speak('풀고 싶은 압축파일을 파일 탐색기에서 선택한 뒤 아래 확인 버튼을 눌러 주세요.');
+          return reply(sourceTab, noArchKo, {
+            followUpSuggestions: [
+              '드래그·선택해 둔 압축파일 확인 후 풀기',
+              '파일 압축',
+            ],
+          });
+        }
+
+        const listLines = activeArchivePool
+          .slice(0, 6)
+          .map(
+            (c, i) =>
+              `  ${i + 1}. 🗜️ **\`${c.name}\`** (${c.scope}${c.sizeMb > 0 ? ` · ${c.sizeMb}MB` : ''}${c.modifiedAt ? ` · ${c.modifiedAt}` : ''})`
+          )
+          .join('\n');
+
+        const askPickExtractKo =
+          `📦 **[1초 스마트 압축 풀기 — 어떤 압축파일을 풀지 선택해 주세요!]**\n` +
+          `유저님이 지정하지 않은 파일을 임의로 풀지 않습니다. 현재 내 컴퓨터(다운로드·바탕화면)에 있는 압축파일(**총 ${activeArchivePool.length}건**) 중 어떤 파일을 풀까요?\n\n` +
+          `${listLines}\n\n` +
+          `• 아래에서 **원하시는 압축파일 버튼**을 바로 누르시거나, 채팅창에 **"1번 풀어줘"** 또는 **"파일명 압축 풀어줘"**라고 입력해 주세요!\n` +
+          `• 다른 폴더에 있는 압축파일이라면 파일 탐색기에서 마우스로 클릭(선택)해 둔 뒤 **[드래그·선택해 둔 압축파일 확인 후 풀기]**를 눌러 주세요.`;
+        speak('어떤 압축파일을 풀지 아래 목록에서 선택하시거나 번호를 말씀해 주세요.');
+        return reply(sourceTab, askPickExtractKo, {
+          followUpSuggestions: [
+            ...activeArchivePool.slice(0, 3).map((c) => `📦 [${c.scope}] '${c.name}' 압축 풀기`),
+            '드래그·선택해 둔 압축파일 확인 후 풀기',
+          ],
+        });
+      }
+
+      // 유저가 선택한 압축파일(targetArchivePath) 압축 해제 실행!
       const extRes = await fetch(getZCoreUrl('/api/care/extract-archive'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          path: targetArchivePath,
           password: pwMatch?.[1] || undefined,
           openExplorer: true,
         }),
@@ -2954,50 +3231,219 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
         .catch(() => null);
 
       if (!extRes || !extRes.ok) {
-        const errMsg = extRes?.needsPassword
-          ? `🔒 **암호가 걸린 압축파일입니다!**\n채팅창에 **"암호 1234로 압축 풀어줘"**처럼 비밀번호를 함께 말씀해 주시면 즉시 풀어드립니다.`
-          : `⚠️ ${extRes?.message || '내 컴퓨터 연결(멀린 Z-코어) 상태를 확인한 뒤 다시 시도해 주세요.'}`;
+        const errMsg =
+          extRes?.needPassword || extRes?.needsPassword
+            ? `🔒 **\`${targetArchivePath.split(/[\\/]/).pop()}\` 파일은 암호가 걸린 압축파일입니다!**\n채팅창에 **"암호 1234로 압축 풀어줘"**처럼 비밀번호를 함께 말씀해 주시면 즉시 풀어드립니다.`
+            : `⚠️ ${extRes?.message || '내 컴퓨터 연결(멀린 Z-코어) 상태를 확인한 뒤 다시 시도해 주세요.'}`;
         speak('압축 해제 결과를 확인해 주세요.');
         return reply(sourceTab, errMsg, {
           followUpSuggestions: [
-            '다운로드 폴더 열어서 1초 압축 풀기 써보기',
-            '이 폴더 압축해줘',
-            '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+            ...activeArchivePool.slice(0, 2).map((c) => `📦 [${c.scope}] '${c.name}' 압축 풀기`),
+            '파일 압축',
           ],
         });
       }
 
-      const outDir = String(extRes.outputDir || '').trim();
-      const outName = outDir.split(/[\\/]/).pop() || outDir;
+      updateSmartArchivePendingState(null);
+      const archFileName = targetArchivePath.split(/[\\/]/).pop() || targetArchivePath;
+      const outDir = String(extRes.extractedFolder || extRes.outputDir || '').trim();
+      const outName = outDir.split(/[\\/]/).pop() || outDir || archFileName.replace(/\.[a-z0-9]+$/i, '');
       const fileCnt = Number(extRes.extractedCount ?? 1);
+      const extractedFilesArr: string[] = Array.isArray(extRes.extractedFiles) ? extRes.extractedFiles : [];
+      const previewFiles =
+        extractedFilesArr.length > 0
+          ? `${extractedFilesArr.slice(0, 5).join(', ')}${extractedFilesArr.length > 5 ? ` 외 ${extractedFilesArr.length - 5}건` : ''}`
+          : String(extRes.extractedPreview || '').trim() || `${outName} 내부 파일 ${fileCnt}개`;
+
+      if (outDir) {
+        void openMissingFileOrRecycleBinLocation(outDir, false).catch(() => {});
+      }
+
       const msgKo =
         `✅ **[1초 스마트 압축 풀기 완료]**\n` +
-        `• **풀린 폴더**: \`${outName}\` (총 **${fileCnt}개** 파일 · 맥북 한글 자소 복원 및 압축폭탄 방지 적용)\n` +
-        `• **저장 위치**: \`${outDir}\`\n\n` +
-        `방금 압축이 풀린 폴더를 파일 탐색기에서 바로 열어드렸습니다!`;
-      speak(`압축파일을 깔끔하게 풀어 ${outName} 폴더를 열어드렸습니다.`);
+        `• **원본 압축파일**: **\`${archFileName}\`**\n` +
+        `• **풀린 폴더 이름**: **\`${outName}\`** (총 **${fileCnt}개** 항목 해제 완료 · 한글 자소 복원 및 압축폭탄 방지 적용)\n` +
+        `• **풀려 나온 파일 목록**: **\`${previewFiles}\`**\n` +
+        `• **저장 위치(경로)**: \`${outDir || targetArchivePath}\`\n\n` +
+        `방금 압축이 풀린 **\`${outName}\`** 폴더를 파일 탐색기에서 바로 열어드렸습니다!`;
+      speak(`${archFileName} 압축을 풀어 ${outName} 폴더를 열어드렸습니다.`);
       return reply(sourceTab, msgKo, {
         followUpSuggestions: [
-          '이 폴더 압축해줘',
-          '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
-          '다운로드 폴더 열어서 1초 압축 풀기 써보기',
+          '파일 압축',
+          ...activeArchivePool
+            .filter((c) => c.fullPath.toLowerCase() !== targetArchivePath.toLowerCase())
+            .slice(0, 2)
+            .map((c) => `📦 [${c.scope}] '${c.name}' 압축 풀기`),
         ],
       });
     }
 
-    // 3-1C) 폴더/파일/사진 새 ZIP 압축 (일반 압축 & AES-256 암호 압축) 실행
-    const pwMatch = clean.match(/(?:비밀번호|암호|비번)\s*(?:걸어서|설정해서|넣어서|는|은|:|=)?\s*([0-9A-Za-z!@#$%^&*_-]{2,32})/i);
-    const zipPassword =
-      pwMatch && !/^(?:압축|걸어|걸어서|설정|해줘|해주세요)$/i.test(pwMatch[1])
-        ? pwMatch[1]
-        : hasEncryptionCue
-        ? '1234'
-        : undefined;
+    // ─────────────────────────────────────────────────────────────────────────
+    // 3-1C) [새 ZIP 압축 / 암호 압축 (COMPRESS)] — 유저가 지정하지 않은 바탕화면·다운로드 파일을
+    //       절대 임의로 묶어 압축하지 않습니다!
+    //       ① 탐색기에 드래그(선택)된 파일들이 있으면 파일명을 먼저 나열해 압축 여부를 확인받고,
+    //       ② 선택된 파일이 없으면 바탕화면·다운로드의 실제 폴더·파일 후보를 나열해 유저가 직접 고르게 합니다!
+    // ─────────────────────────────────────────────────────────────────────────
+    const activeCompressPool =
+      ws.compressCandidates.length > 0
+        ? ws.compressCandidates
+        : lastSmartArchivePendingState?.mode === 'COMPRESS'
+        ? lastSmartArchivePendingState.candidates
+        : [];
 
+    let targetCompressPaths: string[] = [];
+
+    if (!isExplicitRefreshSelectionCheck) {
+      // 1) 탐색기에서 드래그(선택)한 항목 확인 후 "✅ 선택한 항목 바로 ZIP 압축 실행" / "🔒 선택한 항목 암호 ZIP 압축" / "응 압축해줘"
+      const isConfirmingExplorerSelection =
+        /선택한\s*항목.*?(?:ZIP\s*압축|압축\s*실행|암호\s*ZIP)|^(?:응|네|예|그래|좋아|진행)\s*(?:선택한\s*(?:항목|파일|폴더)\s*)?(?:바로\s*)?(?:ZIP\s*)?(?:압축)?(?:해\s*줘|해\s*주세요|실행|할래)?[.!~]*$/i.test(
+          clean
+        );
+      if (isConfirmingExplorerSelection) {
+        if (ws.selectedPaths.length > 0) {
+          targetCompressPaths = ws.selectedPaths;
+        } else if (
+          lastSmartArchivePendingState?.mode === 'COMPRESS' &&
+          lastSmartArchivePendingState.selectedPaths.length > 0
+        ) {
+          targetCompressPaths = lastSmartArchivePendingState.selectedPaths;
+        }
+      }
+
+      // 2) 번호로 선택 ("1번 압축해줘", "1번이랑 2번 압축해줘", "1번", "2번 암호 걸어서 압축해줘")
+      if (targetCompressPaths.length === 0) {
+        const isNumberSelectionTurn =
+          /^\s*(?:#?\d+\s*번?(?:\s*(?:이랑|하고|과|와|,|\s)\s*#?\d+\s*번?)*)\s*(?:암호.*?)?(?:ZIP\s*)?(?:압축|해\s*줘|해\s*주세요|할래|선택|묶어\s*줘)?[.!~]*$/i.test(
+            clean
+          ) || /(?:^|\s)\d+\s*번\s*(?:폴더|파일|항목)?\s*(?:암호.*?)?(?:ZIP\s*)?압축/i.test(clean);
+        if (isNumberSelectionTurn) {
+          const nums = Array.from(clean.matchAll(/(\d+)\s*번?/g))
+            .map((m) => parseInt(m[1], 10))
+            .filter((n) => n >= 1 && n <= activeCompressPool.length && n !== 1234);
+          const picked = nums
+            .map((n) => activeCompressPool[n - 1]?.fullPath)
+            .filter((p): p is string => Boolean(p));
+          if (picked.length > 0) {
+            targetCompressPaths = Array.from(new Set(picked));
+          }
+        }
+      }
+
+      // 3) 후보 버튼 클릭("📁 [바탕화면] '테스트폴더' ZIP 압축해줘") 또는 구체적 폴더·파일 이름 지정("테스트폴더 압축해줘")
+      if (targetCompressPaths.length === 0) {
+        const quotedTarget = clean.match(/['"`]([^'"`]+)['"`]/);
+        if (quotedTarget) {
+          const qLow = quotedTarget[1].trim().toLowerCase();
+          const hit = activeCompressPool.find(
+            (c) => c.name.toLowerCase() === qLow || c.name.toLowerCase().includes(qLow)
+          );
+          if (hit) {
+            targetCompressPaths = [hit.fullPath];
+          }
+        }
+      }
+      if (targetCompressPaths.length === 0) {
+        const qLow = clean.toLowerCase();
+        const matchedByName = activeCompressPool.filter((c) => {
+          const cLow = c.name.toLowerCase();
+          const stemLow = cLow.replace(/\.[a-z0-9]{1,5}$/i, '');
+          return (cLow.length >= 2 && qLow.includes(cLow)) || (stemLow.length >= 2 && qLow.includes(stemLow));
+        });
+        if (matchedByName.length > 0) {
+          targetCompressPaths = matchedByName.map((c) => c.fullPath);
+        }
+      }
+    }
+
+    // 아직 어떤 파일이나 폴더를 압축할지 지정/확인되지 않은 경우:
+    // 절대 임의로 바탕화면·다운로드 파일을 섞어 압축하지 않고,
+    // ① 탐색기 드래그 선택 파일이 있으면 파일명을 나열해 물어보고, ② 없으면 바탕화면·다운로드 후보 목록을 나열해 선택하게 합니다!
+    if (targetCompressPaths.length === 0) {
+      updateSmartArchivePendingState({
+        mode: 'COMPRESS',
+        selectedPaths: ws.selectedPaths,
+        candidates: activeCompressPool,
+        pendingPassword: zipPassword,
+        updatedAt: Date.now(),
+      });
+
+      if (ws.selectedPaths.length > 0) {
+        const selLines = ws.selectedPaths
+          .slice(0, 8)
+          .map((p, idx) => {
+            const fn = p.split(/[\\/]/).pop() || p;
+            const parentLbl = /desktop|바탕\s*화면/i.test(p)
+              ? '바탕화면'
+              : /downloads|다운로드/i.test(p)
+              ? '다운로드'
+              : p.split(/[\\/]/).slice(-2, -1)[0] || '탐색기';
+            return `  ${idx + 1}. **\`${fn}\`** (${parentLbl})`;
+          })
+          .join('\n');
+        const moreCnt = ws.selectedPaths.length > 8 ? `\n  *(외 ${ws.selectedPaths.length - 8}건)*` : '';
+        const encNotice = hasEncryptionCue
+          ? `\n• **암호 압축 준비**: 비밀번호 **\`${zipPassword || '1234'}\`**(AES-256) 적용 대기 중`
+          : '';
+
+        const askConfirmSelectedKo =
+          `📦 **[1초 스마트 ZIP 압축 — 드래그(선택)해 두신 파일 확인]**\n` +
+          `현재 파일 탐색기에서 아래 **총 ${ws.selectedPaths.length}개 항목**을 선택해 두셨어요. 이 항목들을 ZIP 파일로 압축할까요?\n\n` +
+          `${selLines}${moreCnt}${encNotice}\n\n` +
+          `• **위 선택 항목을 압축하시려면**: 아래 **[✅ 선택한 항목 바로 ZIP 압축 실행]** 또는 **[🔒 선택한 항목 암호 ZIP 압축 (비밀번호 1234)]** 버튼을 누르시거나 채팅창에 **"응 압축해줘"**라고 입력해 주세요!\n` +
+          `• **다른 폴더나 파일을 압축하시려면**: 아래 후보 버튼을 누르시거나 파일명을 말씀해 주세요.`;
+        speak(
+          `현재 파일 탐색기에서 선택하신 ${ws.selectedPaths.length}개 항목을 확인했습니다. 이 항목들을 압축할지 아래 버튼을 눌러 선택해 주세요.`
+        );
+        return reply(sourceTab, askConfirmSelectedKo, {
+          followUpSuggestions: [
+            '✅ 선택한 항목 바로 ZIP 압축 실행',
+            '🔒 선택한 항목 암호 ZIP 압축 (비밀번호 1234)',
+            ...activeCompressPool
+              .slice(0, 2)
+              .map((c) => `${c.kind === 'FOLDER' ? '📁' : '📄'} [${c.scope}] '${c.name}' ZIP 압축해줘`),
+          ],
+        });
+      }
+
+      const candidateLines =
+        activeCompressPool.length > 0
+          ? activeCompressPool
+              .slice(0, 6)
+              .map(
+                (c, i) =>
+                  `  ${i + 1}. ${c.kind === 'FOLDER' ? '📁 폴더' : '📄 파일'} **\`${c.name}\`** (${c.scope}${
+                    c.sizeMb > 0 ? ` · ${c.sizeMb}MB` : ''
+                  })`
+              )
+              .join('\n')
+          : '  *(현재 바탕화면·다운로드에서 바로 선택 가능한 일반 폴더·파일이 없습니다)*';
+
+      const topCand = activeCompressPool[0];
+      const askWhichFileToZipKo =
+        `📦 **[1초 스마트 ZIP 압축 — 어떤 폴더나 파일을 압축할지 선택해 주세요!]**\n` +
+        `유저님이 지정하지 않은 파일들을 비서가 임의로 묶어 압축하지 않습니다. 아래 **2가지 방법** 중 편한 방식으로 압축할 대상을 골라주세요!\n\n` +
+        `1️⃣ **파일 탐색기에서 마우스로 드래그(선택)해 둔 상태로 압축하기**:\n` +
+        `  파일 탐색기 창에서 압축할 파일·폴더들을 마우스로 드래그(선택)해 놓은 뒤 아래 **[드래그해 둔 선택 항목 확인 후 압축하기]** 버튼을 누르시면, 비서가 선택된 파일명을 먼저 나열해 보여드리고 확인 후 압축합니다.\n\n` +
+        `2️⃣ **아래 내 컴퓨터(바탕화면·다운로드) 항목 중 직접 골라 압축하기** *(아래 버튼 클릭 또는 \`"1번 압축해줘"\`, \`"폴더명 압축해줘"\` 입력)*:\n` +
+        `${candidateLines}`;
+      speak('지정하지 않은 파일을 임의로 압축하지 않습니다. 아래 목록에서 압축할 폴더나 파일을 선택하시거나, 파일 탐색기에서 드래그해 선택한 뒤 확인 버튼을 눌러 주세요.');
+      return reply(sourceTab, askWhichFileToZipKo, {
+        followUpSuggestions: [
+          ...activeCompressPool
+            .slice(0, 2)
+            .map((c) => `${c.kind === 'FOLDER' ? '📁' : '📄'} [${c.scope}] '${c.name}' ZIP 압축해줘`),
+          ...(topCand ? [`🔒 [${topCand.scope}] '${topCand.name}' 암호 ZIP 압축 (비밀번호 1234)`] : []),
+          '드래그해 둔 선택 항목 확인 후 압축하기',
+        ],
+      });
+    }
+
+    // 유저가 명확히 지정·승인한 targetCompressPaths만 정확히 ZIP 압축 실행!
     const zipRes = await fetch(getZCoreUrl('/api/care/create-zip'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        paths: targetCompressPaths,
         password: zipPassword,
         openExplorer: true,
       }),
@@ -3006,39 +3452,46 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       .catch(() => null);
 
     if (!zipRes || !zipRes.ok) {
-      const failKo =
-        `⚠️ ${zipRes?.message || '내 컴퓨터 연결(멀린 Z-코어)을 확인한 뒤 다시 눌러주세요.'}`;
+      const failKo = `⚠️ ${zipRes?.message || '내 컴퓨터 연결(멀린 Z-코어)을 확인한 뒤 다시 눌러주세요.'}`;
       speak(failKo);
       return reply(sourceTab, failKo, {
         followUpSuggestions: [
-          '다운로드 최근 ZIP 바로 풀기',
-          '다운로드 폴더 열어서 1초 압축 풀기 써보기',
+          '드래그해 둔 선택 항목 확인 후 압축하기',
+          '압축 풀기',
         ],
       });
     }
 
+    updateSmartArchivePendingState(null);
     const zName = String(zipRes.zipName || '새_압축파일.zip');
     const zPath = String(zipRes.zipPath || '');
     const addedCnt = Number(zipRes.addedCount ?? 1);
     const isEnc = Boolean(zipRes.encrypted);
-    const srcList: string[] = Array.isArray(zipRes.sourceNames) ? zipRes.sourceNames : [];
-    const srcHint = srcList.length > 0 ? ` (원본: \`${srcList.slice(0, 3).join(', ')}\`)` : '';
+    const srcList: string[] = Array.isArray(zipRes.sourceNames)
+      ? zipRes.sourceNames
+      : targetCompressPaths.map((p) => p.split(/[\\/]/).pop() || p);
+    const srcHint = srcList.length > 0 ? srcList.join(', ') : zName;
+
+    if (zPath) {
+      void openMissingFileOrRecycleBinLocation(zPath, false).catch(() => {});
+    }
+
     const msgKo =
       `✅ **[${isEnc ? '🔒 AES-256 암호 ZIP 압축' : '📦 1초 스마트 ZIP 압축'} 생성 완료]**\n` +
-      `• **생성된 압축파일**: **\`${zName}\`** (총 **${addedCnt}개** 파일 포함${srcHint})\n` +
+      `• **선택하신 압축 대상**: **\`${srcHint}\`** (총 **${addedCnt}개** 파일 포함)\n` +
+      `• **생성된 압축파일**: **\`${zName}\`**\n` +
       (isEnc ? `• **적용된 암호**: \`${zipPassword}\` (AES-256 표준 암호화 적용)\n` : '') +
-      `• **저장 위치**: \`${zPath}\`\n\n` +
-      `방금 만들어진 **\`${zName}\`** 파일에 탐색기 선택 표시를 맞춰 열어드렸습니다!`;
+      `• **저장 위치(경로)**: \`${zPath}\`\n\n` +
+      `방금 만들어진 **\`${zName}\`** 파일 위치로 파일 탐색기를 바로 열어드렸습니다!`;
     speak(
       isEnc
-        ? `비밀번호 ${zipPassword}번으로 암호 압축파일 ${zName}을 만들고 폴더를 열어드렸습니다.`
-        : `압축파일 ${zName}을 만들고 폴더를 열어드렸습니다.`
+        ? `선택하신 ${srcHint} 항목을 비밀번호 ${zipPassword}번으로 암호 압축해 ${zName} 파일을 만들고 폴더를 열어드렸습니다.`
+        : `선택하신 ${srcHint} 항목을 압축해 ${zName} 파일을 만들고 폴더를 열어드렸습니다.`
     );
     return reply(sourceTab, msgKo, {
       followUpSuggestions: [
-        '다운로드 최근 ZIP 바로 풀기',
-        isEnc ? '이 폴더 압축해줘' : '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
-        '다운로드 폴더 열어서 1초 압축 풀기 써보기',
+        `📦 '${zName}' 압축 풀기`,
+        '다른 파일·폴더 더 압축하기',
       ],
     });
   }
