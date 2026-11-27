@@ -2682,15 +2682,35 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                               </button>
                             )}
                             {bk.bucketId === 'SECURITY' && !card.executed && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void submitExternalMonsterChatQuery('윈도우 순정 백신 검사해줘', message.sourceTab || 'trash')
-                                }
-                                className="px-2 py-0.5 rounded bg-white hover:bg-teal-50 border border-slate-200 text-[10.5px] font-semibold text-teal-700 cursor-pointer"
-                              >
-                                🛡️ 순정 백신 상태·검사
-                              </button>
+                              <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void submitExternalMonsterChatQuery('안 지우고 잠재우기', message.sourceTab || 'trash')
+                                  }
+                                  className="px-2 py-0.5 rounded bg-amber-50 hover:bg-amber-100 border border-amber-200 text-[10.5px] font-semibold text-amber-900 cursor-pointer"
+                                >
+                                  🌙 안 지우고 잠재우기
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void submitExternalMonsterChatQuery('안 쓰는 보안앱 완전 삭제', message.sourceTab || 'trash')
+                                  }
+                                  className="px-2 py-0.5 rounded bg-rose-50 hover:bg-rose-100 border border-rose-200 text-[10.5px] font-semibold text-rose-800 cursor-pointer"
+                                >
+                                  🗑️ 안 쓰는 보안앱 완전 삭제
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void submitExternalMonsterChatQuery('윈도우 순정 백신 검사해줘', message.sourceTab || 'trash')
+                                  }
+                                  className="px-2 py-0.5 rounded bg-white hover:bg-teal-50 border border-slate-200 text-[10.5px] font-semibold text-teal-700 cursor-pointer"
+                                >
+                                  🛡️ 순정 백신 상태·검사
+                                </button>
+                              </div>
                             )}
                           </div>
 

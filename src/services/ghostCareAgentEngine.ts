@@ -512,11 +512,11 @@ export function explainCareItemForBeginner(item: {
       plainExplainKo: '프린터 본체 드라이버가 아니라 뒤에서 통계만 보내는 부가 프로그램이에요. 지워도 인쇄·스캔은 100% 그대로 됩니다!',
     };
   }
-  if (/nprotect|ahnlab|astx|nossvc/.test(comb)) {
+  if (/nprotect|엔프로텍트|ahnlab|안랩|v3\s*lite|v3lite|astx|nossvc|alyac|알약/.test(comb)) {
     return {
       safetyBadge: 'SAFE_DELETE',
       safetyBadgeLabel: '🟠 CPU 과점유 · 삭제 추천',
-      plainExplainKo: '은행 보안 프로그램인데 끄지 못하게 잠겨 있어 평소에도 CPU를 많이 먹어요. 자주 안 쓰시면 지우시는 게 훨씬 빠르고, 나중에 은행 가면 자동 재설치돼요!',
+      plainExplainKo: '자가보호가 걸려 있어 평소에도 뒤에서 CPU와 메모리를 차지하는 상주 보안·백신 모듈(AhnLab·nProtect 등)이에요. 윈도우 순정 백신으로 충분하므로 [안 쓰는 보안앱 완전 삭제]로 지우시는 게 훨씬 빠릅니다!',
     };
   }
   if (item.actionType === 'SECURITY_SLEEP' || /anysign|touchen|delfino|veraport|wizvera|crossex|iniline|ipinside|keysharp|magicline|crosscert|secukit/.test(comb)) {
@@ -1141,6 +1141,16 @@ export async function runAgentCareReadTools(
     (i) => i.bucketId === 'SECURITY' && i.safetyBadge === 'SLEEP_RECOMMEND'
   ).length;
 
+  const secItems = items.filter((i) => i.bucketId === 'SECURITY');
+  const secSampleNames = secItems
+    .slice(0, 5)
+    .map((i) => i.name)
+    .filter(Boolean);
+  const secSampleHint =
+    secSampleNames.length > 0
+      ? ` (감지된 보안모듈: **${secSampleNames.join(', ')}**${secItems.length > secSampleNames.length ? ` 외 ${secItems.length - secSampleNames.length}건` : ''})`
+      : '';
+
   let briefingParts: string[];
   if (subFocus === 'UNUSED_APPS') {
     briefingParts = [
@@ -1156,9 +1166,9 @@ export async function runAgentCareReadTools(
     ];
   } else if (subFocus === 'ADWARE_SECURITY') {
     briefingParts = [
-      `광고·애드웨어와 은행·관공서 보안프로그램을 정밀 점검해 **삭제 권장 ${secDangerCnt}건 · 잠재우기 권장 ${secSleepCnt}건**을 분류했어요!`,
-      `• 아래 4칸 요약표 중 **[② 🛡️ 광고 · 보안앱]**의 **[상세 ▾]**를 누르시면 바로 그 아래에 세부 목록이 펼쳐집니다.`,
-      `• **"빨간색 광고앱만 지우고 은행 보안앱은 잠재워줘"**처럼 말씀하시거나 원하는 항목만 체크해 실행해 보세요!`,
+      `내 PC의 보안모듈·애드웨어를 정밀 점검해 **완전 삭제 권장 ${secDangerCnt}건 · 안 지우고 잠재우기 권장 ${secSleepCnt}건**을 감지했어요!${secSampleHint}`,
+      `• 아래 4칸 요약표 중 **[② 🛡️ 광고 · 보안앱]** 칸에 세부 목록이 펼쳐져 있습니다.`,
+      `• 자주 가는 은행 보안앱이라면 **[안 지우고 잠재우기]**(은행 접속 시 1초 자동 기상)를, AhnLab·nProtect 등 상주 보안모듈이나 안 쓰는 보안앱이라면 **[안 쓰는 보안앱 완전 삭제]** 선택지를 눌러 깔끔하게 정리해 보세요!`,
     ];
   } else if (subFocus === 'DESKTOP_CLEAN' || subFocus === 'PHOTO_CLEANUP') {
     briefingParts = [
@@ -1168,14 +1178,14 @@ export async function runAgentCareReadTools(
   } else if (subFocus === 'SPEED_SLOW') {
     const speedCnt = items.filter((i) => i.bucketId === 'SPEED' && !i.isProtected).length;
     briefingParts = [
-      `속도를 늦추는 백그라운드 상주 서비스·자동실행 항목 **${speedCnt}건**과 4대 영역을 함께 점검했어요!`,
-      `• 아래 4칸 요약표 중 **[① ⚡ 속도 높이기]**의 **[상세 ▾]**를 누르시면 바로 그 아래에 세부 목록이 펼쳐지니, 원하시는 항목만 체크하거나 **"빨간색 안전 항목만 정리해줘"**처럼 말씀해 주세요!`,
+      `속도를 늦추는 백그라운드 상주 서비스·자동실행 **${speedCnt}건**과 보안모듈(**삭제 권장 ${secDangerCnt}건 · 잠재우기 권장 ${secSleepCnt}건**)${secSampleHint}을 함께 점검했어요!`,
+      `• 아래 4칸 요약표에서 **[① ⚡ 속도 높이기]**와 **[② 🛡️ 광고 · 보안앱]** 세부 목록을 확인하시고, 보안모듈은 **[안 지우고 잠재우기]** 또는 **[안 쓰는 보안앱 완전 삭제]** 중 원하시는 방식을 선택해 주세요!`,
     ];
   } else {
     briefingParts = [
-      `내 PC의 **4대 영역(①속도 · ②광고/보안앱 · ③용량/묵은앱 · ④바탕화면/사진)**에서 총 **${items.length}개 항목**을 실측해 왔어요!`,
+      `내 PC의 **4대 영역(①속도 · ②광고/보안앱 · ③용량/묵은앱 · ④바탕화면/사진)**에서 총 **${items.length}개 항목**을 실측해 왔어요!${secSampleHint}`,
       ...summaryLines.map((l) => `• ${l}`),
-      `아래 **4칸 요약표**에서 원하는 칸의 **[상세 ▾]**를 눌러 세부 내역을 보시고, 체크박스로 고르시거나 **"오캠이랑 4번은 빼고 정리해줘"**처럼 편하게 말씀해 주세요!`,
+      `아래 **4칸 요약표**에서 원하는 칸의 **[상세 ▾]**를 눌러 세부 내역을 보시고, 보안모듈은 **[안 지우고 잠재우기]**와 **[안 쓰는 보안앱 완전 삭제]** 중 편한 선택지를 골라 실행해 주세요!`,
     ];
   }
 
@@ -1186,8 +1196,9 @@ export async function runAgentCareReadTools(
   if (subFocus === 'UNUSED_APPS') {
     followUps.push('1번 프로그램이 뭐 하는 건지 알려줘');
     followUps.push('오래 안 쓴 프로그램만 골라줘');
-  } else if (subFocus === 'ADWARE_SECURITY' || scanKind === 'SECURITY_2TIER') {
-    followUps.push('빨간색 애드웨어만 지우고 은행 보안앱은 잠재워줘');
+  } else if (subFocus === 'ADWARE_SECURITY' || scanKind === 'SECURITY_2TIER' || subFocus === 'SPEED_SLOW' || subFocus === 'FULL_CHECKUP') {
+    followUps.push('안 지우고 잠재우기');
+    followUps.push('안 쓰는 보안앱 완전 삭제');
     followUps.push('윈도우 순정 백신 검사해줘');
   } else if (subFocus === 'DESKTOP_CLEAN' || subFocus === 'PHOTO_CLEANUP' || scanKind === 'DESKTOP_DETAIL') {
     if (visibleSysIcons.length > 0) {
@@ -1952,9 +1963,9 @@ export function detectAgentCareIntent(
       clean
     );
 
-  // ② 광고·애드웨어·은행/관공서 보안앱 점검·정리 ("애드웨어 체크해줘", "이상한 광고창 떠", "은행 보안앱 정리" 등 전면 포괄)
+  // ② 광고·애드웨어·은행/관공서 보안앱 점검·정리 ("애드웨어 체크해줘", "보안 앱", "컴퓨터 속도, 보안 프로그램 점검", "안랩 점검" 등 전면 포괄)
   const isSecurity2Tier =
-    /(?:애드웨어|스파이웨어|그리드|구라\s*제거|악성\s*(?:앱|프로그램)|광고\s*(?:프로그램|앱|어플|창|팝업|배너)|(?:이상한|모르는|수상한)\s*(?:창|팝업|광고|배너|앱|프로그램)|(?:은행|관공서|홈택스|키보드|웹)?\s*보안\s*(?:프로그램|모듈|앱|어플|서비스|쓰레기))/i.test(
+    /(?:애드웨어|스파이웨어|그리드|구라\s*제거|악성\s*(?:앱|프로그램)|광고\s*(?:프로그램|앱|어플|창|팝업|배너)|(?:이상한|모르는|수상한)\s*(?:창|팝업|광고|배너|앱|프로그램)|(?:은행|관공서|홈택스|키보드|웹)?\s*보안\s*(?:프로그램|모듈|앱|어플|서비스|쓰레기)|^(?:보안\s*(?:앱|프로그램|모듈)|안랩|ahnlab|v3(?:\s*lite)?|nprotect|엔프로텍트)$|(?:안랩|ahnlab|v3\s*lite|v3lite|nprotect|엔프로텍트).*?(?:점검|확인|체크|상태|감지|검사|스캔|정리))/i.test(
       clean
     );
 

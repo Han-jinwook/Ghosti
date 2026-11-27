@@ -185,11 +185,13 @@ GRID_AND_ADWARE_APP_TOKENS = (
 )
 
 WEB_SECURITY_APP_TOKENS = (
-    "nprotect", "anysign", "touchen", "delfino", "veraport", "wizvera",
-    "iniline", "crossex", "inisafe", "crosscert", "ipinside", "keysharp",
-    "magicline", "markany", "e-pagesafer", "miplatform", "ozweblauncher",
-    "ozx webagent", "iformscan", "inziiform", "non-activex kipo", "redbc",
-    "secure keystroke", "aps engine", "yettiesoft", "secukit", "eisp",
+    "ahnlab", "안랩", "astx", "v3 lite", "v3lite", "v3 clinic", "v3clinic",
+    "alyac", "알약", "nprotect", "엔프로텍트", "anysign", "touchen", "delfino",
+    "veraport", "wizvera", "iniline", "crossex", "inisafe", "crosscert",
+    "ipinside", "keysharp", "magicline", "markany", "e-pagesafer", "miplatform",
+    "ozweblauncher", "ozx webagent", "iformscan", "inziiform", "non-activex kipo",
+    "redbc", "secure keystroke", "aps engine", "yettiesoft", "secukit", "eisp",
+    "raonsecure", "dreamsecurity", "softforum", "initech", "ksign",
 )
 
 
@@ -1067,7 +1069,13 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
                 "actionType": "APP_UNINSTALL",
             })
         elif any(tok in comb_low for tok in WEB_SECURITY_APP_TOKENS):
-            is_self_def = any(k in comb_low for k in ("nprotect", "ahnlab safe", "astx", "nossvc"))
+            is_self_def = any(
+                k in comb_low
+                for k in (
+                    "nprotect", "엔프로텍트", "ahnlab", "안랩", "astx", "nossvc",
+                    "v3 lite", "v3lite", "v3 clinic", "v3clinic", "alyac", "알약",
+                )
+            )
             is_stale_old = age_days >= 365 or any(k in comb_low for k in ("miplatform", "iformscan", "inziiform", "ozweblauncher", "ozx", "aps engine", "yettiesoft"))
             if is_self_def or is_stale_old:
                 delete_recommend.append({
@@ -1077,7 +1085,11 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
                     "publisher": pub,
                     "sizeMb": float(ap.get("sizeMb") or 0),
                     "installDate": inst_dt_str,
-                    "reason": "자가보호 상주(CPU 과점유) 또는 장기 미사용 구형 모듈 (완전 삭제 권장)" if is_self_def else "장기 미사용·구형 관공서/리포트 모듈 (삭제 권장)",
+                    "reason": (
+                        "자가보호 상주(CPU·메모리 과점유) 보안·백신 모듈 — 윈도우 순정 백신으로 대체 가능 (완전 삭제 권장)"
+                        if is_self_def
+                        else "장기 미사용·구형 관공서/리포트 모듈 (삭제 권장)"
+                    ),
                     "actionType": "APP_UNINSTALL",
                 })
             else:
@@ -1090,6 +1102,38 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
                     "reason": "은행·관공서 실사용 모듈 (삭제하지 않고 무삭제 수면 + 접속 시 자동 기상 권장)",
                     "actionType": "SECURITY_SLEEP",
                 })
+
+    # 2-B) 레지스트리 설치 목록에 잡히지 않거나 실행 중인 AhnLab / nProtect 상주 프로세스 폴백 감지
+    existing_del_low = " ".join(str(x.get("name") or "").lower() for x in delete_recommend)
+    if "ahnlab" not in existing_del_low and "v3" not in existing_del_low:
+        for p_exe, p_info in running_map.items():
+            if p_exe in ("asdsvc.exe", "v3l4sp.exe", "v3lite4exp.exe", "v3lite.exe", "astx.exe"):
+                lbl = "AhnLab Safe Transaction" if p_exe == "astx.exe" else "AhnLab V3 Lite (안랩 상주 보안모듈)"
+                delete_recommend.insert(0, {
+                    "id": "sec_ahnlab_live",
+                    "name": lbl,
+                    "cat": "STALE_OR_SELFDEF_SECURITY",
+                    "publisher": "AhnLab, Inc.",
+                    "sizeMb": round(float(p_info.get("memoryMb") or 65.0), 1),
+                    "installDate": now_dt.strftime("%Y-%m-%d"),
+                    "reason": f"자가보호 상주({p_exe} 실행 중) 보안·백신 모듈 — 윈도우 순정 백신으로 대체 가능 (완전 삭제 권장)",
+                    "actionType": "APP_UNINSTALL",
+                })
+                break
+    if "nprotect" not in existing_del_low:
+        for p_exe, p_info in running_map.items():
+            if p_exe in ("nossvc.exe", "nosstarter.npe", "npkcrypt.exe"):
+                delete_recommend.insert(0, {
+                    "id": "sec_nprotect_live",
+                    "name": "nProtect Online Security (엔프로텍트 보안모듈)",
+                    "cat": "STALE_OR_SELFDEF_SECURITY",
+                    "publisher": "INCA Internet",
+                    "sizeMb": round(float(p_info.get("memoryMb") or 55.0), 1),
+                    "installDate": now_dt.strftime("%Y-%m-%d"),
+                    "reason": f"자가보호 상주({p_exe} 실행 중) 금융보안 모듈 (완전 삭제 권장)",
+                    "actionType": "APP_UNINSTALL",
+                })
+                break
 
     # 번호 부여
     idx = 1

@@ -5225,6 +5225,30 @@ def _toast_worker() -> None:
                 s_fp = str(sel_rec.get("img_path") or sel_rec.get("file_path") or "").strip()
                 tk.Label(preview_pane, text="👻 선택 항목 상세 미리보기", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 9, "bold"), anchor="w").pack(fill="x", pady=(0, 6))
                 tk.Label(preview_pane, text=s_txt[:360], fg="#F8FAFC", bg="#0F172A", font=("Malgun Gothic", 9), justify="left", wraplength=330, anchor="w").pack(fill="x", pady=(0, 8))
+                if s_fp and Path(s_fp).suffix.lower() in (".gsheet", ".gdoc", ".gslides"):
+                    def _open_gdoc_fallback(_e=None, fp=s_fp, tx=str(s_txt)):
+                        _close_win()
+                        def _bg():
+                            import webbrowser
+                            g_url = ""
+                            try:
+                                raw_b = Path(fp).read_bytes()[:32768].decode("utf-8-sig", errors="ignore")
+                                meta = json.loads(raw_b)
+                                g_url = str(meta.get("url") or "").strip()
+                                did = str(meta.get("doc_id") or meta.get("resource_id") or "").strip()
+                                if not g_url and did:
+                                    el = Path(fp).suffix.lower()
+                                    g_url = f"https://docs.google.com/{'spreadsheets' if el == '.gsheet' else ('presentation' if el == '.gslides' else 'document')}/d/{did}/edit"
+                            except Exception:
+                                pass
+                            if not g_url:
+                                m_g = re.search(r"https://(?:docs|drive)\.google\.com/[^\s\"'<>]+", tx)
+                                g_url = m_g.group(0) if m_g else f"https://drive.google.com/drive/search?q={urllib.parse.quote(Path(fp).stem)}"
+                            webbrowser.open(g_url)
+                        threading.Thread(target=_bg, daemon=True).start()
+                    g_btn = tk.Label(preview_pane, text="🌐 Google 문서·시트 웹에서 열기 ↗", fg="#FFFFFF", bg="#059669", padx=8, pady=5, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
+                    g_btn.pack(fill="x", pady=(0, 3))
+                    g_btn.bind("<Button-1>", _open_gdoc_fallback)
                 act_b = tk.Label(preview_pane, text="📎 현재 커서에 바로 꽂기 (Enter)", fg="#0B1120", bg="#2DD4BF", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
                 act_b.pack(fill="x", pady=2)
                 act_b.bind("<Button-1>", lambda _e, r=sel_rec: _paste_to_target(r.get("text", ""), r.get("file_path") or r.get("img_path") or ""))

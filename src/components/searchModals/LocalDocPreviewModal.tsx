@@ -210,6 +210,31 @@ export const LocalDocPreviewModal: React.FC = () => {
                 민감 정보 외부 전송 제한
               </span>
             )}
+            {(() => {
+              const gMatch = displayDocText.match(
+                /https:\/\/(?:docs|drive)\.google\.com\/[^\s"'<>]+/
+              );
+              const rawName = selectedDocModal.fileName || selectedDocModal.path || '';
+              const isGoogleExt = /\.(gsheet|gdoc|gslides)$/i.test(rawName);
+              const gHref = gMatch
+                ? gMatch[0]
+                : isGoogleExt
+                ? `https://drive.google.com/drive/search?q=${encodeURIComponent(
+                    (selectedDocModal.title || rawName).replace(/\.[^.]+$/, '')
+                  )}`
+                : '';
+              if (!gHref) return null;
+              return (
+                <a
+                  href={gHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold transition-colors cursor-pointer"
+                >
+                  Google 문서·시트 웹에서 열기 ↗
+                </a>
+              );
+            })()}
             <button
               type="button"
               onClick={() => {

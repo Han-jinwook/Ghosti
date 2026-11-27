@@ -158,27 +158,27 @@
 
 ---
 
-# 🟣 `[4귀신]` 세션 인계장 (`SESSION_HANDOVER_4.md` — 업무 공유 `S:` · 1PC 단일 계정 점유 · 기본 QA 미션 완비)
+# 🟣 `[4귀신]` 세션 인계장 (`SESSION_HANDOVER_4.md` — 업무 공유 `S:` · 1PC 단일 계정 점유 · 배포 트랙 이원화)
 
-- **최종 갱신 일시**: 2026-11-26 15:55 (KST) — 정상 체크아웃 완료
+- **최종 갱신 일시**: 2026-11-27 11:11 (KST)
 - **담당 역할**: `[4귀신]` (`5. 업무 공유 (S:)` 전담 + 귀신비서 제미니 에이전트 PC 자가케어 1·2차 고도화)
-- **최신 배포 버전**: **`Merlin Z-Core v2.10.59`** (`2·3·4호컴` 실측 가동 및 Netlify 배포 완료) · `3대 모드 전환기 v1.2.0` (2·3·4호컴 동기화) · 양대 모바일 스토어 **`v1.0.113 (113)`**
-- **세션 창 제목**: `4귀신 1PC단일계정·S안정`
+- **QA 담당 테스터**: **달나라님** (`담당 = 달나라` 고정)
+- **최신 배포 버전**: **`Merlin Z-Core v2.11.29+`** (MS 공인 코드서명 `CN=썬드림주식회사` · `https://krc.codesigning.azure.net/` 개통) · `3대 모드 전환기 v1.2.0` · 양대 모바일 스토어 **`v1.0.122 (122)`**
+- **세션 창 제목**: `4귀신 정원차단·배포이원화`
 
-## 완료 내역 (2026-11-26)
-1. **업무 공유 `S:` 팀원 자발적 방 나가기 & 강퇴 시 즉시 격리 및 잔상 제거 (`36ace6a`, `Z-Core v2.10.59`, 카드 `422f9ffd-2c1d-81f3-ae98-fd0d05fa0a59` `'재테스트 대기'`)**
-   - **엔진 금고 격리 (`_isolate_invited_room_local_vault`)**: 방 나가기/강퇴 시 윈도우 탐색기 `S:` 언마운트와 더불어 `%LOCALAPPDATA%\Merlin\업무공유폴더_S`의 파일들을 `_isolated_left_rooms`로 안전 격리(명세 §8.3-③ 준수, 영구 삭제 방지)하고 빈 하위 폴더 제거.
-   - **웹 UI 폴더 잔상 및 메모리 문서 소거**: `WorkLoungeB2BHub.tsx`에 `roomCleanupEpochRef`를 도입하여 비동기 `loadRemoteState`/`fetchWorkFilesFromHostTunnel`의 문서 재주입을 원천 차단하고, `isWorkUnlocked || hasOwnExpiredHostVault` 조건문으로 나간 계정에서 `01_계약서...` 등의 폴더 필터 버튼과 문서 리스트를 100% 비노출 처리.
-   - **오프라인 PC 사후 치유**: Z-Core가 꺼진 상태에서 방을 나간 경우(`2호기` 사례)에도 브라우저 로컬 스토리지에 `markPendingInvitedVaultPurge`를 남겨 Z-Core 재연결 시 자동으로 `S:` 언마운트와 금고 격리가 즉시 실행되도록 보강.
-2. **알바 근무시간(`09:00~15:00`) Z-코어 기본 자동 배포 대상에 `2호컴` 영구 추가 (`9be4b3e`)**
-   - 통합테스트에 실사용되는 `2호컴(100.88.230.16)`이 근무시간 중 배포 대상에서 빠져 엔진이 멈춰 있던 문제를 멀린님 승인에 따라 정식 규칙화.
-   - `deploy_z_core_cluster.py`, `AGENTS.md`, `기능명세.md`, `멀린_Z_코어_통합_아키텍처_명세서.md`, `GHOSTI_QA_TWO_TRACK_OPERATION_SPEC.md`, `README.md`에 동시 반영.
-3. **`3대 모드 전환기 v1.2.0` 구버전(`v2.8.19`) 금고 역주입 원천 차단 및 클러스터 배포 (`5ba8bb5`)**
-   - `4호컴` 등에서 모드 전환기 구동 시 `%LOCALAPPDATA%\Merlin_Mode_Vault\snapshots\cached_installer`의 구버전 단독 exe가 최신 엔진을 덮어쓰던 문제를 규명.
-   - `--onedir` 번들(`exe + _internal/`) 유효성 검증(`_is_valid_onedir_bundle`) 및 최신 번들 금고 동기화 로직 적용. `deploy_mode_switcher_cluster.py`로 2·3·4호컴 전수 배포 및 셀프테스트 완료.
-4. **`2호컴`·`3호컴`·`4호컴` 실시간 헬스체크 실측 검증 (`Z-Core v2.10.59` 구동 확인)**
-   - 2호기(`100.88.230.16`), 3호기(`100.102.43.42`), 4호기(`100.114.100.24`) 모두 `:5199` 헬스체크 `v2.10.59` 정상 응답 확인 후 노션 카드 `'재테스트 대기'` 최종 이동 완결.
+## 완료 내역 (2026-11-26 ~ 11-27)
+1. **전 기기 배포 트랙 이원화(`Track A: 3·4호컴 QA 직결` vs `Track B: 1·2·5·6호컴 GitHub Releases 실유저 Auto-Update`) 전환 확정 & MS 공인 코드서명(`krc`) 개통 반영 (2026-11-27)**
+   - **Track A (`3호컴` · `4호컴`)**: QA 테스트 전용 기기로 코드 수정·빌드 즉시 AI 직결 0초 쾌속 원자적 스왑 배포 유지.
+   - **Track B (`1호컴` · `2호컴` · `5호컴` · `6호컴`)**: 기존 `2호컴` 직결 배포 규칙을 전면 전환·정합화하여 AI 강제 덮어쓰기를 영구 금지하고, `3·4호컴` 검증 완료 빌드를 **GitHub Releases(`z-core-latest`)**에 정식 버전 상향 업로드한 뒤 실제 고객과 100% 동일하게 자체 백그라운드 Auto-Update(`/__merlin/self-update`)로만 교체·기동되도록 운용.
+   - **MS 공인 코드서명(`sundream-public-cert`, `CN=썬드림주식회사`)**: 정식 엔드포인트 `https://krc.codesigning.azure.net/` 및 영구 Service Principal(`AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`, `local_secrets.json` `utf-8-sig` 폴백) 연동 및 GitHub Releases 업로드 전 Authenticode `Valid` 필수 서명 게이트 준수.
+2. **업무 공유 `S:` 소호·무료체험(5인) 정원 초과 시 미검증 초대 선해금·가짜 1인 목록 원천 차단 및 전용 확인 모달 적용 (`cac4792`, 카드 `422f9ffd-2c1d-8127-a6bf-da89de78afac` `'재테스트 대기'`) (2026-11-27)**
+   - 초대 URL 파라미터만으로 `work_accept_invite` 서버 검증 전에 선해금(`S:` 오마운트 및 `sundream7879 (방장)` 1인 폴백 목록 노출)되던 결함과 정원 초과 토스트가 엔진 연결 토스트에 덮이던 문제를 `WorkLoungeB2BHub.tsx`, `workRoomSyncService.ts`, `deviceIntegrationService.ts`, `workAndDeviceBridgeOps.mjs`에서 근본 해결.
+   - 6번째 계정 합류 시도 시 `403 WORK_SEAT_LIMIT_EXCEEDED`와 함께 초대 잔상 소거·`S:` 마운트 차단 및 사용자가 `[확인]`을 누를 때까지 유지되는 **전용 정원 초과 안내 모달(`work-room-seat-limit-modal`)·상단 배너** 표시.
+3. **업무 공유 `S:` 팀원 자발적 방 나가기 후 초기 안내 화면 정합성 검증 및 `'재테스트 대기'` 회신 (`36ace6a`, 카드 `422f9ffd-2c1d-81f3-ae98-fd0d05fa0a59`) (2026-11-26 ~ 11-27)**
+   - 엔진 금고 격리(`_isolate_invited_room_local_vault`), 웹 UI 폴더 잔상 소거(`roomCleanupEpochRef`), 오프라인 PC 사후 치유(`markPendingInvitedVaultPurge`) 적용 후 달나라님 재테스트 캡처 2건(PC 이용권 시작 안내 단독 노출 / 모바일 `'참여 중인 업무 공유방 없음'` 단독 노출)이 확정 설계 기준 100% 정상 화면임을 확인·회신 완료.
+4. **`3대 모드 전환기 v1.2.0` 구버전(`v2.8.19`) 금고 역주입 원천 차단 (`5ba8bb5`) (2026-11-26)**
+   - `--onedir` 번들(`exe + _internal/`) 유효성 검증(`_is_valid_onedir_bundle`) 및 최신 번들 금고 동기화 적용 완료.
 
 ## 다음 체크인 Todo
-- [ ] **노션 QA `422f9ffd`(`팀원 자발적 방 나가기 & 강퇴 격리`) 테스터(해나라님/달나라님) 재테스트 결과 확인 및 피드백 대응**.
-- [ ] **남은 업무 공유 `S:` 실전 미션 12건(MYBOX/구글드라이브 연동, 외부 LTE 직통 터널, 5인 초과 가드, 야간 초절전 유지) 피드백 모니터링**.
+- [ ] **노션 QA `422f9ffd-8127`(`5인 정원 초과 합류 차단`) 및 `422f9ffd-81f3`(`팀원 방 나가기 격리`) 달나라님 최종 재테스트 확인 및 피드백 즉시 대응 (`발견된 버그` 현재 `0건`)**.
+- [ ] **Z-코어 빌드·배포 시 `zcore_board.py` 문패 준수 및 `Track A(3·4호컴 직결)` / `Track B(1·2·5·6호컴 GitHub Releases Auto-Update)` + MS 공인 코드서명(`krc`) 원칙 엄수**.

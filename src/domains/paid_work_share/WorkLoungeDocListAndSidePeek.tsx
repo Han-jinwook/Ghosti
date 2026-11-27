@@ -361,13 +361,26 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {(() => {
-              const gMatch = (selectedDoc.fullTextPreview || '').match(/https:\/\/docs\.google\.com\/[^\s]+/);
-              if (!gMatch) return null;
+              const gMatch = (
+                `${selectedDoc.fullTextPreview || ''}\n${selectedDoc.matchedSnippet || ''}`
+              ).match(/https:\/\/(?:docs|drive)\.google\.com\/[^\s"'<>]+/);
+              const isGoogleDocExt =
+                ['GSHEET', 'GDOC', 'GSLIDES'].includes((selectedDoc.ext || '').toUpperCase()) ||
+                /\.(gsheet|gdoc|gslides)$/i.test(selectedDoc.fileName || '');
+              const gHref = gMatch
+                ? gMatch[0]
+                : isGoogleDocExt
+                ? `https://drive.google.com/drive/search?q=${encodeURIComponent(
+                    (selectedDoc.fileName || '').replace(/\.[^.]+$/, '')
+                  )}`
+                : '';
+              if (!gHref) return null;
               return (
                 <a
-                  href={gMatch[0]}
+                  href={gHref}
                   target="_blank"
                   rel="noopener noreferrer"
+                  data-testid="work-open-google-doc-web-btn"
                   className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-medium cursor-pointer transition-colors"
                 >
                   Google 문서·시트 웹에서 열기 ↗

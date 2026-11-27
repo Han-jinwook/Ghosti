@@ -1154,8 +1154,12 @@ def get_security_services_status() -> Dict[str, Any]:
 
     def _classify_self_defense_module(raw_svc: str, raw_disp: str) -> Tuple[str, str]:
         comb = f"{raw_svc} {raw_disp}".lower()
+        if any(k in comb for k in ("v3lite", "v3 service", "v3svc", "asdsvc", "v3l4sp", "v3lite4exp", "ahnlab v3")):
+            return "ahnlab_v3", "AhnLab V3 Lite (안랩 자가보호 상주 보안모듈)"
         if any(k in comb for k in ("astx", "ahnlab", "safetransaction", "safe_transaction")):
             return "astx", "AhnLab Safe Transaction (자가보호 금융보안)"
+        if any(k in comb for k in ("alyac", "ayagent", "alupdate")):
+            return "alyac", "알약 ALYac (자가보호 상주 보안모듈)"
         if any(k in comb for k in ("nossvc", "nprotect", "npkcrypt", "nosstarter")):
             return "nprotect", "nProtect Online Security (자가보호 금융보안)"
         return (raw_svc.lower() or "self_defense"), f"{raw_disp or raw_svc} (자가보호 상주 보안)"
@@ -3790,18 +3794,36 @@ DEEP_UNINSTALL_SYNONYM_MAP: Dict[str, Dict[str, Any]] = {
         "keywords": ["anydesk"],
     },
     "구라": {
-        "label": "관공서·은행 상주 보안 플러그인 일괄",
+        "label": "관공서·은행·안랩 상주 보안 플러그인 일괄",
         "keywords": [
-            "anysign", "touchen", "veraport", "magicline", "ipinside", "astx",
-            "crosscert", "iniline", "delfino", "wizvera", "ksign", "nprotect", "nossvc",
+            "ahnlab", "안랩", "v3lite", "v3 lite", "asdsvc", "v3l4sp", "anysign", "touchen",
+            "veraport", "magicline", "ipinside", "astx", "crosscert", "iniline", "delfino",
+            "wizvera", "ksign", "nprotect", "nossvc", "keysharp", "crossex",
         ],
     },
     "보안프로그램": {
-        "label": "관공서·은행 상주 보안 플러그인 일괄",
+        "label": "관공서·은행·안랩 상주 보안 플러그인 일괄",
         "keywords": [
-            "anysign", "touchen", "veraport", "magicline", "ipinside", "astx",
-            "crosscert", "iniline", "delfino", "wizvera", "ksign", "nprotect", "nossvc",
+            "ahnlab", "안랩", "v3lite", "v3 lite", "asdsvc", "v3l4sp", "anysign", "touchen",
+            "veraport", "magicline", "ipinside", "astx", "crosscert", "iniline", "delfino",
+            "wizvera", "ksign", "nprotect", "nossvc", "keysharp", "crossex",
         ],
+    },
+    "보안앱": {
+        "label": "관공서·은행·안랩 상주 보안 플러그인 일괄",
+        "keywords": [
+            "ahnlab", "안랩", "v3lite", "v3 lite", "asdsvc", "v3l4sp", "anysign", "touchen",
+            "veraport", "magicline", "ipinside", "astx", "crosscert", "iniline", "delfino",
+            "wizvera", "ksign", "nprotect", "nossvc", "keysharp", "crossex",
+        ],
+    },
+    "안랩": {
+        "label": "AhnLab (V3 Lite · Safe Transaction) 보안 프로그램",
+        "keywords": ["ahnlab", "안랩", "v3lite", "v3 lite", "asdsvc", "v3l4sp", "v3lite4exp", "astx"],
+    },
+    "ahnlab": {
+        "label": "AhnLab (V3 Lite · Safe Transaction) 보안 프로그램",
+        "keywords": ["ahnlab", "안랩", "v3lite", "v3 lite", "asdsvc", "v3l4sp", "v3lite4exp", "astx"],
     },
 }
 

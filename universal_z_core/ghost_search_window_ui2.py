@@ -593,6 +593,111 @@ def build_ui2_search_window(
         _UI2_LIVE_EXISTS_CACHE[fp_chk] = (now_e, ok_e)
         return ok_e
 
+    def _resolve_google_workspace_web_url(fpath: str, text_hint: str = "") -> tuple[str, bool]:
+        """
+        .gsheet / .gdoc / .gslides 바로가기 파일에서 정식 Google Docs/Sheets 웹 URL을 추출합니다.
+        반환값: (url, is_direct_doc_url)
+        """
+        if not fpath:
+            return ("", False)
+        ext_l = Path(fpath).suffix.lower()
+        if ext_l not in (".gsheet", ".gdoc", ".gslides"):
+            return ("", False)
+        raw_txt = ""
+        try:
+            if os.path.isfile(fpath):
+                with open(fpath, "rb") as gf:
+                    raw_txt = gf.read(32768).decode("utf-8-sig", errors="ignore")
+        except Exception:
+            raw_txt = ""
+        if raw_txt.strip():
+            try:
+                meta = json.loads(raw_txt)
+                if isinstance(meta, dict):
+                    g_url = str(meta.get("url") or "").strip()
+                    doc_id = str(meta.get("doc_id") or meta.get("resource_id") or "").strip()
+                    if g_url.startswith(("https://", "http://")):
+                        return (g_url, True)
+                    if doc_id:
+                        if ext_l == ".gsheet":
+                            return (f"https://docs.google.com/spreadsheets/d/{doc_id}/edit", True)
+                        if ext_l == ".gslides":
+                            return (f"https://docs.google.com/presentation/d/{doc_id}/edit", True)
+                        return (f"https://docs.google.com/document/d/{doc_id}/edit", True)
+            except Exception:
+                pass
+        for cand_src in (raw_txt, text_hint or ""):
+            m_u = re.search(r"https://(?:docs|drive)\.google\.com/[^\s\"'<>]+", cand_src)
+            if m_u:
+                return (m_u.group(0), True)
+        import urllib.parse as _up_g
+        stem_q = _up_g.quote(Path(fpath).stem or Path(fpath).name)
+        return (f"https://drive.google.com/drive/search?q={stem_q}", False)
+
+    def _launch_url_in_default_browser(target_url: str) -> bool:
+        if not target_url:
+            return False
+        if sys.platform == "win32":
+            com_inited = False
+            try:
+                hr = ctypes.windll.ole32.CoInitializeEx(None, 0x2)
+                com_inited = hr in (0, 1)
+            except Exception:
+                pass
+            try:
+                shell32 = ctypes.windll.shell32
+                shell32.ShellExecuteW.argtypes = [
+                    wintypes.HWND,
+                    wintypes.LPCWSTR,
+                    wintypes.LPCWSTR,
+                    wintypes.LPCWSTR,
+                    wintypes.LPCWSTR,
+                    ctypes.c_int,
+                ]
+                shell32.ShellExecuteW.restype = ctypes.c_void_p
+                rc = int(shell32.ShellExecuteW(None, "open", target_url, None, None, 1) or 0)
+                if rc > 32:
+                    return True
+            except Exception:
+                pass
+            finally:
+                if com_inited:
+                    try:
+                        ctypes.windll.ole32.CoUninitialize()
+                    except Exception:
+                        pass
+        try:
+            import webbrowser
+            return bool(webbrowser.open(target_url))
+        except Exception:
+            return False
+
+    def _open_google_workspace_web(fpath: str, text_hint: str = "") -> str:
+        abs_fp = os.path.abspath(fpath) if fpath else ""
+        if not abs_fp or not os.path.exists(abs_fp):
+            toast_queue.put(("⚠️ 이미 삭제되었거나 이동된 파일입니다.", 2200))
+            return "break"
+        resolved_url, is_direct = _resolve_google_workspace_web_url(abs_fp, text_hint)
+        close_win()
+
+        def _bg_open_gweb() -> None:
+            if is_direct and resolved_url:
+                if _launch_url_in_default_browser(resolved_url):
+                    return
+            # 직접 URL이 없는 수동 생성 .gsheet 파일 등은 OS 기본 연결 앱 시도 후 브라우저 드라이브 검색 폴백
+            if sys.platform == "win32":
+                try:
+                    rc = int(ctypes.windll.shell32.ShellExecuteW(None, "open", abs_fp, None, os.path.dirname(abs_fp) or None, 1) or 0)
+                    if rc > 32:
+                        return
+                except Exception:
+                    pass
+            if resolved_url:
+                _launch_url_in_default_browser(resolved_url)
+
+        threading.Thread(target=_bg_open_gweb, daemon=True).start()
+        return "break"
+
     def _open_file_in_os(fpath: str) -> str:
         abs_fp = os.path.abspath(fpath) if fpath else ""
         if not abs_fp or not os.path.exists(abs_fp):
@@ -606,6 +711,8 @@ def build_ui2_search_window(
             st_state["bg_ui_dirty"] = True
             toast_queue.put(("⚠️ 이미 삭제되었거나 이동된 파일이라 목록에서 정리했습니다.", 2200))
             return "break"
+        if Path(abs_fp).suffix.lower() in (".gsheet", ".gdoc", ".gslides"):
+            return _open_google_workspace_web(abs_fp)
 
         def _launch_worker(target_p: str) -> None:
             opened = False
@@ -2144,6 +2251,22 @@ def build_ui2_search_window(
                 anchor="w",
             ).pack(fill="x", pady=(0, 8))
             if s_fpath:
+                if Path(s_fpath).suffix.lower() in (".gsheet", ".gdoc", ".gslides"):
+                    gweb_b = tk.Label(
+                        preview_pane,
+                        text="🌐 Google 문서·시트 웹에서 열기 ↗",
+                        fg="#FFFFFF",
+                        bg="#059669",
+                        padx=8,
+                        pady=5,
+                        font=("Malgun Gothic", 9, "bold"),
+                        cursor="hand2",
+                    )
+                    gweb_b.pack(fill="x", pady=(0, 3))
+                    gweb_b.bind(
+                        "<Button-1>",
+                        lambda _e, fp=s_fpath, t=str(s_txt): _open_google_workspace_web(fp, t),
+                    )
                 exp_row = tk.Frame(preview_pane, bg="#0F172A")
                 exp_row.pack(fill="x", pady=2)
                 exp_row.grid_columnconfigure(0, weight=1, uniform="actbtn")

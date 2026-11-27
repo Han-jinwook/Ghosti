@@ -1722,7 +1722,14 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
             table_headers, table_rows, preview_text = _parse_xlsx_preview_stdlib(file_path)
         elif ext_low in (".gdoc", ".gsheet", ".gslides"):
             raw_bytes = file_path.read_bytes()[:32768]
-            meta = json.loads(raw_bytes.decode("utf-8-sig", errors="ignore") or "{}")
+            raw_str = raw_bytes.decode("utf-8-sig", errors="ignore")
+            meta: Dict[str, Any] = {}
+            try:
+                parsed_m = json.loads(raw_str or "{}")
+                if isinstance(parsed_m, dict):
+                    meta = parsed_m
+            except Exception:
+                meta = {}
             doc_id = str(meta.get("doc_id") or meta.get("resource_id") or "").strip()
             g_url = str(meta.get("url") or "").strip()
             if not g_url and doc_id:
@@ -1732,6 +1739,13 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
                     g_url = f"https://docs.google.com/presentation/d/{doc_id}/edit"
                 else:
                     g_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+            if not g_url:
+                m_gu = re.search(r"https://(?:docs|drive)\.google\.com/[^\s\"'<>]+", raw_str)
+                if m_gu:
+                    g_url = m_gu.group(0)
+                else:
+                    import urllib.parse as _up_gd
+                    g_url = f"https://drive.google.com/drive/search?q={_up_gd.quote(file_path.stem or file_path.name)}"
             kind_ko = (
                 "Google 스프레드시트"
                 if ext_low == ".gsheet"
