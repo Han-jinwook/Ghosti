@@ -1271,6 +1271,60 @@ def build_ui2_search_window(
     smart_tip_frame = tk.Frame(outer, bg="#0B1120")
     smart_tip_frame.pack(fill="x")
 
+    # [확정 ②] 2.7단 슬림 최근 검색어 5개 바 (검색창 비어있을 때 1줄 노출, 타이핑 즉시 숨김)
+    recent_q_frame = tk.Frame(outer, bg="#0B1120", padx=6, pady=2)
+    # 초기에는 검색창이 비어있으면 노출
+    recent_q_chips: list[tk.Widget] = []
+
+    def _render_recent_queries_bar(current_q: str) -> None:
+        clean_q = str(current_q or "").strip()
+        for w in recent_q_chips:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        recent_q_chips.clear()
+        if clean_q:
+            recent_q_frame.pack_forget()
+            return
+        qs = _load_recent_search_queries()
+        if not qs:
+            recent_q_frame.pack_forget()
+            return
+        recent_q_frame.pack_forget()
+        # fbar 바로 아래, body_frame 위에 배치
+        recent_q_frame.pack(fill="x", before=body_frame)
+        title_l = tk.Label(
+            recent_q_frame,
+            text="⏱️ 최근:",
+            fg="#94A3B8",
+            bg="#0B1120",
+            font=("Malgun Gothic", 8, "bold"),
+        )
+        title_l.pack(side="left", padx=(0, 4))
+        recent_q_chips.append(title_l)
+
+        def _apply_recent_q(target_word: str) -> None:
+            s_entry.delete(0, tk.END)
+            s_entry.insert(0, target_word)
+            _schedule_query_render(target_word)
+
+        for q_item in qs[:5]:
+            chip = tk.Label(
+                recent_q_frame,
+                text=q_item[:12],
+                fg="#E2E8F0",
+                bg="#1E293B",
+                padx=6,
+                pady=1,
+                font=("Malgun Gothic", 8),
+                cursor="hand2",
+            )
+            chip.pack(side="left", padx=(0, 4))
+            chip.bind("<Button-1>", lambda _e, tw=q_item: _apply_recent_q(tw))
+            recent_q_chips.append(chip)
+
+
     # 3단 결과 영역
     body_frame = tk.Frame(outer, bg="#0B1120")
     body_frame.pack(fill="both", expand=True)
@@ -1509,6 +1563,7 @@ def build_ui2_search_window(
             pass
 
     def _render_search_results() -> None:
+        _render_recent_queries_bar(_get_live_entry_query())
         for ch in smart_tip_frame.winfo_children():
             ch.destroy()
         for ch in body_frame.winfo_children():
@@ -2580,6 +2635,9 @@ def build_ui2_search_window(
         def _apply_debounced() -> None:
             st_state["debounce_job"] = None
             if current_win[0] is win:
+                _render_recent_queries_bar(cur_q)
+                if cur_q and len(cur_q.strip()) >= 2:
+                    _push_recent_search_query(cur_q)
                 _render_search_results()
 
         st_state["debounce_job"] = win.after(75, _apply_debounced)
