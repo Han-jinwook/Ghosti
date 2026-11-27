@@ -210,6 +210,93 @@ const MY_WORK_ROOM_CACHE_PREFIX = 'ghosti_my_work_room_meta_v2::';
 const JOINED_WORK_ROOM_CACHE_PREFIX = 'ghosti_joined_work_room_meta_v1::';
 const LOCAL_WORK_TOMBSTONES_PREFIX = 'ghosti_work_tombstones_v2::';
 const PENDING_INVITED_VAULT_PURGE_PREFIX = 'ghosti_pending_invited_vault_purge_v1::';
+const HOST_TUNNEL_ENDPOINT_CACHE_PREFIX = 'ghosti_work_tunnel_ep_v1::';
+const LOCAL_WORK_MOUNT_META_PREFIX = 'ghosti_work_sdrive_mount_meta_v1::';
+
+export interface CachedLocalWorkMountMeta {
+  mounted: boolean;
+  targetDir: string;
+}
+
+export function readCachedLocalWorkMountMetaSync(
+  accountEmail?: string
+): CachedLocalWorkMountMeta | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return null;
+    const raw = localStorage.getItem(`${LOCAL_WORK_MOUNT_META_PREFIX}${scopeEmail}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedLocalWorkMountMeta>;
+    if (typeof parsed?.mounted !== 'boolean') return null;
+    return {
+      mounted: parsed.mounted,
+      targetDir: String(parsed.targetDir || '').trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveCachedLocalWorkMountMeta(
+  meta: CachedLocalWorkMountMeta | null,
+  accountEmail?: string
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return;
+    const key = `${LOCAL_WORK_MOUNT_META_PREFIX}${scopeEmail}`;
+    if (!meta) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        mounted: Boolean(meta.mounted),
+        targetDir: String(meta.targetDir || '').trim(),
+      })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readCachedHostTunnelEndpointSync(
+  roomId: string,
+  accountEmail?: string
+): WorkHostTunnelEndpointDto | null {
+  if (typeof window === 'undefined' || !roomId) return null;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return null;
+    const raw = localStorage.getItem(`${HOST_TUNNEL_ENDPOINT_CACHE_PREFIX}${scopeEmail}::${roomId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<WorkHostTunnelEndpointDto>;
+    const cleanUrl = String(parsed?.tunnelUrl || '').trim().replace(/\/+$/, '');
+    if (!cleanUrl) return null;
+    return {
+      tunnelUrl: cleanUrl,
+      accessKey: String(parsed?.accessKey || '').trim(),
+      masterServerName: parsed?.masterServerName,
+      backupServers: Array.isArray(parsed?.backupServers) ? parsed.backupServers : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearCachedHostTunnelEndpoint(roomId: string, accountEmail?: string): void {
+  if (typeof window === 'undefined' || !roomId) return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return;
+    localStorage.removeItem(`${HOST_TUNNEL_ENDPOINT_CACHE_PREFIX}${scopeEmail}::${roomId}`);
+  } catch {
+    /* ignore */
+  }
+}
 
 let activeHostTunnelSession: {
   roomId: string;
@@ -277,6 +364,24 @@ export function setActiveHostTunnelSession(
     masterServerName: tunnel?.masterServerName,
     backupServers: tunnel?.backupServers,
   };
+  if (typeof window !== 'undefined') {
+    try {
+      const scopeEmail = resolveCurrentWorkAccountEmail();
+      if (scopeEmail && scopeEmail !== 'anonymous') {
+        localStorage.setItem(
+          `${HOST_TUNNEL_ENDPOINT_CACHE_PREFIX}${scopeEmail}::${cleanRoom}`,
+          JSON.stringify({
+            tunnelUrl: cleanUrl,
+            accessKey: cleanKey,
+            masterServerName: tunnel?.masterServerName,
+            backupServers: tunnel?.backupServers,
+          })
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function resolveCurrentWorkAccountEmail(explicitEmail?: string): string {
@@ -1249,6 +1354,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
   includeSyncBase64?: boolean;
   author?: string;
   knownSig?: string;
+  allowOptimisticLocalLoopback?: boolean;
 }): Promise<{
   ok: boolean;
   unchanged?: boolean;
@@ -1260,7 +1366,9 @@ export async function fetchLocalWorkFilesNative(opts?: {
   locallyDeletedRelPaths: string[];
   localDeletedTombstones: WorkDeletedTombstoneMap;
 }> {
-  const base = resolveWorkApiUrl('/__work/files');
+  const base =
+    resolveWorkApiUrl('/__work/files') ||
+    (opts?.allowOptimisticLocalLoopback ? getZCoreUrl('/__work/files') : null);
   if (!base) {
     return {
       ok: false,
@@ -1270,13 +1378,18 @@ export async function fetchLocalWorkFilesNative(opts?: {
       localDeletedTombstones: {},
     };
   }
+  const ctrl =
+    opts?.allowOptimisticLocalLoopback && !zCoreBridge.isConnected && typeof AbortController !== 'undefined'
+      ? new AbortController()
+      : null;
+  const fastTimer = ctrl ? setTimeout(() => ctrl.abort(), 1400) : null;
   try {
     const qs = new URLSearchParams();
     if (opts?.includeSyncBase64) qs.set('includeSyncBase64', '1');
     if (opts?.author) qs.set('author', opts.author);
     if (opts?.knownSig) qs.set('knownSig', opts.knownSig);
     const fullUrl = qs.toString() ? `${base}?${qs.toString()}` : base;
-    const res = await fetch(fullUrl);
+    const res = await fetch(fullUrl, ctrl ? { signal: ctrl.signal } : undefined);
     if (!res.ok) {
       return {
         ok: false,
@@ -1346,6 +1459,8 @@ export async function fetchLocalWorkFilesNative(opts?: {
       locallyDeletedRelPaths: [],
       localDeletedTombstones: {},
     };
+  } finally {
+    if (fastTimer) clearTimeout(fastTimer);
   }
 }
 
@@ -2193,13 +2308,14 @@ export async function cacheWorkRoomPreviewLocally(
   }
 }
 
-export async function loadCachedWorkRoomPreview(
+export function loadCachedWorkRoomPreviewSync(
   roomId: string,
   accountEmail?: string
-): Promise<WorkLoungeDocDto[]> {
+): WorkLoungeDocDto[] {
   if (typeof window === 'undefined' || !roomId) return [];
   try {
     const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (!scopeEmail || scopeEmail === 'anonymous') return [];
     const raw = localStorage.getItem(`${LOCAL_WORK_PREVIEW_PREFIX}${scopeEmail}::${roomId}`);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -2207,6 +2323,13 @@ export async function loadCachedWorkRoomPreview(
   } catch {
     return [];
   }
+}
+
+export async function loadCachedWorkRoomPreview(
+  roomId: string,
+  accountEmail?: string
+): Promise<WorkLoungeDocDto[]> {
+  return loadCachedWorkRoomPreviewSync(roomId, accountEmail);
 }
 
 export async function fetchWorkRoomCloudPreview(inviteToken: string): Promise<{

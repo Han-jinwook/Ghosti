@@ -15,6 +15,7 @@ export interface WorkLoungeDocListAndSidePeekProps {
   viewMode: 'semantic' | 'explorer';
   selectedFolderId?: string;
   selectedFolderLabel?: string;
+  isInitialDocsLoading?: boolean;
   filteredDocs: WorkLoungeDocDto[];
   selectedDoc: WorkLoungeDocDto | null;
   setSelectedDocId: React.Dispatch<React.SetStateAction<string>>;
@@ -52,6 +53,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
   viewMode,
   selectedFolderId = 'all',
   selectedFolderLabel,
+  isInitialDocsLoading = false,
   filteredDocs,
   selectedDoc,
   setSelectedDocId,
@@ -112,6 +114,14 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
           </div>
 
           {filteredDocs.length === 0 ? (
+            isInitialDocsLoading && !searchQuery.trim() ? (
+              <div className="px-5 py-10 text-center flex flex-col items-center gap-2.5">
+                <span className="inline-block w-5 h-5 rounded-full border-2 border-teal-600 border-t-transparent animate-spin" />
+                <p className="text-[14px] text-slate-800 font-semibold break-keep">
+                  공유 업무 폴더(S:)의 문서 목록을 불러오고 있습니다...
+                </p>
+              </div>
+            ) : (
             <div className="px-5 py-10 text-center flex flex-col items-center gap-2.5">
               <p className="text-[14.5px] text-slate-900 font-semibold break-keep">
                 등록된 공용 업무 문서가 없습니다
@@ -158,6 +168,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                 )}
               </div>
             </div>
+            )
           ) : (
             <div className="flex flex-col divide-y divide-slate-100">
               {filteredDocs.map((doc) => {
