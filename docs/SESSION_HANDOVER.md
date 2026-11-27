@@ -111,7 +111,10 @@
 
 ## 완료 내역 (2026-11-25 ~ 11-27)
 1. **폰↔PC 무화면 직송 및 PC➔폰 선택 푸시 실기기 피드백 4건 근본 해결 (`v1.0.126 (126)` 양대 스토어 출시, 카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`) (2026-11-27)**
-   - Android 크롬 웹 드래그 공유 시 `#:~:text=` 링크·따옴표 자동 정제, Android `NotificationCompat` + 단색 벡터 아이콘(`ic_stat_ghosti_clip`) 적용으로 `[📱 폰으로 보내기]` 헤드업 알림 즉시 표시, iOS `GhostKeyShareExtension` `78pt` 컴팩트 시트 + Keychain 파생키 캐시·`0ms` 즉시 발사 고속화, iOS `GhostiPcClipNotificationProxy` 위임 보존으로 알림 아래로 당길 때 `[📋 복사]` 버튼 노출 및 배너 1탭 즉시 복사 동시 완결.
+   - **① Android 웹 드래그 `[공유 ➔ 귀신같이]` 시 링크 동반 부착 제거 (`GhostiQuickClipActivity.java`)**: 크롬 Highlight Share(`"본문"\nhttps://...#:~:text=...`) 감지 시 말미 페이지 링크와 감싸는 따옴표를 자동 정제해 드래그한 순수 글자만 전송(단독 URL 공유 시에는 URL 유지).
+   - **② iOS `[공유... ➔ 귀신같이]` 거대 시트 축소 및 3초 지연 해소 (`ShareViewController.swift` · `GhostKeySharedClipboardStore.swift`)**: `78pt` 초소형 커스텀 시트 Detent 적용 + `viewDidLoad` `0ms` 즉시 발사(`viewDidAppear` 애니메이션 대기 제거) + Keychain 파생키 캐시(60,000회 PBKDF2 재연산 제거) + 로컬 히스토리 저장 백그라운드 병렬화로 즉시 전송·종료.
+   - **③ iOS 선택 푸시 `[📋 복사]` 버튼 누락 해소 (`AppDelegate.swift` · `SceneDelegate.swift`)**: Capacitor NotificationRouter가 `UNUserNotificationCenter.delegate` 및 카테고리를 덮어쓰던 문제를 `GhostiPcClipNotificationProxy` 위임 프록시 + 발송 직전 카테고리 병합 등록으로 해결하여 알림을 아래로 당길 때 `[📋 복사]` 무화면 버튼 노출 및 배너 1탭 터치 즉시 복사 동시 보장.
+   - **④ Android `[📱 폰으로 보내기]` 푸시 미표시 해결 (`GhostiNativeClipboardSync.java` · `ic_stat_ghosti_clip.xml` · `MainActivity.java`)**: Android 12~15에서 `AdaptiveIconDrawable`을 알림 `smallIcon`으로 거부하던 예외 및 `Notification.Action(0)` 예외를 단색 벡터 아이콘(`ic_stat_ghosti_clip`) + `NotificationCompat.Builder`(`PRIORITY_MAX` 헤드업 채널 `v2`)로 근본 해결.
 1. **사진 공유 `[내 기기 원본 폴더 열기]` 윈도우 탐색기 미오픈 근본 해결 (`Z-Core v2.12.9`, 카드 `425f9ffd-2c1d-8149-ade8-f53e486b8365` `'재테스트 대기'`) (2026-11-27)**
    - **원인**: `LoungeFeedContextBanner.tsx`가 상대 경로 `fetch('/__club/download-originals')`(로컬 Vite 개발서버 전용 목업) 및 하드코딩 `D:\Ghosti\다운로드_원본`을 호출해 실운영(`https://ghosti.sundreamer.app`)에서 Netlify 404로 무응답 처리되던 문제 규명.
    - **해결**: `plugin_ghosti_os.py`(`sync_and_open_shared_room_originals`) 및 `merlin_z_core_daemon.py`(`POST /__club/download-originals`, `v2.12.9`)에 내 PC 공식 `[사진]\Ghosti_Shared_Rooms\<방이름>`(또는 사용자 지정 경로) 실물 폴더 생성·공유방 사진 자동 저장 및 `open_file_location_on_interactive_desktop` 윈도우 탐색기 `0.05초` 즉시 오픈을 정식 구현하고, `LoungeFeedContextBanner.tsx`에서 `getZCoreUrl('/__club/download-originals')` 직결 및 방별 경로 영속화 반영 완료.

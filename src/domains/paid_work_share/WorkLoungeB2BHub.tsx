@@ -276,7 +276,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
   });
   const [authSyncTick, setAuthSyncTick] = useState<number>(0);
   const [workInviteTick, setWorkInviteTick] = useState<number>(0);
-  const [isCheckingJoinedRooms, setIsCheckingJoinedRooms] = useState<boolean>(false);
+  const [isCheckingJoinedRooms, setIsCheckingJoinedRooms] = useState<boolean>(() =>
+    Boolean(hasAuthenticatedHubAccountSession())
+  );
+  const [hasCheckedJoinedRoomsOnce, setHasCheckedJoinedRoomsOnce] = useState<boolean>(false);
+  const [serverHostedRoomUnlocked, setServerHostedRoomUnlocked] = useState<boolean>(false);
   const [startingWorkTrial, setStartingWorkTrial] = useState<boolean>(false);
   const [hostTunnelStatus, setHostTunnelStatus] = useState<string>('idle');
   const [lastDeletedUndoItem, setLastDeletedUndoItem] = useState<{
@@ -417,7 +421,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const isWorkTrialExpired = Boolean(deviceEntitlement?.workTrialExpired);
   const hasUsedWorkTrial = Boolean(deviceEntitlement?.workTrialOptInStartedAt);
   const isOwnWorkUnlocked = Boolean(
-    isWorkPaidActive || isWorkTrialActive || deviceEntitlement?.workSubscriptionUnlocked
+    isWorkPaidActive ||
+      isWorkTrialActive ||
+      deviceEntitlement?.workSubscriptionUnlocked ||
+      (serverHostedRoomUnlocked && !isWorkTrialExpired)
   );
   const isJoinedInvitedMember = isAuthenticated && Boolean(joinedInvitedRoom);
   const isWorkUnlocked =
@@ -668,8 +675,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
   // (PC 재로그인/F5·모바일 웹 초대 수락 후 모바일 앱 재접속 시 초대 링크 재클릭 및 2단 대기 불필요)
   useEffect(() => {
     const resolvedEmail = resolveCurrentWorkAccountEmail(merlinAuth?.email || undefined);
-    if (resolvedEmail === 'anonymous' || !hasAuthenticatedHubAccountSession()) return undefined;
-    if (inviteMeta.hasWorkInvite && Boolean(inviteMeta.inviteToken)) return undefined;
+    if (resolvedEmail === 'anonymous' || !hasAuthenticatedHubAccountSession()) {
+      setIsCheckingJoinedRooms(false);
+      setHasCheckedJoinedRoomsOnce(false);
+      setServerHostedRoomUnlocked(false);
+      return undefined;
+    }
+    if (inviteMeta.hasWorkInvite && Boolean(inviteMeta.inviteToken)) {
+      setIsCheckingJoinedRooms(false);
+      return undefined;
+    }
     let cancelled = false;
     const epochAtStart = memberMutationEpochRef.current;
     setIsCheckingJoinedRooms(true);
@@ -678,6 +693,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (cancelled || !res.ok) return;
         const curRoomId = activeWorkRoomIdRef.current;
         if (res.rooms.length === 0) {
+          setServerHostedRoomUnlocked(false);
           const prevJoined = readCachedJoinedWorkRoomMeta(resolvedEmail);
           clearCachedJoinedWorkRoomMeta(resolvedEmail);
           setRemoteRoomLockReason(null);
@@ -767,6 +783,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           return;
         }
         if (hostedRoom) {
+          setServerHostedRoomUnlocked(Boolean(hostedRoom.ownerUnlocked));
           // 미개통(WORK_SUBSCRIPTION_REQUIRED) 또는 모바일 비활성 방장 껍데기 방은 복원하지 않고 '참여 중인 업무 공유방 없음'으로 유지
           if (!hostedRoom.ownerUnlocked && (hostedRoom.lockReason !== 'WORK_TRIAL_EXPIRED' || isMobileOrStore)) {
             setRemoteRoomLockReason(null);
@@ -838,7 +855,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }
       })
       .finally(() => {
-        if (!cancelled) setIsCheckingJoinedRooms(false);
+        if (!cancelled) {
+          setIsCheckingJoinedRooms(false);
+          setHasCheckedJoinedRoomsOnce(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -1248,10 +1268,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
             roomId: pendingPurge.roomId || undefined,
           });
         }
-        // 로그인된 초대 팀원이 첫 진입·초대 링크 검증(acceptWorkRoomInvite / fetchMyJoinedWorkRooms) 완료 전에 오마운트/오잠금되는 현상 방지
+        // 로그인된 방장·초대 팀원이 첫 진입(F5)·초대 링크 검증·서버 소속방/이용권 조회 완료 전에 S: 드라이브가 조기 해제(unmount)되는 레이스 원천 차단
         if (
           isPendingWorkInviteVerification ||
-          (!isWorkUnlocked && isAuthenticated && isCheckingJoinedRooms)
+          (!isWorkUnlocked &&
+            isAuthenticated &&
+            (isCheckingJoinedRooms || !hasCheckedJoinedRoomsOnce || deviceEntitlement === null))
         ) {
           return;
         }
@@ -2707,6 +2729,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
       )}
 
       {/* 공유방 연결 해제(내보내기) 확인 안내 창 — 사용자가 직접 [확인] 버튼을 누르기 전까지 자동 소멸 금지 */}
@@ -2745,6 +2780,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
       )}
 
       {/* 모바일 브라우저에서 업무 공유 초대 링크 접속 시 귀신같이 앱으로 바로 연결 + 자동 계정 연동 안내 */}
@@ -2799,6 +2847,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
       ) : isPendingWorkInviteVerification ? (
         <div
           data-testid="work-invite-verifying-card"
@@ -2983,6 +3044,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
       )}
 
       {/* 초대받아 참여 중인 업무 공유방 안내 배너 (방장이 내보내거나 나가기 클릭 즉시 소거) */}
@@ -3042,6 +3116,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
       )}
 
       {(isWorkUnlocked || hasOwnExpiredHostVault) && (
@@ -3193,6 +3280,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
 
         {/* [2웨이브 예정] 호스트(방장) PC 전용: 사무실 연결 PC 삼체(Three-Body) 실시간 관제 패널 — 2웨이브 출시 시 주석 해제 */}
         {/* {!isMobileOrStore && (
@@ -3401,6 +3501,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
           </div>
         </div>
+
+        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
+            <span className="font-mono truncate max-w-full">
+              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
+            </span>
+            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
+              <span className="text-teal-700 font-medium break-keep">
+                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <WorkLoungeDocListAndSidePeek
