@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.12.79"
+CORE_VERSION = "2.13.09"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2526,6 +2526,11 @@ def main() -> None:
         try:
             plugin_ghosti_superpowers.ensure_superpower_daemon_running()
             plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
+        except Exception:
+            pass
+        # 웹 브라우저를 열지 않고 Ctrl+0만 눌러도 G: 가상 드라이브 공유 바로가기 폴더까지 자동 수집·디스크 공유되도록 기동 직후 예약
+        try:
+            plugin_ghosti_os._start_bg_full_drive_scan_once()
         except Exception:
             pass
         if getattr(sys, "frozen", False):

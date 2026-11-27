@@ -3957,23 +3957,6 @@ def _collect_search_scan_dirs(
                 pass
             grp["elapsed"] += max(0.0, time.time() - t_step)
 
-    # [구글 드라이브(G:) 공유 바로가기 폴더 편입]: Z-코어 2단계 백그라운드 전체 드라이브 스캔이 끝까지 수집한
-    # 가상 드라이브 미디어 폴더(G:\.shortcut-targets-by-id 하위 포함)를 Ctrl+0 귀신검색창 검색 대상에도 그대로 합류시킵니다.
-    try:
-        import plugin_ghosti_os as _pgo
-
-        with _pgo._FULL_DRIVE_SCAN_LOCK:
-            _virt_extra = [p for p in _pgo._FULL_DRIVE_EXTRA_DIRS if _pgo._is_virtual_cloud_drive_path(p)]
-        for _vx in _virt_extra:
-            if len(scan_dirs) >= max_total_dirs + 6000:
-                break
-            _nvx = os.path.normcase(os.path.abspath(str(_vx)))
-            if _nvx not in seen_scan_dirs:
-                seen_scan_dirs.add(_nvx)
-                scan_dirs.append(Path(_vx))
-    except Exception:
-        pass
-
     _SCAN_DIRS_CACHE["dirs"] = list(scan_dirs)
     _SCAN_DIRS_CACHE["s_sig"] = cur_s_sig
     _SCAN_DIRS_CACHE["ts"] = time.time()
@@ -4096,6 +4079,33 @@ def _compute_hot_user_folders_fast_sig() -> str:
     return "|".join(parts)
 
 
+_VIRT_DISK_CACHE_MEM: dict[str, Any] = {"mtime_ns": -1, "items": []}
+
+
+def _load_virtual_drive_items_from_disk_cache() -> tuple[int, list[list]]:
+    """5199 Z-Core가 백그라운드로 수집해 저장한 G: 가상 드라이브 SSOT 디스크 캐시를 0.01초 만에 읽습니다."""
+    try:
+        cache_p = (
+            Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+            / "Merlin"
+            / "virtual_drive_listing_cache_v1.json"
+        )
+        if not cache_p.exists():
+            return -1, []
+        mt_ns = int(getattr(cache_p.stat(), "st_mtime_ns", 0))
+        if mt_ns > 0 and mt_ns == _VIRT_DISK_CACHE_MEM.get("mtime_ns"):
+            return mt_ns, _VIRT_DISK_CACHE_MEM.get("items") or []
+        raw = json.loads(cache_p.read_text(encoding="utf-8"))
+        items = raw.get("items") if isinstance(raw, dict) else []
+        if not isinstance(items, list):
+            items = []
+        _VIRT_DISK_CACHE_MEM["mtime_ns"] = mt_ns
+        _VIRT_DISK_CACHE_MEM["items"] = items
+        return mt_ns, items
+    except Exception:
+        return -1, []
+
+
 def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
     """
     [초고속 전 하드 드라이브 로컬 파일 스캐너 — UI·단축키 스레드 GIL 블로킹 0%]:
@@ -4117,14 +4127,8 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
             return _LOCAL_FILE_CACHE["items"]
 
         scan_dirs = _collect_search_scan_dirs(force=force)
-        cur_sig = f"{hot_sig}::{_compute_watched_folders_fast_sig(scan_dirs=scan_dirs)}"
-        try:
-            import plugin_ghosti_os as _pgo_sig
-
-            # 가상 드라이브(G:) 백그라운드 목록이 새로 채워지면(_DRIVE_SCAN_SEQ 증가) 115초 캐시를 기다리지 않고 즉시 재구성
-            cur_sig = f"{cur_sig}::{_pgo_sig._DRIVE_SCAN_SEQ}"
-        except Exception:
-            pass
+        virt_disk_mt_ns, virt_disk_items = _load_virtual_drive_items_from_disk_cache()
+        cur_sig = f"{hot_sig}::{_compute_watched_folders_fast_sig(scan_dirs=scan_dirs)}::{virt_disk_mt_ns}"
         if (
             not force
             and last_ts > 0.0
@@ -4164,50 +4168,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                     )
                 is_virt_drv = virt_drv_flags[drv_prefix]
             if is_virt_drv:
-                # 가상 드라이브(G:) 폴더는 Z-코어 백그라운드 SSOT 목록 캐시만 사용 (스캔 스레드 os.scandir 0회 · 1.8초 예산 누락 제거)
-                try:
-                    import plugin_ghosti_os as _pgo_v
-
-                    v_listing_ui = _pgo_v._get_virtual_dir_listing(fd)
-                except Exception:
-                    v_listing_ui = None
-                if not v_listing_ui:
-                    continue
-                v_badge = f"{drv_prefix}\\{fd.name}" if fd.name else f"{drv_prefix}\\"
-                for v_name, v_path, v_st in v_listing_ui:
-                    v_low = v_name.lower()
-                    if v_name.startswith((".", "~$", ".~lock.")) or v_low in ("desktop.ini", "thumbs.db"):
-                        continue
-                    v_dot = v_low.rfind(".")
-                    if v_dot < 0:
-                        continue
-                    v_ext = v_low[v_dot:]
-                    if v_ext in doc_exts:
-                        v_kind = "doc"
-                    elif v_ext in img_exts:
-                        v_kind = "image"
-                    elif v_ext in vid_exts:
-                        v_kind = "video"
-                    else:
-                        continue
-                    v_norm = os.path.normcase(v_path)
-                    if v_norm in seen_files:
-                        continue
-                    seen_files.add(v_norm)
-                    by_kind[v_kind].append({
-                        "kind": v_kind,
-                        "file_path": v_path,
-                        "img_path": v_path if v_kind == "image" else "",
-                        "text": f"[{v_badge}] {v_name}",
-                        "ts": v_st.st_mtime,
-                        "_fname": v_name,
-                        "_size": v_st.st_size,
-                        # 클라우드 전용 표시: 본문 즉석 판독(.txt/.csv/.md) 등 원본 다운로드 경로를 차단
-                        "_attrs": int(getattr(v_st, "st_file_attributes", 0) or 0) | CLOUD_UNHYDRATED_MASK,
-                        "_ext": v_ext,
-                        "_badge": v_badge,
-                        "_name": v_name[:120],
-                    })
+                # 가상 드라이브(G:)는 5199 Z-Core가 백그라운드로 저장한 SSOT 디스크 캐시(virt_disk_items)에서 일괄 합류합니다.
                 continue
             if is_non_c_drv:
                 hit_nc = _NON_C_DIR_SCAN_CACHE.get(fd_str_low)
@@ -4321,6 +4282,48 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                     if len(_NON_C_DIR_SCAN_CACHE) > 800:
                         _NON_C_DIR_SCAN_CACHE.clear()
                     _NON_C_DIR_SCAN_CACHE[fd_str_low] = (now, int(getattr(os.stat(fd), "st_mtime_ns", 0)), nc_dir_items)
+                except Exception:
+                    pass
+
+        # [구글 드라이브(G:) 등 가상 클라우드 드라이브 SSOT 디스크 캐시 합류 — 웹 2. 귀신검색과 100% 동일 목록]
+        if virt_disk_items:
+            for row_v in virt_disk_items:
+                try:
+                    v_path, v_name, v_folder, v_sz, v_mt = row_v[0], str(row_v[1]), str(row_v[2]), int(row_v[3]), float(row_v[4])
+                    v_low = v_name.lower()
+                    if v_name.startswith((".", "~$", ".~lock.")) or v_low in ("desktop.ini", "thumbs.db"):
+                        continue
+                    v_dot = v_low.rfind(".")
+                    if v_dot < 0:
+                        continue
+                    v_ext = v_low[v_dot:]
+                    if v_ext in doc_exts:
+                        v_kind = "doc"
+                    elif v_ext in img_exts:
+                        v_kind = "image"
+                    elif v_ext in vid_exts:
+                        v_kind = "video"
+                    else:
+                        continue
+                    v_norm = os.path.normcase(str(v_path))
+                    if v_norm in seen_files:
+                        continue
+                    seen_files.add(v_norm)
+                    v_drv = str(v_path)[:2].upper() if len(str(v_path)) >= 2 and str(v_path)[1] == ":" else "G:"
+                    v_badge = f"{v_drv}\\{v_folder}" if v_folder else f"{v_drv}\\"
+                    by_kind[v_kind].append({
+                        "kind": v_kind,
+                        "file_path": str(v_path),
+                        "img_path": str(v_path) if v_kind == "image" else "",
+                        "text": f"[{v_badge}] {v_name}",
+                        "ts": v_mt,
+                        "_fname": v_name,
+                        "_size": v_sz,
+                        "_attrs": CLOUD_UNHYDRATED_MASK,
+                        "_ext": v_ext,
+                        "_badge": v_badge,
+                        "_name": v_name[:120],
+                    })
                 except Exception:
                     pass
 

@@ -853,13 +853,42 @@ def _is_cloud_only_media_file(p: Path | str, attrs: int | None = None) -> bool:
     return bool(int(attrs or 0) & _UNPINNED_CLOUD_ATTR_MASK)
 
 
-# [가상 클라우드 드라이브 폴더 목록 SSOT 캐시 — 요청 스레드 I/O 0회 + 백그라운드 단일 갱신 워커]
-# 사진·동영상·문서 목록 요청이 G: 폴더를 직접 os.scandir 하며 0.3초 예산에 걸려 대부분의 폴더를 건너뛰던 구조를 대체합니다.
+# [가상 클라우드 드라이브 폴더 목록 SSOT 캐시 — 요청 스레드 I/O 0회 + 백그라운드 단일 갱신 워커 + 프로세스 간 디스크 SSOT]
+# 사진·동영상·문서 목록 요청(5199)과 Ctrl+0 귀신검색창(--seq-paste-daemon, 별도 프로세스)이 중복 os.scandir 없이
+# 동일한 가상 드라이브(G: 공유 바로가기 포함) 파일 목록을 0.05초 만에 공유합니다.
 _VIRT_DIR_LISTING_CACHE: Dict[str, tuple[float, List[tuple[str, str, os.stat_result]]]] = {}
 _VIRT_DIR_LISTING_PENDING: Dict[str, str] = {}
 _VIRT_DIR_LISTING_LOCK = threading.Lock()
 _VIRT_DIR_LISTING_WORKER_ALIVE = False
 _VIRT_DIR_LISTING_TTL_SEC = 180.0
+_VIRT_DIR_LISTING_DISK_FILE = (
+    Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    / "Merlin"
+    / "virtual_drive_listing_cache_v1.json"
+)
+
+
+def _flush_virtual_dir_listing_disk_cache() -> None:
+    """5199 백그라운드가 수집한 G: 가상 드라이브 파일 목록을 별도 프로세스(--seq-paste-daemon)와 공유하도록 원자적 저장."""
+    try:
+        items_out: List[list] = []
+        # dict 스냅샷으로 락 없이 안전 순회
+        for _dk, (_ts, lst) in list(_VIRT_DIR_LISTING_CACHE.items()):
+            for nm, abs_str, st in lst:
+                try:
+                    p_dir = os.path.basename(os.path.dirname(abs_str)) or ""
+                    items_out.append([abs_str, nm, p_dir, int(st.st_size), float(st.st_mtime)])
+                except Exception:
+                    pass
+        _VIRT_DIR_LISTING_DISK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp_p = _VIRT_DIR_LISTING_DISK_FILE.with_name(
+            f".virt_listing_tmp_{os.getpid()}_{int(time.time() * 1000)}.json"
+        )
+        payload = {"v": 1, "updatedAt": time.time(), "count": len(items_out), "items": items_out}
+        tmp_p.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp_p, _VIRT_DIR_LISTING_DISK_FILE)
+    except Exception:
+        pass
 
 
 def _get_virtual_dir_listing(d: Path) -> List[tuple[str, str, os.stat_result]] | None:
@@ -888,14 +917,16 @@ def _virtual_dir_listing_worker() -> None:
     last_publish = time.monotonic()
     processed = 0
 
-    def _publish() -> None:
+    def _publish(flush_disk: bool = True) -> None:
         global _DRIVE_SCAN_SEQ
-        # 새로 채워진 G: 폴더 목록을 웹 귀신검색(watch-sig fsSig)에 즉시 알려 사진·동영상·문서 목록을 재구성시킵니다.
+        # 새로 채워진 G: 폴더 목록을 웹 귀신검색(watch-sig fsSig) 및 별도 프로세스(Ctrl+0 귀신검색창)에 즉시 반영합니다.
         _DRIVE_SCAN_SEQ += 1
         _WATCH_SIG_TTL_CACHE["ts"] = 0.0
         _PHOTOS_RESP_MEM_CACHE["sig"] = ""
         _DOCS_RESP_MEM_CACHE["sig"] = ""
         _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+        if flush_disk:
+            _flush_virtual_dir_listing_disk_cache()
 
     try:
         while True:
@@ -1729,6 +1760,11 @@ def _start_bg_full_drive_scan_once() -> None:
                     _PHOTOS_RESP_MEM_CACHE["sig"] = ""
                     _DOCS_RESP_MEM_CACHE["sig"] = ""
                     _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+                    if is_virtual:
+                        # 웹을 열지 않고 Ctrl+0만 눌러도 G: 드라이브가 검색되도록 발견 즉시 파일 목록 수집·디스크 공유 예약!
+                        for vd in discovered:
+                            if _is_virtual_cloud_drive_path(vd):
+                                _schedule_virtual_dir_listing(os.path.normcase(str(vd)), str(vd))
         except Exception:
             pass
 
