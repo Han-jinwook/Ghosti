@@ -54,7 +54,6 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
     sharedRoomAddedPhotos,
     videoSceneItems,
     searchSpace,
-    runTextQuery,
   } = useSaySeeStore();
 
   useEffect(() => {
@@ -96,28 +95,6 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   const totalVideoCount = sharedMode ? 0 : videoSceneItems.length;
   const totalReadyCount = gallerySceneCount + totalVideoCount + totalIndexedDocs;
 
-  const recentInlineFiles = useMemo(() => {
-    const items: { label: string; query: string }[] = [];
-    if (!sharedMode && localDocuments.length > 0) {
-      const topDoc = localDocuments[0];
-      const cleanName = topDoc.fileName || topDoc.title;
-      const shortQuery = cleanName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
-      items.push({
-        label: cleanName,
-        query: shortQuery || cleanName,
-      });
-    }
-    if (activePhotos.length > 0) {
-      const topPhoto = activePhotos[0];
-      const tagKeyword = topPhoto.tags?.[0]?.replace(/^#/, '') || topPhoto.name.replace(/\.[^.]+$/, '');
-      items.push({
-        label: topPhoto.name,
-        query: tagKeyword,
-      });
-    }
-    return items.slice(0, 2);
-  }, [sharedMode, localDocuments, activePhotos]);
-
   const showPriorityJumpToast =
     searchSpace !== 'video' &&
     snap.lastPriorityJump &&
@@ -136,24 +113,6 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             <span>내 PC 연결됨</span>
           </span>
-
-          {recentInlineFiles.length > 0 && <span className="text-slate-300">·</span>}
-
-          {recentInlineFiles.map((f, idx) => (
-            <React.Fragment key={f.label}>
-              <button
-                type="button"
-                onClick={() => void runTextQuery(f.query)}
-                title={`클릭 시 "${f.query}" 검색`}
-                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[11.5px] font-medium transition-colors cursor-pointer truncate max-w-[200px]"
-              >
-                {f.label}
-              </button>
-              {idx < recentInlineFiles.length - 1 && (
-                <span className="text-slate-300">·</span>
-              )}
-            </React.Fragment>
-          ))}
 
           <span className="text-slate-300">·</span>
           <span className="text-slate-600">
