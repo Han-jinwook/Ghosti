@@ -475,14 +475,112 @@ export function familyCandidates(st = loadPassportRegState()): FaceMemberCluster
   const selfId = self?.clusterId || freshSt.selfClusterId;
   const dismissed = new Set(freshSt.dismissedClusterIds);
   const dismissedSigs = new Set(freshSt.dismissedSignatures || []);
-  return rankFaceClusters(liveClusters(), Number.MAX_SAFE_INTEGER)
-    .filter((c) => {
-      if (c.clusterId === selfId || dismissed.has(c.clusterId)) return false;
-      const sig = clusterDismissSignature(c);
-      if (sig && dismissedSigs.has(sig)) return false;
-      return (c.matchedPhotoCount || 0) >= FAMILY_MIN_PHOTOS && pendingCutsFor(c, freshSt).length > 0;
-    })
-    .slice(0, MAX_FACES);
+  const rawList = rankFaceClusters(liveClusters(), Number.MAX_SAFE_INTEGER).filter((c) => {
+    if (c.clusterId === selfId || dismissed.has(c.clusterId)) return false;
+    const sig = clusterDismissSignature(c);
+    if (sig && dismissedSigs.has(sig)) return false;
+    return (c.matchedPhotoCount || 0) >= FAMILY_MIN_PHOTOS && pendingCutsFor(c, freshSt).length > 0;
+  });
+
+  // [선글라스·챙모자 서브 묶음 실시간 자동 통합 가드]:
+  // 구버전 캐시나 다각도 촬영으로 인해 한 가족(예: 배우자)의 정면 묶음과 선글라스·챙모자 묶음이
+  // 두 줄로 나뉘어 올라온 경우에도, ① 같은 사진 동시 등장이 0건(Cannot-Link 통과)이고,
+  // ② 128차원 벡터 중심 유사도(>= 0.34) 및同一 촬영일/동반 가족 맥락이 일치하면
+  // 가족 여권 등록 화면에서 두 줄로 쪼개지 않고 한 줄(단일 인물 카드)로 즉시 통합해 보여준다.
+  const mergedList: FaceMemberCluster[] = [];
+  const absorbedIds = new Set<string>();
+  const allLive = liveClusters();
+
+  for (let i = 0; i < rawList.length; i++) {
+    const primary = rawList[i];
+    if (absorbedIds.has(primary.clusterId)) continue;
+    let cur = primary;
+    let curPhotos = new Set((cur.matchedPhotoFiles || []).map((f) => f.toLowerCase()));
+    let curDates = new Set(cur.seedDates || []);
+
+    for (let j = i + 1; j < rawList.length; j++) {
+      const sub = rawList[j];
+      if (absorbedIds.has(sub.clusterId)) continue;
+      if (cur.registeredName && sub.registeredName && cur.registeredName !== sub.registeredName) continue;
+
+      const subPhotos = new Set((sub.matchedPhotoFiles || []).map((f) => f.toLowerCase()));
+      let hasOverlap = false;
+      for (const p of subPhotos) {
+        if (curPhotos.has(p)) {
+          hasOverlap = true;
+          break;
+        }
+      }
+      if (hasOverlap) continue;
+
+      const cSim = cosineSim128(cur.seedVecPreview, sub.seedVecPreview);
+      if (cSim < 0.34) continue;
+
+      const subDates = new Set(sub.seedDates || []);
+      let sharedDate = false;
+      for (const d of subDates) {
+        if (curDates.has(d)) {
+          sharedDate = true;
+          break;
+        }
+      }
+      const eitherHasSunglasses =
+        (cur.yearlyBestCuts || []).some((yc) => yc.conditionTag === '선글라스·역광') ||
+        (sub.yearlyBestCuts || []).some((yc) => yc.conditionTag === '선글라스·역광');
+
+      const sharedCompanion = allLive.some((other) => {
+        if (other.clusterId === cur.clusterId || other.clusterId === sub.clusterId) return false;
+        const oFiles = other.matchedPhotoFiles || [];
+        if (oFiles.length < 3) return false;
+        let withCur = false;
+        let withSub = false;
+        for (const f of oFiles) {
+          const fl = f.toLowerCase();
+          if (curPhotos.has(fl)) withCur = true;
+          if (subPhotos.has(fl)) withSub = true;
+          if (withCur && withSub) return true;
+        }
+        return false;
+      });
+
+      if (cSim >= 0.42 || (cSim >= 0.36 && sharedCompanion && (sharedDate || eitherHasSunglasses))) {
+        absorbedIds.add(sub.clusterId);
+        const combinedFiles = Array.from(new Set([...(cur.matchedPhotoFiles || []), ...(sub.matchedPhotoFiles || [])]));
+        const seenCutPhotos = new Set((cur.yearlyBestCuts || []).map((yc) => yc.representativePhoto).filter(Boolean));
+        const combinedCuts = [...(cur.yearlyBestCuts || [])];
+        for (const yc of sub.yearlyBestCuts || []) {
+          if (yc.representativePhoto && !seenCutPhotos.has(yc.representativePhoto)) {
+            seenCutPhotos.add(yc.representativePhoto);
+            combinedCuts.push(yc);
+          }
+        }
+        combinedCuts.sort((a, b) => b.year - a.year || (b.frontalScore || 0) - (a.frontalScore || 0));
+        cur = {
+          ...cur,
+          yearlyBestCuts: combinedCuts,
+          matchedPhotoFiles: combinedFiles,
+          matchedPhotoCount: combinedFiles.length,
+          appearanceLabelKo: `${combinedFiles.length}장 등장`,
+          seedDates: Array.from(new Set([...(cur.seedDates || []), ...(sub.seedDates || [])])).slice(0, 8),
+        };
+        curPhotos = new Set(combinedFiles.map((f) => f.toLowerCase()));
+        curDates = new Set(cur.seedDates || []);
+      }
+    }
+    mergedList.push(cur);
+  }
+
+  if (absorbedIds.size > 0) {
+    const curStore = useSaySeeStore.getState();
+    const mergedById = new Map(mergedList.map((m) => [m.clusterId, m]));
+    const nextClusters = curStore.faceClusters
+      .filter((c) => !absorbedIds.has(c.clusterId))
+      .map((c) => mergedById.get(c.clusterId) || c);
+    useSaySeeStore.setState({ faceClusters: nextClusters });
+    saveCachedOnDeviceFaceClusters(nextClusters, curStore.latestCorpusYear);
+  }
+
+  return mergedList.slice(0, MAX_FACES);
 }
 
 export interface PassportPendingSummary {

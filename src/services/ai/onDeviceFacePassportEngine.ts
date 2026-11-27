@@ -10,7 +10,7 @@ import type { WorkerDetectedFace } from './facePassportWorker';
 
 export type PassportStyleSlotTag = NonNullable<YearlyFaceBestCut['conditionTag']>;
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v13';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v14';
 const MAX_SCAN_PHOTOS = 260;
 /** 인물별 시기 바구니(성인 10년 / 미성년 5년) 1개당 5대 스타일 슬롯 최대 선별 장수 (전 생애 누적 장수·인물 수는 무제한) */
 const MAX_CUTS_PER_TIMELINE_BUCKET = 5;
@@ -23,13 +23,14 @@ const MERGE_CENTROID_THRESHOLD = 0.42;
 const MERGE_TOP3_PAIR_THRESHOLD = 0.45;
 /**
  * [특허 제3호 — 시공간 연속성(동일 촬영일) + 동반 등장 가족(Companion) 맥락 족쇄]
- * 선글라스·챙모자·역광 등으로 눈이 가려져 중심 유사도가 0.34~0.41로 낮아지더라도,
+ * 선글라스·챙모자·역광 등으로 눈이 가려져 중심 유사도가 0.34~0.41, 상위 3쌍 유사도가 0.40~0.43으로 낮아지더라도,
  * ① 두 묶음이 같은 사진에 동시 등장한 적이 없고(Cannot-Link 통과),
  * ② 같은 날 촬영되었거나 동일한 제3의 가족과 나란히 커플·단체 컷에 동반 등장한 맥락이 입증되고,
- * ③ 상위 3쌍 평균 유사도(>= 0.44)까지 충족하면 묻지 않고 동일 인물('선글라스·역광' 슬롯)로 자동 결합합니다.
+ * ③ 상위 3쌍 평균 유사도(>= 0.40, 선글라스 미착용 시 >= 0.43)까지 충족하면 묻지 않고 동일 인물('선글라스·역광' 슬롯)로 자동 결합합니다.
  */
 const CONTEXT_LOCK_CENTROID_THRESHOLD = 0.34;
-const CONTEXT_LOCK_TOP3_THRESHOLD = 0.44;
+const CONTEXT_LOCK_TOP3_THRESHOLD = 0.43;
+const CONTEXT_LOCK_SUNGLASSES_TOP3_THRESHOLD = 0.40;
 /** 여권사진 정체성 변별 및 4~10인 가족 단체사진(280px 썸네일 내 자녀·어르신 얼굴 19~25px) 동시 포착 최소 기준 — 18px 이하 원경 노이즈 차단 */
 const MIN_PASSPORT_FACE_PX = 19;
 const MIN_PASSPORT_EYE_SPAN_PX = 5.8;
@@ -106,7 +107,7 @@ function buildPhotosFingerprint(photos: PhotoItem[]): string {
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `v12:${real.length}:${head}:${tail}`;
+  return `v14:${real.length}:${head}:${tail}`;
 }
 
 let cachedFaceClustersMem: {
@@ -809,12 +810,16 @@ function clusterExtractedFaces(
         if (hasPhotoOverlap(wi.photoKeys, wj.photoKeys)) continue;
         const pairSim = dot(wi.centroid, wj.centroid);
         if (pairSim < CONTEXT_LOCK_CENTROID_THRESHOLD) continue;
-        const top3Mean = computeTop3CrossPairMean(wi.members, wj.members);
-        if (top3Mean < CONTEXT_LOCK_TOP3_THRESHOLD) continue;
 
         const sgRatioI = wi.members.filter((m) => m.hasSunglasses).length / Math.max(1, wi.members.length);
         const sgRatioJ = wj.members.filter((m) => m.hasSunglasses).length / Math.max(1, wj.members.length);
         const eitherSunglasses = sgRatioI >= 0.35 || sgRatioJ >= 0.35;
+
+        const top3Mean = computeTop3CrossPairMean(wi.members, wj.members);
+        const minTop3Required = eitherSunglasses
+          ? CONTEXT_LOCK_SUNGLASSES_TOP3_THRESHOLD
+          : CONTEXT_LOCK_TOP3_THRESHOLD;
+        if (top3Mean < minTop3Required) continue;
 
         const datesI = new Set(wi.members.map((m) => m.dateStr));
         const hasSharedDate = wj.members.some((m) => datesI.has(m.dateStr));
@@ -831,7 +836,7 @@ function clusterExtractedFaces(
 
         const contextLocked =
           (hasSharedCompanion && (hasSharedDate || eitherSunglasses)) ||
-          (hasSharedDate && eitherSunglasses && top3Mean >= 0.46);
+          (hasSharedDate && eitherSunglasses && top3Mean >= 0.42);
         if (!contextLocked) continue;
 
         const combinedScore = top3Mean + pairSim * 0.5;

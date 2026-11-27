@@ -367,7 +367,10 @@ export const PassportRegistrationPanel: React.FC = () => {
                   sizeClass="w-14 h-14"
                   shape="square"
                 />
-                <span className="text-[10.5px] font-medium text-slate-500">{cut.year}</span>
+                <span className="text-[10.5px] font-medium text-slate-500">
+                  {cut.year}
+                  {cut.conditionShortKo && cut.conditionShortKo !== '정면' ? ` · ${cut.conditionShortKo}` : ''}
+                </span>
               </div>
             ))}
           </div>
@@ -538,7 +541,10 @@ export const PassportRegistrationPanel: React.FC = () => {
                       >
                         {checked ? '✓' : ''}
                       </span>
-                      <span className="text-[10.5px] font-medium text-slate-500">{cut.year}</span>
+                      <span className="text-[10.5px] font-medium text-slate-500">
+                        {cut.year}
+                        {cut.conditionShortKo && cut.conditionShortKo !== '정면' ? ` · ${cut.conditionShortKo}` : ''}
+                      </span>
                     </button>
                   );
                 })}
