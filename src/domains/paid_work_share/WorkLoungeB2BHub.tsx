@@ -162,6 +162,28 @@ export const WorkLoungeB2BHub: React.FC = () => {
     desktopTab === 'trash' ? 'explorer' : 'semantic'
   );
   const [driveTargetPath, setDriveTargetPath] = useState('S:\\ (내 PC 업무공유폴더_S)');
+  const isGoogleDriveTargetPath = Boolean(
+    driveTargetPath &&
+      /(내 드라이브|My Drive|Google Drive|공유 드라이브|Shared drives)/i.test(driveTargetPath)
+  );
+  const googleDriveWebOpenUrl = useMemo(() => {
+    if (!isGoogleDriveTargetPath || !driveTargetPath) return '';
+    const parts = driveTargetPath
+      .replace(/\//g, '\\')
+      .split('\\')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const leaf = parts[parts.length - 1] || '';
+    if (
+      leaf &&
+      !/^(?:[A-Za-z]:|내 드라이브|My Drive|Google Drive|공유 드라이브|Shared drives)$/i.test(leaf)
+    ) {
+      return `https://drive.google.com/drive/search?q=${encodeURIComponent(
+        `type:folder "${leaf}"`
+      )}`;
+    }
+    return 'https://drive.google.com/drive/my-drive';
+  }, [driveTargetPath, isGoogleDriveTargetPath]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [localDocs, setLocalDocs] = useState<WorkLoungeDocDto[]>([]);
@@ -3195,6 +3217,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 >
                   <span>탐색기 S:\ 열기</span>
                 </button>
+                {isGoogleDriveTargetPath && googleDriveWebOpenUrl && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.open(googleDriveWebOpenUrl, '_blank', 'noopener,noreferrer')
+                    }
+                    title="구글 드라이브 프로그램 정책상 새 구글 시트(.gsheet)·문서(.gdoc)는 윈도우 탐색기 우클릭 대신 구글 드라이브 웹에서 [+ 신규]로 만들면 S:\ 폴더에 자동 반영됩니다"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 shadow-xs"
+                  >
+                    <span>구글 드라이브 웹 폴더 열기 ↗</span>
+                  </button>
+                )}
                 {myRoomRole === 'host' && !isJoinedInvitedMember && (
                   <button
                     type="button"
@@ -3272,10 +3306,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
             <span className="font-mono truncate max-w-full">
               현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
             </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
+            {isGoogleDriveTargetPath && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-teal-700 font-medium break-keep">
+                  탐색기 [내 PC]에서는 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시되며, 새 구글 시트·문서는 탐색기 우클릭 대신 [구글 드라이브 웹 폴더 열기 ↗] → [+ 신규]에서 만들면 S:\에 자동 반영됩니다.
+                </span>
+                {googleDriveWebOpenUrl && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.open(googleDriveWebOpenUrl, '_blank', 'noopener,noreferrer')
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer shrink-0"
+                  >
+                    구글 드라이브 웹 폴더 열기 ↗
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
