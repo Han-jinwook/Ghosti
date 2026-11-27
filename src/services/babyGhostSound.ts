@@ -8,6 +8,37 @@ import { hasActiveGhostiLoginSession } from './zCoreBridge';
 
 const GIGGLE_SOUND_URL = '/sounds/baby_ghost/sample3_baby_ghost_giggle.wav';
 const Z_CORE_GIGGLE_URL = 'http://127.0.0.1:5199/__merlin/play-enter-giggle';
+export const GHOSTI_SOUND_ENABLED_STORAGE_KEY = 'ghosti_sound_enabled';
+
+export function isGhostiSoundEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return localStorage.getItem(GHOSTI_SOUND_ENABLED_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function setGhostiSoundEnabled(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(GHOSTI_SOUND_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (typeof fetch !== 'undefined') {
+      void fetch('http://127.0.0.1:5199/api/superpower/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sound_enabled: enabled }),
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined,
+      }).catch(() => {});
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 let preloadedGiggleAudio: HTMLAudioElement | null = null;
 let hasPlayedAppEnterGiggle = false;
@@ -93,6 +124,11 @@ async function tryPlayViaLocalZCore(): Promise<boolean> {
  */
 export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
   if (typeof window === 'undefined') return;
+  if (!isGhostiSoundEnabled()) {
+    hasPlayedAppEnterGiggle = true;
+    (window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY] = true;
+    return;
+  }
   const winFlag = Boolean((window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY]);
   if (forceOnModeTransition) {
     // 쇼룸 대문에서 [본 앱 바로 시작하기] 등으로 게스트 워크스페이스에 진입할 때 아직 재생되지 않았다면 즉시 재생 보장

@@ -13,6 +13,7 @@ import {
   dispatchFileToKakaoRealChatroom,
 } from './voiceSearchAndAiBatonEngine';
 import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from './zCoreBridge';
+import { setGhostiSoundEnabled } from './babyGhostSound';
 import {
   isAndroidMobileBrowserOrApp,
   isCapacitorNativeMobileRuntime,
@@ -2170,18 +2171,9 @@ ${payload.summaryText}`, {
   }
 
   // 4) 애기귀신 소리 / 화면 유지 시간 설정 변경
-  if (/(귀신\s*소리|애기귀신|효과음|음소거|무음|조용히).*?(꺼|켜|음소거|무음|해제|해줘|해주세요)/i.test(clean) && !/스피커|블루투스|윈도우\s*소리/i.test(clean)) {
-    const turnOn = /켜|활성|다시|음소거\s*해제/.test(clean) && !/꺼|무음|조용히/.test(clean);
-    try {
-      await fetch(getZCoreUrl('/api/superpower/settings'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sound_enabled: turnOn }),
-        signal: AbortSignal.timeout(1500),
-      });
-    } catch {
-      /* ignore */
-    }
+  if (/(귀신\s*소리|검색창\s*소리|애기귀신|소리|효과음|알림음|음소거|무음|조용히).*?(꺼|끄|켜|음소거|무음|해제|안\s*나게|다시\s*나게|해줘|해주세요)/i.test(clean) && !/스피커|블루투스|윈도우\s*소리/i.test(clean)) {
+    const turnOn = /켜|활성|다시|음소거\s*해제|무음\s*해제/.test(clean) && !/꺼|끄|무음|조용히|안\s*나게/.test(clean);
+    setGhostiSoundEnabled(turnOn);
     const payload: MonsterAppSettingsPayload = {
       settingCategory: 'GHOST_WINDOW_PREF',
       badgeText: `애기귀신 효과음 ${turnOn ? 'ON (켜짐)' : 'OFF (음소거)'}`,

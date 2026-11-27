@@ -27,6 +27,9 @@ const TRIAL_STORAGE_KEY = 'ghosti_superpower_trial_v27';
 
 export function playBabyGhostChime(mode: 'typo' | 'summon' = 'typo'): void {
   try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('ghosti_sound_enabled') === 'false') {
+      return;
+    }
     const wavUrl = mode === 'summon' ? '/sounds/active_summon_sound.wav' : '/sounds/active_typo_sound.wav';
     const audio = new Audio(wavUrl);
     audio.volume = 0.22;

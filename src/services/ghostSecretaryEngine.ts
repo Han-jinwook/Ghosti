@@ -8,6 +8,7 @@
  *  - 대본집에 없는 질문은 unmatched_questions 큐에 적재(주 1회 비서 정기 감사로 대본집 편입)
  */
 import playbookJson from '../data/ghost_secretary_playbook.json';
+import { setGhostiSoundEnabled } from './babyGhostSound';
 import { isAndroidMobileBrowserOrApp, isIosMobileBrowserOrApp } from './ghostiMobileCareBridge';
 import { updateProfile as updateHubProfile } from './merlin-hub-sdk/Auth/auth';
 import { getSessionToken } from './merlin-hub-sdk/CoreLogic/client';
@@ -1504,22 +1505,12 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ④-2 귀신창 음소거/소리 켜기 즉시 제어 (cmd_unmute_ghost_sound / cmd_mute_ghost_sound 우선 처리)
-  if (/(귀신\s*소리|검색창\s*소리|소리|효과음|음소거|무음|조용히|시끄러)/.test(text)) {
-    const isUnmute = /켜|음소거\s*해제|다시\s*나게/.test(text);
+  if (/(귀신\s*소리|검색창\s*소리|소리|효과음|알림음|음소거|무음|조용히|시끄러)/.test(text) && !/스피커|블루투스|윈도우\s*소리/i.test(text)) {
+    const isUnmute = /켜|음소거\s*해제|무음\s*해제|다시\s*나게/.test(text);
     const isMute = !isUnmute && /꺼|끄|음소거|무음|조용히|시끄러|안\s*나게/.test(text);
     if (isMute || isUnmute) {
       const sc = findScenario(isMute ? 'cmd_mute_ghost_sound' : 'cmd_unmute_ghost_sound');
-      try {
-        if (typeof fetch !== 'undefined') {
-          void fetch('http://127.0.0.1:5199/api/superpower/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sound_enabled: !isMute }),
-          }).catch(() => {});
-        }
-      } catch {
-        /* ignore */
-      }
+      setGhostiSoundEnabled(!isMute);
       if (sc) {
         return {
           scenarioId: sc.id,

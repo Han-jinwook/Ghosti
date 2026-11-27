@@ -226,28 +226,15 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
   const clean = (rawQuery || '').trim();
   if (!clean) return { matched: false };
 
-  // 1) 지금 즉시 정기 건강검진 / 정기 점검 / 손 없는 날 점검 실행 요청
-  if (
-    /(?:지금|당장|오늘|바로)?\s*(?:정기\s*(?:건강)?\s*(?:검진|점검)|수요\s*손\s*없는\s*날|손\s*없는\s*날\s*(?:검진|점검)|종합\s*건강\s*(?:검진|점검)).*?(?:해\s*(?:줘|주세요)|실행|시작|진단|봐\s*(?:줘|주세요)|손봐\s*(?:줘|주세요)|확인|알려\s*(?:줘|주세요))/i.test(
-      clean
-    )
-  ) {
-    return { matched: true, action: 'RUN_NOW_CHECKUP' };
-  }
-
   const hasCareKeyword =
     /(?:정기\s*(?:건강)?\s*(?:검진|점검)|정기\s*청소|정기\s*손보기|자동\s*손보기|수요\s*손\s*없는\s*날|손\s*없는\s*날|매주.*?손봐|매주.*?(?:검진|점검)|(?:검진|점검)\s*요일|(?:검진|점검)\s*시간|예약\s*일시|예약\s*주기)/i.test(
       clean
     );
 
-  if (!hasCareKeyword) return { matched: false };
-
-  // 2) 정기 검진/점검 끄기/해제
-  if (/(?:꺼\s*(?:줘|주세요)|끄기|해제|중지|그만|안\s*할래|안\s*할게|하지\s*마|취소)/i.test(clean)) {
-    return { matched: true, action: 'DISABLE_SCHEDULE' };
-  }
-
-  // 3) 요일 + 시간 추출
+  // [요일·시간 추출 최우선 판별]
+  // "정기검진 금요일 오후 4시로해줘", "매주 금요일 오후 4시에 정기 검진해줘", "정기 점검 목요일 9시로 해줘" 등
+  // 문장 안에 요일이나 시각이 명시되어 있으면 '지금 당장 실행(RUN_NOW_CHECKUP)'으로 가로채지 않고
+  // 반드시 '예약 일정 변경(UPDATE_SCHEDULE)'으로 먼저 처리합니다!
   const dayMap: Record<string, number> = {
     일: 0,
     월: 1,
@@ -258,20 +245,29 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
     토: 6,
   };
   const dayMatch = clean.match(/([일월화수목금토])(?:요일|욜)/);
-  const current = loadWeeklyCareSchedule();
-  const targetDay = dayMatch ? dayMap[dayMatch[1]] ?? current.dayOfWeek : current.dayOfWeek;
+  const timeMatch = clean.match(/(오전|아침|새벽|오후|저녁|밤|낮)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);
+  const hasExplicitDayOrTime =
+    Boolean(dayMatch) ||
+    Boolean(timeMatch) ||
+    /(?:점심|정오|아침|출근|퇴근|저녁)(?:에|으로|로|\s*마다)/.test(clean);
+  const isDisableIntent =
+    /(?:꺼\s*(?:줘|주세요)|끄기|해제|중지|그만|안\s*할래|안\s*할게|하지\s*마|취소)/i.test(clean);
 
-  let targetHour = current.hour;
-  let targetMinute = 0;
+  // 1) 정기 검진/점검 끄기/해제
+  if (hasCareKeyword && isDisableIntent) {
+    return { matched: true, action: 'DISABLE_SCHEDULE' };
+  }
 
-  if (/점심|정오/.test(clean) && !/\d+\s*시/.test(clean)) {
-    targetHour = 13;
-  } else if (/아침|출근/.test(clean) && !/\d+\s*시/.test(clean)) {
-    targetHour = 9;
-  } else if (/퇴근|저녁/.test(clean) && !/\d+\s*시/.test(clean)) {
-    targetHour = 16;
-  } else {
-    const timeMatch = clean.match(/(오전|아침|새벽|오후|저녁|밤|낮)?\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/);
+  // 2) 요일 또는 시간이 포함된 예약 변경 요청 ("정기검진 금요일 오후 4시로해줘", "금요일 오후 4시로 바꿔줘", "수요일 점심마다 손봐줘")
+  if (
+    hasExplicitDayOrTime &&
+    (hasCareKeyword || /(?:바꿔|변경|설정|예약|맞춰)(?:\s*(?:줘|주세요))?/i.test(clean))
+  ) {
+    const current = loadWeeklyCareSchedule();
+    const targetDay = dayMatch ? dayMap[dayMatch[1]] ?? current.dayOfWeek : current.dayOfWeek;
+    let targetHour = current.hour;
+    let targetMinute = 0;
+
     if (timeMatch) {
       const meridiem = timeMatch[1] || '';
       let h = parseInt(timeMatch[2], 10);
@@ -286,16 +282,42 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
       }
       targetHour = Math.max(0, Math.min(23, h));
       targetMinute = Math.max(0, Math.min(59, m));
+    } else if (/점심|정오/.test(clean)) {
+      targetHour = 13;
+    } else if (/아침|출근/.test(clean)) {
+      targetHour = 9;
+    } else if (/퇴근|저녁/.test(clean)) {
+      targetHour = 16;
     }
-  }
 
-  if (dayMatch || /(?:바꿔|변경|설정|예약|맞춰|켜\s*줘)/.test(clean)) {
     return {
       matched: true,
       action: 'UPDATE_SCHEDULE',
       dayOfWeek: targetDay,
       hour: targetHour,
       minute: targetMinute,
+    };
+  }
+
+  // 3) 요일·시간 지정 없이 지금 즉시 정기 건강검진 / 정기 점검 / 손 없는 날 점검 실행 요청
+  if (
+    /(?:지금|당장|오늘|바로)?\s*(?:정기\s*(?:건강)?\s*(?:검진|점검)|수요\s*손\s*없는\s*날|손\s*없는\s*날\s*(?:검진|점검)|종합\s*건강\s*(?:검진|점검)).*?(?:해\s*(?:줘|주세요)|실행|시작|진단|봐\s*(?:줘|주세요)|손봐\s*(?:줘|주세요)|확인|알려\s*(?:줘|주세요))/i.test(
+      clean
+    )
+  ) {
+    return { matched: true, action: 'RUN_NOW_CHECKUP' };
+  }
+
+  if (!hasCareKeyword) return { matched: false };
+
+  if (/(?:바꿔|변경|설정|예약|맞춰|켜\s*줘)/.test(clean)) {
+    const current = loadWeeklyCareSchedule();
+    return {
+      matched: true,
+      action: 'UPDATE_SCHEDULE',
+      dayOfWeek: current.dayOfWeek,
+      hour: current.hour,
+      minute: current.minute,
     };
   }
 
