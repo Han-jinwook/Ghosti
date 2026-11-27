@@ -282,13 +282,60 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       setIsCleanupPaused(false);
       setPausedSnapshot(null);
     };
+    const onFocusPhotoCareTab = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ tab?: 'duplicate' | 'memo' | 'screenshot' | 'blurry' | 'restore' | 'auto' }>).detail;
+      const requestedTab = detail?.tab || 'auto';
+      setIsCleanupPaused(false);
+      setPausedSnapshot(null);
+
+      if (requestedTab === 'restore') {
+        window.setTimeout(() => {
+          const restoreEl = document.getElementById('ghosti-quarantine-restore-section');
+          restoreEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+        return;
+      }
+
+      let targetTab: TrashCategory = 'duplicate';
+      if (requestedTab === 'auto') {
+        const curState = useSaySeeStore.getState();
+        const curActiveTrash = (curState.photos || []).filter((p) => p.trashCategory && !p.quarantined);
+        const hasDup = (curState.duplicateGroups || []).some((g) =>
+          g.photoIds.some((id) => {
+            const ph = (curState.photos || []).find((p) => p.id === id);
+            return ph && !ph.quarantined && id !== g.bestPhotoId;
+          })
+        );
+        if (hasDup) {
+          targetTab = 'duplicate';
+        } else if (curActiveTrash.some((p) => matchesTrashTab(p, 'memo'))) {
+          targetTab = 'memo';
+        } else if (curActiveTrash.some((p) => matchesTrashTab(p, 'screenshot'))) {
+          targetTab = 'screenshot';
+        } else if (curActiveTrash.some((p) => matchesTrashTab(p, 'blurry'))) {
+          targetTab = 'blurry';
+        } else {
+          targetTab = 'duplicate';
+        }
+      } else {
+        targetTab = requestedTab;
+      }
+
+      setActiveTrashCategoryFilter(targetTab);
+      window.setTimeout(() => {
+        const sectionEl = document.getElementById('ghosti-photo-care-tabs-section');
+        sectionEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 90);
+    };
     window.addEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
     window.addEventListener('ghosti_photo_restored_from_quarantine', onPhotoRestored);
     window.addEventListener('ghosti_photo_moved_to_quarantine', onPhotoMovedToQuarantine);
+    window.addEventListener('ghosti_focus_photo_care_tab', onFocusPhotoCareTab);
     return () => {
       window.removeEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
       window.removeEventListener('ghosti_photo_restored_from_quarantine', onPhotoRestored);
       window.removeEventListener('ghosti_photo_moved_to_quarantine', onPhotoMovedToQuarantine);
+      window.removeEventListener('ghosti_focus_photo_care_tab', onFocusPhotoCareTab);
     };
   }, [liveActiveTrash, duplicateGroups, clearTrashSelection, setActiveTrashCategoryFilter]);
 
@@ -716,7 +763,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           )}
 
           {/* 4열 사진 정리 카테고리 */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div id="ghosti-photo-care-tabs-section" className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 scroll-mt-4">
             {TRASH_TABS_4.map((tab) => {
               const items = activeTrash.filter((p) => matchesTrashTab(p, tab.key));
               const bytes = items.reduce((a, p) => a + p.size, 0);

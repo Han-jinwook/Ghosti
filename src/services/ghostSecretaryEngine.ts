@@ -1312,12 +1312,22 @@ export function resolveGhostSecretaryTurn(
     };
   }
 
-  // ⓪-2 모바일 옛날 사진 스캔 시점 선택 응답
-  if (/30\s*분|지금\s*(천천히|돌려)/.test(text) && /사진|스캔|돌려|천천히|30\s*분/.test(text) && st.passportStep === 'done' && !st.mobileRemainingScanChoice) {
-    return { scenarioId: 'mobile_scan_choice_now', text: '좋아요! 뒤에서 천천히 찾아두고 약 30분 뒤에 채팅으로 알려드릴게요.', nextState: { ...st, mobileRemainingScanChoice: 'now_30min' } };
+  // ⓪-2 모바일 옛날 사진 스캔 시점 선택 응답 (여권 등록 완료 여부와 무관하게 언제든 선택 즉시 인식 및 실제 백그라운드 추가 스캔 트리거)
+  if (/30\s*분|지금\s*(천천히|돌려)/.test(text) && /사진|스캔|돌려|천천히|30\s*분/.test(text)) {
+    return {
+      scenarioId: 'mobile_scan_choice_now',
+      text: '좋아요! 지금 바로 백그라운드에서 남은 옛날 사진을 천천히 스캔하기 시작했어요. 화면은 멈추지 않게 조절하며, 스캔이 끝나면 채팅으로 바로 알려드릴게요!',
+      followUps: ['내 폰 사진 자동 점검 결과 볼래', '맨 위 검색창으로 바로 찾아볼래'],
+      nextState: { ...st, mobileRemainingScanChoice: 'now_30min' },
+    };
   }
-  if (/저녁/.test(text) && st.passportStep === 'done' && !st.mobileRemainingScanChoice) {
-    return { scenarioId: 'mobile_scan_choice_evening', text: '알겠어요! 저녁에 쉬실 때 조용히 해두고, 다음 날 한 번만 채팅으로 알려드릴게요.', nextState: { ...st, mobileRemainingScanChoice: 'evening' } };
+  if (/저녁/.test(text) && /쉴\s*때|조용히|스캔|사진|해\s*줘/.test(text)) {
+    return {
+      scenarioId: 'mobile_scan_choice_evening',
+      text: '알겠어요! 저녁에 쉬실 때(오후 8시 이후 앱 실행 시) 조용히 남은 옛날 사진을 스캔해 두고 완료되면 채팅으로 알려드릴게요.',
+      followUps: ['내 폰 사진 자동 점검 결과 볼래', '맨 위 검색창으로 바로 찾아볼래'],
+      nextState: { ...st, mobileRemainingScanChoice: 'evening' },
+    };
   }
 
   const isCareActionApprovalText =

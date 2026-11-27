@@ -2322,9 +2322,25 @@ ${payload.summaryText}`, {
   if (careCmd.matched) {
     if (careCmd.action === 'RUN_NOW_CHECKUP') {
       const store = useSaySeeStore.getState();
+      const isMobileCareNow = store.isStoreAppMode || isMobileRuntimeForChat();
+      const mobileSummary = isMobileCareNow
+        ? computeLocalPhotoCleanupSummary(store.photos || [], store.duplicateGroups || [], {
+            isRealDeviceModeOverride: true,
+          })
+        : undefined;
       const briefing = await evaluateDualProactiveCareEngine({
         forceManual: true,
-        isStoreAppMode: store.isStoreAppMode,
+        isStoreAppMode: isMobileCareNow,
+        mobilePhotoSummary: mobileSummary
+          ? {
+              totalLocalPhotoCount: mobileSummary.totalLocalPhotoCount,
+              totalCandidateCount: mobileSummary.totalCandidateCount,
+              dupPhotoCount: mobileSummary.dupPhotoCount,
+              memoAndScreenCount: mobileSummary.memoAndScreenCount,
+              blurryCount: mobileSummary.blurryCount,
+              totalCandidateBytes: mobileSummary.totalCandidateBytes,
+            }
+          : undefined,
       });
       if (briefing) {
         const twoLineText = ` **[${briefing.badgeLabel}]**\n1️⃣ ${briefing.headlineLine1}\n2️⃣ ${briefing.schedulePromptLine2}`;
@@ -4209,6 +4225,40 @@ export async function processUnifiedMonsterChatQuery(params: {
       pendingApprovalMsg.proactiveCareBriefing &&
       !pendingApprovalMsg.proactiveCareBriefing.executed
     ) {
+      if (isMobileRuntimeForChat()) {
+        recordCareCompletionTimestamp();
+        saveWeeklyCareSchedule({ enabled: true });
+        const schedLabel = formatScheduleLabelKo(loadWeeklyCareSchedule());
+        setSharedMonsterMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingApprovalMsg.id && m.proactiveCareBriefing
+              ? {
+                  ...m,
+                  proactiveCareBriefing: {
+                    ...m.proactiveCareBriefing,
+                    executed: true,
+                    scheduleConfirmed: true,
+                    approvedTypedText: clean,
+                    createdRestoreId: '모바일 정리',
+                  },
+                }
+              : m
+          )
+        );
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ghosti_focus_photo_care_tab', { detail: { tab: 'auto' } }));
+          if (isAndroidMobileBrowserOrApp()) {
+            window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));
+          }
+        }
+        const mobileWeeklyMsg =
+          `아래 **4대 사진 정리 탭**을 바로 열어드렸어요! 원하시는 사진만 확인하고 휴지통으로 간편하게 정리해 보세요.\n` +
+          `• **다음 정기 점검 자동 세팅**: ${schedLabel} (원하실 때 채팅으로 요일·시간 변경 가능)`;
+        speak('아래 4대 사진 정리 탭을 열어드렸으며 주간 정기 점검도 설정해 두었습니다.');
+        return reply(sourceTab, mobileWeeklyMsg, {
+          followUpSuggestions: ['중복·연사 사진 정리해줘', '방금 정리한 사진 복원해줘'],
+        });
+      }
       const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
       cachedPcContext = null;
       const restoreId = String((osRes && osRes.restoreId) || '#1');
@@ -4803,6 +4853,121 @@ export async function processUnifiedMonsterChatQuery(params: {
 
     const infoDeskReplyEarly = handleGhostiInfoDeskIfMatched(clean, sourceTab, speak);
     if (infoDeskReplyEarly) return infoDeskReplyEarly;
+  }
+
+  // 0-0C-MOBILE) [모바일 정식 앱 전용 손보기 · 4대 사진 정리 · 용량/속도/광고 점검 SSOT 핸들러]
+  // - 모바일에서는 PC Z-코어(127.0.0.1:5199)나 가짜 Windows 10/11 사양 카드를 절대 호출하지 않고,
+  //   실측 갤러리 4대 사진 정리 탭 자동 펼침·스크롤 + (Android) 악성 클리너 스캔 / (iOS) 저장공간·구독 정식 안내로 직결합니다.
+  if (isMobileRuntimeForChat() && !isSelectingRestoreNumberNow) {
+    const isMobilePhotoTabQuery =
+      /(내\s*폰\s*사진\s*(?:자동\s*)?(?:점검|스캔)\s*결과|사진\s*(?:정리|점검)\s*(?:탭|결과|해\s*줘|볼래|봐\s*줘)|중복\s*[·.\s]*연사|연사\s*사진|중복\s*사진|영수증\s*[·.\s]*메모|메모\s*사진|스크린샷\s*(?:캡처\s*)?(?:모아|정리|지워|치워)|흔들린?\s*사진|오촬영|방금\s*정리한\s*사진\s*(?:복원|되돌)|사진\s*휴지통\s*(?:복원|되돌|열어))/i.test(
+        clean
+      );
+    const isMobileSpeedOrStorageOrAdQuery =
+      /(폰이?\s*(?:느려|느린|느리|버벅|답답|무거워)|(?:저장\s*)?용량\s*(?:부족|모자라|꽉|늘려|확보|줄여|정리|확인|어때|얼마나)|폰\s*(?:청소|정리|점검|상태|손\s*좀|손봐)|안\s*쓰는\s*앱\s*(?:정리|삭제|지워)|(?:이상한|수상한|광고)\s*(?:창|팝업|배너|알림|앱)|자꾸\s*(?:광고|팝업|창).*?(?:떠|뜨|나와)|느려|버벅|답답|사양|스펙)/i.test(
+        clean
+      );
+
+    if (isMobilePhotoTabQuery || isMobileSpeedOrStorageOrAdQuery) {
+      const storeNow = useSaySeeStore.getState();
+      const photoSum = computeLocalPhotoCleanupSummary(
+        storeNow.photos || [],
+        storeNow.duplicateGroups || [],
+        { isRealDeviceModeOverride: true }
+      );
+      const reclaimMb = Math.max(1, Math.round(photoSum.totalCandidateBytes / (1024 * 1024)));
+
+      const focusTab: 'duplicate' | 'memo' | 'screenshot' | 'blurry' | 'restore' | 'auto' =
+        /방금\s*정리한\s*사진|사진\s*휴지통|복원|되돌/i.test(clean)
+          ? 'restore'
+          : /중복|연사/i.test(clean)
+          ? 'duplicate'
+          : /영수증|메모|주차/i.test(clean)
+          ? 'memo'
+          : /스크린샷|캡처/i.test(clean)
+          ? 'screenshot'
+          : /흔들|오촬영/i.test(clean)
+          ? 'blurry'
+          : 'auto';
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ghosti_focus_photo_care_tab', { detail: { tab: focusTab } }));
+      }
+
+      if (focusTab === 'restore') {
+        const isIos = isIosMobileBrowserOrApp();
+        const restoreMsg = isIos
+          ? `아래 **[최근 정리 내역]**으로 이동해 드렸어요! 아이폰은 애플 FaceID 보안 정책에 따라 **[사진 앱 ➔ 최근 삭제된 항목]**에 30일간 안전 보관되며, 그곳에서 복원하시면 귀신같이에도 자동으로 다시 나타납니다.`
+          : photoSum.quarantinedCount > 0
+          ? `아래 **[정리한 사진 복원 (${photoSum.quarantinedCount}장)]**으로 이동해 드렸어요! 원하시는 사진을 눌러 1초 만에 원래 갤러리로 되돌리실 수 있어요.`
+          : `아래 **[정리한 사진 복원]** 영역으로 이동해 드렸어요. 현재 복원 대기 중인 정리 사진은 0장입니다.`;
+        speak(restoreMsg);
+        return reply(sourceTab, restoreMsg, {
+          followUpSuggestions: ['내 폰 사진 자동 점검 결과 볼래', '중복·연사 사진 정리해줘'],
+        });
+      }
+
+      if (isMobilePhotoTabQuery) {
+        const tabLabel =
+          focusTab === 'duplicate'
+            ? `중복·연사 사진 (${photoSum.dupPhotoCount}장 · ${photoSum.dupSetCount}세트)`
+            : focusTab === 'memo'
+            ? `주차·영수증·메모 사진 (${photoSum.memoCount}장)`
+            : focusTab === 'screenshot'
+            ? `스크린샷·캡처 (${photoSum.screenshotCount}장)`
+            : focusTab === 'blurry'
+            ? `흔들림·오촬영 사진 (${photoSum.blurryCount}장)`
+            : `전체 정리 후보 ${photoSum.totalCandidateCount}장`;
+
+        const photoMsg =
+          photoSum.totalLocalPhotoCount === 0
+            ? `아직 자동 인덱싱된 내 폰 사진이 없어요. 아래 **[사진첩 다시 확인]** 버튼을 눌러 사진 접근 권한을 허용하시면 중복·연사·영수증·스크린샷·흔들린 사진을 바로 분류해 드립니다!`
+            : photoSum.totalCandidateCount > 0
+            ? `아래 **${tabLabel}** 탭을 바로 펼쳐드렸어요!\n• 스캔된 내 폰 사진 **${photoSum.totalLocalPhotoCount}장** 중 정리 후보 **${photoSum.totalCandidateCount}장(약 ${reclaimMb}MB 확보 가능)**\n• 중복·연사 **${photoSum.dupPhotoCount}장** · 영수증·메모 **${photoSum.memoCount}장** · 스크린샷 **${photoSum.screenshotCount}장** · 흔들림 **${photoSum.blurryCount}장**`
+            : `스캔된 내 폰 사진 **${photoSum.totalLocalPhotoCount}장**을 점검했는데 정리할 중복·흔들린 사진 없이 아주 깔끔한 상태예요! 아래 4대 정리 탭을 열어 직접 확인해 보실 수 있어요.`;
+        speak(photoMsg.replace(/\*\*/g, ''));
+        return reply(sourceTab, photoMsg, {
+          followUpSuggestions:
+            photoSum.quarantinedCount > 0
+              ? ['방금 정리한 사진 복원해줘', '맨 위 검색창으로 바로 찾아볼래']
+              : ['스크린샷 캡처 모아줘', '흔들린 사진 골라 정리해줘'],
+        });
+      }
+
+      // 모바일 속도·용량·광고창 점검
+      if (isAndroidMobileBrowserOrApp()) {
+        const cleanerScan = await scanMobileBloatCleaners();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));
+        }
+        const cleanerLine =
+          cleanerScan.detected.length > 0
+            ? `🚨 **악성/유료결제 유도 청소앱 ${cleanerScan.detected.length}건 감지**: 맨 위 구출 배너에서 **[1. 앱 삭제 ➔ 2. Play 정기결제 해지 ➔ 3. 구글 계정 권한 해제]**를 순서대로 눌러주세요!`
+            : `✅ **악성 청소앱 점검 완료**: 설치된 유료결제 유도 청소앱이 감지되지 않아 안심하셔도 됩니다.`;
+        const photoLine =
+          photoSum.totalCandidateCount > 0
+            ? `📸 **사진 용량 확보 가능**: 아래 4대 정리 탭을 열어드렸어요! 정리 후보 **${photoSum.totalCandidateCount}장(약 ${reclaimMb}MB)**을 휴지통으로 옮기면 저장 공간이 즉시 늘어납니다.`
+            : `📸 **갤러리 상태**: 스캔된 사진 ${photoSum.totalLocalPhotoCount}장이 깔끔하게 정리되어 있습니다.`;
+        const aosCareMsg = `스마트폰 상태와 사진 용량을 실시간으로 점검했어요!\n• ${cleanerLine}\n• ${photoLine}`;
+        speak(aosCareMsg.replace(/\*\*/g, ''));
+        return reply(sourceTab, aosCareMsg, {
+          followUpSuggestions: ['중복·연사 사진 정리해줘', '구글 플레이 정기결제 해지 확인해줘'],
+        });
+      }
+
+      const iosCareMsg =
+        `아이폰(iOS) 사진 저장 공간과 상태를 점검했어요!\n` +
+        `• 📸 **사진 용량 확보**: ${
+          photoSum.totalCandidateCount > 0
+            ? `아래 4대 정리 탭을 열어드렸어요! 정리 후보 **${photoSum.totalCandidateCount}장(약 ${reclaimMb}MB)**을 정리하시면 용량이 바로 확보됩니다.`
+            : `스캔된 사진 ${photoSum.totalLocalPhotoCount}장이 깔끔한 상태입니다.`
+        }\n` +
+        `• 🍎 **아이폰 저장 공간·구독 확인**: 전체 앱별 용량은 **[아이폰 설정 > 일반 > iPhone 저장 공간]**, 정기결제는 **[설정 > 내 이름(Apple 계정) > 구독]**에서 안전하게 관리하실 수 있어요.`;
+      speak(iosCareMsg.replace(/\*\*/g, ''));
+      return reply(sourceTab, iosCareMsg, {
+        followUpSuggestions: ['중복·연사 사진 정리해줘', '스크린샷 캡처 모아줘'],
+      });
+    }
   }
 
   // 0-0C) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 트랙 (2026-11-24 Ghosti × MerlinHub 합의 5대 기둥)]
@@ -6206,7 +6371,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     ? llmDecision.followUpSuggestions
     : undefined;
 
-  if (isDirectSlowOrAdwareFix) {
+  if (isDirectSlowOrAdwareFix && !isMobileRuntimeForChat()) {
     const isMobileRuntime =
       typeof navigator !== 'undefined' &&
       /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
@@ -6982,13 +7147,14 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
 
   if (
-    llmDecision?.intent === 'PC_SPEC_CONSULTATION' ||
-    llmDecision?.zCoreCommand?.endpoint === '/__zcore/pc-spec' ||
-    /느려|느린|느리|속도|버벅|답답|애드웨어/i.test(clean) ||
-    (!hasLlm &&
-      /사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드|느려|느린데|버벅|답답/i.test(
-        clean
-      ))
+    !isMobileRuntimeForChat() &&
+    (llmDecision?.intent === 'PC_SPEC_CONSULTATION' ||
+      llmDecision?.zCoreCommand?.endpoint === '/__zcore/pc-spec' ||
+      /느려|느린|느리|속도|버벅|답답|애드웨어/i.test(clean) ||
+      (!hasLlm &&
+        /사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드|느려|느린데|버벅|답답/i.test(
+          clean
+        )))
   ) {
     const [r, osInspectRes] = await Promise.all([      zcoreJson<{
         ok: boolean;
@@ -7250,13 +7416,14 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  // 8) 프린터·네트워크·화면·소리·S드라이브 등 OS 수리 의도 (⚙️ 고치기 연동)
+  // 8) 프린터·네트워크·화면·소리·S드라이브 등 OS 수리 의도 (⚙️ 고치기 연동 — PC 전용)
   if (
-    llmDecision?.intent === 'OS_REPAIR_ACTION' ||
-    (!hasLlm &&
-      /프린터|인쇄|스풀러|와이파이|인터넷|네트워크|블루투스|소리|스피커|글씨|화면|주사율|광고|팝업|s\s*드라이브|고쳐/i.test(
-        clean
-      ))
+    !isMobileRuntimeForChat() &&
+    (llmDecision?.intent === 'OS_REPAIR_ACTION' ||
+      (!hasLlm &&
+        /프린터|인쇄|스풀러|와이파이|인터넷|네트워크|블루투스|소리|스피커|글씨|화면|주사율|광고|팝업|s\s*드라이브|고쳐/i.test(
+          clean
+        )))
   ) {
     const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
     const diagPlan = buildSetupDiagnosisPlan('pc', clean);

@@ -1157,8 +1157,26 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     const runProactiveCheck = async () => {
       if (cancelled) return;
       // [v1.3] 전사 단일 웹 알림 = 귀신비서 채팅 노크 (대답할 때까지 하루 1회만)
+      const curStoreForCare = useSaySeeStore.getState();
+      const mobileSumForCare = isMobileOrStore
+        ? computeLocalPhotoCleanupSummary(
+            curStoreForCare.photos || [],
+            curStoreForCare.duplicateGroups || [],
+            { isRealDeviceModeOverride: true }
+          )
+        : undefined;
       const briefing = await evaluateDualProactiveCareEngine({
         isStoreAppMode: isMobileOrStore,
+        mobilePhotoSummary: mobileSumForCare
+          ? {
+              totalLocalPhotoCount: mobileSumForCare.totalLocalPhotoCount,
+              totalCandidateCount: mobileSumForCare.totalCandidateCount,
+              dupPhotoCount: mobileSumForCare.dupPhotoCount,
+              memoAndScreenCount: mobileSumForCare.memoAndScreenCount,
+              blurryCount: mobileSumForCare.blurryCount,
+              totalCandidateBytes: mobileSumForCare.totalCandidateBytes,
+            }
+          : undefined,
       });
       if (!briefing || cancelled) return;
       // Track A(20% 실시간 과부하 10분 지속)는 정기 노크와 별개로 즉시 안내하되, 이미 미실행 브리핑 카드가 있으면 중복 방지
@@ -1706,6 +1724,27 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               text: pcBridge.text,
               showMobileToPcBridgeButton: true,
             });
+          }
+        }
+        if (turn.scenarioId === 'mobile_scan_choice_now') {
+          try {
+            localStorage.removeItem('ghosti_mobile_evening_scan_pending');
+          } catch {
+            /* ignore */
+          }
+          void useSaySeeStore
+            .getState()
+            .syncMobileNativeGalleryAuto({ promptPermission: false, maxTargetCount: 2500 });
+        } else if (turn.scenarioId === 'mobile_scan_choice_evening') {
+          try {
+            localStorage.setItem('ghosti_mobile_evening_scan_pending', '1');
+          } catch {
+            /* ignore */
+          }
+          if (new Date().getHours() >= 20) {
+            void useSaySeeStore
+              .getState()
+              .syncMobileNativeGalleryAuto({ promptPermission: false, maxTargetCount: 2500 });
           }
         }
         saveGhostSecretaryState(nextState);

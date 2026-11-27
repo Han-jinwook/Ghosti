@@ -372,24 +372,50 @@ function getCurrentWeekKey(now: Date, cfg: WeeklyCareScheduleConfig): string {
 export async function evaluateDualProactiveCareEngine(options?: {
   forceManual?: boolean;
   isStoreAppMode?: boolean;
+  mobilePhotoSummary?: {
+    totalLocalPhotoCount: number;
+    totalCandidateCount: number;
+    dupPhotoCount: number;
+    memoAndScreenCount: number;
+    blurryCount: number;
+    totalCandidateBytes: number;
+  };
 }): Promise<ProactiveCareBriefingResult | null> {
   const isStore = Boolean(options?.isStoreAppMode);
   const cfg = loadWeeklyCareSchedule();
   const now = new Date();
 
-  // 모바일 스토어 클린 모드에서는 OS 프로세스 스캔 대신 사진 정리 브리핑만 제공
+  // 모바일 정식 앱 / 모바일 모드에서는 OS 프로세스 스캔 대신 실측 갤러리 사진 정리 브리핑 제공
   if (isStore) {
-    if (!options?.forceManual) return null;
+    const ms = options?.mobilePhotoSummary;
+    const candidateCnt = ms?.totalCandidateCount ?? 0;
+    const reclaimMb = ms ? Math.max(1, Math.round(ms.totalCandidateBytes / (1024 * 1024))) : 0;
+    const isWeeklyWindow =
+      cfg.enabled &&
+      now.getDay() === cfg.dayOfWeek &&
+      now.getHours() >= cfg.hour &&
+      now.getTime() - (cfg.lastCareCompletedAtMs || 0) >= SMART_COOLDOWN_48H_MS &&
+      cfg.lastTriggeredWeekKey !== getCurrentWeekKey(now, cfg);
+
+    if (!options?.forceManual && (!isWeeklyWindow || candidateCnt === 0)) return null;
+    if (isWeeklyWindow && !options?.forceManual) {
+      saveWeeklyCareSchedule({ lastTriggeredWeekKey: getCurrentWeekKey(now, cfg) });
+    }
+
+    const headlineLine1 =
+      candidateCnt > 0
+        ? `내 폰 갤러리(총 ${ms?.totalLocalPhotoCount ?? 0}장)에서 정리 후보 ${candidateCnt}장(중복·연사 ${ms?.dupPhotoCount ?? 0}장 · 메모·캡처 ${ms?.memoAndScreenCount ?? 0}장 · 흔들림 ${ms?.blurryCount ?? 0}장, 약 ${reclaimMb}MB)을 찾아두었습니다.`
+        : '현재 내 폰 갤러리가 깔끔한 상태입니다! 아래 4대 사진 정리 탭에서 언제든 새로 찍은 사진을 점검하실 수 있어요.';
+
     return {
-      triggerType: 'MANUAL_CHECKUP',
+      triggerType: options?.forceManual ? 'MANUAL_CHECKUP' : 'TRACK_B_WEDNESDAY_MEME',
       badgeLabel: `${cfg.memeTitleKo}`,
-      headlineLine1:
-        '갤러리 속 중복·연사 사진과 영수증·스크린샷 정리 후보를 분류해 두었습니다. 선명한 원본만 남기고 간편하게 정리해 보세요.',
-      schedulePromptLine2: '이번 주처럼 매주 수요일 점심마다 알아서 갤러리 정리 후보를 챙겨드릴까요?',
-      overloadPercent: 20,
+      headlineLine1,
+      schedulePromptLine2: '지금 바로 정리 탭을 열어 확인하고, 매주 정기 점검도 계속 켜둘까요?',
+      overloadPercent: candidateCnt > 0 ? Math.min(100, Math.max(20, candidateCnt * 2)) : 0,
       detectedBloatwareCount: 0,
       detectedBloatwareNames: [],
-      junkFileCount: 0,
+      junkFileCount: candidateCnt,
       ramUsedPercent: null,
       cpuLoadPercent: null,
     };

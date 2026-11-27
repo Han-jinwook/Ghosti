@@ -1264,6 +1264,33 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 type="button"
                 disabled={busyId === 'weekly_care_exec'}
                 onClick={async () => {
+                  const st = useSaySeeStore.getState();
+                  const isMobileCareMode =
+                    st.isStoreAppMode ||
+                    st.layout === 'mobile' ||
+                    (typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || ''));
+                  if (isMobileCareMode) {
+                    recordCareCompletionTimestamp();
+                    saveWeeklyCareSchedule({ enabled: true });
+                    onUpdateMessage({
+                      ...message,
+                      proactiveCareBriefing: {
+                        ...message.proactiveCareBriefing!,
+                        executed: true,
+                        scheduleConfirmed: true,
+                        approvedTypedText: '모바일 사진 정리 탭 열기 및 정기 점검 예약',
+                        createdRestoreId: '모바일 정리',
+                      },
+                    });
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('ghosti_focus_photo_care_tab', { detail: { tab: 'auto' } }));
+                      if (/Android/i.test(navigator.userAgent || '')) {
+                        window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));
+                      }
+                    }
+                    onToast?.('아래 4대 사진 정리 탭을 열어드렸으며 주간 정기 점검을 켰습니다.');
+                    return;
+                  }
                   setBusyId('weekly_care_exec');
                   const osRes = await executeRealOsAction(
                     'boot_lag_clean_bloatware',
