@@ -833,6 +833,121 @@ def _is_cloud_virtual_or_unpinned_file(p: Path) -> bool:
     return False
 
 
+_UNPINNED_CLOUD_ATTR_MASK = 0x1000 | 0x40000 | 0x400000
+
+
+def _is_cloud_only_media_file(p: Path | str, attrs: int | None = None) -> bool:
+    """
+    [클라우드 전용 미디어 SSOT 판별 — 파일명 선색인 · 원본 대량 다운로드 금지 대상]:
+    - Google Drive for Desktop(DriveFS) 가상 드라이브(G:)는 온라인 전용 파일도 속성이 0x80(NORMAL)으로 보고되어
+      속성만으로는 미동기화 여부를 알 수 없으므로(4호기 실측 8,635장 전부 0x80), 가상 드라이브 경로 전체를 클라우드 전용으로 취급합니다.
+    - OneDrive 등 Cloud Files 온라인 전용 파일(OFFLINE / RECALL_ON_OPEN / RECALL_ON_DATA_ACCESS)도 포함합니다.
+    """
+    if _is_virtual_cloud_drive_path(p):
+        return True
+    if attrs is None:
+        try:
+            attrs = int(getattr(os.stat(p), "st_file_attributes", 0) or 0)
+        except Exception:
+            return False
+    return bool(int(attrs or 0) & _UNPINNED_CLOUD_ATTR_MASK)
+
+
+# [가상 클라우드 드라이브 폴더 목록 SSOT 캐시 — 요청 스레드 I/O 0회 + 백그라운드 단일 갱신 워커]
+# 사진·동영상·문서 목록 요청이 G: 폴더를 직접 os.scandir 하며 0.3초 예산에 걸려 대부분의 폴더를 건너뛰던 구조를 대체합니다.
+_VIRT_DIR_LISTING_CACHE: Dict[str, tuple[float, List[tuple[str, str, os.stat_result]]]] = {}
+_VIRT_DIR_LISTING_PENDING: Dict[str, str] = {}
+_VIRT_DIR_LISTING_LOCK = threading.Lock()
+_VIRT_DIR_LISTING_WORKER_ALIVE = False
+_VIRT_DIR_LISTING_TTL_SEC = 180.0
+
+
+def _get_virtual_dir_listing(d: Path) -> List[tuple[str, str, os.stat_result]] | None:
+    """가상 드라이브 폴더의 (파일명, 절대경로, stat) 목록을 캐시에서 즉시 반환하고, 없거나 오래되면 백그라운드 갱신을 예약합니다."""
+    d_key = os.path.normcase(str(d))
+    hit = _VIRT_DIR_LISTING_CACHE.get(d_key)
+    if hit is None or (time.monotonic() - hit[0]) >= _VIRT_DIR_LISTING_TTL_SEC:
+        _schedule_virtual_dir_listing(d_key, str(d))
+    return hit[1] if hit is not None else None
+
+
+def _schedule_virtual_dir_listing(d_key: str, d_path: str) -> None:
+    global _VIRT_DIR_LISTING_WORKER_ALIVE
+    with _VIRT_DIR_LISTING_LOCK:
+        _VIRT_DIR_LISTING_PENDING[d_key] = d_path
+        if _VIRT_DIR_LISTING_WORKER_ALIVE:
+            return
+        _VIRT_DIR_LISTING_WORKER_ALIVE = True
+    threading.Thread(target=_virtual_dir_listing_worker, daemon=True, name="GhostiVirtualDirListing").start()
+
+
+def _virtual_dir_listing_worker() -> None:
+    global _VIRT_DIR_LISTING_WORKER_ALIVE, _DRIVE_SCAN_SEQ
+    media_exts = _IMAGE_EXTS | _VIDEO_EXTS | _DOC_EXTS
+    changed = False
+    last_publish = time.monotonic()
+    processed = 0
+
+    def _publish() -> None:
+        global _DRIVE_SCAN_SEQ
+        # 새로 채워진 G: 폴더 목록을 웹 귀신검색(watch-sig fsSig)에 즉시 알려 사진·동영상·문서 목록을 재구성시킵니다.
+        _DRIVE_SCAN_SEQ += 1
+        _WATCH_SIG_TTL_CACHE["ts"] = 0.0
+        _PHOTOS_RESP_MEM_CACHE["sig"] = ""
+        _DOCS_RESP_MEM_CACHE["sig"] = ""
+        _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+
+    try:
+        while True:
+            with _VIRT_DIR_LISTING_LOCK:
+                if not _VIRT_DIR_LISTING_PENDING:
+                    _VIRT_DIR_LISTING_WORKER_ALIVE = False
+                    break
+                d_key, d_path = _VIRT_DIR_LISTING_PENDING.popitem()
+            listing: List[tuple[str, str, os.stat_result]] = []
+            try:
+                with os.scandir(d_path) as it:
+                    for dent in it:
+                        try:
+                            if not dent.is_file(follow_symlinks=False):
+                                continue
+                            nm = dent.name
+                            dot = nm.rfind(".")
+                            if dot < 0 or nm[dot:].lower() not in media_exts:
+                                continue
+                            listing.append((nm, os.path.abspath(dent.path), dent.stat(follow_symlinks=False)))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            prev = _VIRT_DIR_LISTING_CACHE.get(d_key)
+            if prev is None or len(prev[1]) != len(listing) or (
+                max((x[2].st_mtime for x in prev[1]), default=0.0) != max((x[2].st_mtime for x in listing), default=0.0)
+            ):
+                changed = changed or bool(listing) or prev is not None
+            if len(_VIRT_DIR_LISTING_CACHE) > 20000:
+                _VIRT_DIR_LISTING_CACHE.clear()
+            _VIRT_DIR_LISTING_CACHE[d_key] = (time.monotonic(), listing)
+            processed += 1
+            if (processed & 31) == 31:
+                time.sleep(0.002)
+            if changed and (time.monotonic() - last_publish) >= 3.0:
+                _publish()
+                changed = False
+                last_publish = time.monotonic()
+    finally:
+        with _VIRT_DIR_LISTING_LOCK:
+            _VIRT_DIR_LISTING_WORKER_ALIVE = False
+            restart = bool(_VIRT_DIR_LISTING_PENDING)
+        if changed:
+            _publish()
+        if restart:
+            with _VIRT_DIR_LISTING_LOCK:
+                if not _VIRT_DIR_LISTING_WORKER_ALIVE:
+                    _VIRT_DIR_LISTING_WORKER_ALIVE = True
+                    threading.Thread(target=_virtual_dir_listing_worker, daemon=True, name="GhostiVirtualDirListing").start()
+
+
 def _load_custom_scan_roots() -> List[Path]:
     out: List[Path] = []
     try:
@@ -1510,8 +1625,11 @@ def _start_bg_full_drive_scan_once() -> None:
                             nm_t_low = nm_t.lower()
                             try:
                                 if dent_t.is_dir(follow_symlinks=False):
+                                    # 구글 드라이브(DriveFS)의 '공유 문서함 바로가기' 실폴더(G:\.shortcut-targets-by-id)는
+                                    # 점(.)으로 시작해도 사용자가 탐색기에서 여는 실제 업무 폴더이므로 반드시 탐색합니다.
+                                    is_shortcut_targets = is_virtual and nm_t == ".shortcut-targets-by-id"
                                     if (
-                                        not nm_t.startswith((".", "$", "~"))
+                                        (is_shortcut_targets or not nm_t.startswith((".", "$", "~")))
                                         and nm_t_low not in skip_top_names
                                         and not _is_skip_subdir_name(nm_t_low)
                                     ):
@@ -1534,9 +1652,11 @@ def _start_bg_full_drive_scan_once() -> None:
 
                 rr_idx = 0
                 per_drive_discovered = 0
-                per_drive_cap = 260 if is_virtual else 6000
-                drv_time_cap = 2.0 if is_virtual else 12.0
-                max_walk_depth = 6 if is_virtual else 12
+                # 가상 드라이브(G: DriveFS) 폴더 목록은 메타데이터 캐시에서 반환되어 파일 다운로드가 0이므로,
+                # 백그라운드 스레드에서 공유 바로가기 하위 폴더(4호기 실측 1,557개)까지 끝까지 수집합니다.
+                per_drive_cap = 6000
+                drv_time_cap = 90.0 if is_virtual else 12.0
+                max_walk_depth = 12
                 t_drv_start = time.time()
                 while (
                     sub_queues
@@ -2027,7 +2147,6 @@ def _is_antivirus_decoy_sibling_file(parent_dir: Path, stem_low: str) -> bool:
     return False
 
 
-_VIRTUAL_DIR_PHOTO_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, str, str, os.stat_result, Path, str]]]] = {}
 _LOCAL_DIR_PHOTO_SCAN_CACHE: Dict[str, tuple[int, List[tuple[Path, str, str, os.stat_result, Path, str]]]] = {}
 
 
@@ -2076,31 +2195,28 @@ def _list_local_photos_unlocked(
 
     raw_photo_candidates: List[tuple[Path, str, str, os.stat_result, Path, str]] = []
     seen_paths: set[str] = set()
-    now_m = time.monotonic()
-    virt_p_elapsed = 0.0
-    UNPINNED_CLOUD_MASK = 0x1000 | 0x40000 | 0x400000
 
     for idx_dir, d in enumerate(scan_dirs):
         is_virt_d = _is_virtual_cloud_drive_path(d)
         d_key = os.path.normcase(str(d))
         if is_virt_d:
-            hit_vp = _VIRTUAL_DIR_PHOTO_SCAN_CACHE.get(d_key)
-            # 가상 드라이브(G:/H: 구글드라이브)는 30초 TTL 내 os.stat() 네트워크 I/O를 0회로 즉시 반환 (260개 폴더 stat 지연 원천 차단)
-            if hit_vp is not None and (now_m - hit_vp[0]) < 30.0:
-                for p_tup in hit_vp[2]:
-                    np_low = p_tup[2].lower()
-                    if np_low not in seen_paths:
-                        seen_paths.add(np_low)
-                        raw_photo_candidates.append(p_tup)
+            # 가상 드라이브(G: 구글드라이브) 폴더는 요청 스레드에서 os.scandir 0회 — 백그라운드 SSOT 목록 캐시만 사용
+            # (클라우드 전용 사진은 파일명·폴더명으로 선색인하고 원본은 열람 시에만 받습니다)
+            v_listing = _get_virtual_dir_listing(d)
+            if not v_listing:
                 continue
-            if virt_p_elapsed >= 0.30:
-                if hit_vp is not None:
-                    for p_tup in hit_vp[2]:
-                        np_low = p_tup[2].lower()
-                        if np_low not in seen_paths:
-                            seen_paths.add(np_low)
-                            raw_photo_candidates.append(p_tup)
-                continue
+            v_label = _detect_folder_label(d)
+            for nm, abs_str, st in v_listing:
+                dot = nm.rfind(".")
+                if dot < 0 or nm[dot:].lower() not in _IMAGE_EXTS:
+                    continue
+                if st.st_size < 4096:
+                    continue
+                np_low = abs_str.lower()
+                if np_low not in seen_paths:
+                    seen_paths.add(np_low)
+                    raw_photo_candidates.append((d, v_label, abs_str, st, Path(abs_str), nm))
+            continue
         elif idx_dir >= 24:
             # 보조·심층 로컬 폴더(900~4,500개)는 디렉터리 mtime_ns 불변 시 캐시 재사용 (1.9초 재스캔 ➔ 15ms 즉시 응답)
             hit_lp = _LOCAL_DIR_PHOTO_SCAN_CACHE.get(d_key)
@@ -2117,7 +2233,6 @@ def _list_local_photos_unlocked(
                             raw_photo_candidates.append(p_tup)
                     continue
 
-        t_p0 = time.monotonic()
         if _is_antivirus_ransomware_decoy_dir(d):
             continue
         p_bucket: List[tuple[Path, str, str, os.stat_result, Path, str]] = []
@@ -2138,10 +2253,9 @@ def _list_local_photos_unlocked(
                         continue
                     if _is_antivirus_decoy_sibling_file(d, nm[:dot].lower()):
                         continue
-                    # os.scandir의 WIN32_FIND_DATA 캐시(dent.stat)에서 커널 핸들 오픈 0회로 오프라인 클라우드 속성 판별
+                    # os.scandir의 WIN32_FIND_DATA 캐시(dent.stat)에서 커널 핸들 오픈 0회로 속성 판별
+                    # (온라인 전용 클라우드 사진도 파일명 검색 대상으로 포함하고, 썸네일·AI 분석 단계에서만 원본 다운로드를 차단)
                     st = dent.stat(follow_symlinks=False)
-                    if int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK:
-                        continue
                     if st.st_size < 4096 and not is_sample_or_test_dir:
                         continue
                     abs_str = os.path.abspath(dent.path)
@@ -2153,10 +2267,7 @@ def _list_local_photos_unlocked(
                         raw_photo_candidates.append(ptup)
         except Exception:
             pass
-        if is_virt_d:
-            virt_p_elapsed += max(0.0, time.monotonic() - t_p0)
-            _VIRTUAL_DIR_PHOTO_SCAN_CACHE[d_key] = (now_m, 1, p_bucket)
-        elif idx_dir >= 24:
+        if idx_dir >= 24:
             try:
                 _LOCAL_DIR_PHOTO_SCAN_CACHE[d_key] = (int(getattr(os.stat(d), "st_mtime_ns", 0)), p_bucket)
             except Exception:
@@ -2178,6 +2289,8 @@ def _list_local_photos_unlocked(
             "size": int(st.st_size),
             "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
             "mtimeMs": int(st.st_mtime * 1000),
+            # 클라우드 전용(G: DriveFS·온라인 전용) 사진: 웹은 파일명·폴더명 검색만 하고 AI 내용 분석(원본 다운로드)에서 제외
+            "cloudOnly": _is_cloud_only_media_file(abs_str, int(getattr(st, "st_file_attributes", 0) or 0)),
         })
     primary_dir = resolve_active_photo_dir(req_dir)
     if files:
@@ -2449,9 +2562,19 @@ _PREWARM_RUNNING = False
 def get_or_create_photo_thumb(full_path: Path, max_px: int = 280) -> Path | None:
     """고해상도 원본 사진(4~12MB)을 libjpeg DCT draft 가속 기반 280px 경량 JPEG 썸네일(6~14KB)로 디스크 캐싱해 즉시 서빙합니다 (HEIC/특수 포맷은 Win32 Shell 폴백)."""
     try:
-        if _is_cloud_virtual_or_unpinned_file(full_path):
-            return None
         st = full_path.stat()
+        if _is_cloud_only_media_file(full_path, int(getattr(st, "st_file_attributes", 0) or 0)):
+            # [클라우드 전용 사진 썸네일 — 원본 다운로드 0]: PIL로 원본을 열면 구글 드라이브가 전체 파일(1~12MB)을 내려받으므로,
+            # Windows 셸 썸네일(SIIGBF_THUMBNAILONLY)만 요청합니다 (4호기 실측: 1.3MB 원본 대신 약 90KB 썸네일만 수신).
+            c_key = hashlib.sha1(
+                f"{full_path}|{st.st_size}|{int(st.st_mtime)}|{max_px}|cloud".encode("utf-8", errors="ignore")
+            ).hexdigest()[:20]
+            out_c = _PHOTO_THUMBS_DIR / f"pt_{c_key}.jpg"
+            if out_c.exists() and out_c.stat().st_size > 400:
+                return out_c
+            if os.name == "nt" and _win32_shell_extract_media_thumb(full_path, out_c, max_px=max_px, thumbnail_only=True):
+                return out_c
+            return None
         if st.st_size <= 45 * 1024 and full_path.suffix.lower() in (".jpg", ".jpeg"):
             return full_path
         cache_key = hashlib.sha1(
@@ -3746,7 +3869,6 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
 _DOCS_ENTRY_MEM_CACHE: Dict[str, Dict[str, Any]] = {}
 _DOCS_FULL_TEXT_MEM_MAP: Dict[str, str] = {}
-_VIRTUAL_DIR_DOC_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, Path, os.stat_result]]]] = {}
 _LOCAL_DIR_DOC_SCAN_CACHE: Dict[str, tuple[int, List[tuple[Path, Path, os.stat_result]]]] = {}
 _DOC_TEXT_BG_PREWARM_RUNNING = False
 
@@ -3847,30 +3969,27 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
         _LOCAL_DIR_DOC_SCAN_CACHE.clear()
     raw_entries: List[tuple[Path, Path, os.stat_result]] = []
     seen_paths: set[str] = set()
-    now_m = time.monotonic()
-    virt_elapsed = 0.0
-    UNPINNED_CLOUD_MASK = 0x1000 | 0x40000 | 0x400000
 
     for idx_dir, d in enumerate(scan_dirs):
         is_virt_d = _is_virtual_cloud_drive_path(d)
         d_key = os.path.normcase(str(d))
         if is_virt_d:
-            hit_vd = _VIRTUAL_DIR_DOC_SCAN_CACHE.get(d_key)
-            if hit_vd is not None and (now_m - hit_vd[0]) < 30.0:
-                for cd, cp, cst in hit_vd[2]:
-                    nd = str(cp).lower()
-                    if nd not in seen_paths:
-                        seen_paths.add(nd)
-                        raw_entries.append((cd, cp, cst))
+            # 가상 드라이브(G:) 폴더는 백그라운드 SSOT 목록 캐시만 사용 (요청 스레드 os.scandir 0회 · 0.3초 예산 누락 제거)
+            v_listing_d = _get_virtual_dir_listing(d)
+            if not v_listing_d:
                 continue
-            if virt_elapsed >= 0.30:
-                if hit_vd is not None:
-                    for cd, cp, cst in hit_vd[2]:
-                        nd = str(cp).lower()
-                        if nd not in seen_paths:
-                            seen_paths.add(nd)
-                            raw_entries.append((cd, cp, cst))
-                continue
+            for nm, abs_doc, st in v_listing_d:
+                nm_low = nm.lower()
+                dot = nm_low.rfind(".")
+                if dot < 0 or nm_low[dot:] not in _DOC_EXTS:
+                    continue
+                if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
+                    continue
+                nd = abs_doc.lower()
+                if nd not in seen_paths:
+                    seen_paths.add(nd)
+                    raw_entries.append((d, Path(abs_doc), st))
+            continue
         elif idx_dir >= 24:
             hit_ld = _LOCAL_DIR_DOC_SCAN_CACHE.get(d_key)
             if hit_ld is not None:
@@ -3886,7 +4005,6 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                             raw_entries.append((cd, cp, cst))
                     continue
 
-        t_d0 = time.monotonic()
         if _is_antivirus_ransomware_decoy_dir(d):
             continue
         dir_bucket: List[tuple[Path, Path, os.stat_result]] = []
@@ -3904,12 +4022,8 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                         continue
                     if _is_antivirus_decoy_sibling_file(d, nm_low[:dot]):
                         continue
+                    # 온라인 전용 클라우드 문서도 파일명으로 선색인 (_extract_doc_text가 본문 추출 시 다운로드를 차단)
                     st = dent.stat(follow_symlinks=False)
-                    if (
-                        nm_low[dot:] not in (".gsheet", ".gdoc", ".gslides")
-                        and (int(getattr(st, "st_file_attributes", 0) or 0) & UNPINNED_CLOUD_MASK)
-                    ):
-                        continue
                     abs_doc = os.path.abspath(dent.path)
                     norm_doc = abs_doc.lower()
                     tup = (d, Path(abs_doc), st)
@@ -3919,10 +4033,7 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                         raw_entries.append(tup)
         except Exception:
             pass
-        if is_virt_d:
-            virt_elapsed += max(0.0, time.monotonic() - t_d0)
-            _VIRTUAL_DIR_DOC_SCAN_CACHE[d_key] = (now_m, 1, dir_bucket)
-        elif idx_dir >= 24:
+        if idx_dir >= 24:
             try:
                 _LOCAL_DIR_DOC_SCAN_CACHE[d_key] = (int(getattr(os.stat(d), "st_mtime_ns", 0)), dir_bucket)
             except Exception:
@@ -3972,17 +4083,18 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
             known_text = mem_full or disk_full
             has_known_text = bool(known_text)
             entry_mem_key = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{len(known_text)}"
+            # 클라우드 전용(G: DriveFS 가상 드라이브 · OneDrive 온라인 전용) 일반 문서는 파일명만 선색인하고 본문 추출(다운로드)은 생략
+            is_virt_e = _is_cloud_only_media_file(resolved_doc_str, int(getattr(st, "st_file_attributes", 0) or 0))
             cached_doc_item = _DOCS_ENTRY_MEM_CACHE.get(entry_mem_key)
             if cached_doc_item is not None:
                 docs.append(cached_doc_item)
-                if not has_known_text and (ext_low in (".gsheet", ".gdoc", ".gslides") or not _is_virtual_cloud_drive_path(resolved_doc_str)):
+                if not has_known_text and (ext_low in (".gsheet", ".gdoc", ".gslides") or not is_virt_e):
                     if len(deferred_doc_texts) < 1500:
                         deferred_doc_texts.append(entry)
                 continue
 
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
             stem_expanded = _split_camel_and_alnum_words(stem)
-            is_virt_e = _is_virtual_cloud_drive_path(resolved_doc_str)
             if has_known_text:
                 extracted = known_text
             elif is_virt_e and ext_low not in (".gsheet", ".gdoc", ".gslides"):
@@ -4469,11 +4581,12 @@ _IID_IShellItemImageFactory = _WIN32_GUID(
 )
 
 
-def _win32_shell_extract_media_thumb(src_path: Path, out_jpg: Path, max_px: int = 512) -> bool:
+def _win32_shell_extract_media_thumb(src_path: Path, out_jpg: Path, max_px: int = 512, thumbnail_only: bool = False) -> bool:
     """
     [무프로세스(0-Subprocess) Win32 IShellItemImageFactory 네이티브 고속 썸네일 추출기]
     - FFmpeg가 없는 PC에서도 PowerShell 서브프로세스를 띄우지 않고 인프로세스 COM(IShellItemImageFactory)으로
       30~150ms 내에 MP4/MOV/WMV/AVI/MKV/HEIC 대표 썸네일 JPEG를 즉시 생성합니다.
+    - thumbnail_only=True(클라우드 전용 파일): 셸·클라우드 공급자 썸네일만 받고 아이콘 폴백(SIIGBF_RESIZETOFIT)은 쓰지 않습니다.
     """
     if os.name != "nt" or not src_path.exists():
         return False
@@ -4523,7 +4636,7 @@ def _win32_shell_extract_media_thumb(src_path: Path, out_jpg: Path, max_px: int 
             hbm = ctypes.wintypes.HBITMAP()
             # SIIGBF_THUMBNAILONLY (0x08) 우선 시도 ➔ 미지원 시 SIIGBF_RESIZETOFIT (0x00)
             hr_img = get_image(ppv, _WIN32_SIZE(max_px, max_px), 0x08, ctypes.byref(hbm))
-            if hr_img != 0 or not hbm.value:
+            if (hr_img != 0 or not hbm.value) and not thumbnail_only:
                 hr_img = get_image(ppv, _WIN32_SIZE(max_px, max_px), 0x00, ctypes.byref(hbm))
             if hr_img != 0 or not hbm.value:
                 return False
@@ -4716,7 +4829,7 @@ def get_or_create_faststart_video_cache(
 ) -> Path | None:
     """HEVC·WMV·AVI 또는 대용량 MOV 영상을 완전한 길이가 보존된 720p H.264 Faststart MP4(v2)로 캐싱하여 0.01초 즉시 재생 및 무끊김 스트리밍을 보장합니다."""
     ff = find_ffmpeg_exe()
-    if (not ff and os.name != "nt") or _is_cloud_virtual_or_unpinned_file(file_path):
+    if (not ff and os.name != "nt") or _is_cloud_virtual_or_unpinned_file(file_path) or (not interactive and _is_virtual_cloud_drive_path(file_path)):
         return None
     try:
         st = file_path.stat()
@@ -4783,7 +4896,21 @@ def get_or_create_video_thumb(params: Dict[str, Any] | None = None) -> tuple[Pat
     if full_path is None or status != 200:
         return None, status
     ff = find_ffmpeg_exe()
-    if (not ff and os.name != "nt") or _is_cloud_virtual_or_unpinned_file(full_path):
+    if not ff and os.name != "nt":
+        return None, 404
+    if _is_cloud_only_media_file(full_path):
+        # 클라우드 전용(G: DriveFS·온라인 전용) 영상은 FFmpeg 프레임 추출(원본 다운로드) 대신 셸 썸네일만 사용
+        try:
+            st_c = full_path.stat()
+            c_key = hashlib.sha1(f"{full_path}|{st_c.st_size}|{int(st_c.st_mtime)}|cloud".encode("utf-8", errors="ignore")).hexdigest()[:20]
+            _VIDEO_THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+            out_c = _VIDEO_THUMBS_DIR / f"vt_{c_key}.jpg"
+            if out_c.exists() and out_c.stat().st_size > 1000:
+                return out_c, 200
+            if os.name == "nt" and _win32_shell_extract_media_thumb(full_path, out_c, max_px=512, thumbnail_only=True):
+                return out_c, 200
+        except Exception:
+            pass
         return None, 404
 
     data = params or {}
@@ -6252,7 +6379,9 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                 _VIDEOS_ENTRY_MEM_CACHE.clear()
 
             # 971개 대량 영상 보유 PC에서 동기 디스크 헤더 판독 블로킹을 0.06초 시간 예산으로 원천 제거!
-            allow_sync_io = (time.monotonic() - t_vid_probe0) < 0.06
+            # 클라우드 전용(G: DriveFS) 영상은 헤더 판독·변환 캐시·썸네일 선생성으로 원본이 대량 다운로드되지 않도록 차단
+            is_cloud_v = _is_cloud_only_media_file(resolved, int(getattr(st, "st_file_attributes", 0) or 0))
+            allow_sync_io = (time.monotonic() - t_vid_probe0) < 0.06 and not is_cloud_v
             real_dur_sec = _get_fast_video_duration_sec(
                 resolved,
                 allow_ffmpeg_sync=False,
@@ -6268,7 +6397,7 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
             codec_tag = _detect_video_codec_fast(resolved, allow_file_io=allow_sync_io, st_hint=st)
             if codec_tag == "needs_transcode" and has_video_transcoder:
                 vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
-                if len(prewarm_targets) < 6:
+                if len(prewarm_targets) < 6 and not is_cloud_v:
                     prewarm_targets.append(resolved)
             elif codec_tag in ("hevc", "mov_slow") and has_video_transcoder:
                 # 최신 Chrome/Edge는 MP4/MOV(HEVC 포함)를 /__photos/file HTTP 206 원본 스트림으로 0.03초 즉시 재생 가능.
@@ -6280,14 +6409,14 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
                     vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
                 else:
                     vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
-                if len(prewarm_targets) < 6:
+                if len(prewarm_targets) < 6 and not is_cloud_v:
                     prewarm_targets.append(resolved)
             else:
                 vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
 
             thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
             thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if has_video_transcoder else ""
-            if has_video_transcoder and len(vthumb_prewarm_targets) < 16:
+            if has_video_transcoder and len(vthumb_prewarm_targets) < 16 and not is_cloud_v:
                 vthumb_prewarm_targets.append((resolved, float(thumb_seek)))
 
             stem_expanded = _split_camel_and_alnum_words(stem)
@@ -6308,7 +6437,7 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
             if (
                 (cached_ocr is None or cached_ver < _VIDEO_PADDLE_OCR_VER)
                 and os.name == "nt"
-                and not _is_virtual_cloud_drive_path(resolved)
+                and not is_cloud_v
                 and len(missing_for_bg) < 180
             ):
                 missing_for_bg.append((sig, resolved, real_dur_sec))

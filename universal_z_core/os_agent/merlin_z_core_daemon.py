@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.12.59"
+CORE_VERSION = "2.12.69"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -971,7 +971,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                         t_mime = "image/jpeg" if thumb_path.suffix.lower() in (".jpg", ".jpeg") else mime
                         self._send_file_stream(thumb_path, content_type=t_mime, cache_max_age=86400)
                         return
-                    if plugin_ghosti_os._is_cloud_virtual_or_unpinned_file(f_path):
+                    # 클라우드 전용(G: DriveFS·온라인 전용) 사진은 셸 썸네일 실패 시 원본 전체 스트리밍(대량 다운로드)으로 폴백하지 않음
+                    if plugin_ghosti_os._is_cloud_only_media_file(f_path):
                         self._send_json({"ok": False, "error": "CLOUD_UNPINNED_SKIP"}, status=404)
                         return
                 self._send_file_stream(f_path, content_type=mime)
