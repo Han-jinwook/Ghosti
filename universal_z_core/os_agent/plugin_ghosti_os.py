@@ -6441,6 +6441,134 @@ def _resolve_listed_photo(name: str) -> Path | None:
     return p
 
 
+def _sanitize_shared_room_folder_name(raw_label: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", (raw_label or "").strip())
+    cleaned = re.sub(r"\s+", "_", cleaned).strip("._ ")
+    return cleaned[:48] or "공유방_원본"
+
+
+def _resolve_shared_room_sync_dir(room_label: str, custom_dir: str = "") -> Path:
+    safe_room = _sanitize_shared_room_folder_name(room_label)
+    cand_raw = (custom_dir or "").strip()
+    if cand_raw and cand_raw.lower() not in (r"d:\ghosti\다운로드_원본", "d:/ghosti/다운로드_원본"):
+        try:
+            cp = Path(cand_raw)
+            if cp.is_absolute():
+                drive_root = Path(cp.anchor) if cp.anchor else None
+                lower_str = str(cp).lower()
+                blocked_sys = any(
+                    lower_str.startswith(p)
+                    for p in ("c:\\windows", "c:\\program files", "c:\\programdata")
+                )
+                if drive_root and drive_root.exists() and not blocked_sys:
+                    cp.mkdir(parents=True, exist_ok=True)
+                    return cp
+        except Exception:
+            pass
+
+    base_pic = safe.known_folder("pictures")
+    target_dir = base_pic / "Ghosti_Shared_Rooms" / safe_room
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir
+    except Exception:
+        fallback = Path.home() / "Pictures" / "Ghosti_Shared_Rooms" / safe_room
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
+def _save_shared_room_items_to_dir(target_dir: Path, items: list[Any]) -> int:
+    import base64
+    import shutil
+    import urllib.request
+
+    saved = 0
+    for idx, it in enumerate(items[:300]):
+        if not isinstance(it, dict):
+            continue
+        raw_name = os.path.basename(str(it.get("name") or f"shared_photo_{idx + 1:03d}.jpg").strip())
+        safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", raw_name).strip("._ ")
+        if not safe_name:
+            safe_name = f"shared_photo_{idx + 1:03d}.jpg"
+        if not Path(safe_name).suffix:
+            safe_name = f"{safe_name}.jpg"
+        dest = target_dir / safe_name
+        if dest.exists() and dest.stat().st_size > 0:
+            continue
+
+        full_path = str(it.get("fullPath") or "").strip()
+        if full_path:
+            src_p = Path(full_path)
+            if src_p.exists() and src_p.is_file():
+                try:
+                    shutil.copy2(str(src_p), str(dest))
+                    saved += 1
+                    continue
+                except Exception:
+                    pass
+
+        url_cand = str(it.get("fullUrl") or it.get("thumbUrl") or "").strip()
+        if url_cand.startswith("data:image/") and "," in url_cand:
+            try:
+                b64_part = url_cand.split(",", 1)[1]
+                raw_bytes = base64.b64decode(b64_part)
+                if raw_bytes:
+                    dest.write_bytes(raw_bytes)
+                    saved += 1
+                    continue
+            except Exception:
+                pass
+        elif url_cand.startswith(("https://", "http://127.0.0.1:", "http://localhost:")):
+            try:
+                req = urllib.request.Request(url_cand, headers={"User-Agent": "MerlinZCore/2.12"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    raw_bytes = resp.read()
+                if raw_bytes:
+                    dest.write_bytes(raw_bytes)
+                    saved += 1
+                    continue
+            except Exception:
+                pass
+    return saved
+
+
+def sync_and_open_shared_room_originals(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """3. 사진 공유(가족·동호회·동창회) 원본 동기화 로컬 폴더 생성·사진 자동 저장 및 윈도우 탐색기 즉시 오픈"""
+    payload = data or {}
+    room_label = str(payload.get("roomLabel") or payload.get("roomTitle") or "가족_모임_공유방").strip()
+    custom_dir = str(payload.get("customDir") or payload.get("targetPath") or "").strip()
+    open_explorer = bool(payload.get("openExplorer"))
+    raw_items = payload.get("items")
+    items = raw_items if isinstance(raw_items, list) else []
+
+    target_dir = _resolve_shared_room_sync_dir(room_label, custom_dir)
+
+    if open_explorer:
+        zos.open_file_location_on_interactive_desktop(target_dir, mode="open_file_location")
+
+    if items:
+        if open_explorer:
+            threading.Thread(
+                target=_save_shared_room_items_to_dir,
+                args=(target_dir, items),
+                daemon=True,
+            ).start()
+        else:
+            _save_shared_room_items_to_dir(target_dir, items)
+
+    try:
+        file_count = sum(1 for p in target_dir.iterdir() if p.is_file())
+    except Exception:
+        file_count = 0
+
+    return {
+        "ok": True,
+        "downloadDir": str(target_dir),
+        "opened": open_explorer,
+        "fileCount": file_count,
+    }
+
+
 def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """사진 정리: OS 기본 휴지통 이동 / 휴지통에서 원위치 복원 / 폴더 열기"""
     data = payload or {}
@@ -6468,6 +6596,8 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
 
     if act in ("open-folder", "open"):
         target = str(data.get("target") or "photos").strip()
+        if target == "shared_room_originals":
+            return sync_and_open_shared_room_originals({**data, "openExplorer": True})
         target_path = str(data.get("targetPath") or data.get("fullPath") or "").strip()
         strict_file = bool(data.get("strictFile"))
         open_native_player = bool(data.get("openNativePlayer"))

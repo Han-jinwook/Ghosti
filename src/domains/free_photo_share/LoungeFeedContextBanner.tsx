@@ -16,7 +16,7 @@ import { PcMasterQuickSendPanel } from '../../components/PricingModal';
 import { GhostiBrandLogo } from '../../components/GhostiBrandLogo';
 import { GhostCastLiveToolbar } from '../../components/GhostCastAndLiveSystem';
 import { SilentIndexingStatusBar } from '../../components/SilentIndexingStatusBar';
-import { zCoreBridge } from '../../services/zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import {
   isAndroidMobileBrowserOrApp,
@@ -83,16 +83,62 @@ export const LoungeFeedContextBanner: React.FC = () => {
     triggerGuestJoinWall,
   } = useSaySeeStore();
 
+  const roomSyncStorageKey = `ghosti_room_original_sync_v1::${activeLoungeType}::${
+    activeSharedRoomId || (activeLoungeType === 'family' ? activeFamilyRoom || '우리집' : 'main')
+  }`;
+  const defaultRoomFolderLabel =
+    activeJoinedRoomMeta?.roomTitle ||
+    (activeLoungeType === 'family'
+      ? `${activeFamilyRoom || '우리집'}_가족방`
+      : activeLoungeType === 'club'
+      ? '동호회_모임방'
+      : '동창회_추억방');
+
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
   const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
   const [estimatedFreeStorageGb, setEstimatedFreeStorageGb] = useState<string | null>(null);
-  const [downloadDirPath, setDownloadDirPath] = useState('D:\\Ghosti\\다운로드_원본');
+  const [downloadDirPath, setDownloadDirPath] = useState(
+    `내 PC [사진]\\Ghosti_Shared_Rooms\\${defaultRoomFolderLabel}`
+  );
+  const [openingOriginalDir, setOpeningOriginalDir] = useState(false);
   const [showClubCover, setShowClubCover] = useState(false);
   const [clubBannerBgTheme, setClubBannerBgTheme] = useState<'forest' | 'sunset'>('forest');
   const [clubBannerTitle, setClubBannerTitle] = useState('주말 산악 · 골프 · 취미 동호회 모임방');
   const [editingClubTitle, setEditingClubTitle] = useState(false);
   const [clubTitleDraft, setClubTitleDraft] = useState('주말 산악 · 골프 · 취미 동호회 모임방');
   const [clubInviteCopied, setClubInviteCopied] = useState(false);
+
+  useEffect(() => {
+    const fallbackDisplay = `내 PC [사진]\\Ghosti_Shared_Rooms\\${defaultRoomFolderLabel}`;
+    try {
+      const raw = localStorage.getItem(roomSyncStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { enabled?: boolean; customDir?: string };
+        const savedDir = String(parsed.customDir || '').trim();
+        const isLegacyPlaceholder =
+          savedDir.toLowerCase() === 'd:\\ghosti\\다운로드_원본' ||
+          savedDir.toLowerCase() === 'd:/ghosti/다운로드_원본';
+        setP2pOriginalSummoned(Boolean(parsed.enabled));
+        setDownloadDirPath(savedDir && !isLegacyPlaceholder ? savedDir : fallbackDisplay);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    setP2pOriginalSummoned(false);
+    setDownloadDirPath(fallbackDisplay);
+  }, [roomSyncStorageKey, defaultRoomFolderLabel]);
+
+  const persistRoomSyncSetting = (nextEnabled: boolean, nextDir: string) => {
+    try {
+      localStorage.setItem(
+        roomSyncStorageKey,
+        JSON.stringify({ enabled: nextEnabled, customDir: nextDir.trim() })
+      );
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     if (!showStorageCheckBanner || typeof navigator === 'undefined' || !navigator.storage?.estimate) {
@@ -133,7 +179,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setTimeout(() => setClubInviteCopied(false), 2600);
   };
 
-  const activeRoomPhotoCount = filterPhotosByClubFeedTrack(
+  const visibleRoomPhotos = filterPhotosByClubFeedTrack(
     filterVisibleGalleryPhotos(
       resolveLoungePhotoCorpus({
         activeLoungeType,
@@ -146,11 +192,81 @@ export const LoungeFeedContextBanner: React.FC = () => {
     ),
     activeLoungeType,
     clubFeedTrack
-  ).length;
+  );
+  const activeRoomPhotoCount = visibleRoomPhotos.length;
   const estimatedOriginalSizeLabel =
     activeRoomPhotoCount === 0
       ? '0장 (0MB)'
       : `${activeRoomPhotoCount}장 (약 ${(activeRoomPhotoCount * 3.2).toFixed(1)}MB)`;
+
+  const callZCoreSharedRoomOriginals = async (opts: {
+    openExplorer: boolean;
+    customDirOverride?: string;
+  }): Promise<{ ok: boolean; downloadDir?: string }> => {
+    const rawDir = (opts.customDirOverride ?? downloadDirPath).trim();
+    const effectiveCustomDir = rawDir.startsWith('내 PC [사진]') ? '' : rawDir;
+    const itemsPayload = visibleRoomPhotos.slice(0, 300).map((p) => ({
+      name: p.name,
+      fullPath: p.fullPath || '',
+      fullUrl: p.fullUrl || '',
+      thumbUrl: p.thumbUrl || '',
+    }));
+
+    try {
+      const resp = await fetch(getZCoreUrl('/__club/download-originals'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          openExplorer: opts.openExplorer,
+          roomLabel: defaultRoomFolderLabel,
+          customDir: effectiveCustomDir,
+          items: itemsPayload,
+        }),
+      });
+      if (resp.ok) {
+        const data = (await resp.json().catch(() => null)) as {
+          ok?: boolean;
+          downloadDir?: string;
+        } | null;
+        if (data?.ok) {
+          if (data.downloadDir) {
+            setDownloadDirPath(data.downloadDir);
+            persistRoomSyncSetting(true, data.downloadDir);
+          }
+          return { ok: true, downloadDir: data.downloadDir };
+        }
+      }
+    } catch {
+      /* fallback below */
+    }
+
+    // 구버전 Z-코어 자동 업데이트 완료 전 과도기 호환 폴백: 기본 사진 폴더 즉시 오픈 보장
+    if (opts.openExplorer) {
+      try {
+        const fb = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target: 'photos',
+            ...(effectiveCustomDir ? { targetPath: effectiveCustomDir } : {}),
+          }),
+        });
+        if (fb.ok) {
+          const fbj = (await fb.json().catch(() => null)) as {
+            ok?: boolean;
+            opened?: string;
+          } | null;
+          if (fbj?.ok) {
+            if (fbj.opened) setDownloadDirPath(fbj.opened);
+            return { ok: true, downloadDir: fbj.opened };
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return { ok: false };
+  };
 
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
@@ -172,17 +288,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
           setShowStorageCheckBanner(true);
           const next = !p2pOriginalSummoned;
           setP2pOriginalSummoned(next);
+          persistRoomSyncSetting(next, downloadDirPath);
           if (next) {
-            void fetch('/__club/download-originals', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ openExplorer: false }),
-            })
-              .then((r) => r.json())
-              .then((d: { downloadDir?: string }) => {
-                if (d?.downloadDir) setDownloadDirPath(d.downloadDir);
-              })
-              .catch(() => {});
+            void callZCoreSharedRoomOriginals({ openExplorer: false });
           }
         }}
         className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
@@ -255,30 +363,52 @@ export const LoungeFeedContextBanner: React.FC = () => {
             />
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                persistRoomSyncSetting(true, downloadDirPath);
+                const res = await callZCoreSharedRoomOriginals({
+                  openExplorer: false,
+                  customDirOverride: downloadDirPath,
+                });
+                const confirmedDir = res.downloadDir || downloadDirPath;
                 useSaySeeStore
                   .getState()
                   .showToast(
-                    `[원본 동기화 경로 저장 완료] 앞으로 이 방의 원본 사진은 '${downloadDirPath}' 폴더에 자동 동기화됩니다.`
+                    `[원본 동기화 경로 저장 완료] 앞으로 이 방의 원본 사진은 '${confirmedDir}' 폴더에 자동 동기화됩니다.`
                   );
               }}
               className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
             >
               경로 지정 확인
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                void fetch('/__club/download-originals', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ openExplorer: true }),
-                }).catch(() => {});
-              }}
-              className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-            >
-              내 기기 원본 폴더 열기
-            </button>
+            {!isNativeAppRuntime && (
+              <button
+                type="button"
+                disabled={openingOriginalDir}
+                onClick={async () => {
+                  setOpeningOriginalDir(true);
+                  try {
+                    const res = await callZCoreSharedRoomOriginals({
+                      openExplorer: true,
+                      customDirOverride: downloadDirPath,
+                    });
+                    if (!res.ok) {
+                      useSaySeeStore
+                        .getState()
+                        .showToast(
+                          zCoreBridge.isConnected
+                            ? '원본 동기화 폴더를 여는 중 오류가 발생했습니다. 경로를 확인해 주세요.'
+                            : '윈도우 탐색기 폴더 열기는 귀신같이 PC 엔진(Z-Core) 실행 시 바로 작동합니다.'
+                        );
+                    }
+                  } finally {
+                    setOpeningOriginalDir(false);
+                  }
+                }}
+                className="inline-flex px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-60"
+              >
+                {openingOriginalDir ? '열기 중...' : '내 기기 원본 폴더 열기'}
+              </button>
+            )}
           </div>
         </div>
       </div>

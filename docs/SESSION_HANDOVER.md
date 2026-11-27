@@ -106,10 +106,13 @@
 - **최종 갱신 일시**: 2026-11-27 12:15 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정 · 3·4귀신 테스터는 해나라님이 아닌 달나라님으로 호칭)
-- **최신 배포 버전**: **`Merlin Z-Core v2.11.99`** · 양대 스토어 **`v1.0.124 (124)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
-- **세션 창 제목**: `3귀신 무화면직송·v1.0.124`
+- **최신 배포 버전**: **`Merlin Z-Core v2.12.9`** · 양대 스토어 **`v1.0.124 (124)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
+- **세션 창 제목**: `3귀신 원본폴더열기·v2.12.9`
 
 ## 완료 내역 (2026-11-25 ~ 11-27)
+1. **사진 공유 `[내 기기 원본 폴더 열기]` 윈도우 탐색기 미오픈 근본 해결 (`Z-Core v2.12.9`, 카드 `425f9ffd-2c1d-8149-ade8-f53e486b8365` `'재테스트 대기'`) (2026-11-27)**
+   - **원인**: `LoungeFeedContextBanner.tsx`가 상대 경로 `fetch('/__club/download-originals')`(로컬 Vite 개발서버 전용 목업) 및 하드코딩 `D:\Ghosti\다운로드_원본`을 호출해 실운영(`https://ghosti.sundreamer.app`)에서 Netlify 404로 무응답 처리되던 문제 규명.
+   - **해결**: `plugin_ghosti_os.py`(`sync_and_open_shared_room_originals`) 및 `merlin_z_core_daemon.py`(`POST /__club/download-originals`, `v2.12.9`)에 내 PC 공식 `[사진]\Ghosti_Shared_Rooms\<방이름>`(또는 사용자 지정 경로) 실물 폴더 생성·공유방 사진 자동 저장 및 `open_file_location_on_interactive_desktop` 윈도우 탐색기 `0.05초` 즉시 오픈을 정식 구현하고, `LoungeFeedContextBanner.tsx`에서 `getZCoreUrl('/__club/download-originals')` 직결 및 방별 경로 영속화 반영 완료.
 1. **폰↔PC 무화면 OS 직송(텍스트·링크·사진 `CF_DIB`+`CF_HDROP`) & PC➔폰 `[📱 폰으로 보내기]` 선택 푸시 ➔ 알림 `[📋 복사]` 1탭 복사 전면 개통 · 노션 QA 미션카드 개편 및 사진 공유 직송 미션 신설 (`Z-Core v2.11.99` · 양대 스토어 `v1.0.124 (124)`) (2026-11-27)**
    - **"앱 열었다 닫기 / iOS `[붙여넣기 허용]` 터치" 억지 동선 및 폐기 커스텀 키보드(`GhostiClipboardImeService` · `GhostKeyKeyboardExtension`) 100% 제거**: 모바일 포그라운드 복귀 시 OS 클립보드 자동 읽기·덮어쓰기를 영구 제거해 iOS `[붙여넣기 허용]` 팝업과 Android 클립보드 읽기 알림을 0회로 소멸.
    - **① `[폰 ➔ PC]` 무화면 직송**: Android `GhostiQuickClipActivity`(`ACTION_PROCESS_TEXT` `[PC로 보내기]` 1탭 + `ACTION_SEND` `[귀신같이]` 2탭 텍스트·사진 직송) 및 iOS `GhostKeyShareExtension`(`app.sundreamer.ghosti.share` 프로비저닝 개통 · `[공유... ➔ 귀신같이]` 2탭 텍스트·링크·사진 무화면 직송) 완결. PC Z-Core(`plugin_paid_sync_ghostwin.py` · `merlin_z_core_daemon.py`)는 Windows `gdiplus.dll` 기반 `CF_DIB` 비트맵 + `CF_HDROP` 파일 핸들을 동시에 장전해 카톡·엑셀·워드·탐색기 `Ctrl+V` 및 웹 `4. 내 기기 통합` 화면 도착 카드로 직결.

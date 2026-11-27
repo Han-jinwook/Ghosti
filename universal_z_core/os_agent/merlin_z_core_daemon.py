@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.11.99"
+CORE_VERSION = "2.12.9"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1240,6 +1240,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if sub.lower() in ("move", "restore") and self._reject_untrusted():
                 return
             self._send_json(plugin_ghosti_os.handle_quarantine(sub, body))
+            return
+
+        if path in ("/__club/download-originals", "/api/ghosti/club/download-originals"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_ghosti_os.sync_and_open_shared_room_originals(body))
             return
 
         if path in ("/__merlin/shutdown", "/__zcore/shutdown"):
