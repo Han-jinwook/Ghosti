@@ -72,6 +72,7 @@ import {
 import { PLAN_BADGE_LABELS } from '../shared/loungeHelpers';
 import { purgeLocalWorkRoomDocs } from '../../services/sharedRoomLocalVault';
 import { WorkLoungeBillingGateBanner } from './WorkLoungeBillingGateBanner';
+import { WorkLoungeBeforeAfterShowcase } from './WorkLoungeBeforeAfterShowcase';
 import { WorkLoungeHostAdminPanels } from './WorkLoungeHostAdminPanels';
 import { WorkLoungeDocListAndSidePeek } from './WorkLoungeDocListAndSidePeek';
 
@@ -2954,6 +2955,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </a>
           </div>
         )}
+
+      {!isGuestInvitePending && !isPendingWorkInviteVerification && (
+        <WorkLoungeBeforeAfterShowcase isStoreAppMode={isStoreAppMode} />
+      )}
 
       {isGuestInvitePending ? (
         <div
