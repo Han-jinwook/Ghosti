@@ -879,22 +879,35 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       ];
 
       if (isMobileOrStore && remainingOldPhotos > 0 && !st.mobileRemainingScanChoice) {
-        const choicePrompt = buildMobileRemainingPhotosChoicePrompt(
-          st.nickname || '회원',
-          remainingOldPhotos
-        );
-        if (choicePrompt) {
-          const remId = `secretary_mobile_remaining_audit_${Date.now() + 1}`;
-          completedSecretaryAnimIds.add(remId);
-          nextBubbles.push({
-            id: remId,
-            role: 'assistant',
-            timestamp: nowTimeKo(),
-            sourceTab: 'trash',
-            text: choicePrompt.text,
-            followUpSuggestions: choicePrompt.followUps,
-          });
-        }
+        // [2026-11-27 멀린님 확정: 불필요한 질문 0회 · 무소음 유휴/충전 자동 확장 인덱싱]
+        // 유저에게 "30분 뒤 vs 저녁"을 묻지 않고, 충전 중이거나 유휴 시 조용히 백그라운드에서 자동 확장 스캔합니다.
+        saveGhostSecretaryState({ ...st, mobileRemainingScanChoice: 'now_30min' });
+        const scheduleQuietExtendedScan = async () => {
+          let delayMs = 12000;
+          try {
+            const navAny = navigator as Navigator & {
+              getBattery?: () => Promise<{ charging?: boolean; level?: number }>;
+            };
+            if (typeof navAny.getBattery === 'function') {
+              const bat = await navAny.getBattery();
+              // 배터리 20% 미만 비충전 상태면 배터리 보호를 위해 이번 세션 확장 스캔을 보류
+              if (bat && !bat.charging && typeof bat.level === 'number' && bat.level < 0.2) {
+                return;
+              }
+              delayMs = bat?.charging ? 4000 : 12000;
+            }
+          } catch {
+            /* ignore */
+          }
+          window.setTimeout(() => {
+            if (document.visibilityState === 'visible') {
+              void useSaySeeStore
+                .getState()
+                .syncMobileNativeGalleryAuto({ promptPermission: false, maxTargetCount: 2500 });
+            }
+          }, delayMs);
+        };
+        void scheduleQuietExtendedScan();
       }
 
       setSharedMonsterMessages((prev) => [...prev, ...nextBubbles]);
