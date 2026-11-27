@@ -1531,7 +1531,7 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ④-3 전 귀신(1·2·3·4귀신) 전 영역 28대 핵심 기능 FAQ 0토큰 즉답 매처 (docs/귀신비서_FAQ_원본.md SSOT)
-  const matchAllDomainGhostiFaq = (q: string): { id: string; text: string } | null => {
+  const matchAllDomainGhostiFaq = (q: string): { id: string; text: string; followUps?: string[] } | null => {
     const nickPrefix = nickname ? `${nickname}님, ` : '';
     // 직접 실행 명령("보안프로그램 정리해줘", "휴지통 비워줘", "원래대로 돌려줘", "사양 진단해줘", "미수금 찾아줘")은 실행 라우터로 통과
     const isDirectActionCommand =
@@ -1590,10 +1590,14 @@ export function resolveGhostSecretaryTurn(
         text: `${nickPrefix}귀신같이는 허락 없이 파일이나 프로그램을 임의로 자동 삭제하는 일이 0%예요! 반드시 대상 목록과 용량을 미리보기 카드로 먼저 보여드리고, 직접 버튼을 누르시거나 '응 진행해'라고 승인하셨을 때만 안전하게 휴지통으로 이동하며 중요 서류 사진은 자동으로 보호됩니다.`,
       };
     }
-    if (/(c\s*드라이브|용량이?\s*(?:왜|바로)\s*안\s*늘|영구\s*삭제하려면|완전히\s*(?:비우|지우)려면)/i.test(q)) {
+    if (/(c\s*드라이브|용량이?\s*(?:왜|바로)\s*안\s*늘|(?:정리|삭제).*?용량.*?(?:왜|안\s*늘|그대로)|영구\s*삭제하려면|완전히\s*(?:비우|지우)려면)/i.test(q)) {
       return {
         id: 'faq_recycle_bin_safety_pin',
-        text: `${nickPrefix}실수로 지운 파일을 언제든 살리실 수 있도록 정리된 파일은 먼저 윈도우 기본 [휴지통]으로 안전하게 이동하기 때문이에요! 확인을 마치고 실제 C드라이브 여유 용량을 바로 확보하고 싶으실 때는 채팅창에 직접 '휴지통 비워줘'라고 입력해 주시면 최종 비우기가 진행됩니다.`,
+        text:
+          `${nickPrefix}정리한 사진·파일을 실수로 영구 삭제하는 일을 막기 위해, **먼저 윈도우 기본 [휴지통]으로 안전하게 이동**해 두었기 때문이에요!\n\n` +
+          `• **용량이 바로 안 늘어나는 이유**: 파일이 윈도우 **[휴지통]** 안에 보관되어 있는 동안에는 언제든 1초 만에 복원할 수 있도록 C드라이브 용량을 잠시 유지합니다.\n` +
+          `• **지금 바로 용량 확보하는 방법**: 정리된 내역에 이상이 없다면 아래 **[🗑️ 휴지통 비워줘]** 버튼을 누르시거나 채팅창에 직접 **\`"휴지통 비워줘"\`**라고 입력해 주세요. 즉시 휴지통을 비워 실제 C드라이브 여유 공간을 확보해 드릴게요!`,
+        followUps: ['휴지통 비워줘', '휴지통에 얼마나 쌓여 있는지 확인해줘'],
       };
     }
     if (/(알약|v3|백신|바이러스\s*검사).*?(안\s*깔아도|깔아야|대신|검사\s*돼|해줘\?)/i.test(q)) {
@@ -1715,6 +1719,7 @@ export function resolveGhostSecretaryTurn(
     return {
       scenarioId: matchedFaq.id,
       text: matchedFaq.text,
+      followUps: matchedFaq.followUps,
       nextState: st,
     };
   }

@@ -3997,10 +3997,38 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
+  // 0-0A1) ["사진 정리했는데 왜 C드라이브 용량이 바로 안 늘어나?" 등 휴지통 보관으로 인한 용량 미증가 이유 질문 0토큰 즉답]
+  const isWhyCapacityNotIncreasingAfterCleanup =
+    /(?:c\s*드라이브|용량|공간)/i.test(clean) &&
+    /(?:왜|어째서)?\s*(?:바로\s*)?(?:안\s*(?:늘|늘어나|줄|줄어들|바뀌|변해)|그대로|차이가\s*없)/i.test(clean);
+  if (isWhyCapacityNotIncreasingAfterCleanup) {
+    let rbDetailLine =
+      '• **용량이 바로 안 늘어나는 이유**: 파일이 윈도우 **[휴지통]** 안에 보관되어 있는 동안에는 언제든 1초 만에 되돌릴 수 있도록 C드라이브 용량을 잠시 유지합니다.';
+    if (!isMobileClient) {
+      const rbSt = await zcoreJson<any>('/__zcore/recycle-bin-status');
+      if (rbSt.ok && rbSt.data?.ok) {
+        const cnt = Number(rbSt.data.itemCount ?? 0);
+        const szLbl = String(rbSt.data.sizeLabel || '0B');
+        const cFree = Number(rbSt.data.cDriveFreeGb ?? 0);
+        if (cnt > 0) {
+          rbDetailLine = `• **현재 휴지통 보관 용량**: 현재 윈도우 **[휴지통]**에 **${cnt}개 항목(총 ${szLbl})**이 안전하게 대기 중입니다. (현재 C드라이브 여유 공간: **${cFree}GB**)`;
+        }
+      }
+    }
+    const whyCapMsg =
+      `정리한 사진·파일을 실수로 영구 삭제하는 일을 막기 위해, **먼저 윈도우 기본 [휴지통]으로 안전하게 이동**해 두었기 때문이에요!\n\n` +
+      `${rbDetailLine}\n` +
+      `• **지금 바로 용량 확보하는 방법**: 정리된 내역에 이상이 없다면 아래 **[휴지통 비워줘]** 버튼을 누르시거나 채팅창에 직접 **\`"휴지통 비워줘"\`**라고 입력해 주세요. 즉시 휴지통을 비워 실제 C드라이브 여유 공간을 확보해 드릴게요!`;
+    speak('정리한 파일이 실수 방지를 위해 윈도우 휴지통에 보관되어 있기 때문입니다. 휴지통 비워줘라고 말씀하시면 즉시 용량을 확보해 드립니다.');
+    return reply(sourceTab, whyCapMsg, {
+      followUpSuggestions: ['휴지통 비워줘', '휴지통에 얼마나 쌓여 있는지 확인해줘'],
+    });
+  }
+
   // 0-0A2) [정리/진행 상태 확인 질문("진행된거야?", "진행한거야?", "정리된거야?", "정리한거야?", "다 된거야?") 및 속도 확인 0토큰 즉답]
   // 서류 검색(SEARCH_ROUTING)이나 외부 AI 바톤터치(BATON_TOUCH_CUTOFF)로 빠지는 현상을 원천 차단합니다!
   const isCleanupActionStatusVerification =
-    !/속도|cpu|메모리|램|ram|빨라/i.test(clean) &&
+    !/속도|cpu|메모리|램|ram|빨라|용량|공간|드라이브|왜\s*안|안\s*늘/i.test(clean) &&
     /(진행\s*된\s*(?:거|건가)|진행된거|진행\s*한\s*(?:거|건가)|진행한거|진행\s*됐|진행됐|진행\s*했|진행했|정리\s*된\s*(?:거|건가)|정리된거|정리\s*한\s*(?:거|건가)|정리한거|정리\s*됐|정리됐|정리\s*했|정리했|다\s*된\s*(?:거|건가)|다된거|다\s*됐|다됐|완료\s*된\s*(?:거|건가)|완료된거|완료\s*됐|완료됐|끝난\s*(?:거|건가)|끝났어|끝났나)/i.test(
       clean
     );

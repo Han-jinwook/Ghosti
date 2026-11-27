@@ -119,14 +119,42 @@ const SECRETARY_FIRST_CARE_QUERY = '요즘 컴퓨터가 좀 느린데 내 사양
 /** 이미 타이핑 연출이 완료된 귀신비서 메시지 ID 캐시 (탭 전환·리렌더 시 중복 재생 방지) */
 const completedSecretaryAnimIds = new Set<string>();
 
+function renderFormattedSecretaryLine(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={idx} className="font-bold text-slate-900">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <code
+          key={idx}
+          className="px-1.5 py-0.5 rounded bg-teal-100/70 border border-teal-200/80 text-teal-900 font-semibold text-[12px]"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
 function splitSecretarySentences(raw: string): string[] {
-  const clean = raw.replace(/\*\*/g, '');
-  const lines = clean.split('\n');
+  const lines = raw.split('\n');
   const out: string[] = [];
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
       out.push('');
+      continue;
+    }
+    // 마크다운 볼드(**...**)나 목록 항목(•, 1), -)이 포함된 줄은 볼드 쌍이 쪼개지지 않도록 줄 단위로 보존
+    if (line.includes('**') || /^[•\-*]|\d+[.)]/.test(trimmed)) {
+      out.push(line);
       continue;
     }
     const parts = line
@@ -139,7 +167,7 @@ function splitSecretarySentences(raw: string): string[] {
       out.push(line);
     }
   }
-  return out.length > 0 ? out : [clean];
+  return out.length > 0 ? out : [raw];
 }
 
 const AnimatedSecretaryText: React.FC<{
@@ -211,11 +239,21 @@ const AnimatedSecretaryText: React.FC<{
   };
 
   if (done) {
-    return <>{text.replace(/\*\*/g, '')}</>;
+    return (
+      <div className="space-y-1">
+        {text.split('\n').map((line, idx) =>
+          line.trim() === '' ? (
+            <div key={idx} className="h-2" />
+          ) : (
+            <div key={idx}>{renderFormattedSecretaryLine(line)}</div>
+          )
+        )}
+      </div>
+    );
   }
 
   return (
-    <div onClick={handleSkip} title="클릭하면 전체 문장을 바로 볼 수 있어요" className="cursor-pointer space-y-0.5">
+    <div onClick={handleSkip} title="클릭하면 전체 문장을 바로 볼 수 있어요" className="cursor-pointer space-y-1">
       {sentences.slice(0, visibleCount).map((line, idx) => {
         if (line === '') {
           return <div key={idx} className="h-2" />;
@@ -225,7 +263,7 @@ const AnimatedSecretaryText: React.FC<{
             key={idx}
             className="animate-[fadeIn_0.35s_ease-out]"
           >
-            {line}
+            {renderFormattedSecretaryLine(line)}
           </div>
         );
       })}
@@ -1420,10 +1458,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워|구독|해지|결제|청소\s*앱|클리너|컴퓨터|컴터|피씨|용량|공간|모자라|답답|버벅|느려|이상한|팝업)/i.test(raw);
     const isExplicitQuestConsentChip =
       raw === '좋아, 알려줘' || raw === '좋아, 예쁘게 바꿔줘';
+    const isFaqOrWhyExplanationQuery =
+      /(?:\.gsheet|\.gdoc|구글\s*(?:스프레드)?시트|구글\s*문서|구글\s*독스|스프레드시트|\bnas\b|나스|시놀로지|synology|사내\s*서버)/i.test(raw) ||
+      (/(구글\s*드라이브|g\s*:\s*드라이브|네이버\s*마이박스|마이박스|mybox|원드라이브|onedrive)/i.test(raw) &&
+        /(s\s*:|업무\s*공유|업무\s*폴더|공유로?\s*쓸|연결|연동|같이\s*쓸|검색|인덱싱)/i.test(raw)) ||
+      (/(c\s*드라이브|용량|공간)/i.test(raw) && /(왜|안\s*늘|그대로|안\s*줄|안\s*바뀌|차지|비우려면|영구\s*삭제)/i.test(raw)) ||
+      /(왜\s*(?:안\s*늘|그대로|필요해|써야)|차이점|장점이\s*뭐)/i.test(raw);
     const shouldBypassSecretaryPlaybook =
       !isExplicitQuestConsentChip &&
       !isNickOrStoreSpecial &&
       !isAnsweringInitialNickname &&
+      !isFaqOrWhyExplanationQuery &&
       (isDirectCareOrStatusCommand ||
         (hasPendingCareApproval &&
           /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*(?:줘|주세요)|알려\s*(?:줘|주세요)|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw)));
