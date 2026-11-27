@@ -2542,9 +2542,29 @@ function dedupePaddleTimelineLines(
  * 1) PC 로컬 Z-코어(v2.3.33+, ocrVer >= 21) 연결 시: C++ 멀티스레드 PP-OCRv5 + 장면 변화 선별 워커로 3~5초 만에 초고속 반환!
  * 2) 모바일 / 웹 단독 환경: 화소 변화 기반 중복·디졸브 제거 후 온디바이스 PP-OCRv5로 정밀 판독!
  */
+let _activeOnDemandVideoOcrAbort: AbortController | null = null;
+
 export async function extractVideoScreenTextOnDemand(
-  vid: VideoSceneItem
+  vid: VideoSceneItem,
+  externalSignal?: AbortSignal
 ): Promise<VideoOcrExtractResult> {
+  // 새 영상 전환·재호출 시 이전 영상의 미완료 OCR 요청(127.0.0.1:5199 소켓 점유)을 즉시 0ms 취소!
+  try {
+    _activeOnDemandVideoOcrAbort?.abort();
+  } catch {
+    /* ignore */
+  }
+  const localAbort = new AbortController();
+  _activeOnDemandVideoOcrAbort = localAbort;
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      localAbort.abort();
+    } else {
+      externalSignal.addEventListener('abort', () => localAbort.abort(), { once: true });
+    }
+  }
+  const sig = localAbort.signal;
+
   const formatTs = (sec: number) => {
     const s = Math.max(0, Math.floor(sec || 0));
     const mm = String(Math.floor(s / 60)).padStart(2, '0');
@@ -2575,13 +2595,21 @@ export async function extractVideoScreenTextOnDemand(
   }
 
   // 1) PC 로컬 Z-코어(v2.3.33+, ocrVer >= 21) C++ 네이티브 PP-OCRv5 고속 경로 (77초 ➔ 3~5초 단축!)
+  if (sig.aborted) {
+    return { ok: false, hasText: false, videoFileName: vid.videoFileName, ocrLines: [], fullText: '' };
+  }
+  let zCoreOcrCheckedCleanly = false;
   if (zCoreBridge.isConnected && vid.videoFileName) {
     try {
       const resZ = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoFileName: vid.videoFileName }),
+        signal: sig,
       });
+      if (sig.aborted) {
+        return { ok: false, hasText: false, videoFileName: vid.videoFileName, ocrLines: [], fullText: '' };
+      }
       if (resZ.ok) {
         const dataZ = await resZ.json();
         const linesZ: VideoOcrLineItem[] = Array.isArray(dataZ?.ocrLines)
@@ -2598,10 +2626,21 @@ export async function extractVideoScreenTextOnDemand(
           inMemoryPaddleVideoOcrCache.set(memKey, out);
           return out;
         }
+        // Z-코어 C++ PP-OCRv5가 이미 판독 완료했고 글자가 없는 일반 영상으로 확정된 경우,
+        // 브라우저에서 숨은 <video>를 또 열어 12프레임 시크(127.0.0.1:5199 소켓 고갈)하는 중복 폴백을 차단합니다.
+        if (dataZ?.ok && Number(dataZ?.ocrVer || 0) >= 21 && linesZ.length === 0) {
+          zCoreOcrCheckedCleanly = true;
+        }
       }
     } catch {
+      if (sig.aborted) {
+        return { ok: false, hasText: false, videoFileName: vid.videoFileName, ocrLines: [], fullText: '' };
+      }
       /* fallback to web PP-OCRv5 below */
     }
+  }
+  if (zCoreOcrCheckedCleanly || sig.aborted) {
+    return { ok: true, hasText: false, videoFileName: vid.videoFileName, ocrLines: [], fullText: '' };
   }
 
   // 2) 브라우저 <video> 무손실 ImageData 샘플링 + PP-OCRv5 Korean 정밀 판독 (PC & 모바일 공통)
@@ -2655,17 +2694,18 @@ export async function extractVideoScreenTextOnDemand(
         }
       }
 
-      if (rawPaddleFrames.length === 0) {
+      if (rawPaddleFrames.length === 0 && !sig.aborted) {
         const sampledImgData = await captureHighResImageDataForVideoOcr(vid, isMobileVid ? 8 : 12);
 
-        if (sampledImgData.length > 0) {
+        if (sampledImgData.length > 0 && !sig.aborted) {
           for (const item of sampledImgData) {
+            if (sig.aborted) break;
             const ocrRes = await recognizeImageDataWithPaddleOcr(item.imageData, { filterVideoUi: true });
             if (ocrRes.text) {
               rawPaddleFrames.push({ timeSec: item.timeSec, ocrText: ocrRes.text });
             }
           }
-        } else if (zCoreBridge.isConnected && vid.videoFileName) {
+        } else if (!sig.aborted && zCoreBridge.isConnected && vid.videoFileName) {
           // 특수 코덱으로 브라우저 <video> 직접 디코딩이 불가한 경우 Z-코어가 뽑아준 프레임에 PP-OCRv5 수행
           const resFrames = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
             method: 'POST',
@@ -2675,6 +2715,7 @@ export async function extractVideoScreenTextOnDemand(
               onlyCachedV5: true,
               returnFramesForPaddle: true,
             }),
+            signal: sig,
           });
           if (resFrames.ok) {
             const df = await resFrames.json();

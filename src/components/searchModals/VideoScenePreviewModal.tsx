@@ -177,6 +177,7 @@ export const VideoScenePreviewModal: React.FC = () => {
 
     let ocrCancelled = false;
     let ocrDeferTimer = 0;
+    const ocrAbortCtrl = new AbortController();
     const needsBgOcr =
       instant.lines.length === 0 && selectedVideoModal.hasScreenOcrText !== false;
     setIsOcrExtracting(needsBgOcr);
@@ -184,7 +185,7 @@ export const VideoScenePreviewModal: React.FC = () => {
       ocrDeferTimer = window.setTimeout(() => {
         void (async () => {
           try {
-            const res = await extractVideoScreenTextOnDemand(selectedVideoModal);
+            const res = await extractVideoScreenTextOnDemand(selectedVideoModal, ocrAbortCtrl.signal);
             if (ocrCancelled) return;
             if (res.ocrLines && res.ocrLines.length > 0) {
               setOcrLines(res.ocrLines);
@@ -300,6 +301,11 @@ export const VideoScenePreviewModal: React.FC = () => {
     return () => {
       ocrCancelled = true;
       window.clearTimeout(ocrDeferTimer);
+      try {
+        ocrAbortCtrl.abort();
+      } catch {
+        /* ignore */
+      }
       // 영상 전환·닫기 시 이전 HTTP 206 스트림 소켓을 즉시 0ms 해제해 크롬 6소켓 풀 포화 방지
       const el = videoRef.current;
       if (el) {
