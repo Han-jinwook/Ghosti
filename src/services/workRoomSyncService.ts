@@ -1203,9 +1203,16 @@ export function clearWorkRoomLocalCachesOnLogout(explicitPrevEmail?: string): vo
 }
 
 export async function mountWorkSDriveNative(opts?: {
-  action?: 'mount' | 'unmount' | 'pick_folder' | 'reset_default';
+  action?:
+    | 'mount'
+    | 'unmount'
+    | 'pick_folder'
+    | 'reset_default'
+    | 'migrate_to_local'
+    | 'import_from_cloud';
   openExplorer?: boolean;
   targetDir?: string;
+  sourceDir?: string;
   accountEmail?: string;
   purgeInvitedVault?: boolean;
   roomId?: string;
@@ -1216,6 +1223,8 @@ export async function mountWorkSDriveNative(opts?: {
   driveLetter?: string;
   targetDir?: string;
   isCustomTarget?: boolean;
+  copiedCount?: number;
+  gdocCopiedCount?: number;
   message?: string;
 }> {
   if (isLocalPcBlockedByOtherAccount()) {
@@ -1229,7 +1238,9 @@ export async function mountWorkSDriveNative(opts?: {
   if (!url) return { ok: false };
   const resolvedEmail = resolveCurrentWorkAccountEmail(opts?.accountEmail);
   const action = opts?.action || 'mount';
-  const timeoutMs = action === 'pick_folder' ? 185_000 : 20_000;
+  const usesPicker =
+    action === 'pick_folder' || action === 'migrate_to_local' || action === 'import_from_cloud';
+  const timeoutMs = usesPicker ? 185_000 : 20_000;
   try {
     const res = await fetchWithTimeout(
       url,
@@ -1243,6 +1254,7 @@ export async function mountWorkSDriveNative(opts?: {
           ...(opts?.roomId ? { roomId: opts.roomId } : {}),
           ...(resolvedEmail && resolvedEmail !== 'anonymous' ? { email: resolvedEmail } : {}),
           ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
+          ...(opts?.sourceDir ? { sourceDir: opts.sourceDir } : {}),
         }),
       },
       timeoutMs
@@ -1254,6 +1266,8 @@ export async function mountWorkSDriveNative(opts?: {
       driveLetter?: string;
       targetDir?: string;
       isCustomTarget?: boolean;
+      copiedCount?: number;
+      gdocCopiedCount?: number;
       message?: string;
     } | null;
     if (parsed && typeof parsed === 'object') {
@@ -1264,6 +1278,8 @@ export async function mountWorkSDriveNative(opts?: {
         driveLetter: parsed.driveLetter,
         targetDir: parsed.targetDir,
         isCustomTarget: parsed.isCustomTarget,
+        copiedCount: parsed.copiedCount,
+        gdocCopiedCount: parsed.gdocCopiedCount,
         message: parsed.message,
       };
     }
@@ -1275,9 +1291,9 @@ export async function mountWorkSDriveNative(opts?: {
     const isAbort = err instanceof Error && err.name === 'AbortError';
     return {
       ok: false,
-      ...(isAbort && action === 'pick_folder' ? { cancelled: true } : {}),
+      ...(isAbort && usesPicker ? { cancelled: true } : {}),
       message: isAbort
-        ? '폴더 선택 대기 시간이 초과되었습니다. 다시 [업무 폴더 변경]을 눌러 선택해 주세요.'
+        ? '폴더 선택 대기 시간이 초과되었습니다. 다시 버튼을 눌러 폴더를 선택해 주세요.'
         : 'PC 엔진 연결이 일시 중단되었습니다. 잠시 후 다시 눌러 주세요.',
     };
   }

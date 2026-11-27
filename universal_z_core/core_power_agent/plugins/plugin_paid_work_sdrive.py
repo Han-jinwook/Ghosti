@@ -683,7 +683,11 @@ def _bring_picker_window_to_front(owner_hwnd_int: int) -> None:
         pass
 
 
-def _pick_folder_dialog_win32(initial_dir: str = "") -> Tuple[Optional[str], Optional[str]]:
+def _pick_folder_dialog_win32(
+    initial_dir: str = "",
+    dialog_title: str = "",
+    ok_label: str = "",
+) -> Tuple[Optional[str], Optional[str]]:
     """방장이 [업무 폴더 변경]을 클릭했을 때 0.05초 내 크롬 맨 앞에 현대식 Windows 탐색기 폴더 선택창(IFileOpenDialog, 좌측 사이드바 네이버 MYBOX·구글 드라이브·내 PC 표시)을 띄웁니다.
     반환: (선택된 폴더 경로, 오류 메시지) — 사용자가 취소(X/취소)한 경우 (None, None)."""
     if os.name != "nt":
@@ -827,8 +831,12 @@ def _pick_folder_dialog_win32(initial_dir: str = "") -> Tuple[Optional[str], Opt
                 GetOptions(dlg, ctypes.byref(cur_opts))
                 # FOS_PICKFOLDERS(0x20) | FOS_FORCEFILESYSTEM(0x40) | FOS_NOCHANGEDIR(0x8) | FOS_PATHMUSTEXIST(0x800)
                 SetOptions(dlg, cur_opts.value | 0x20 | 0x40 | 0x08 | 0x800)
-                SetTitle(dlg, "S: 업무 공유 드라이브로 연결할 폴더 선택 (네이버 MYBOX · 구글 드라이브 · 내 PC 하위 폴더)")
-                SetOkButtonLabel(dlg, "이 폴더를 S:로 연결")
+                SetTitle(
+                    dlg,
+                    dialog_title
+                    or "S: 업무 공유 드라이브로 연결할 폴더 선택 (네이버 MYBOX · 구글 드라이브 · 내 PC 하위 폴더)",
+                )
+                SetOkButtonLabel(dlg, ok_label or "이 폴더를 S:로 연결")
 
                 if start_dir:
                     si_init = ctypes.c_void_p()
@@ -1163,13 +1171,120 @@ def handle_pc_account_owner(data: Dict[str, Any] | None = None) -> Dict[str, Any
     return res_rel
 
 
+def _suggest_local_disk_picker_dir() -> str:
+    for cand in ("D:\\", "E:\\", str(Path.home() / "Documents"), str(Path.home())):
+        try:
+            if cand and os.path.isdir(cand):
+                return cand
+        except Exception:
+            pass
+    return ""
+
+
+def _suggest_google_drive_picker_dir() -> str:
+    for letter_ch in "GHIJKLMNOPQRSTUVWXYZDEF":
+        for sub in ("내 드라이브", "My Drive", "공유 드라이브", "Shared drives"):
+            cand = f"{letter_ch}:\\{sub}"
+            try:
+                if os.path.isdir(cand):
+                    return cand
+            except Exception:
+                pass
+    return _suggest_initial_picker_dir("")
+
+
+def _is_google_drive_or_virtual_cloud_path(p: Path) -> bool:
+    s = str(p or "").lower()
+    if any(tok in s for tok in ("내 드라이브", "my drive", "google drive", "공유 드라이브", "shared drives")):
+        return True
+    if os.name == "nt" and len(s) >= 2 and s[1] == ":":
+        try:
+            vol_buf = ctypes.create_unicode_buffer(260)
+            if ctypes.windll.kernel32.GetVolumeInformationW(
+                ctypes.c_wchar_p(f"{s[0].upper()}:\\"), vol_buf, 260, None, None, None, None, 0
+            ):
+                if "google" in (vol_buf.value or "").lower():
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+def _copy_work_folder_with_gdoc_synthesis(src_dir: Path, dst_dir: Path) -> Dict[str, int]:
+    """구글 드라이브(DriveFS 가상 스텁 WinError 1 / 잘못된 MS-DOS 함수) 내 .gsheet/.gdoc/.gslides 파일을
+    정식 URL·doc_id JSON 바로가기 파일로 자동 합성 복사하고 일반 업무 파일·서브폴더도 무손실 이관합니다."""
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    entries, _, _ = _scan_work_vault(src_dir, set(), include_hidden=False)
+    regular_copied = 0
+    gdoc_copied = 0
+    copied_rels: List[str] = []
+
+    for src_full, rel_p, st in entries:
+        dst_full = _safe_resolve_inside_vault(dst_dir, rel_p)
+        if dst_full is None:
+            continue
+        try:
+            if _same_path(src_full, dst_full):
+                continue
+        except Exception:
+            pass
+        dst_full.parent.mkdir(parents=True, exist_ok=True)
+        ext_low = src_full.suffix.lower()
+        try:
+            if ext_low in (".gsheet", ".gdoc", ".gslides"):
+                g_bytes = read_work_file_bytes_safe(src_full)
+                if not g_bytes:
+                    continue
+                dst_full.write_bytes(g_bytes)
+                try:
+                    os.utime(dst_full, (st.st_mtime, st.st_mtime))
+                except Exception:
+                    pass
+                gdoc_copied += 1
+                copied_rels.append(rel_p)
+            else:
+                try:
+                    shutil.copy2(src_full, dst_full)
+                except OSError:
+                    fallback_b = read_work_file_bytes_safe(src_full)
+                    dst_full.write_bytes(fallback_b)
+                    try:
+                        os.utime(dst_full, (st.st_mtime, st.st_mtime))
+                    except Exception:
+                        pass
+                regular_copied += 1
+                copied_rels.append(rel_p)
+        except Exception:
+            continue
+
+    if copied_rels:
+        def _clear_migrated_tombstones(cur: Dict[str, Any]) -> None:
+            tombs = dict(cur.get("deletedTombstones") or {})
+            for rp in copied_rels:
+                tombs.pop(rp, None)
+                tombs.pop(rp.lower(), None)
+            cur["deletedTombstones"] = tombs
+            cur["knownRelPaths"] = []
+
+        _mutate_sdrive_config(_clear_migrated_tombstones)
+
+    return {
+        "copiedCount": regular_copied + gdoc_copied,
+        "gdocCopiedCount": gdoc_copied,
+        "regularCopiedCount": regular_copied,
+    }
+
+
 def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     payload = data or {}
     action = str(payload.get("action") or "mount").strip().lower()
     open_explorer = bool(payload.get("openExplorer", False))
     custom_target = payload.get("targetDir")
+    source_dir_raw = str(payload.get("sourceDir") or "").strip()
     req_email = str(payload.get("email") or payload.get("accountEmail") or "").strip().lower()
     prev_vault_dir = get_work_vault_dir(ensure_dirs=False)
+    migration_stats: Optional[Dict[str, int]] = None
+    migration_msg_override: str = ""
 
     if action != "status" and not bool(payload.get("forceUnmount")):
         owner_block = check_pc_account_owner_allowed(req_email)
@@ -1209,6 +1324,98 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
             }
         custom_target = picked
         action = "mount"
+    elif action == "migrate_to_local":
+        dst_cand = str(custom_target or "").strip()
+        if not dst_cand:
+            picked_dst, dst_err = _pick_folder_dialog_win32(
+                _suggest_local_disk_picker_dir(),
+                dialog_title="구글 드라이브 파일·시트(.gsheet·.gdoc)를 통째 복사해 옮길 내 PC 로컬 폴더 선택 (예: D:\\업무공유_로컬)",
+                ok_label="이 로컬 폴더로 통째 복사·전환",
+            )
+            if dst_err:
+                return {
+                    "ok": False,
+                    "cancelled": False,
+                    "targetDir": str(prev_vault_dir),
+                    "message": dst_err,
+                }
+            if not picked_dst:
+                return {
+                    "ok": False,
+                    "cancelled": True,
+                    "targetDir": str(prev_vault_dir),
+                    "message": "로컬 폴더 선택이 취소되었습니다.",
+                }
+            dst_cand = picked_dst
+        valid_dst, dst_reason = _validate_custom_work_target(dst_cand)
+        if valid_dst is None:
+            return {
+                "ok": False,
+                "error": "INVALID_TARGET_DIR",
+                "reason": dst_reason,
+                "targetDir": str(prev_vault_dir),
+                "message": "복사할 대상은 드라이브 최상위(예: D:\\) 대신 내 PC 안의 하위 폴더(예: D:\\업무공유_로컬)를 선택해 주세요!",
+            }
+        if _is_google_drive_or_virtual_cloud_path(valid_dst):
+            return {
+                "ok": False,
+                "error": "CLOUD_DESTINATION_NOT_ALLOWED",
+                "targetDir": str(prev_vault_dir),
+                "message": "구글 드라이브가 아닌 내 PC 하드디스크 안의 로컬 폴더(예: D:\\업무공유_로컬)를 선택해 주세요!",
+            }
+        src_for_mig = Path(source_dir_raw) if source_dir_raw and os.path.isdir(source_dir_raw) else prev_vault_dir
+        migration_stats = _copy_work_folder_with_gdoc_synthesis(src_for_mig, valid_dst)
+        custom_target = str(valid_dst)
+        action = "mount"
+        migration_msg_override = (
+            f"✓ 구글 시트·문서({migration_stats['gdocCopiedCount']}건)를 포함한 총 {migration_stats['copiedCount']}개 파일을 "
+            f"[{valid_dst}]로 통째 복사하고 S: 드라이브를 무중단 전환했습니다!"
+        )
+    elif action == "import_from_cloud":
+        src_cand = source_dir_raw
+        if not src_cand:
+            picked_src, src_err = _pick_folder_dialog_win32(
+                _suggest_google_drive_picker_dir(),
+                dialog_title=f"현재 로컬 폴더({prev_vault_dir})로 통째 복사해 올 구글 드라이브 폴더 선택 (.gsheet·.gdoc 포함)",
+                ok_label="이 폴더의 파일·시트 가져오기",
+            )
+            if src_err:
+                return {
+                    "ok": False,
+                    "cancelled": False,
+                    "targetDir": str(prev_vault_dir),
+                    "message": src_err,
+                }
+            if not picked_src:
+                return {
+                    "ok": False,
+                    "cancelled": True,
+                    "targetDir": str(prev_vault_dir),
+                    "message": "원본 구글 드라이브 폴더 선택이 취소되었습니다.",
+                }
+            src_cand = picked_src
+        src_p = Path(src_cand)
+        if not src_p.exists() or not src_p.is_dir():
+            return {
+                "ok": False,
+                "error": "SOURCE_DIR_NOT_FOUND",
+                "targetDir": str(prev_vault_dir),
+                "message": "선택한 원본 폴더를 찾을 수 없습니다. 구글 드라이브가 열려 있는지 확인해 주세요.",
+            }
+        if _same_path(src_p, prev_vault_dir):
+            return {
+                "ok": False,
+                "error": "SAME_SOURCE_AND_TARGET",
+                "targetDir": str(prev_vault_dir),
+                "message": "현재 연결된 로컬 폴더와 다른 원본 구글 드라이브 폴더를 선택해 주세요.",
+            }
+        migration_stats = _copy_work_folder_with_gdoc_synthesis(src_p, prev_vault_dir)
+        custom_target = str(prev_vault_dir)
+        action = "mount"
+        migration_msg_override = (
+            f"✓ [{src_p}] 안의 구글 시트·문서({migration_stats['gdocCopiedCount']}건) 포함 총 {migration_stats['copiedCount']}개 파일을 "
+            f"현재 로컬 폴더([{prev_vault_dir}])로 안전하게 가져왔습니다!"
+        )
     elif action in ("reset_default", "reset_default_folder"):
         default_dir = _default_work_vault_dir()
         custom_target = str(default_dir)
@@ -1344,7 +1551,9 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
 
     used_fallback = chosen != preferred
     msg = (
-        f"{preferred[0]} 드라이브가 이미 다른 연결(회사 NAS 등)에 쓰이고 있어 {chosen[0]} 드라이브로 만들었어요. 기존 연결은 그대로 두었습니다."
+        migration_msg_override
+        if migration_msg_override
+        else f"{preferred[0]} 드라이브가 이미 다른 연결(회사 NAS 등)에 쓰이고 있어 {chosen[0]} 드라이브로 만들었어요. 기존 연결은 그대로 두었습니다."
         if used_fallback
         else f"✓ 윈도우 탐색기에 업무 드라이브({chosen[0]}:)가 연결되었습니다."
     )
@@ -1359,6 +1568,8 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         "isCustomTarget": is_custom_now,
         "folderSwitched": folder_switched,
         "openedExplorer": open_explorer,
+        "copiedCount": int(migration_stats["copiedCount"]) if migration_stats else 0,
+        "gdocCopiedCount": int(migration_stats["gdocCopiedCount"]) if migration_stats else 0,
         "message": msg,
     }
 

@@ -22,6 +22,8 @@ export interface WorkLoungeHostAdminPanelsProps {
   masterWorkPcName: string;
   driveTargetPath: string;
   onPickCustomWorkFolder?: () => Promise<void>;
+  onMigrateGoogleDriveToLocalFolder?: () => Promise<void>;
+  onImportFromGoogleDriveFolder?: () => Promise<void>;
   onApplyCustomWorkFolderPath?: (rawPath: string) => Promise<void>;
   onResetDefaultWorkFolder?: () => Promise<void>;
   backupServers: WorkBackupServerNodeDto[];
@@ -58,6 +60,8 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   masterWorkPcName,
   driveTargetPath,
   onPickCustomWorkFolder,
+  onMigrateGoogleDriveToLocalFolder,
+  onImportFromGoogleDriveFolder,
   onApplyCustomWorkFolderPath,
   onResetDefaultWorkFolder,
   backupServers,
@@ -177,6 +181,30 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                         구글드라이브·지정 폴더 선택
                       </button>
                     )}
+                    {onMigrateGoogleDriveToLocalFolder &&
+                      /(내 드라이브|My Drive|Google Drive|공유 드라이브|Shared drives)/i.test(
+                        driveTargetPath
+                      ) && (
+                        <button
+                          type="button"
+                          onClick={() => void onMigrateGoogleDriveToLocalFolder()}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-semibold cursor-pointer transition-colors"
+                        >
+                          내 PC 로컬 폴더로 통째 복사·전환 (.gsheet 포함)
+                        </button>
+                      )}
+                    {onImportFromGoogleDriveFolder &&
+                      !/(내 드라이브|My Drive|Google Drive|공유 드라이브|Shared drives)/i.test(
+                        driveTargetPath
+                      ) && (
+                        <button
+                          type="button"
+                          onClick={() => void onImportFromGoogleDriveFolder()}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11.5px] font-semibold cursor-pointer transition-colors"
+                        >
+                          구글 드라이브 파일·시트 가져오기 (.gsheet 포함)
+                        </button>
+                      )}
                     {onResetDefaultWorkFolder && !driveTargetPath.includes('업무공유폴더_S') && (
                       <button
                         type="button"
