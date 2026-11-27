@@ -52,6 +52,15 @@ function matchesPlaybookKeyword(text: string, kw: string, scenarioId: string): b
   if ((kw === '조용히' || kw === '시끄러') && scenarioId === 'cmd_mute_ghost_sound') {
     if (/팬\s*소음|비행기\s*소리|쿨러|발열|노트북/.test(text)) return false;
   }
+  if (scenarioId === 'settings_son_free_day_toggle') {
+    if (
+      /([일월화수목금토])(?:요일|욜)|(\d{1,2})\s*시|(?:점심|정오|아침|출근|퇴근|저녁)(?:에|으로|로|\s*마다)|(?:바꿔|변경|맞춰|돌려)/i.test(
+        text
+      )
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 export const GHOST_SECRETARY_NAME = '귀신비서';

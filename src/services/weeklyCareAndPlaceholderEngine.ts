@@ -258,14 +258,16 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
     return { matched: true, action: 'DISABLE_SCHEDULE' };
   }
 
-  // 2) 요일 또는 시간이 포함된 예약 변경 요청 ("정기검진 금요일 오후 4시로해줘", "금요일 오후 4시로 바꿔줘", "수요일 점심마다 손봐줘")
+  // 2) 요일 또는 시간이 포함된 예약 변경 요청 ("정기검진 금요일 오후 4시로해줘", "금요일 오후 4시로 바꿔줘", "수요일 점심마다 손봐줘", "수요 손 없는 날로 돌려줘")
+  const isSonFreeReset = /수요\s*손\s*없는\s*날.*?(?:바꿔|변경|맞춰|돌려|켜|해\s*줘|해\s*주세요)/i.test(clean);
   if (
-    hasExplicitDayOrTime &&
-    (hasCareKeyword || /(?:바꿔|변경|설정|예약|맞춰)(?:\s*(?:줘|주세요))?/i.test(clean))
+    isSonFreeReset ||
+    (hasExplicitDayOrTime &&
+      (hasCareKeyword || /(?:바꿔|변경|설정|예약|맞춰|돌려)(?:\s*(?:줘|주세요))?/i.test(clean)))
   ) {
     const current = loadWeeklyCareSchedule();
-    const targetDay = dayMatch ? dayMap[dayMatch[1]] ?? current.dayOfWeek : current.dayOfWeek;
-    let targetHour = current.hour;
+    const targetDay = dayMatch ? dayMap[dayMatch[1]] ?? current.dayOfWeek : isSonFreeReset ? 3 : current.dayOfWeek;
+    let targetHour = isSonFreeReset && !timeMatch ? 13 : current.hour;
     let targetMinute = 0;
 
     if (timeMatch) {
