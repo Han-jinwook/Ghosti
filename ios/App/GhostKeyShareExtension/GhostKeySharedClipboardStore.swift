@@ -580,6 +580,19 @@ final class GhostKeySharedClipboardStore {
         }
     }
 
+    static func decryptClipText(cipherB64: String, ivB64: String) -> String? {
+        let c = cipherB64.trimmingCharacters(in: .whitespacesAndNewlines)
+        let iv = ivB64.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !c.isEmpty, !iv.isEmpty,
+              let ctx = loadAuthContext(),
+              !ctx.email.isEmpty,
+              !ctx.canonicalUserId.isEmpty,
+              let symKey = deriveSymmetricKey(email: ctx.email, uid: ctx.canonicalUserId) else {
+            return nil
+        }
+        return decryptE2ee(cipherB64: c, ivB64: iv, key: symKey)
+    }
+
     static func markPushIdSeen(_ pushId: String) -> Bool {
         let clean = pushId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return false }

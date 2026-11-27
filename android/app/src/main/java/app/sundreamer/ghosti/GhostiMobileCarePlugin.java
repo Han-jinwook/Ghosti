@@ -3842,6 +3842,27 @@ public class GhostiMobileCarePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void isFirebaseConfigured(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean configured = false;
+        try {
+            Context ctx = getContext();
+            if (ctx != null) {
+                int appIdRes = ctx.getResources().getIdentifier("google_app_id", "string", ctx.getPackageName());
+                if (appIdRes != 0) {
+                    String appId = ctx.getString(appIdRes);
+                    configured = appId != null && !appId.trim().isEmpty();
+                }
+            }
+        } catch (Throwable ignored) {
+            configured = false;
+        }
+        ret.put("ok", true);
+        ret.put("configured", configured);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void openNativeClipboardImeSettings(PluginCall call) {
         Activity act = getActivity();
         Context ctx = getContext();

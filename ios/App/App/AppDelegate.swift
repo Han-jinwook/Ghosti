@@ -16,16 +16,51 @@ public final class GhostiLocalClipNotificationHandler: NSObject, NotificationHan
         }
     }
 
+    private static func resolveClipTextFromUserInfo(_ userInfo: [AnyHashable: Any]) -> String? {
+        if let direct = userInfo["ghosti_clip_text"] as? String, !direct.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return direct.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let cB64 = userInfo["cipherB64"] as? String,
+           let ivB64 = userInfo["ivB64"] as? String,
+           !cB64.isEmpty, !ivB64.isEmpty,
+           let decrypted = GhostKeySharedClipboardStore.decryptClipText(cipherB64: cB64, ivB64: ivB64),
+           !decrypted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return decrypted.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return nil
+    }
+
     public func didReceive(response: UNNotificationResponse) {
         let userInfo = response.notification.request.content.userInfo
-        guard let clipText = userInfo["ghosti_clip_text"] as? String, !clipText.isEmpty else {
+        let isPcClip = response.notification.request.content.categoryIdentifier == AppDelegate.pcClipCategoryIdentifier
+            || (userInfo["type"] as? String) == "GHOSTI_PC_CLIP"
+            || userInfo["ghosti_clip_text"] != nil
+        guard isPcClip else { return }
+
+        let actId = response.actionIdentifier
+        guard actId == AppDelegate.pcClipCopyActionIdentifier || actId == UNNotificationDefaultActionIdentifier else {
             return
         }
-        let actId = response.actionIdentifier
-        if actId == AppDelegate.pcClipCopyActionIdentifier || actId == UNNotificationDefaultActionIdentifier {
+        if let pushId = userInfo["pushId"] as? String, !pushId.isEmpty {
+            _ = GhostKeySharedClipboardStore.markPushIdSeen(pushId)
+        }
+        if let clipText = Self.resolveClipTextFromUserInfo(userInfo) {
             DispatchQueue.main.async {
                 UIPasteboard.general.string = clipText
                 UserDefaults.standard.set(clipText, forKey: "ghosti_pending_push_copy_text")
+                if actId == UNNotificationDefaultActionIdentifier {
+                    AppDelegate.showFloatingCopiedToast()
+                }
+            }
+            return
+        }
+        // 대용량(>2.8KB) APNs 페이로드인 경우 서버 인박스에서 즉시 복호화 후 복사
+        GhostKeySharedClipboardStore.pullPhonePushInboxOnce { _, plain, _ in
+            let clean = plain.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty else { return }
+            DispatchQueue.main.async {
+                UIPasteboard.general.string = clean
+                UserDefaults.standard.set(clean, forKey: "ghosti_pending_push_copy_text")
                 if actId == UNNotificationDefaultActionIdentifier {
                     AppDelegate.showFloatingCopiedToast()
                 }
@@ -108,16 +143,45 @@ final class GhostiPcClipNotificationProxy: NSObject, UNUserNotificationCenterDel
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
-        if let clipText = userInfo["ghosti_clip_text"] as? String, !clipText.isEmpty {
+        let isPcClip = response.notification.request.content.categoryIdentifier == AppDelegate.pcClipCategoryIdentifier
+            || (userInfo["type"] as? String) == "GHOSTI_PC_CLIP"
+            || userInfo["ghosti_clip_text"] != nil
+        if isPcClip {
             let actId = response.actionIdentifier
             if actId == AppDelegate.pcClipCopyActionIdentifier || actId == UNNotificationDefaultActionIdentifier {
-                DispatchQueue.main.async {
-                    UIPasteboard.general.string = clipText
-                    UserDefaults.standard.set(clipText, forKey: "ghosti_pending_push_copy_text")
-                    if actId == UNNotificationDefaultActionIdentifier {
-                        AppDelegate.showFloatingCopiedToast()
+                if let pushId = userInfo["pushId"] as? String, !pushId.isEmpty {
+                    _ = GhostKeySharedClipboardStore.markPushIdSeen(pushId)
+                }
+                var resolvedText = (userInfo["ghosti_clip_text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if resolvedText.isEmpty,
+                   let cB64 = userInfo["cipherB64"] as? String,
+                   let ivB64 = userInfo["ivB64"] as? String,
+                   let dec = GhostKeySharedClipboardStore.decryptClipText(cipherB64: cB64, ivB64: ivB64) {
+                    resolvedText = dec.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                if !resolvedText.isEmpty {
+                    DispatchQueue.main.async {
+                        UIPasteboard.general.string = resolvedText
+                        UserDefaults.standard.set(resolvedText, forKey: "ghosti_pending_push_copy_text")
+                        if actId == UNNotificationDefaultActionIdentifier {
+                            AppDelegate.showFloatingCopiedToast()
+                        }
+                        completionHandler()
                     }
-                    completionHandler()
+                    return
+                }
+                GhostKeySharedClipboardStore.pullPhonePushInboxOnce { _, plain, _ in
+                    let clean = plain.trimmingCharacters(in: .whitespacesAndNewlines)
+                    DispatchQueue.main.async {
+                        if !clean.isEmpty {
+                            UIPasteboard.general.string = clean
+                            UserDefaults.standard.set(clean, forKey: "ghosti_pending_push_copy_text")
+                            if actId == UNNotificationDefaultActionIdentifier {
+                                AppDelegate.showFloatingCopiedToast()
+                            }
+                        }
+                        completionHandler()
+                    }
                 }
                 return
             }
@@ -222,6 +286,17 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        if let pushId = userInfo["pushId"] as? String, !pushId.isEmpty {
+            _ = GhostKeySharedClipboardStore.markPushIdSeen(pushId)
+        }
+        completionHandler(.newData)
     }
 
     func application(

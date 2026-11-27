@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "877660148972",
+    "project_id": "sundream-play-publisher-aab93",
+    "storage_bucket": "sundream-play-publisher-aab93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:877660148972:android:a349a0298b8f4d946081c9",
+        "android_client_info": {
+          "package_name": "app.sundreamer.ghosti"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsZv6S2zTnyA_k1JMm5H-YM5dRiro67Dc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -319,6 +319,69 @@ public final class GhostiNativeClipboardSync {
         watcher.start();
     }
 
+    public static void handleIncomingFcmClipPush(
+        Context ctx,
+        String pushId,
+        String cipherB64,
+        String ivB64,
+        String senderName
+    ) {
+        if (ctx == null) return;
+        final Context appCtx = ctx.getApplicationContext();
+        try {
+            if (pushId != null && !pushId.trim().isEmpty() && isPushIdAlreadyNotified(appCtx, pushId)) {
+                return;
+            }
+            SharedPreferences authPrefs = appCtx.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
+            String email = authPrefs.getString("email", "");
+            String uid = authPrefs.getString("canonicalUserId", "");
+            if (!email.isEmpty() && !uid.isEmpty()
+                && cipherB64 != null && !cipherB64.trim().isEmpty()
+                && ivB64 != null && !ivB64.trim().isEmpty()) {
+                SecretKey key = deriveAesKey(email, uid);
+                String plain = tryDecrypt(key, cipherB64.trim(), ivB64.trim());
+                if (plain != null && !plain.trim().isEmpty()) {
+                    postOneTapCopyNotification(
+                        appCtx,
+                        pushId != null ? pushId.trim() : "",
+                        plain.trim(),
+                        (senderName != null && !senderName.trim().isEmpty()) ? senderName.trim() : "내 PC"
+                    );
+                    return;
+                }
+            }
+            // 대용량(>2.8KB)이거나 canonicalUserId 동기화가 필요한 경우 즉시 서버 인박스에서 가져와 복호화
+            checkPhonePushInboxSync(appCtx);
+        } catch (Throwable t) {
+            Log.w("GhostiClipPush", "handleIncomingFcmClipPush fallback to inbox", t);
+            checkPhonePushInboxSync(appCtx);
+        }
+    }
+
+    public static void registerFcmTokenFromNative(Context ctx, String fcmToken) {
+        if (ctx == null || fcmToken == null || fcmToken.trim().isEmpty()) return;
+        final Context appCtx = ctx.getApplicationContext();
+        final String cleanToken = fcmToken.trim();
+        IO_EXECUTOR.execute(() -> {
+            try {
+                SharedPreferences prefs = appCtx.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
+                String hubToken = prefs.getString("hubToken", "");
+                String devId = prefs.getString("deviceId", "");
+                String endpoint = prefs.getString("bridgeUrl", DEFAULT_BRIDGE_URL);
+                if (hubToken.isEmpty()) return;
+
+                JSONObject req = new JSONObject();
+                req.put("action", "device_register_push_token");
+                req.put("pushToken", cleanToken);
+                req.put("platform", "android");
+                req.put("deviceId", devId.isEmpty() ? "android-native-fcm" : devId);
+                req.put("appVersion", "1.0.129");
+                postBridgeJson(endpoint, hubToken, req, 7000);
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
     public static void checkPhonePushInboxNow(Context ctx) {
         if (ctx == null) return;
         final Context appCtx = ctx.getApplicationContext();

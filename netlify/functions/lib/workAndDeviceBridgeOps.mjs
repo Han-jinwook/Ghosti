@@ -3017,6 +3017,60 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  // [모바일 앱 네이티브 푸시 토큰 등록 (iOS APNs / Android FCM — 백그라운드·앱종료 0.5초 푸시 원소스)]
+  if (action === 'device_register_push_token') {
+    const pushToken = String(body.pushToken || '').trim().slice(0, 512);
+    const tokenPlatform = String(body.platform || '').trim().toLowerCase();
+    const tokenDeviceId = String(body.deviceId || '').trim().slice(0, 80);
+    const apnsEnv = String(body.apnsEnv || 'production').trim().toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
+    const appVersion = String(body.appVersion || '').trim().slice(0, 24);
+    if (!pushToken || (tokenPlatform !== 'ios' && tokenPlatform !== 'android')) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_PUSH_TOKEN_PAYLOAD' } };
+    }
+    const existing = await readStorageJson(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      `${emailHash}/push_tokens_v1.json`,
+      { items: [] }
+    );
+    const nowIso = new Date().toISOString();
+    const cutoff45d = Date.now() - 45 * 24 * 3600 * 1000;
+    const prev = (Array.isArray(existing?.items) ? existing.items : []).filter((it) => {
+      if (!it || !it.pushToken) return false;
+      if (it.pushToken === pushToken) return false;
+      if (tokenDeviceId && it.deviceId && it.deviceId === tokenDeviceId && it.platform === tokenPlatform) return false;
+      const ts = Date.parse(it.updatedAt || '') || 0;
+      return ts === 0 || ts >= cutoff45d;
+    });
+    const nextTokens = [
+      {
+        deviceId: tokenDeviceId || `${tokenPlatform}-${pushToken.slice(0, 12)}`,
+        platform: tokenPlatform,
+        pushToken,
+        apnsEnv,
+        appVersion,
+        updatedAt: nowIso,
+      },
+      ...prev,
+    ].slice(0, 12);
+    const saved = await writeStorageJson(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      `${emailHash}/push_tokens_v1.json`,
+      { updatedAt: nowIso, items: nextTokens }
+    );
+    return {
+      status: saved ? 200 : 502,
+      body: {
+        ok: Boolean(saved),
+        tokenCount: nextTokens.length,
+        canonicalUserId: userId,
+      },
+    };
+  }
+
   // [PC ➔ 폰 명시적 선택 전송 (`[📱 폰으로 보내기]` 1클릭 ➔ 모바일 푸시 알림 1건 + `[📋 복사]` 1탭)]
   if (action === 'device_send_clip_to_phone_push') {
     const cipherB64 = String(body.cipherB64 || '').trim();
@@ -3027,7 +3081,7 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!cipherB64 || !ivB64 || !clipHash || cipherB64.length > 128000) {
       return { status: 400, body: { ok: false, reason: 'INVALID_E2EE_PHONE_PUSH_PAYLOAD' } };
     }
-    const [gate, inbox, mailbox] = await Promise.all([
+    const [gate, inbox, mailbox, tokenStore] = await Promise.all([
       assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash),
       readStorageJson(
         supabaseUrl,
@@ -3041,6 +3095,13 @@ export async function handleAuthedWorkAndDeviceAction({
         serviceKey,
         DEVICE_BUCKET,
         `${emailHash}/clipboard_mailbox_v1.json`,
+        { items: [] }
+      ),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/push_tokens_v1.json`,
         { items: [] }
       ),
     ]);
@@ -3083,7 +3144,40 @@ export async function handleAuthedWorkAndDeviceAction({
       ...prevMail,
     ].slice(0, 500);
 
-    const [savedInbox] = await Promise.all([
+    const targetPushTokens = (Array.isArray(tokenStore?.items) ? tokenStore.items : []).filter(
+      (t) => t && t.pushToken && (!senderDeviceId || t.deviceId !== senderDeviceId)
+    );
+
+    const dispatchNativePushPromise = (async () => {
+      if (targetPushTokens.length === 0) return { attempted: 0, delivered: 0, invalidTokens: [] };
+      try {
+        const { dispatchPcClipPushToTokens } = await import('./mobilePushDispatcher.mjs');
+        const disp = await dispatchPcClipPushToTokens({
+          tokens: targetPushTokens,
+          pushItem,
+          readPrivateJson: (objPath) =>
+            readStorageJson(supabaseUrl, serviceKey, DEVICE_BUCKET, objPath, null),
+        });
+        if (Array.isArray(disp.invalidTokens) && disp.invalidTokens.length > 0) {
+          const invalidSet = new Set(disp.invalidTokens);
+          const remaining = (Array.isArray(tokenStore?.items) ? tokenStore.items : []).filter(
+            (t) => t && t.pushToken && !invalidSet.has(t.pushToken)
+          );
+          await writeStorageJson(
+            supabaseUrl,
+            serviceKey,
+            DEVICE_BUCKET,
+            `${emailHash}/push_tokens_v1.json`,
+            { updatedAt: nowIso, items: remaining }
+          ).catch(() => null);
+        }
+        return disp;
+      } catch {
+        return { attempted: targetPushTokens.length, delivered: 0, invalidTokens: [] };
+      }
+    })();
+
+    const [savedInbox, , , nativePushResult] = await Promise.all([
       writeStorageJson(
         supabaseUrl,
         serviceKey,
@@ -3105,6 +3199,7 @@ export async function handleAuthedWorkAndDeviceAction({
         'PC_TO_PHONE_CLIP_PUSH',
         pushItem
       ),
+      dispatchNativePushPromise,
     ]);
     if (!savedInbox) {
       return { status: 502, body: { ok: false, reason: 'PHONE_PUSH_INBOX_WRITE_FAILED' } };
@@ -3117,6 +3212,10 @@ export async function handleAuthedWorkAndDeviceAction({
         createdAt: nowIso,
         canonicalUserId: userId,
         canonicalEmail: email,
+        nativePush: {
+          attempted: Number(nativePushResult?.attempted || 0),
+          delivered: Number(nativePushResult?.delivered || 0),
+        },
       },
     };
   }

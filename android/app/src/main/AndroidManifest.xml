@@ -104,6 +104,14 @@
         </receiver>
 
         <service
+            android:name=".GhostiFirebaseMessagingService"
+            android:exported="false">
+            <intent-filter android:priority="100">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".GhostiPushKeepAliveJobService"
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />

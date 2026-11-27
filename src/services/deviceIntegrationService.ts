@@ -873,12 +873,23 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.128',
+    appVersion: '1.0.129',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
     forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),
   });
+
+  if (isCapacitorNativeMobileRuntime() && typeof window !== 'undefined') {
+    try {
+      const storedPushTok = (localStorage.getItem('ghosti_native_push_token') || '').trim();
+      if (storedPushTok) {
+        void registerNativeMobilePushToken(storedPushTok);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   if (!res.ok) {
     return {
@@ -1928,6 +1939,44 @@ export async function pullRecentDirectPhotoToPc(): Promise<GhostiDirectPhotoDrop
  * - 평소 PC Ctrl+C 시에는 폰 알림을 전혀 울리지 않으며(0건), 사용자가 `4. 내 기기 통합` 화면에서 `[📱 폰으로 보내기]`를 눌렀을 때만
  *   단 1건의 암호화 푸시 알림을 발송하여 앱을 열지 않고 `[📋 복사]` 1탭으로 즉시 붙여넣기하게 합니다.
  */
+let lastRegisteredNativePushKey = '';
+
+export async function registerNativeMobilePushToken(rawToken: string): Promise<boolean> {
+  if (!isCapacitorNativeMobileRuntime()) return false;
+  const cleanToken = (rawToken || '').trim();
+  if (!cleanToken || !hasAuthenticatedHubAccountSession() || thisDeviceRevokedLocally) {
+    return false;
+  }
+  const ident = getThisDeviceIdentity();
+  const plat = ident.platform === 'ios' ? 'ios' : ident.platform === 'android' ? 'android' : '';
+  if (!plat) return false;
+  const dedupeKey = `${plat}:${ident.deviceId}:${cleanToken}`;
+  if (lastRegisteredNativePushKey === dedupeKey) return true;
+
+  const res = await callGhostiServerBridge<{ tokenCount?: number }>('device_register_push_token', {
+    pushToken: cleanToken,
+    platform: plat,
+    deviceId: ident.deviceId,
+    apnsEnv: 'production',
+    appVersion: '1.0.129',
+  });
+  if (res.ok) {
+    lastRegisteredNativePushKey = dedupeKey;
+    return true;
+  }
+  return false;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('ghostiNativePushToken', (ev) => {
+    const detail = (ev as CustomEvent<{ token?: string }>)?.detail;
+    const tok = (detail?.token || '').trim();
+    if (tok) {
+      void registerNativeMobilePushToken(tok);
+    }
+  });
+}
+
 export async function sendClipToPhonePush(opts: {
   text: string;
   email: string;
