@@ -36,6 +36,7 @@ import {
   LoungeView,
 } from './LoungeView';
 import { SampleSharedRoomExperienceCard } from '../domains/free_photo_share/SampleSharedRoomExperienceCard';
+import { DeviceIntegrationBeforeAfterShowcase } from '../domains/paid_device_sync/DeviceIntegrationBeforeAfterShowcase';
 import {
   PcMasterQuickSendPanel,
   buildDocPreviewSnippet,
@@ -1693,6 +1694,9 @@ export const MobileAppView: React.FC = () => {
 
                     {showPrivateSyncSection && (
                       <div className="px-4 pb-4 pt-3 border-t border-slate-100 flex flex-col gap-3">
+                        <DeviceIntegrationBeforeAfterShowcase
+                          isStoreAppMode={Boolean(isStoreAppMode) || isCapacitorNativeMobileRuntime()}
+                        />
                         <CrossDeviceClipboardAndPairingBar compact />
 
                         {(() => {

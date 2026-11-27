@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
 import { LoungeCustomSettingsHeader } from '../../components/LoungeView';
 import { PcMasterQuickSendPanel } from '../../components/PricingModal';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
+import { DeviceIntegrationBeforeAfterShowcase } from './DeviceIntegrationBeforeAfterShowcase';
 
 export const PaidDeviceSyncPane: React.FC = () => {
   const {
     desktopTab,
     activeLoungeType,
+    isStoreAppMode,
     photos,
     matchedLocalDocs,
     openLocalFolder,
@@ -20,6 +23,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(true);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
+  const hidePricingForStore = Boolean(isStoreAppMode) || isMobileOrStoreRuntime();
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
   const quarantinedPhotos = useMemo(() => photos.filter((p) => p.quarantined), [photos]);
@@ -30,7 +34,10 @@ export const PaidDeviceSyncPane: React.FC = () => {
         <main className="flex-1 w-full max-w-[1160px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
           <GhostSecretaryFirstGuard>
             {activeLoungeType === 'personal' ? (
-              <LoungeCustomSettingsHeader />
+              <>
+                <DeviceIntegrationBeforeAfterShowcase isStoreAppMode={hidePricingForStore} />
+                <LoungeCustomSettingsHeader />
+              </>
             ) : activeLoungeType === 'family' ||
               activeLoungeType === 'club' ||
               activeLoungeType === 'student' ? (
