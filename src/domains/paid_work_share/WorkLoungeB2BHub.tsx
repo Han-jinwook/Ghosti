@@ -1356,6 +1356,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     isAuthenticated,
     isPendingWorkInviteVerification,
     isCheckingJoinedRooms,
+    hasCheckedJoinedRoomsOnce,
     isWorkUnlocked,
     isWorkTrialActive,
     isJoinedInvitedMember,
@@ -2729,19 +2730,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
-            <span className="font-mono truncate max-w-full">
-              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
-            </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
-            )}
-          </div>
-        )}
       )}
 
       {/* 공유방 연결 해제(내보내기) 확인 안내 창 — 사용자가 직접 [확인] 버튼을 누르기 전까지 자동 소멸 금지 */}
@@ -2780,19 +2768,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
-            <span className="font-mono truncate max-w-full">
-              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
-            </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
-            )}
-          </div>
-        )}
       )}
 
       {/* 모바일 브라우저에서 업무 공유 초대 링크 접속 시 귀신같이 앱으로 바로 연결 + 자동 계정 연동 안내 */}
@@ -2847,19 +2822,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
-            <span className="font-mono truncate max-w-full">
-              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
-            </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
-            )}
-          </div>
-        )}
       ) : isPendingWorkInviteVerification ? (
         <div
           data-testid="work-invite-verifying-card"
@@ -3044,19 +3006,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
-            <span className="font-mono truncate max-w-full">
-              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
-            </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
-            )}
-          </div>
-        )}
       )}
 
       {/* 초대받아 참여 중인 업무 공유방 안내 배너 (방장이 내보내거나 나가기 클릭 즉시 소거) */}
@@ -3116,19 +3065,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
           </div>
         </div>
-
-        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
-            <span className="font-mono truncate max-w-full">
-              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
-            </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
-            )}
-          </div>
-        )}
       )}
 
       {(isWorkUnlocked || hasOwnExpiredHostVault) && (
@@ -3501,19 +3437,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
           </div>
         </div>
-
-        {!isMobileOrStore && isZCoreConnected && sDriveMounted && driveTargetPath && (
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-slate-600">
-            <span className="font-mono truncate max-w-full">
-              현재 S:\ 연결 원본 폴더: <strong className="text-slate-800">{driveTargetPath}</strong>
-            </span>
-            {/(내 드라이브|My Drive|Google Drive)/i.test(driveTargetPath) && (
-              <span className="text-teal-700 font-medium break-keep">
-                구글 드라이브 연결 시 탐색기 [내 PC]에서는 &lsquo;로컬 디스크 (S:)&rsquo; 대신 &lsquo;구글계정 - Google Drive (S:)&rsquo;로 표시됩니다 (상단 [탐색기 S:\ 열기]로 바로 열림)
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       <WorkLoungeDocListAndSidePeek
