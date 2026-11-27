@@ -37,7 +37,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
           <span className="inline-block px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium mb-3">
             기능 미리보기 영상
           </span>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-keep mb-2">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight break-keep mb-2">
             짧은 영상으로 살펴보는 주요 기능
           </h2>
           <p className="text-slate-500 text-[13.5px] break-keep">
@@ -161,7 +161,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-700 text-[12px] font-medium">
               개인 · 민간 기업 기본 기능 무료 사용 확인서
             </span>
-            <h3 className="text-lg sm:text-2xl font-bold text-slate-900 leading-snug break-keep">
+            <h3 className="font-display text-lg sm:text-2xl font-bold text-slate-900 leading-snug break-keep">
               회사 PC에서도 기본 기능은 별도 라이선스 비용 없이 사용하실 수 있습니다
             </h3>
 
@@ -224,7 +224,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
                 선택형 구독 플랜 (30일 무료체험 제공)
               </span>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight break-keep">
+              <h3 className="font-display text-xl sm:text-2xl font-bold text-slate-900 tracking-tight break-keep">
                 여러 기기 연동과 팀 공용 폴더가 필요할 때만 선택하세요
               </h3>
               <p className="text-[13px] text-slate-500 break-keep">
@@ -323,7 +323,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <span className="inline-block px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 text-[12px] font-medium">
               서비스 철학
             </span>
-            <p className="text-[17px] sm:text-[19px] font-bold text-slate-900 break-keep">
+            <p className="font-display text-[17px] sm:text-[19px] font-bold text-slate-900 break-keep">
               조용하고 가볍게, 필요한 순간에만 돕는 도구
             </p>
           </div>

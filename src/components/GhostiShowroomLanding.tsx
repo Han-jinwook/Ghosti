@@ -759,7 +759,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               </span>
 
               <div className="space-y-2.5">
-                <h1 className="text-2xl sm:text-4xl font-bold tracking-tight leading-[1.25] text-slate-900 break-keep">
+                <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight leading-[1.3] text-slate-900 break-keep">
                   {isCompactH1Slot
                     ? 'PC · 스마트폰 정리와 문서 · 사진 내용 검색을 한곳에서'
                     : '열지 않고 찾고, 안심하고 정리하는 내 기기 관리 도구'}
@@ -1037,7 +1037,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     {activeMeta.stageBadge}
                   </span>
                 </div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-900 break-keep">
+                <h2 className="font-display text-lg sm:text-xl font-bold text-slate-900 break-keep">
                   {activeMeta.stageTitle}
                 </h2>
               </div>
@@ -1552,115 +1552,46 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 )}
 
                 {/* ④ 사진 공유 샘플 체험 */}
-                {demoTab === 'share' && (() => {
-                  const group = SAMPLE_FAMILY_GROUPS.find((g) => g.key === shareGroupKey) || SAMPLE_FAMILY_GROUPS[0];
-                  const katalkSample = SAMPLE_FAMILY_PHOTOS.slice(0, 3);
-                  return (
-                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 sm:p-5 space-y-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[13.5px] font-semibold text-slate-900">
-                          가족 · 모임 공유방 안내
+                {demoTab === 'share' && (
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 sm:p-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[13.5px] font-semibold text-slate-900">
+                        가족 · 모임 공유방 안내
+                      </div>
+                      <span className="text-[11.5px] text-slate-500">만료 없는 원본 공유 앨범</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="rounded-xl bg-white border border-slate-200 p-3.5 space-y-1">
+                        <div className="text-[12.5px] font-semibold text-slate-800">
+                          일반 메신저 대화방의 사진 만료 · 화질 저하 문제
                         </div>
-                        <span className="text-[11.5px] text-slate-500">만료 없는 원본 공유 앨범</span>
+                        <p className="text-[12.5px] text-slate-600 leading-relaxed break-keep">
+                          메신저로 주고받은 사진은 일정 기간이 지나면 다운로드 기간이 만료되거나 해상도가 압축되어 원본 보관이 어렵습니다.
+                        </p>
                       </div>
 
-                      {shareStep === 0 && (
-                        <div className="space-y-3">
-                          <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-2.5">
-                            <div className="text-[12.5px] font-semibold text-slate-800">
-                              일반 메신저 대화방의 사진 만료 · 화질 저하 문제
-                            </div>
-                            {katalkSample.length > 0 ? (
-                              <div className="grid grid-cols-3 gap-2">
-                                {katalkSample.map((p) => (
-                                  <div key={p} className="relative aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-                                    <img
-                                      src={`${SAMPLE_FAMILY_THUMB_BASE}${p}`}
-                                      alt="만료된 사진 예시"
-                                      className="w-full h-full object-cover blur-xs grayscale opacity-60"
-                                    />
-                                    <div className="absolute inset-0 flex items-center justify-center p-1.5 text-center">
-                                      <span className="text-[11px] font-medium text-slate-800 bg-white/90 rounded px-1.5 py-0.5">
-                                        기간 만료
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-[12.5px] text-slate-600 leading-relaxed">
-                                메신저로 주고받은 사진은 일정 기간이 지나면 다운로드 기간이 만료되거나 해상도가 압축되어 원본 보관이 어렵습니다.
-                              </p>
-                            )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px] break-keep">
+                        <div className="rounded-lg bg-white p-4 border border-slate-200 space-y-1.5">
+                          <div className="font-semibold text-slate-700">일반 메신저 대화방</div>
+                          <div className="text-slate-500 text-[12.5px] leading-relaxed">
+                            · 전송 시 화질 압축<br />
+                            · 일정 기간 경과 후 만료<br />
+                            · 예전 사진을 인물·상황으로 찾기 어려움
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              playBabyGhostChime();
-                              setShareStep(1);
-                            }}
-                            className="w-full px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] cursor-pointer transition-colors"
-                          >
-                            공유방 비교 안내 보기 →
-                          </button>
                         </div>
-                      )}
-
-                      {shareStep >= 1 && (
-                        <div className="space-y-3">
-                          {group && group.photos.length > 0 && shareStep === 1 ? (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                              {group.photos.map((p) => (
-                                <button
-                                  key={p}
-                                  type="button"
-                                  onClick={() => {
-                                    playBabyGhostChime();
-                                    setSharePickedPhoto(p);
-                                    setShareStep(2);
-                                  }}
-                                  className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors cursor-pointer"
-                                >
-                                  <img
-                                    src={`${SAMPLE_FAMILY_THUMB_BASE}${p}`}
-                                    alt="샘플 사진"
-                                    loading="lazy"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </button>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px] break-keep">
-                              <div className="rounded-lg bg-white p-4 border border-slate-200 space-y-1.5">
-                                <div className="font-semibold text-slate-700">일반 메신저 대화방</div>
-                                <div className="text-slate-500 text-[12.5px] leading-relaxed">
-                                  · 전송 시 화질 압축<br />
-                                  · 일정 기간 경과 후 만료<br />
-                                  · 예전 사진을 인물·상황으로 찾기 어려움
-                                </div>
-                              </div>
-                              <div className="rounded-lg bg-white p-4 border border-slate-900 space-y-1.5">
-                                <div className="font-semibold text-slate-900">귀신같이 사진 공유방</div>
-                                <div className="text-slate-700 text-[12.5px] leading-relaxed">
-                                  · 원본 해상도 그대로 보관<br />
-                                  · 초대 링크로 간편 합류<br />
-                                  · 날짜·인물·장면별 빠른 검색 지원
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {shareUploadHint && (
-                            <div className="rounded-lg bg-white border border-slate-200 px-3.5 py-3 text-[12.5px] text-slate-700 leading-relaxed break-keep">
-                              사진 공유방 개설과 업로드는 귀신같이 워크스페이스 내 『사진 공유』 메뉴에서 무료로 이용하실 수 있습니다.
-                            </div>
-                          )}
+                        <div className="rounded-lg bg-white p-4 border border-slate-900 space-y-1.5">
+                          <div className="font-semibold text-slate-900">귀신같이 사진 공유방</div>
+                          <div className="text-slate-700 text-[12.5px] leading-relaxed">
+                            · 원본 해상도 그대로 보관<br />
+                            · 초대 링크로 간편 합류<br />
+                            · 날짜·인물·장면별 빠른 검색 지원
+                          </div>
                         </div>
-                      )}
+                      </div>
                     </div>
-                  );
-                })()}
+                  </div>
+                )}
               </div>
             )}
 
