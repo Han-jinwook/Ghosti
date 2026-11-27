@@ -31,6 +31,8 @@ import {
   type SafeOnboardingChatMsg,
   WEAPON_META,
   nowTimeStr,
+  SHOWROOM_BEFORE_AFTER_MENU_CASES,
+  SHOWROOM_BEFORE_AFTER_JOB_CASES,
 } from './showroom/showroomDataAndUtils';
 import { ShowroomLowerSections } from './showroom/ShowroomLowerSections';
 
@@ -64,8 +66,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'video' | 'doc' | 'clean'>('all');
   const [activeShortsModal, setActiveShortsModal] = useState<ShortsItem | null>(null);
 
-  // 공식 보증서 모달 상태 & B2B 영업 유입(?from=b2b / #work-share) 직통 포커싱 상태
+  // 공식 보증서 모달 상태 & 실전 활용 사례(Before vs After) 펼치기 상태 & B2B 영업 유입(?from=b2b / #work-share) 직통 포커싱 상태
   const [certModalOpen, setCertModalOpen] = useState<boolean>(false);
+  const [beforeAfterOpen, setBeforeAfterOpen] = useState<boolean>(false);
+  const [beforeAfterViewMode, setBeforeAfterViewMode] = useState<'jobs' | 'menus'>('jobs');
   const [b2bFocused, setB2bFocused] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -559,6 +563,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             >
               기능 체험
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBeforeAfterOpen(true);
+                setTimeout(() => {
+                  document.getElementById('before-after-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 40);
+              }}
+              className="px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
+            >
+              💡 실전 활용 사례
+            </button>
             {!isStoreAppMode && (
               <button
                 type="button"
@@ -665,6 +681,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             className="px-2.5 py-1 rounded-md bg-slate-900 text-white cursor-pointer shrink-0"
           >
             기능 체험
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setBeforeAfterOpen(true);
+              setTimeout(() => {
+                document.getElementById('before-after-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 40);
+            }}
+            className="px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 border border-teal-200 cursor-pointer shrink-0"
+          >
+            💡 실전 활용 사례
           </button>
           {!isStoreAppMode && (
             <button
@@ -785,6 +813,32 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   >
                     {isLaunched ? '바로 시작하기' : '가입 없이 샘플 체험하기'}
                   </button>
+                  <button
+                    type="button"
+                    data-before-after-toggle="true"
+                    onClick={() => {
+                      playBabyGhostChime();
+                      setBeforeAfterOpen((prev) => {
+                        const next = !prev;
+                        if (next) {
+                          setTimeout(() => {
+                            document
+                              .getElementById('before-after-showcase')
+                              ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                          }, 50);
+                        }
+                        return next;
+                      });
+                    }}
+                    className={`px-4 py-3 rounded-lg border font-semibold text-[13.5px] transition-colors cursor-pointer flex items-center gap-1.5 ${
+                      beforeAfterOpen
+                        ? 'bg-slate-900 border-slate-900 text-white'
+                        : 'bg-teal-50/80 hover:bg-teal-100/80 border-teal-200 text-teal-900'
+                    }`}
+                  >
+                    <span>💡 실전 활용 사례 (Before vs After)</span>
+                    <span className="text-[11px]">{beforeAfterOpen ? '▴ 접기' : '▾ 펼쳐보기'}</span>
+                  </button>
                   {!isLaunched && !verifiedUserEmail && (
                     <button
                       type="button"
@@ -893,6 +947,163 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* [단추 숨김 & 펼치기 UX] 💡 이런 순간, 귀신같이 달라집니다 (실전 활용 사례 Before vs After) */}
+        <div id="before-after-showcase" className="rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+          <div
+            onClick={() => {
+              playBabyGhostChime();
+              setBeforeAfterOpen((prev) => !prev);
+            }}
+            className="px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/80 transition-colors"
+          >
+            <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+              <span className="px-2.5 py-1 rounded-md bg-teal-600 text-white text-[11.5px] font-semibold shrink-0">
+                Before vs After
+              </span>
+              <h2 className="font-display text-[15px] sm:text-[17px] font-bold text-slate-900 break-keep">
+                💡 이런 순간, 귀신같이 달라집니다 — 직업별 · 기능별 실전 활용 사례
+              </h2>
+              <span className="hidden md:inline text-[12.5px] text-slate-500">
+                (자영업·셀러 · 육아맘·가족 · 직장인 · 외근·부동산 · 모임 총무)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                playBabyGhostChime();
+                setBeforeAfterOpen((prev) => !prev);
+              }}
+              className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-colors cursor-pointer shrink-0 ${
+                beforeAfterOpen
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-200'
+              }`}
+            >
+              {beforeAfterOpen ? '사례 접기 ▴' : '실전 사례 펼쳐보기 ▾'}
+            </button>
+          </div>
+
+          {beforeAfterOpen && (
+            <div className="px-5 sm:px-6 pb-6 pt-2 border-t border-slate-200 bg-slate-50/60 space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
+                <p className="text-[13px] text-slate-600 break-keep">
+                  기능 설명만으로는 상상하기 어려운 실제 생활·업무 현장의 <strong>기존 불편함(❌ Before)</strong>과{' '}
+                  <strong>도입 후 변화(⭕ After)</strong>를 한눈에 비교해 보세요.
+                </p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setBeforeAfterViewMode('jobs')}
+                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-colors cursor-pointer ${
+                      beforeAfterViewMode === 'jobs'
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    🎯 직업·상황별 5대 시나리오
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBeforeAfterViewMode('menus')}
+                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-colors cursor-pointer ${
+                      beforeAfterViewMode === 'menus'
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    📂 핵심 메뉴별 상세 비교
+                  </button>
+                </div>
+              </div>
+
+              {beforeAfterViewMode === 'jobs' ? (
+                <div className="grid grid-cols-1 gap-3.5">
+                  {SHOWROOM_BEFORE_AFTER_JOB_CASES.map((jc) => (
+                    <div
+                      key={jc.persona}
+                      className="rounded-xl bg-white border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[11.5px] font-bold">
+                            {jc.rank}
+                          </span>
+                          <h3 className="text-[15px] font-bold text-slate-900 break-keep">{jc.persona}</h3>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[11.5px] font-semibold">
+                          핵심 조합: {jc.combo}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-lg bg-rose-50/60 border border-rose-200/80 p-3.5 space-y-1">
+                          <div className="text-[12px] font-bold text-rose-800">❌ Before (기존 불편함)</div>
+                          <p className="text-[12.5px] text-slate-700 leading-relaxed break-keep">{jc.before}</p>
+                        </div>
+                        <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 p-3.5 space-y-1">
+                          <div className="text-[12px] font-bold text-emerald-800">⭕ After (귀신같이 도입 후)</div>
+                          <p className="text-[12.5px] text-slate-800 font-medium leading-relaxed break-keep">
+                            {jc.after}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] font-semibold text-slate-800 break-keep">
+                        💬 한 줄 요약: {jc.hookLine}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {SHOWROOM_BEFORE_AFTER_MENU_CASES.filter(
+                    (mc) => !(isStoreAppMode && mc.hideInStoreMode)
+                  ).map((mc) => (
+                    <div
+                      key={mc.id}
+                      className="rounded-xl bg-white border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-3.5"
+                    >
+                      <div className="space-y-1 pb-2.5 border-b border-slate-100">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded-md bg-teal-600 text-white text-[11.5px] font-semibold">
+                            {mc.menuTag}
+                          </span>
+                          <h3 className="text-[15.5px] font-bold text-slate-900 break-keep">{mc.title}</h3>
+                        </div>
+                        <p className="text-[12.5px] text-slate-500 break-keep">상황: {mc.targetSituation}</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="rounded-lg bg-rose-50/60 border border-rose-200/80 p-3.5 space-y-2">
+                          <div className="text-[12px] font-bold text-rose-800">❌ Before (기존 불편함)</div>
+                          <ul className="space-y-1.5 text-[12.5px] text-slate-700 leading-relaxed break-keep list-disc pl-4">
+                            {mc.beforeItems.map((bi, idx) => (
+                              <li key={idx}>{bi}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 p-3.5 space-y-2">
+                          <div className="text-[12px] font-bold text-emerald-800">⭕ After (귀신같이 도입 후)</div>
+                          <ul className="space-y-1.5 text-[12.5px] text-slate-800 font-medium leading-relaxed break-keep list-disc pl-4">
+                            {mc.afterItems.map((ai, idx) => (
+                              <li key={idx}>{ai}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] font-semibold text-slate-800 break-keep">
+                        💬 한 줄 요약: {mc.hookLine}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 2단 체험 영역 */}
