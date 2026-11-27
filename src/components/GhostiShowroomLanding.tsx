@@ -814,7 +814,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     tab: 'video' as OnboardingWeaponTab,
                     stat: '본문 · 장면 검색',
                     title: '귀신검색',
-                    sub: 'Ctrl+0으로 문서와 영상 바로 찾기',
+                    sub: '문서 본문 · 영상 장면 검색',
                   },
                   {
                     key: 'share',
@@ -863,11 +863,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-900'
                       }`}
                     >
-                      <div className={`text-[11.5px] font-medium mb-0.5 ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                      <div className={`text-[11.5px] font-medium mb-0.5 ${active ? 'text-white/90' : 'text-slate-500'}`}>
                         {card.stat}
                       </div>
                       <div className="text-[14px] font-semibold">{card.title}</div>
-                      <div className={`text-[12px] line-clamp-2 break-keep leading-snug mt-0.5 ${active ? 'text-slate-200' : 'text-slate-600'}`}>
+                      <div className={`text-[12px] break-keep leading-snug mt-0.5 ${active ? 'text-white/95' : 'text-slate-600'}`}>
                         {card.sub}
                       </div>
                     </button>
@@ -996,7 +996,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       <div className="text-[13px] font-semibold break-keep leading-snug mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className={`text-[11.5px] break-keep leading-snug ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+                      <div className={`text-[11.5px] break-keep leading-snug ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
                         {item.chipSub}
                       </div>
                     </button>

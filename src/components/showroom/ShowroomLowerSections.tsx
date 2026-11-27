@@ -233,12 +233,12 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-5 space-y-2.5">
+              <div className="rounded-xl bg-[#FDFBF7] border border-amber-200/90 p-5 space-y-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[14px] font-semibold text-slate-900">
                     4. 내 기기 통합
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-[12px] font-medium whitespace-nowrap">
+                  <span className="px-2.5 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[12px] font-semibold whitespace-nowrap">
                     30일 무료체험 · 월 3,900원
                   </span>
                 </div>
@@ -260,10 +260,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
 
               <div
                 id="work-share"
-                className={`rounded-xl bg-slate-50 p-5 space-y-2.5 ${
+                className={`rounded-xl bg-[#FDFBF7] p-5 space-y-2.5 ${
                   b2bFocused
-                    ? 'border-2 border-slate-900'
-                    : 'border border-slate-200'
+                    ? 'border-2 border-amber-500 ring-2 ring-amber-200/60'
+                    : 'border border-amber-200/90'
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -274,11 +274,11 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                     <button
                       type="button"
                       onClick={() => setCertModalOpen(true)}
-                      className="px-2.5 py-0.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer whitespace-nowrap"
+                      className="px-2.5 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
                     >
                       기업 기본 기능 확인서
                     </button>
-                    <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-[12px] font-medium whitespace-nowrap">
+                    <span className="px-2.5 py-0.5 rounded-md bg-amber-50 border border-amber-300 text-amber-900 text-[12px] font-semibold whitespace-nowrap">
                       30일 체험 · 월 9,900원~
                     </span>
                   </div>
@@ -300,13 +300,13 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               </div>
             </div>
 
-            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-slate-600">
+            <div className="rounded-xl bg-[#FDFBF7] border border-amber-200/80 p-4 flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-slate-700">
               <span>기본 기능은 기기 내 로컬 방식으로 동작하여 별도 서버 유지비 없이 제공됩니다.</span>
-              <div className="flex flex-wrap gap-1.5 text-[11.5px] font-medium text-slate-700">
+              <div className="flex flex-wrap gap-1.5 text-[11.5px] font-semibold text-amber-900">
                 {['암호화 전송', '휴지통 복원 지원', '법인 세금계산서 발행', '(주)썬드림 고객지원'].map((badge) => (
                   <span
                     key={badge}
-                    className="px-2.5 py-1 rounded-md bg-white border border-slate-200 whitespace-nowrap"
+                    className="px-2.5 py-1 rounded-md bg-amber-50 border border-amber-300 whitespace-nowrap"
                   >
                     {badge}
                   </span>

@@ -377,14 +377,14 @@ html.theme-warm-light .text-on-surface:not(.bg-slate-900):not(.bg-slate-900 *):n
   color: #1E293B !important;
 }
 
-html.theme-warm-light .text-zinc-200:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light [class*="text-zinc-200/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light .text-zinc-300:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light [class*="text-zinc-300/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light .text-slate-200:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light [class*="text-slate-200/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light .text-slate-300:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light [class*="text-slate-300/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *) {
+html.theme-warm-light .text-zinc-200:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-zinc-200/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light .text-zinc-300:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-zinc-300/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light .text-slate-200:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-slate-200/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light .text-slate-300:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-slate-300/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"] *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *) {
   color: #334155 !important;
 }
 
