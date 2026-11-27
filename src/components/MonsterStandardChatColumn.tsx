@@ -1210,10 +1210,30 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     // 첫 진입 2.5초 후 1회 점검 + 이후 60초마다 슬라이딩 윈도우(10분 지속 조건) 점검
     const initTimer = window.setTimeout(() => void runProactiveCheck(), 2500);
     const pollTimer = window.setInterval(() => void runProactiveCheck(), 60_000);
+    // [모바일 남은 옛날 사진 '저녁에 쉴 때 조용히 해줘' 재진입 자동 기동]
+    let eveningTimer: number | undefined;
+    if (isMobileOrStore) {
+      try {
+        if (
+          localStorage.getItem('ghosti_mobile_evening_scan_pending') === '1' &&
+          new Date().getHours() >= 20
+        ) {
+          localStorage.removeItem('ghosti_mobile_evening_scan_pending');
+          eveningTimer = window.setTimeout(() => {
+            void useSaySeeStore
+              .getState()
+              .syncMobileNativeGalleryAuto({ promptPermission: false, maxTargetCount: 2500 });
+          }, 4000);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
     return () => {
       cancelled = true;
       window.clearTimeout(initTimer);
       window.clearInterval(pollTimer);
+      if (eveningTimer) window.clearTimeout(eveningTimer);
     };
   }, [isMobileOrStore, sourceTab]);
 
