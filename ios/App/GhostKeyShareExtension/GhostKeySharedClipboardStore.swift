@@ -40,9 +40,11 @@ final class GhostKeySharedClipboardStore {
 
     private static let ioQueue = DispatchQueue(label: "app.sundreamer.ghosti.sharedclip.io", qos: .userInitiated)
     private static let keyLock = NSLock()
+    private static let pushSeenLock = NSLock()
     private static var keyCache: [String: SymmetricKey] = [:]
+    private static var memorySeenPushIds: Set<String> = []
     private static var lastPullAtMs: Double = 0
-    private static var lastPushSinceMs: Double = Date().timeIntervalSince1970 * 1000.0 - 30_000.0
+    private static var lastPushSinceMs: Double = Date().timeIntervalSince1970 * 1000.0 - 10.0 * 60.0 * 1000.0
 
     private static func makeBaseQuery(account: String, useGroup: Bool) -> [String: Any] {
         var q: [String: Any] = [
@@ -581,14 +583,21 @@ final class GhostKeySharedClipboardStore {
     static func markPushIdSeen(_ pushId: String) -> Bool {
         let clean = pushId.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return false }
+        pushSeenLock.lock()
+        defer { pushSeenLock.unlock() }
+        if memorySeenPushIds.contains(clean) {
+            return false
+        }
         var seen: [String] = []
         if let raw = readSharedData(forAccount: keySeenPushIds),
            let arr = try? JSONDecoder().decode([String].self, from: raw) {
             seen = arr
         }
         if seen.contains(clean) {
+            memorySeenPushIds.insert(clean)
             return false
         }
+        memorySeenPushIds.insert(clean)
         seen.append(clean)
         if seen.count > 60 {
             seen = Array(seen.suffix(40))
@@ -601,12 +610,21 @@ final class GhostKeySharedClipboardStore {
 
     private static func isPushIdSeen(_ pushId: String) -> Bool {
         let clean = pushId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty,
-              let raw = readSharedData(forAccount: keySeenPushIds),
+        guard !clean.isEmpty else { return false }
+        pushSeenLock.lock()
+        defer { pushSeenLock.unlock() }
+        if memorySeenPushIds.contains(clean) {
+            return true
+        }
+        guard let raw = readSharedData(forAccount: keySeenPushIds),
               let arr = try? JSONDecoder().decode([String].self, from: raw) else {
             return false
         }
-        return arr.contains(clean)
+        if arr.contains(clean) {
+            memorySeenPushIds.insert(clean)
+            return true
+        }
+        return false
     }
 
     static func pullPhonePushInboxOnce(onPushArrived: @escaping (String, String, String) -> Void) {
@@ -616,9 +634,11 @@ final class GhostKeySharedClipboardStore {
                   !ctx.hubToken.isEmpty else {
                 return
             }
+            let floorMs = Date().timeIntervalSince1970 * 1000.0 - 10.0 * 60.0 * 1000.0
+            let querySince = Int64(max(floorMs, lastPushSinceMs - 2000.0))
             let body: [String: Any] = [
                 "action": "device_pull_phone_push_inbox",
-                "sinceMs": Int64(lastPushSinceMs),
+                "sinceMs": querySince,
                 "callerDeviceId": ctx.deviceId
             ]
             postBridgeJson(endpoint: ctx.bridgeUrl, hubToken: ctx.hubToken, body: body, timeout: 5.5) { resp in
@@ -639,7 +659,7 @@ final class GhostKeySharedClipboardStore {
                 }
                 for item in items.reversed() {
                     let pushId = (item["pushId"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    let cMs = (item["createdAtMs"] as? Double) ?? 0
+                    let cMs = (item["createdAtMs"] as? NSNumber)?.doubleValue ?? (item["createdAtMs"] as? Double) ?? 0
                     if cMs > lastPushSinceMs {
                         lastPushSinceMs = cMs
                     }

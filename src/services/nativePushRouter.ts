@@ -131,6 +131,15 @@ export async function initNativePushRouter(): Promise<void> {
           visibility: 1,
         });
       }
+      // Android 13+(API 33+) POST_NOTIFICATIONS 런타임 권한은 Firebase 유무와 무관하게 선행 확보
+      try {
+        const prePerm = await PushNotifications.checkPermissions();
+        if (prePerm.receive === 'prompt' || prePerm.receive === 'prompt-with-rationale') {
+          await PushNotifications.requestPermissions();
+        }
+      } catch {
+        /* MainActivity.requestPermissions 폴백 동작 */
+      }
       // [치명적 크래시 방어]: google-services.json 미탑재 빌드에서 PushNotifications.register() 호출 시
       // Android 네이티브 FirebaseMessaging.getInstance()가 IllegalStateException으로 앱을 즉시 강제종료하므로 사전 점검!
       let firebaseReady = false;
@@ -141,7 +150,7 @@ export async function initNativePushRouter(): Promise<void> {
         firebaseReady = false;
       }
       if (!firebaseReady) {
-        console.info('[Ghosti Push] Android google-services.json 미설정 — 로컬 알림 채널만 등록하고 FCM register 생략 (튕김 원천 차단)');
+        console.info('[Ghosti Push] Android google-services.json 미설정 — 로컬 알림 채널·권한만 확보하고 FCM register 생략 (튕김 원천 차단)');
         return;
       }
     }

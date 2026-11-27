@@ -2,24 +2,65 @@ import UIKit
 import UserNotifications
 import Capacitor
 
-/// Capacitor NotificationRouter가 delegate를 교체하더라도 GHOSTI_PC_CLIP 알림의
-/// [📋 복사] 버튼 등록·전면 배너 표시·1탭 클립보드 복사가 100% 작동하도록 보장하는 위임 프록시
+/// Capacitor 공식 NotificationRouter.localNotificationHandler와 직접 결합하여
+/// 앱이 전면(Foreground)이나 백그라운드 어느 상태에 있든 GHOSTI_PC_CLIP 로컬 알림 배너·사운드·[📋 복사] 액션을 100% 보장
+@objc(GhostiLocalClipNotificationHandler)
+public final class GhostiLocalClipNotificationHandler: NSObject, NotificationHandlerProtocol {
+    public static let shared = GhostiLocalClipNotificationHandler()
+
+    public func willPresent(notification: UNNotification) -> UNNotificationPresentationOptions {
+        if #available(iOS 14.0, *) {
+            return [.banner, .list, .sound]
+        } else {
+            return [.alert, .sound]
+        }
+    }
+
+    public func didReceive(response: UNNotificationResponse) {
+        let userInfo = response.notification.request.content.userInfo
+        guard let clipText = userInfo["ghosti_clip_text"] as? String, !clipText.isEmpty else {
+            return
+        }
+        let actId = response.actionIdentifier
+        if actId == AppDelegate.pcClipCopyActionIdentifier || actId == UNNotificationDefaultActionIdentifier {
+            DispatchQueue.main.async {
+                UIPasteboard.general.string = clipText
+                UserDefaults.standard.set(clipText, forKey: "ghosti_pending_push_copy_text")
+                if actId == UNNotificationDefaultActionIdentifier {
+                    AppDelegate.showFloatingCopiedToast()
+                }
+            }
+        }
+    }
+}
+
+/// Capacitor NotificationRouter가 교체되기 전·후 어떤 시점에도 GHOSTI_PC_CLIP 알림을 보호하는 메인 스레드 위임 프록시
 final class GhostiPcClipNotificationProxy: NSObject, UNUserNotificationCenterDelegate {
     static let shared = GhostiPcClipNotificationProxy()
     weak var fallbackDelegate: UNUserNotificationCenterDelegate?
+    private var categoryRegistered = false
 
-    func installIfNeeded() {
-        let center = UNUserNotificationCenter.current()
-        if let cur = center.delegate, !(cur is GhostiPcClipNotificationProxy) {
-            fallbackDelegate = cur
+    func installOnMain() {
+        let work = {
+            let center = UNUserNotificationCenter.current()
+            if let cur = center.delegate, !(cur is GhostiPcClipNotificationProxy) {
+                self.fallbackDelegate = cur
+            }
+            if !(center.delegate is GhostiPcClipNotificationProxy) {
+                center.delegate = self
+            }
+            self.registerPcClipCategorySyncIfNeeded()
         }
-        if !(center.delegate is GhostiPcClipNotificationProxy) {
-            center.delegate = self
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
         }
-        ensureCategoryMerged(completion: nil)
     }
 
-    func ensureCategoryMerged(completion: (() -> Void)?) {
+    func registerPcClipCategorySyncIfNeeded() {
+        guard !categoryRegistered else { return }
+        categoryRegistered = true
         let center = UNUserNotificationCenter.current()
         let copyAction = UNNotificationAction(
             identifier: AppDelegate.pcClipCopyActionIdentifier,
@@ -32,12 +73,7 @@ final class GhostiPcClipNotificationProxy: NSObject, UNUserNotificationCenterDel
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
-        center.getNotificationCategories { existing in
-            var updated = Set(existing.filter { $0.identifier != AppDelegate.pcClipCategoryIdentifier })
-            updated.insert(clipCat)
-            center.setNotificationCategories(updated)
-            completion?()
-        }
+        center.setNotificationCategories([clipCat])
     }
 
     func userNotificationCenter(
@@ -45,7 +81,8 @@ final class GhostiPcClipNotificationProxy: NSObject, UNUserNotificationCenterDel
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        if notification.request.content.categoryIdentifier == AppDelegate.pcClipCategoryIdentifier {
+        if notification.request.content.categoryIdentifier == AppDelegate.pcClipCategoryIdentifier
+            || notification.request.content.userInfo["ghosti_clip_text"] != nil {
             if #available(iOS 14.0, *) {
                 completionHandler([.banner, .list, .sound])
             } else {
@@ -107,7 +144,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        GhostiPcClipNotificationProxy.shared.installIfNeeded()
+        GhostiPcClipNotificationProxy.shared.installOnMain()
         return true
     }
 
@@ -116,10 +153,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         center.getNotificationSettings { settings in
             if settings.authorizationStatus == .notDetermined {
                 center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
-                    GhostiPcClipNotificationProxy.shared.installIfNeeded()
+                    GhostiPcClipNotificationProxy.shared.installOnMain()
                 }
             } else {
-                GhostiPcClipNotificationProxy.shared.installIfNeeded()
+                GhostiPcClipNotificationProxy.shared.installOnMain()
             }
         }
     }
@@ -131,12 +168,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             return
         }
 
-        GhostiPcClipNotificationProxy.shared.installIfNeeded()
-        GhostiPcClipNotificationProxy.shared.ensureCategoryMerged {
+        DispatchQueue.main.async {
+            GhostiPcClipNotificationProxy.shared.installOnMain()
             let content = UNMutableNotificationContent()
             let cleanSender = senderName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "내 PC" : senderName
             content.title = "📋 \(cleanSender)에서 보낸 클립보드"
-            content.subtitle = "한 번 터치하거나 아래로 당겨 [📋 복사]"
+            content.subtitle = "아래로 당겨 [📋 복사] 또는 배너 한 번 터치"
             let preview = trimmed.replacingOccurrences(of: "\n", with: " ")
             content.body = preview.count > 96 ? String(preview.prefix(96)) + "…" : preview
             content.sound = .default

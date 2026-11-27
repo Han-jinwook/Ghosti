@@ -22,7 +22,8 @@ class GhostiBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GhostiMobileCarePlugin())
-        GhostiPcClipNotificationProxy.shared.installIfNeeded()
+        bridge?.notificationRouter.localNotificationHandler = GhostiLocalClipNotificationHandler.shared
+        GhostiPcClipNotificationProxy.shared.installOnMain()
         view.backgroundColor = UIColor.white
         webView?.isOpaque = true
         webView?.backgroundColor = UIColor.white
@@ -194,6 +195,12 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "postLocalPcClipPushNotification", returnType: CAPPluginReturnPromise)
     ]
 
+    public override func load() {
+        super.load()
+        self.bridge?.notificationRouter.localNotificationHandler = GhostiLocalClipNotificationHandler.shared
+        GhostiPcClipNotificationProxy.shared.installOnMain()
+    }
+
     @objc func postLocalPcClipPushNotification(_ call: CAPPluginCall) {
         let pushId = call.getString("pushId") ?? ""
         let text = (call.getString("text") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -342,6 +349,9 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             bridgeUrl: bridgeUrl
         )
         AppDelegate.ensureNotificationPermissionIfNeeded()
+        GhostKeySharedClipboardStore.pullPhonePushInboxOnce { pushId, plain, sender in
+            AppDelegate.scheduleLocalPcClipNotification(pushId: pushId, plainText: plain, senderName: sender)
+        }
         call.resolve(["ok": true])
     }
 
@@ -1740,6 +1750,28 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var bgPushTaskId: UIBackgroundTaskIdentifier = .invalid
     private var bgPushTimer: DispatchSourceTimer?
+    private var fgPushTimer: DispatchSourceTimer?
+
+    private func stopForegroundPushWatch() {
+        fgPushTimer?.cancel()
+        fgPushTimer = nil
+    }
+
+    private func startForegroundPushWatch() {
+        stopForegroundPushWatch()
+        GhostKeySharedClipboardStore.pullPhonePushInboxOnce { pushId, plain, sender in
+            AppDelegate.scheduleLocalPcClipNotification(pushId: pushId, plainText: plain, senderName: sender)
+        }
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + 1.6, repeating: .milliseconds(1800))
+        timer.setEventHandler {
+            GhostKeySharedClipboardStore.pullPhonePushInboxOnce { pushId, plain, sender in
+                AppDelegate.scheduleLocalPcClipNotification(pushId: pushId, plainText: plain, senderName: sender)
+            }
+        }
+        fgPushTimer = timer
+        timer.resume()
+    }
 
     private func stopBackgroundPushWatch() {
         bgPushTimer?.cancel()
@@ -1756,7 +1788,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             self?.stopBackgroundPushWatch()
         }
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-        timer.schedule(deadline: .now() + 0.8, repeating: .milliseconds(1600))
+        timer.schedule(deadline: .now() + 0.6, repeating: .milliseconds(1400))
         timer.setEventHandler {
             GhostKeySharedClipboardStore.pullPhonePushInboxOnce { pushId, plain, sender in
                 AppDelegate.scheduleLocalPcClipNotification(pushId: pushId, plainText: plain, senderName: sender)
@@ -1804,7 +1836,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         stopBackgroundPushWatch()
+        startForegroundPushWatch()
         DispatchQueue.main.async { [weak self] in
+            GhostiPcClipNotificationProxy.shared.installOnMain()
+            if let bridgeVC = self?.window?.rootViewController as? GhostiBridgeViewController {
+                bridgeVC.bridge?.notificationRouter.localNotificationHandler = GhostiLocalClipNotificationHandler.shared
+            }
             if let pendingCopy = UserDefaults.standard.string(forKey: "ghosti_pending_push_copy_text"),
                !pendingCopy.isEmpty {
                 UIPasteboard.general.string = pendingCopy
@@ -1817,6 +1854,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        stopForegroundPushWatch()
         startBackgroundPushWatch()
     }
 

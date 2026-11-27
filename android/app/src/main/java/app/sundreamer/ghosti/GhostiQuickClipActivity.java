@@ -29,7 +29,8 @@ public class GhostiQuickClipActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         overridePendingTransition(0, 0);
         super.onCreate(savedInstanceState);
-        GhostiNativeClipboardSync.startPhonePushInboxWatcher(getApplicationContext());
+        GhostiNativeClipboardSync.ensurePhonePushWatcherAlive(getApplicationContext());
+        GhostiNativeClipboardSync.checkPhonePushInboxNow(getApplicationContext());
         handleQuickShareIntent(getIntent());
     }
 

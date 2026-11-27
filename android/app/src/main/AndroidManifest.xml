@@ -93,6 +93,21 @@
             android:taskAffinity=""
             android:exported="false" />
 
+        <receiver
+            android:name=".GhostiBridgeUpdateReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".GhostiPushKeepAliveJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -116,8 +131,9 @@
     <!-- [Ghosti] 음성 AI 내용검색 (말로 사진 찾기) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- [Ghosti] 패밀리 공용 푸시 알림 (Android 13+) -->
+    <!-- [Ghosti] 패밀리 공용 푸시 알림 (Android 13+) 및 스토어 업데이트/재부팅 자동 복구 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- [Ghosti 귀신비서] 유료결제 유도(Fleeceware)·광고폭탄 클리너/부스터 합법 타겟 스캔 (<queries>) -->
     <queries>

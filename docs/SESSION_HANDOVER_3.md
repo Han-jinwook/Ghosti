@@ -1,12 +1,15 @@
 ﻿# 🟠 `[3귀신]` 세션 인계장 (`SESSION_HANDOVER_3.md` — 사진 공유 · 내 기기 통합 · 모바일 앱)
 
-- **최종 갱신 일시**: 2026-11-27 12:15 (KST)
+- **최종 갱신 일시**: 2026-11-27 14:00 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정 · 3·4귀신 테스터는 해나라님이 아닌 달나라님으로 호칭)
-- **최신 배포 버전**: **`Merlin Z-Core v2.12.9`** · 양대 스토어 **`v1.0.126 (126)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
-- **세션 창 제목**: `3귀신 모바일푸시·v1.0.126`
+- **최신 배포 버전**: **`Merlin Z-Core v2.12.9`** · 양대 스토어 **`v1.0.127 (127)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
+- **세션 창 제목**: `3귀신 모바일푸시·v1.0.127`
 
 ## 완료 내역 (2026-11-25 ~ 11-27)
+1. **PC ➔ 폰 `[📱 폰으로 보내기]` 아이폰·안드로이드 푸시 알림 미표시 근본 해결 (`v1.0.127 (127)` 양대 스토어 동시 출시, 카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`) (2026-11-27)**
+   - **근본 원인 4중 해부**: ① PC `sendClipToPhonePush`가 활성 `activePairChannel` WebSocket으로 `PC_TO_PHONE_CLIP_PUSH`를 직접 보내지 않고 서버 REST 브로드캐스트에만 의존해 실시간 전파가 누락됨, ② 모바일 `deviceIntegrationService.ts`(부팅·포그라운드·복귀) 및 iOS `SceneDelegate.sceneDidBecomeActive`가 `device_pull_phone_push_inbox`를 전혀 조회하지 않고 백그라운드 타이머만 정지시켜 앱 활성 중에도 알림이 뜨지 않음, ③ iOS `AppDelegate.swift`에서 비동기 `getNotificationCategories` 경합 및 `CAPNotificationRouter.localNotificationHandler` 미연결로 전면 배너가 무음 소거됨, ④ Android에서 스토어 업데이트 직후(`MY_PACKAGE_REPLACED`) 프로세스 미기동·화면 꺼짐/캐시 정지 후 워처 미복구 및 `nativePushRouter.ts`의 비-Firebase 환경 `POST_NOTIFICATIONS` 권한 요청 생략이 겹침.
+   - **정공법 해결**: ① PC `sendClipToPhonePush`에서 서버 `pushId` 발급 즉시 `activePairChannel` WebSocket으로 35ms 직통 브로드캐스트 병행 + 모바일 부팅·복귀·가시 타이머에서 `pullPendingPhonePushInboxToMobile`(10분 캐치업, `pushId` 멱등 중복 제거) 상시 동기화, ② iOS `GhostiLocalClipNotificationHandler`(`CAPNotificationRouter.localNotificationHandler` 직결) + 메인 스레드 동기 카테고리 등록 + 포그라운드·백그라운드 듀얼 워처 가동, ③ Android `GhostiBridgeUpdateReceiver`(`MY_PACKAGE_REPLACED`·`BOOT_COMPLETED` 즉시 기동) + `GhostiPushKeepAliveJobService` 자가 치유 + 화면 켜짐(`ACTION_SCREEN_ON`/`USER_PRESENT`) 0ms 즉시 수신 + `nativePushRouter.ts` `POST_NOTIFICATIONS` 선행 권한 확보 완결.
 1. **무료 `[3. 사진 공유]` 전 영역 업무 문서 드래그 차단 및 `[사내 공용 폴더(S:)로 바로 이동]` 안내 배너 전역 바인딩 (카드 `425f9ffd-2c1d-8127-aa44-f3869b6302b0` `'재테스트 대기'`) (2026-11-27)**
    - **원인**: 기존 드래그앤드롭 핸들러가 `[정리 대기실]`(`LoungeIndexingWaitingRoom.tsx`)에만 걸려 있어, 기본 `[사진 공유]` 앨범 메인(`GhostSearchPane.tsx`)·`[방 관리]`·여백에 엑셀·PDF·한글 파일을 놓으면 브라우저 기본 동작(파일 다운로드/열기)이 발화되던 누락 규명.
    - **해결**: 사진 공유 전 화면 상시 마운트 컴포넌트인 `FreePhotoShareOverlays.tsx`에 캡처 단계 `window` `dragover`/`drop` 전역 가드를 구축하여 비사진·비영상 업무 문서 드래그 시 브라우저 다운로드·업로드를 100% 차단하고 최상단 `[사내 공용 폴더(S:)로 바로 이동]` 안내 배너를 즉시 표출하도록 완결.

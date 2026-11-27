@@ -4,8 +4,10 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
@@ -50,10 +52,15 @@ public final class GhostiNativeClipboardSync {
         "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge";
 
     private static final ExecutorService IO_EXECUTOR = Executors.newSingleThreadExecutor();
+    private static final ExecutorService PUSH_PULL_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final ConcurrentHashMap<String, SecretKey> KEY_CACHE = new ConcurrentHashMap<>();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static volatile long sLastPullAtMs = 0L;
-    private static volatile boolean sPushWatcherStarted = false;
+    private static volatile long sPushInboxSinceMs = System.currentTimeMillis() - 10 * 60_000L;
+    private static volatile long sLastWatcherHeartbeatMs = 0L;
+    private static volatile Thread sActiveWatcherThread = null;
+    private static volatile boolean sScreenReceiverRegistered = false;
+    private static final Set<String> MEMORY_SEEN_PUSH_IDS = new HashSet<>();
 
     private GhostiNativeClipboardSync() {}
 
@@ -98,7 +105,10 @@ public final class GhostiNativeClipboardSync {
                 }
             });
         }
-        startPhonePushInboxWatcher(ctx.getApplicationContext());
+        Context appCtx = ctx.getApplicationContext();
+        ensurePhonePushWatcherAlive(appCtx);
+        checkPhonePushInboxNow(appCtx);
+        GhostiPushKeepAliveJobService.scheduleNext(appCtx, 15_000L);
     }
 
     private static SecretKey deriveAesKey(String normEmail, String normUid) throws Exception {
@@ -237,108 +247,176 @@ public final class GhostiNativeClipboardSync {
         }
     }
 
+    private static synchronized void registerScreenWakeReceiverIfNeeded(Context appCtx) {
+        if (appCtx == null || sScreenReceiverRegistered) return;
+        sScreenReceiverRegistered = true;
+        try {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_SCREEN_ON);
+            filter.addAction(Intent.ACTION_USER_PRESENT);
+            BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (context == null) return;
+                    ensurePhonePushWatcherAlive(context.getApplicationContext());
+                    checkPhonePushInboxNow(context.getApplicationContext());
+                }
+            };
+            if (Build.VERSION.SDK_INT >= 33) {
+                appCtx.registerReceiver(wakeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                appCtx.registerReceiver(wakeReceiver, filter);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static void startPhonePushInboxWatcher(Context ctx) {
+        ensurePhonePushWatcherAlive(ctx);
+    }
+
     /**
      * PC에서 [📱 폰으로 보내기] 클릭 시 도착한 선택 전송 패킷을 감지하여 상단 알림바에 [📋 복사] 버튼 알림 1건을 띄웁니다.
-     * - 화면이 꺼져 있을 때는 0% 대기하여 배터리를 전혀 소모하지 않고, 화면이 켜져 있을 때만 경량 수신합니다.
+     * - 캐시 프리저/프로세스 회수 이후에도 하트비트 기반으로 워처 스레드를 자동 복구하며, 화면 켜짐 시 즉시 확인합니다.
      */
-    public static synchronized void startPhonePushInboxWatcher(Context ctx) {
-        if (ctx == null || sPushWatcherStarted) return;
-        sPushWatcherStarted = true;
+    public static synchronized void ensurePhonePushWatcherAlive(Context ctx) {
+        if (ctx == null) return;
         final Context appCtx = ctx.getApplicationContext();
         ensurePcClipPushChannel(appCtx);
+        registerScreenWakeReceiverIfNeeded(appCtx);
 
+        long now = System.currentTimeMillis();
+        Thread existing = sActiveWatcherThread;
+        if (existing != null && existing.isAlive() && (now - sLastWatcherHeartbeatMs) < 12_000L) {
+            return;
+        }
+
+        sLastWatcherHeartbeatMs = now;
         Thread watcher = new Thread(() -> {
-            long sinceMs = System.currentTimeMillis() - 30_000L;
-            while (true) {
+            while (!Thread.currentThread().isInterrupted()) {
+                sLastWatcherHeartbeatMs = System.currentTimeMillis();
                 try {
                     PowerManager pm = (PowerManager) appCtx.getSystemService(Context.POWER_SERVICE);
                     boolean screenOn = (pm == null) || pm.isInteractive();
                     if (!screenOn) {
-                        Thread.sleep(4500L);
+                        Thread.sleep(4000L);
                         continue;
                     }
-                    SharedPreferences authPrefs = appCtx.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
-                    String email = authPrefs.getString("email", "");
-                    String uid = authPrefs.getString("canonicalUserId", "");
-                    String hubToken = authPrefs.getString("hubToken", "");
-                    String devId = authPrefs.getString("deviceId", "");
-                    String endpoint = authPrefs.getString("bridgeUrl", DEFAULT_BRIDGE_URL);
-                    if (email.isEmpty() || hubToken.isEmpty()) {
-                        Thread.sleep(3500L);
-                        continue;
-                    }
-
-                    JSONObject req = new JSONObject();
-                    req.put("action", "device_pull_phone_push_inbox");
-                    req.put("sinceMs", sinceMs);
-                    req.put("callerDeviceId", devId);
-                    JSONObject resp = postBridgeJson(endpoint, hubToken, req, 6500);
-                    if (resp != null && resp.optBoolean("ok", false)) {
-                        String srvUid = resp.optString("canonicalUserId", "").trim();
-                        String prevUid = uid;
-                        if (!srvUid.isEmpty() && !srvUid.equals(uid)) {
-                            authPrefs.edit().putString("canonicalUserId", srvUid).apply();
-                            uid = srvUid;
-                        }
-                        JSONArray items = resp.optJSONArray("items");
-                        if (items != null && items.length() > 0 && !uid.isEmpty()) {
-                            SecretKey primaryKey = deriveAesKey(email, uid);
-                            SecretKey fallbackKey = (!prevUid.isEmpty() && !prevUid.equals(uid))
-                                ? deriveAesKey(email, prevUid)
-                                : null;
-                            for (int i = items.length() - 1; i >= 0; i--) {
-                                JSONObject it = items.optJSONObject(i);
-                                if (it == null) continue;
-                                String pushId = it.optString("pushId", "").trim();
-                                long createdAtMs = it.optLong("createdAtMs", 0L);
-                                if (createdAtMs > sinceMs) sinceMs = createdAtMs;
-                                if (pushId.isEmpty() || isPushIdAlreadyNotified(appCtx, pushId)) continue;
-
-                                String cB64 = it.optString("cipherB64", "");
-                                String ivB64 = it.optString("ivB64", "");
-                                String plain = tryDecrypt(primaryKey, cB64, ivB64);
-                                if (plain == null && fallbackKey != null) {
-                                    plain = tryDecrypt(fallbackKey, cB64, ivB64);
-                                }
-                                if (plain != null && !plain.trim().isEmpty()) {
-                                    postOneTapCopyNotification(
-                                        appCtx,
-                                        pushId,
-                                        plain.trim(),
-                                        it.optString("senderName", "내 PC")
-                                    );
-                                }
-                            }
-                        }
-                    }
+                    checkPhonePushInboxSync(appCtx);
+                } catch (InterruptedException ie) {
+                    break;
                 } catch (Throwable ignored) {
                 }
                 try {
-                    Thread.sleep(1500L);
+                    Thread.sleep(1400L);
                 } catch (InterruptedException ie) {
                     break;
                 }
             }
         }, "ghosti-phone-push-watcher");
         watcher.setDaemon(true);
+        sActiveWatcherThread = watcher;
         watcher.start();
+    }
+
+    public static void checkPhonePushInboxNow(Context ctx) {
+        if (ctx == null) return;
+        final Context appCtx = ctx.getApplicationContext();
+        PUSH_PULL_EXECUTOR.execute(() -> checkPhonePushInboxSync(appCtx));
+    }
+
+    public static void checkPhonePushInboxSync(Context appCtx) {
+        if (appCtx == null) return;
+        try {
+            SharedPreferences authPrefs = appCtx.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
+            String email = authPrefs.getString("email", "");
+            String uid = authPrefs.getString("canonicalUserId", "");
+            String hubToken = authPrefs.getString("hubToken", "");
+            String devId = authPrefs.getString("deviceId", "");
+            String endpoint = authPrefs.getString("bridgeUrl", DEFAULT_BRIDGE_URL);
+            if (email.isEmpty() || hubToken.isEmpty()) {
+                return;
+            }
+            long windowFloor = System.currentTimeMillis() - 10 * 60_000L;
+            long querySince = Math.max(windowFloor, sPushInboxSinceMs - 2000L);
+
+            JSONObject req = new JSONObject();
+            req.put("action", "device_pull_phone_push_inbox");
+            req.put("sinceMs", querySince);
+            req.put("callerDeviceId", devId);
+            JSONObject resp = postBridgeJson(endpoint, hubToken, req, 6000);
+            if (resp == null || !resp.optBoolean("ok", false)) {
+                return;
+            }
+            String srvUid = resp.optString("canonicalUserId", "").trim();
+            String prevUid = uid;
+            if (!srvUid.isEmpty() && !srvUid.equals(uid)) {
+                authPrefs.edit().putString("canonicalUserId", srvUid).apply();
+                uid = srvUid;
+            }
+            JSONArray items = resp.optJSONArray("items");
+            if (items == null || items.length() == 0 || uid.isEmpty()) {
+                return;
+            }
+            SecretKey primaryKey = deriveAesKey(email, uid);
+            SecretKey fallbackKey = (!prevUid.isEmpty() && !prevUid.equals(uid))
+                ? deriveAesKey(email, prevUid)
+                : null;
+            for (int i = items.length() - 1; i >= 0; i--) {
+                JSONObject it = items.optJSONObject(i);
+                if (it == null) continue;
+                String pushId = it.optString("pushId", "").trim();
+                long createdAtMs = it.optLong("createdAtMs", 0L);
+                if (createdAtMs > sPushInboxSinceMs) {
+                    sPushInboxSinceMs = createdAtMs;
+                }
+                if (pushId.isEmpty() || isPushIdAlreadyNotified(appCtx, pushId)) continue;
+
+                String cB64 = it.optString("cipherB64", "");
+                String ivB64 = it.optString("ivB64", "");
+                String plain = tryDecrypt(primaryKey, cB64, ivB64);
+                if (plain == null && fallbackKey != null) {
+                    plain = tryDecrypt(fallbackKey, cB64, ivB64);
+                }
+                if (plain != null && !plain.trim().isEmpty()) {
+                    postOneTapCopyNotification(
+                        appCtx,
+                        pushId,
+                        plain.trim(),
+                        it.optString("senderName", "내 PC")
+                    );
+                }
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private static synchronized boolean isPushIdAlreadyNotified(Context appCtx, String pushId) {
         if (appCtx == null || pushId == null || pushId.trim().isEmpty()) return false;
+        String cleanId = pushId.trim();
+        if (MEMORY_SEEN_PUSH_IDS.contains(cleanId)) return true;
         SharedPreferences stPrefs = appCtx.getSharedPreferences(PUSH_STATE_PREFS, Context.MODE_PRIVATE);
         Set<String> seenSet = stPrefs.getStringSet("seen_ids", null);
-        return seenSet != null && seenSet.contains(pushId.trim());
+        if (seenSet != null && seenSet.contains(cleanId)) {
+            MEMORY_SEEN_PUSH_IDS.add(cleanId);
+            return true;
+        }
+        return false;
     }
 
     private static synchronized boolean markPushIdNotified(Context appCtx, String pushId) {
         if (appCtx == null || pushId == null || pushId.trim().isEmpty()) return true;
         String cleanId = pushId.trim();
+        if (MEMORY_SEEN_PUSH_IDS.contains(cleanId)) {
+            return false;
+        }
         SharedPreferences stPrefs = appCtx.getSharedPreferences(PUSH_STATE_PREFS, Context.MODE_PRIVATE);
         Set<String> seenSet = new HashSet<>(stPrefs.getStringSet("seen_ids", new HashSet<>()));
         if (seenSet.contains(cleanId)) {
+            MEMORY_SEEN_PUSH_IDS.add(cleanId);
             return false;
         }
+        MEMORY_SEEN_PUSH_IDS.add(cleanId);
         seenSet.add(cleanId);
         if (seenSet.size() > 80) {
             Set<String> trimmed = new HashSet<>();
@@ -347,9 +425,10 @@ public final class GhostiNativeClipboardSync {
                 trimmed.add(id);
                 if (++k >= 50) break;
             }
+            trimmed.add(cleanId);
             seenSet = trimmed;
         }
-        stPrefs.edit().putStringSet("seen_ids", seenSet).apply();
+        stPrefs.edit().putStringSet("seen_ids", seenSet).commit();
         return true;
     }
 

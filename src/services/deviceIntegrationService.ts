@@ -873,7 +873,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.124',
+    appVersion: '1.0.127',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
@@ -1504,6 +1504,59 @@ let pendingClipBroadcastPacket: {
   senderName: string;
   createdAt: string;
 } | null = null;
+let pendingPhonePushBroadcastPacket: {
+  pushId: string;
+  clipHash: string;
+  cipherB64: string;
+  ivB64: string;
+  senderDeviceId: string;
+  senderName: string;
+  createdAt: string;
+  createdAtMs: number;
+} | null = null;
+const SEEN_PHONE_PUSH_IDS_PREFIX = 'ghosti_seen_phone_push_ids_web_v1::';
+const deliveredPhonePushIdsMemory = new Set<string>();
+
+function hasPhonePushIdBeenDelivered(pushId: string, email?: string): boolean {
+  const clean = (pushId || '').trim();
+  if (!clean) return false;
+  if (deliveredPhonePushIdsMemory.has(clean)) return true;
+  if (typeof window === 'undefined') return false;
+  const normEmail = (email || '').trim().toLowerCase();
+  if (!normEmail) return false;
+  try {
+    const raw = localStorage.getItem(`${SEEN_PHONE_PUSH_IDS_PREFIX}${normEmail}`);
+    if (!raw) return false;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr) && arr.includes(clean)) {
+      deliveredPhonePushIdsMemory.add(clean);
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function rememberDeliveredPhonePushId(pushId: string, email?: string): void {
+  const clean = (pushId || '').trim();
+  if (!clean) return;
+  deliveredPhonePushIdsMemory.add(clean);
+  if (typeof window === 'undefined') return;
+  const normEmail = (email || '').trim().toLowerCase();
+  if (!normEmail) return;
+  try {
+    const key = `${SEEN_PHONE_PUSH_IDS_PREFIX}${normEmail}`;
+    const prevRaw = localStorage.getItem(key);
+    const prevArr = prevRaw ? JSON.parse(prevRaw) : [];
+    const merged = Array.from(
+      new Set([...(Array.isArray(prevArr) ? prevArr.filter((x) => typeof x === 'string') : []), clean])
+    ).slice(-60);
+    localStorage.setItem(key, JSON.stringify(merged));
+  } catch {
+    /* ignore */
+  }
+}
 
 function saveLastSyncedOsClipHash(hash: string, email?: string): void {
   if (!hash || typeof window === 'undefined') return;
@@ -1911,12 +1964,42 @@ export async function sendClipToPhonePush(opts: {
   if (res.canonicalUserId) {
     saveCanonicalE2eeUid(normEmail, res.canonicalUserId);
   }
+  const effectivePushId = String(res.pushId || `pp_${Date.now()}`);
+  const effectiveCreatedAt = res.createdAt || nowIso;
+  const directPushPacket = {
+    pushId: effectivePushId,
+    clipHash: encrypted.clipHash,
+    cipherB64: encrypted.cipherB64,
+    ivB64: encrypted.ivB64,
+    senderDeviceId: ident.deviceId,
+    senderName: ident.displayName,
+    createdAt: effectiveCreatedAt,
+    createdAtMs: Date.parse(effectiveCreatedAt) || Date.now(),
+  };
+
+  // PC에서 이미 열려 있는 Supabase Realtime WebSocket으로도 35ms 내 직통 브로드캐스트 병행 (서버 우체통 pushId와 100% 동일하여 중복 알림 0건)
+  if (isRealtimeChannelActuallyHealthy() && activePairChannel) {
+    void activePairChannel
+      .send({
+        type: 'broadcast',
+        event: 'PC_TO_PHONE_CLIP_PUSH',
+        payload: directPushPacket,
+      })
+      .catch(() => {
+        pendingPhonePushBroadcastPacket = directPushPacket;
+        activePairReconnectTrigger?.();
+      });
+  } else {
+    pendingPhonePushBroadcastPacket = directPushPacket;
+    activePairReconnectTrigger?.();
+  }
+
   const item: GhostiSyncedClipItem = {
     clipHash: encrypted.clipHash,
     text: cleanText,
     senderDeviceId: ident.deviceId,
     senderName: `${ident.displayName} (폰 전송)`,
-    createdAt: res.createdAt || nowIso,
+    createdAt: effectiveCreatedAt,
     encryptedE2ee: true,
   };
   const nextList = pruneSyncedClipsToSevenDays([
@@ -1924,7 +2007,68 @@ export async function sendClipToPhonePush(opts: {
     ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== item.clipHash),
   ]);
   saveCachedSyncedClips(nextList, normEmail);
-  return { ok: true, pushId: res.pushId, item };
+  return { ok: true, pushId: effectivePushId, item };
+}
+
+let inflightPhonePushInboxPull = false;
+
+export async function pullPendingPhonePushInboxToMobile(opts: {
+  email: string;
+  userId: string;
+}): Promise<void> {
+  if (!isCapacitorNativeMobileRuntime() || inflightPhonePushInboxPull || thisDeviceRevokedLocally) {
+    return;
+  }
+  const normEmail = (opts.email || '').trim().toLowerCase();
+  if (!normEmail || !opts.userId || !hasAuthenticatedHubAccountSession()) return;
+  const ident = getThisDeviceIdentity(normEmail);
+  if (ident.deviceKind !== 'mobile') return;
+
+  inflightPhonePushInboxPull = true;
+  try {
+    const res = await callGhostiServerBridge<{
+      canonicalUserId?: string;
+      items?: Array<{
+        pushId: string;
+        cipherB64: string;
+        ivB64: string;
+        senderDeviceId?: string;
+        senderName?: string;
+        createdAtMs?: number;
+      }>;
+    }>('device_pull_phone_push_inbox', {
+      sinceMs: Date.now() - 10 * 60 * 1000,
+      callerDeviceId: ident.deviceId,
+    });
+    if (!res.ok || !Array.isArray(res.items) || res.items.length === 0) return;
+    if (res.canonicalUserId) {
+      saveCanonicalE2eeUid(normEmail, res.canonicalUserId);
+    }
+    const extraUids = res.canonicalUserId ? [res.canonicalUserId] : undefined;
+    for (const entry of [...res.items].reverse()) {
+      const pushId = String(entry?.pushId || '').trim();
+      if (!pushId || hasPhonePushIdBeenDelivered(pushId, normEmail)) continue;
+      if (entry.senderDeviceId && entry.senderDeviceId === ident.deviceId) continue;
+      const plain = await decryptClipboardE2ee(
+        String(entry.cipherB64 || ''),
+        String(entry.ivB64 || ''),
+        normEmail,
+        opts.userId,
+        extraUids
+      );
+      if (!plain || !plain.trim()) continue;
+      rememberDeliveredPhonePushId(pushId, normEmail);
+      await triggerNativePcClipPushNotification(
+        pushId,
+        plain.trim(),
+        String(entry.senderName || '내 PC')
+      );
+    }
+  } catch {
+    /* native poller also handles fallback */
+  } finally {
+    inflightPhonePushInboxPull = false;
+  }
 }
 
 export async function pullDelayedE2eeClipboardMailbox(opts: {
@@ -3613,9 +3757,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         .on('broadcast', { event: 'PC_TO_PHONE_CLIP_PUSH' }, async ({ payload }) => {
           if (disposed || thisDeviceRevokedLocally || !payload?.cipherB64 || !payload?.ivB64) return;
           if (ident.deviceKind !== 'mobile') return;
-          if (!isCurrentAccountSyncUnlocked(normEmail)) return;
           const senderId = String(payload.senderDeviceId || '');
           if (senderId && senderId === ident.deviceId) return;
+          const pushId = String(payload.pushId || '').trim();
+          if (pushId && hasPhonePushIdBeenDelivered(pushId, normEmail)) return;
           const cachedUid = loadCanonicalE2eeUid(normEmail);
           const plain = await decryptClipboardE2ee(
             String(payload.cipherB64),
@@ -3625,7 +3770,9 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             cachedUid ? [cachedUid] : undefined
           );
           if (!plain || !plain.trim()) return;
-          const pushId = String(payload.pushId || '');
+          if (pushId) {
+            rememberDeliveredPhonePushId(pushId, normEmail);
+          }
           const senderName = String(payload.senderName || '내 PC');
           await triggerNativePcClipPushNotification(pushId, plain.trim(), senderName);
         })
@@ -3738,6 +3885,15 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
                 type: 'broadcast',
                 event: 'E2EE_CLIPBOARD_PUSH',
                 payload: clipPkt,
+              });
+            }
+            if (pendingPhonePushBroadcastPacket) {
+              const phonePkt = pendingPhonePushBroadcastPacket;
+              pendingPhonePushBroadcastPacket = null;
+              void ch.send({
+                type: 'broadcast',
+                event: 'PC_TO_PHONE_CLIP_PUSH',
+                payload: phonePkt,
               });
             }
             if (pendingTeleportPacket) {
@@ -3919,6 +4075,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (!isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) return;
     void flushPendingNativeMobileClips();
+    void pullPendingPhonePushInboxToMobile({ email: normEmail, userId: opts.userId });
     if (alsoSyncRemoteAfter) {
       void syncRemoteMailboxToUi(false);
     }
@@ -4100,6 +4257,9 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     const [hb] = await Promise.all([
       pairedViaUrl ? Promise.resolve(null) : syncDeviceHeartbeatAndList(),
       syncRemoteMailboxToUi(shouldInjectOnMailboxPull),
+      ident.deviceKind === 'mobile'
+        ? pullPendingPhonePushInboxToMobile({ email: normEmail, userId: opts.userId })
+        : Promise.resolve(),
       realtimePromise,
     ]);
 
@@ -4253,6 +4413,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         if (!isRealtimeChannelActuallyHealthy()) {
           void setupRealtimeChannel(true);
         }
+        void pullPendingPhonePushInboxToMobile({ email: normEmail, userId: opts.userId });
         if (mailboxTickCounter % 2 === 0) {
           void syncRemoteMailboxToUi(false);
         }

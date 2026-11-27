@@ -82,7 +82,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GhostiMobileCarePlugin.class);
         super.onCreate(savedInstanceState);
         GhostiNativeClipboardSync.ensurePcClipPushChannel(getApplicationContext());
-        GhostiNativeClipboardSync.startPhonePushInboxWatcher(getApplicationContext());
+        GhostiNativeClipboardSync.ensurePhonePushWatcherAlive(getApplicationContext());
+        GhostiNativeClipboardSync.checkPhonePushInboxNow(getApplicationContext());
+        GhostiPushKeepAliveJobService.scheduleNext(getApplicationContext(), 15_000L);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
                 != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -237,6 +239,8 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onResume() {
         super.onResume();
+        GhostiNativeClipboardSync.ensurePhonePushWatcherAlive(getApplicationContext());
+        GhostiNativeClipboardSync.checkPhonePushInboxNow(getApplicationContext());
         notifyWebViewAppResumed(hasWindowFocus());
     }
 
@@ -244,6 +248,7 @@ public class MainActivity extends BridgeActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
+            GhostiNativeClipboardSync.checkPhonePushInboxNow(getApplicationContext());
             notifyWebViewAppResumed(true);
         }
     }

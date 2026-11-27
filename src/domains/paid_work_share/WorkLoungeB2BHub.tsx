@@ -75,14 +75,46 @@ import { WorkLoungeBillingGateBanner } from './WorkLoungeBillingGateBanner';
 import { WorkLoungeHostAdminPanels } from './WorkLoungeHostAdminPanels';
 import { WorkLoungeDocListAndSidePeek } from './WorkLoungeDocListAndSidePeek';
 
-const WORK_LOUNGE_FOLDERS = [
-  { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 0, path: 'S:\\' },
-  { id: 'root', name: 'S:\\ 루트 (최상단 파일)', count: 0, path: 'S:\\' },
-  { id: 'contracts', name: '01_계약서_법무문서', count: 0, path: 'S:\\01_계약서_법무문서' },
-  { id: 'quotes', name: '02_견적서_엑셀문서', count: 0, path: 'S:\\02_견적서_엑셀문서' },
-  { id: 'tax', name: '03_세금계산서_회계증빙', count: 0, path: 'S:\\03_세금계산서_회계증빙' },
-  { id: 'site', name: '04_현장시공_도면_미디어', count: 0, path: 'S:\\04_현장시공_도면_미디어' },
-];
+const DEFAULT_WORK_SUBFOLDERS = [
+  { id: 'contracts', name: '01_계약서_법무문서', path: 'S:\\01_계약서_법무문서' },
+  { id: 'quotes', name: '02_견적서_엑셀문서', path: 'S:\\02_견적서_엑셀문서' },
+  { id: 'tax', name: '03_세금계산서_회계증빙', path: 'S:\\03_세금계산서_회계증빙' },
+  { id: 'site', name: '04_현장시공_도면_미디어', path: 'S:\\04_현장시공_도면_미디어' },
+] as const;
+
+interface WorkFolderFilterItem {
+  id: string;
+  name: string;
+  count: number;
+  path: string;
+}
+
+function resolveWorkDocFolderBucket(doc: WorkLoungeDocDto): {
+  id: string;
+  name: string;
+  path: string;
+} {
+  const normRel = (doc.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  const slashIdx = normRel.indexOf('/');
+  if (slashIdx <= 0) {
+    return { id: 'root', name: 'S:\\ 최상단', path: 'S:\\' };
+  }
+  const topDir = normRel.slice(0, slashIdx).trim();
+  if (!topDir || topDir === '.') {
+    return { id: 'root', name: 'S:\\ 최상단', path: 'S:\\' };
+  }
+  const matchedDefault = DEFAULT_WORK_SUBFOLDERS.find(
+    (sf) => topDir === sf.name || doc.folderId === sf.id
+  );
+  if (matchedDefault) {
+    return { id: matchedDefault.id, name: matchedDefault.name, path: matchedDefault.path };
+  }
+  return {
+    id: `dir:${topDir}`,
+    name: topDir,
+    path: `S:\\${topDir}`,
+  };
+}
 
 function areWorkServerMembersEqual(
   a: WorkRoomServerMemberDto[],
@@ -2253,22 +2285,76 @@ export const WorkLoungeB2BHub: React.FC = () => {
     actorNickname,
   ]);
 
-  const folderCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      all: docs.length,
-      root: 0,
-      contracts: 0,
-      quotes: 0,
-      tax: 0,
-      site: 0,
-    };
+  const isUsingCustomOrMirrorFolder = useMemo(() => {
+    if (isJoinedInvitedMember || !isZCoreConnected) return true;
+    const norm = (driveTargetPath || '').replace(/\//g, '\\').trim();
+    if (!norm) return false;
+    return !norm.includes('업무공유폴더_S');
+  }, [driveTargetPath, isJoinedInvitedMember, isZCoreConnected]);
+
+  const dynamicWorkFolders = useMemo<WorkFolderFilterItem[]>(() => {
+    const bucketMap = new Map<string, WorkFolderFilterItem>();
+    let rootCount = 0;
     for (const d of docs) {
-      if (counts[d.folderId] !== undefined) {
-        counts[d.folderId] += 1;
+      const b = resolveWorkDocFolderBucket(d);
+      if (b.id === 'root') {
+        rootCount += 1;
+        continue;
+      }
+      const existing = bucketMap.get(b.id);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        bucketMap.set(b.id, { id: b.id, name: b.name, count: 1, path: b.path });
       }
     }
-    return counts;
-  }, [docs]);
+
+    const out: WorkFolderFilterItem[] = [
+      { id: 'all', name: '전체 폴더', count: docs.length, path: 'S:\\' },
+    ];
+
+    if (rootCount > 0 || !isUsingCustomOrMirrorFolder) {
+      if (!isMobileOrStore || rootCount > 0) {
+        out.push({ id: 'root', name: 'S:\\ 최상단', count: rootCount, path: 'S:\\' });
+      }
+    }
+
+    if (!isUsingCustomOrMirrorFolder) {
+      // 기본 내장 폴더(업무공유폴더_S)일 때만 기본 4대 서브폴더를 노출 (모바일은 파일 있는 폴더만 노출)
+      for (const sf of DEFAULT_WORK_SUBFOLDERS) {
+        const cnt = bucketMap.get(sf.id)?.count ?? 0;
+        bucketMap.delete(sf.id);
+        if (isMobileOrStore && cnt === 0) continue;
+        out.push({ id: sf.id, name: sf.name, count: cnt, path: sf.path });
+      }
+    } else {
+      // 사용자 지정 폴더([업무 폴더 변경]) 또는 팀원 동기화 뷰일 때는 실제 존재하는 폴더만 순서대로 노출
+      for (const sf of DEFAULT_WORK_SUBFOLDERS) {
+        const hit = bucketMap.get(sf.id);
+        if (hit && hit.count > 0) {
+          out.push(hit);
+          bucketMap.delete(sf.id);
+        }
+      }
+    }
+
+    const customDirs = Array.from(bucketMap.values())
+      .filter((item) => item.count > 0)
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    out.push(...customDirs);
+    return out;
+  }, [docs, isMobileOrStore, isUsingCustomOrMirrorFolder]);
+
+  // 업무 폴더 변경 등으로 선택되어 있던 하위 폴더가 사라진 경우 즉시 '전체 폴더'로 자동 복귀
+  useEffect(() => {
+    if (
+      selectedFolderId !== 'all' &&
+      !dynamicWorkFolders.some((f) => f.id === selectedFolderId)
+    ) {
+      setSelectedFolderId('all');
+      setViewMode('semantic');
+    }
+  }, [dynamicWorkFolders, selectedFolderId]);
 
   // 실제 문서 목록에서 빠른 검색 키워드 동적 추출 (가짜 하드코딩 키워드 0건)
   const dynamicQuickQueries = useMemo<string[]>(() => {
@@ -2413,10 +2499,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const filteredDocs = useMemo(() => {
     return docs.filter((doc) => {
+      const docBucketId = resolveWorkDocFolderBucket(doc).id;
       const folderMatch =
         viewMode === 'semantic' && selectedFolderId === 'all'
           ? true
-          : selectedFolderId === 'all' || doc.folderId === selectedFolderId;
+          : selectedFolderId === 'all' || docBucketId === selectedFolderId;
       if (!folderMatch) return false;
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
@@ -2546,6 +2633,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
     setSDriveMounted(Boolean(res.mounted));
     if (res.targetDir) setDriveTargetPath(res.targetDir);
+    setSelectedFolderId('all');
+    setViewMode('semantic');
     lastWorkFilesSigRef.current = '';
     localDocsRef.current = [];
     setLocalDocs([]);
@@ -3461,16 +3550,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
             {(!isMobileOrStore || docs.length > 0) && (
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                {WORK_LOUNGE_FOLDERS.filter((folder) => {
-                  if (!isMobileOrStore) return true;
-                  if (folder.id === 'all') return true;
-                  return (folderCounts[folder.id] ?? 0) > 0;
-                }).map((folder) => {
+                {dynamicWorkFolders.map((folder) => {
                   const active = selectedFolderId === folder.id && viewMode === 'explorer';
                   const isAllActive =
                     folder.id === 'all' && (selectedFolderId === 'all' || viewMode === 'semantic');
                   const highlight = active || isAllActive;
-                  const count = folderCounts[folder.id] ?? folder.count;
+                  const count = folder.count;
                   return (
                     <button
                       key={folder.id}
@@ -3542,7 +3627,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         viewMode={viewMode}
         selectedFolderId={selectedFolderId}
         selectedFolderLabel={
-          WORK_LOUNGE_FOLDERS.find((f) => f.id === selectedFolderId)?.path || selectedFolderId
+          dynamicWorkFolders.find((f) => f.id === selectedFolderId)?.path || selectedFolderId
         }
         filteredDocs={filteredDocs}
         selectedDoc={selectedDoc}
