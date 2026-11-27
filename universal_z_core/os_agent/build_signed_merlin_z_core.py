@@ -120,7 +120,7 @@ def ensure_ms_signing_tools_installed() -> Dict[str, Any]:
         meta_file.write_text(
             json.dumps(
                 {
-                    "Endpoint": "https://koreacentral.codesigning.azure.net/",
+                    "Endpoint": "https://krc.codesigning.azure.net/",
                     "CodeSigningAccountName": "sundreamer",
                     "CertificateProfileName": "sundream-public-cert",
                 },
@@ -128,6 +128,14 @@ def ensure_ms_signing_tools_installed() -> Dict[str, Any]:
             ),
             encoding="utf-8",
         )
+    else:
+        try:
+            meta_obj = json.loads(meta_file.read_text(encoding="utf-8"))
+            if "koreacentral." in str(meta_obj.get("Endpoint") or ""):
+                meta_obj["Endpoint"] = "https://krc.codesigning.azure.net/"
+                meta_file.write_text(json.dumps(meta_obj, indent=2), encoding="utf-8")
+        except Exception:
+            pass
     return {
         "ok": bool(find_signtool() and find_azure_dlib() and find_azure_metadata()),
         "signtoolPath": find_signtool(),
@@ -141,6 +149,7 @@ def verify_authenticode_signature(target_file: Path) -> Dict[str, Any]:
     if not target_file.exists():
         return {"ok": False, "error": f"파일 없음: {target_file}"}
     ps_cmd = (
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
         f"$sig = Get-AuthenticodeSignature -FilePath '{target_file}'; "
         "@{ status = [string]$sig.Status; statusMessage = [string]$sig.StatusMessage; "
         "signerSubject = if ($sig.SignerCertificate) { [string]$sig.SignerCertificate.Subject } else { '' }; "
@@ -220,15 +229,38 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
             ),
         }
 
-    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    env = os.environ.copy()
+    local_dotnet = Path(os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")) / "Microsoft" / "dotnet"
+    if not env.get("DOTNET_ROOT"):
+        if Path(r"C:\Program Files\dotnet\shared\Microsoft.NETCore.App").is_dir():
+            env["DOTNET_ROOT"] = r"C:\Program Files\dotnet"
+        elif (local_dotnet / "shared" / "Microsoft.NETCore.App").is_dir():
+            env["DOTNET_ROOT"] = str(local_dotnet)
+            env["PATH"] = f"{local_dotnet};{env.get('PATH', '')}"
+    if not env.get("AZURE_CLIENT_SECRET"):
+        try:
+            secrets_file = Path(r"D:\Secretary\local_secrets.json")
+            if secrets_file.exists():
+                sec_obj = json.loads(secrets_file.read_text(encoding="utf-8-sig"))
+                aas = sec_obj.get("azure_artifact_signing") or {}
+                if aas.get("tenant_id") and aas.get("client_id") and aas.get("client_secret"):
+                    env["AZURE_TENANT_ID"] = str(aas["tenant_id"]).strip()
+                    env["AZURE_CLIENT_ID"] = str(aas["client_id"]).strip()
+                    env["AZURE_CLIENT_SECRET"] = str(aas["client_secret"]).strip()
+        except Exception:
+            pass
+
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     combined_out = (res.stdout or "") + "\n" + (res.stderr or "")
-    reason = "SIGNED_OK" if res.returncode == 0 else (
-        "AZURE_CREDENTIAL_OR_APPROVAL_PENDING (signtool + Dlib + metadata 100% 바인딩 완료, 내일 MS 심사 승인 및 az login 시 즉시 서명 완료)"
+    auth_info = verify_authenticode_signature(exe_path)
+    is_valid_sig = bool(res.returncode == 0 and str(auth_info.get("status") or "").lower() == "valid")
+    reason = "SIGNED_OK" if is_valid_sig else (
+        "AZURE_CREDENTIAL_OR_APPROVAL_PENDING"
         if "CredentialUnavailableException" in combined_out
         else "SIGNTOOL_EXECUTION_FAILED"
     )
     return {
-        "signed": res.returncode == 0,
+        "signed": is_valid_sig,
         "returncode": res.returncode,
         "reason": reason,
         "signtoolPath": signtool,
@@ -236,7 +268,7 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
         "metadataPath": azure_metadata,
         "stdout": res.stdout.strip(),
         "stderr": res.stderr.strip(),
-        "authenticode": verify_authenticode_signature(exe_path),
+        "authenticode": auth_info,
     }
 
 
@@ -465,6 +497,14 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
     m = re.search(r'CORE_VERSION\s*=\s*["\']([^"\']+)["\']', daemon_py.read_text(encoding="utf-8", errors="ignore"))
     core_version = m.group(1) if m else "2.3.23"
 
+    # [MS Artifact Signing 공인 코드서명 필수 게이트]: GitHub Releases 업로드 전 Authenticode Status == Valid 확인 (미서명 시 즉시 자동 재서명)
+    auth_chk = verify_authenticode_signature(exe_path)
+    if str(auth_chk.get("status") or "").lower() != "valid":
+        ensure_ms_signing_tools_installed()
+        sign_binary_with_ms_codesign(exe_path)
+        auth_chk = verify_authenticode_signature(exe_path)
+    sig_valid = str(auth_chk.get("status") or "").lower() == "valid"
+
     public_dir = repo_root / "public"
     public_dir.mkdir(parents=True, exist_ok=True)
     zip_target = public_dir / "Merlin_Z_Core.zip"
@@ -614,8 +654,10 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
             tmp_zip.unlink(missing_ok=True)
 
     return {
-        "ok": zip_target.exists(),
+        "ok": zip_target.exists() and sig_valid,
         "version": core_version,
+        "authenticodeValid": sig_valid,
+        "signerSubject": auth_chk.get("signerSubject", ""),
         "zipPath": str(zip_target),
         "zipSizeMB": round(zip_target.stat().st_size / 1024 / 1024, 1) if zip_target.exists() else 0,
         "versionJsonPath": str(ver_json_target),
@@ -676,11 +718,21 @@ def main() -> None:
             if out["build"]["built"]:
                 ensure_ms_signing_tools_installed()
                 out["sign"] = sign_binary_with_ms_codesign(exe)
-                out["authenticode"] = verify_authenticode_signature(exe)
+                out["authenticode"] = (out["sign"] or {}).get("authenticode") or verify_authenticode_signature(exe)
+                sig_valid = bool(
+                    (out["sign"] or {}).get("signed")
+                    and str((out["authenticode"] or {}).get("status") or "") == "Valid"
+                    and "썬드림주식회사" in str((out["authenticode"] or {}).get("signerSubject") or "")
+                )
+                out["signatureGatePassed"] = sig_valid
                 out["verify"] = verify_built_exe(exe, port=args.verify_port)
-                if (out.get("verify") or {}).get("ok"):
+                if sig_valid and (out.get("verify") or {}).get("ok"):
                     out["releaseSync"] = sync_release_zip_and_frontend_version(exe)
-            out["ok"] = bool(out["build"]["built"] and (out.get("verify") or {}).get("ok"))
+            out["ok"] = bool(
+                out["build"]["built"]
+                and out.get("signatureGatePassed")
+                and (out.get("verify") or {}).get("ok")
+            )
             print(json.dumps(out, ensure_ascii=False, indent=2))
             sys.exit(0 if out["ok"] else 1)
         finally:

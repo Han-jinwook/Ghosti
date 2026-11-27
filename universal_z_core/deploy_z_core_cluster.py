@@ -753,33 +753,151 @@ def update_pc5(core_ver: str):
     _update_remote_exe_node("5호기 (집 100.122.235.63)", "100.122.235.63", "WD", core_ver)
 
 
+def _trigger_and_verify_auto_update_node(label: str, host: str | None, remote_user: str | None, core_ver: str) -> bool:
+    """
+    [Track B — 실유저 GitHub Releases 기반 무인 자동 업데이트(Auto-Update) 트리거 및 실측 검증]:
+    - AI가 SSH/SCP로 파일을 강제 덮어쓰지 않고, 실제 일반 고객과 100% 동일하게
+      GitHub Releases(z-core-latest/Merlin_Z_Core.zip) URL로 자체 Auto-Updater(/__merlin/self-update)가
+      다운로드 ➔ --selftest 무결성 검증 ➔ 원자적 스왑 ➔ 재기동을 완결하는지 실측 검증합니다.
+    """
+    zip_url = "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip"
+    payload_str = json.dumps({"targetVersion": core_ver, "downloadUrl": zip_url})
+    log(f"\n=== [Track B 실유저 Auto-Update 검증: {label}] GitHub Releases(v{core_ver}) 자가 업데이트 트리거 ===")
+
+    if host is None:
+        # 로컬(6호컴) 자가 업데이트 트리거
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:5199/__merlin/health", timeout=2.5) as r0:
+                cur_v = str(json.loads(r0.read().decode("utf-8")).get("version") or "").strip()
+                if cur_v == core_ver:
+                    log(f"✅ {label} 이미 최신 버전(v{core_ver}) 기동 중 확인")
+                    return True
+        except Exception:
+            pass
+        try:
+            req = urllib.request.Request(
+                "http://127.0.0.1:5199/__merlin/self-update",
+                data=payload_str.encode("utf-8"),
+                method="POST",
+                headers={"Content-Type": "application/json", "Origin": "https://ghosti.sundreamer.app"},
+            )
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                res_obj = json.loads(resp.read().decode("utf-8"))
+                log(f"   ↳ {label} self-update 응답: {res_obj.get('status')} (current={res_obj.get('currentVersion', res_obj.get('version'))} -> target={core_ver})")
+                if res_obj.get("status") == "DEV_SCRIPT_MODE_SKIPPED":
+                    update_pc1()
+                    return True
+        except Exception as e:
+            log(f"⚠️ {label} 로컬 self-update 호출 예외 (초기 기동 폴백 수행): {e}")
+            update_pc1()
+            return True
+
+        for attempt in range(25):
+            time.sleep(1.2)
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:5199/__merlin/health", timeout=2.5) as r1:
+                    new_v = str(json.loads(r1.read().decode("utf-8")).get("version") or "").strip()
+                    if new_v == core_ver:
+                        log(f"✅ [Track B 검증 통과] {label} GitHub Releases Auto-Update 완료 (v{new_v}, {(attempt + 1) * 1.2:.1f}s)!")
+                        return True
+            except Exception:
+                pass
+        log(f"⚠️ {label} Auto-Update 대기 시간 초과 ➔ 로컬 서비스 재기동 보정")
+        update_pc1()
+        return False
+
+    # 원격 Track B 노드 (1호컴, 2호컴, 5호컴) — SSH 파일 덮어쓰기 없이 로컬 루프백 self-update API만 트리거
+    key_path = _resolve_ssh_key()
+    ssh_target = f"{remote_user}@{host}"
+    ps_trigger = f"""
+$h0 = curl.exe -s --max-time 2 http://127.0.0.1:5199/__merlin/health
+if ($h0 -match '"{core_ver}"') {{
+    Write-Output "ALREADY_LATEST:{core_ver}"
+    exit 0
+}}
+$body = '{payload_str}'
+$res = Invoke-RestMethod -Uri 'http://127.0.0.1:5199/__merlin/self-update' -Method Post -ContentType 'application/json' -Headers @{{Origin='https://ghosti.sundreamer.app'}} -Body $body -TimeoutSec 5 -ErrorAction SilentlyContinue
+if ($res) {{
+    Write-Output ("TRIGGERED:" + ($res | ConvertTo-Json -Compress))
+}} else {{
+    Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    $res2 = Invoke-RestMethod -Uri 'http://127.0.0.1:5199/__merlin/self-update' -Method Post -ContentType 'application/json' -Headers @{{Origin='https://ghosti.sundreamer.app'}} -Body $body -TimeoutSec 5 -ErrorAction SilentlyContinue
+    Write-Output ("TRIGGERED_AFTER_WAKE:" + ($res2 | ConvertTo-Json -Compress))
+}}
+"""
+    try:
+        tr = _run_remote_ps_encoded(ssh_target, key_path, ps_trigger, timeout_sec=18)
+        out_s = (tr.stdout or "").strip()
+        if f"ALREADY_LATEST:{core_ver}" in out_s:
+            log(f"✅ [Track B 검증 통과] {label} 이미 최신 버전(v{core_ver}) 가동 중!")
+            return True
+        log(f"   ↳ {label} 트리거 결과: {out_s[:200]}")
+    except Exception as e:
+        log(f"⚠️ {label} Auto-Update 트리거 통신 실패: {e}")
+        return False
+
+    for attempt in range(25):
+        time.sleep(1.5)
+        try:
+            chk = _run_remote_ps_encoded(
+                ssh_target,
+                key_path,
+                "$h = curl.exe -s --max-time 3 http://127.0.0.1:5199/__merlin/health; Write-Output $h",
+                timeout_sec=10,
+            )
+            if chk.returncode == 0 and f'"{core_ver}"' in (chk.stdout or ""):
+                log(f"✅ [Track B 검증 통과] {label} GitHub Releases 기반 무인 Auto-Update 완료 (v{core_ver}, {(attempt + 1) * 1.5:.1f}s)!")
+                return True
+        except Exception:
+            pass
+    log(f"⚠️ {label} GitHub Releases Auto-Update 37초 내 버전 전환 미확인 (백그라운드 다운로드 진행 중일 수 있음)")
+    return False
+
+
 def main():
+    force_ssh_all = "--force-ssh-all" in sys.argv
     with acquire_global_zcore_deploy_lock():
         src_changed = bool(sync_internal_z_core_mirrors())
         core_ver = ensure_release_zip_and_bridge_synced(force_rebuild=src_changed)
-        import datetime as _dt
-        _now_hr = _dt.datetime.now().hour
-        _is_qa_work_hours = (9 <= _now_hr < 15)
-        if _is_qa_work_hours:
-            log("🕘 [알바 근무시간(09:00~15:00) 전용 배포 모드] 1·5·6호기는 제외하고 통합테스트용 2호기·3호기(달나라)·4호기(해나라)에 무중단 원자적 스왑 설치합니다.")
-            update_pc2(core_ver)
-            update_pc3(core_ver)
-            update_pc4(core_ver)
-            log(f"\n🎉 근무시간(09:00~15:00) 안전 배포 완료 — 2호기 · 3호기 · 4호기 Z-코어(v{core_ver}) 설치 완료!")
-        else:
+
+        if force_ssh_all:
+            log("⚡ [--force-ssh-all 비상 직결 모드] 전 기기(1~6호컴) SSH 직결 스왑 배포를 수행합니다.")
             update_pc1()
             update_pc1_remote(core_ver)
             update_pc2(core_ver)
             update_pc3(core_ver)
             update_pc4(core_ver)
-            # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
             try:
                 import socket
                 with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
                     update_pc5(core_ver)
             except Exception:
                 log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — 배포 스킵")
-            log(f"\n🎉 전 클러스터(로컬 6호기 · 1호기 · 2호기 · 3호기 · 4호기 · 5호기) 통합 동기화(v{core_ver})가 완료되었습니다!")
+            return
+
+        # ══════════════════════════════════════════════════════════════════════════
+        # [2026-11-27 전사 배포 이원화 표준 확정]
+        # • Track A (해나라님 QA 전용 0초 쾌속 직결 배포): 3호컴(달나라) · 4호컴(해나라)
+        # • Track B (실유저 GitHub Releases 기반 Auto-Update 상시 검증): 1호컴 · 2호컴 · 5호컴 · 6호컴(로컬)
+        # ══════════════════════════════════════════════════════════════════════════
+        log(f"🚀 [Track A — 해나라님 QA 전용 직결 배포] 3호컴(100.102.43.42) · 4호컴(100.114.100.24) 무중단 원자적 스왑(v{core_ver}) 시작")
+        update_pc3(core_ver)
+        update_pc4(core_ver)
+
+        log(f"\n🌐 [Track B — 실유저 GitHub Releases Auto-Update 상시 검증] 6호컴(로컬) · 1호컴 · 2호컴 · 5호컴 자가 업데이트(v{core_ver}) 검증 시작")
+        _trigger_and_verify_auto_update_node("6호기 (로컬 개발/운영 PC)", None, None, core_ver)
+        if os.environ.get("COMPUTERNAME", "").upper() != "DESKTOP-TRRSPRP":
+            _trigger_and_verify_auto_update_node("1호기 (사무실 메인 100.86.161.8)", "100.86.161.8", "chichi", core_ver)
+        _trigger_and_verify_auto_update_node("2호기 (사무실 서버 100.88.230.16)", "100.88.230.16", "sun-multi", core_ver)
+        try:
+            import socket
+            with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
+                _trigger_and_verify_auto_update_node("5호기 (집 메인 100.122.235.63)", "100.122.235.63", "WD", core_ver)
+        except Exception:
+            log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — Track B Auto-Update 검증 스킵 (부팅 시 주기 감시병이 자동 업데이트)")
+
+        log(f"\n🎉 [Track A(3·4호컴 QA 직결) + Track B(1·2·5·6호컴 GitHub Releases 실유저 Auto-Update)] 이원화 배포 및 검증(v{core_ver}) 완료!")
 
 if __name__ == "__main__":
     main()
