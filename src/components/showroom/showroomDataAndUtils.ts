@@ -215,7 +215,7 @@ export const WEAPON_META: Record<
   video: {
     icon: '',
     chipLabel: '동영상 장면 · 화면 글자 찾기',
-    chipSub: '재생하지 않고 원하는 구간으로 이동',
+    chipSub: '재생 없이 원하는 구간 바로 이동',
     keywordBadge: '귀신검색',
     userBubble: '동영상 수백 개 중에 아기 첫 걸음마 장면이랑 화면 글자 찾아줘',
     secretaryReply:

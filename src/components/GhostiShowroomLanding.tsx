@@ -971,7 +971,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span>체험할 기능을 선택하세요</span>
                 <span>우측 화면 연동</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 auto-rows-fr gap-2">
                 {(['clean', 'video', 'doc', 'share'] as OnboardingWeaponTab[]).map((tabKey) => {
                   const item = WEAPON_META[tabKey];
                   const isActive = demoTab === tabKey;
@@ -980,7 +980,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       key={tabKey}
                       type="button"
                       onClick={() => handleSelectWeaponChip(tabKey)}
-                      className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
+                      className={`h-full min-h-[76px] p-2.5 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
                           ? 'bg-teal-600 border-teal-600 text-white'
                           : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-900'
@@ -993,10 +993,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       >
                         {item.keywordBadge}
                       </span>
-                      <div className="text-[12px] font-semibold break-keep leading-snug mt-0.5">
+                      <div className="text-[11.5px] font-semibold whitespace-nowrap truncate leading-snug mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className={`text-[11px] break-keep leading-snug ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
+                      <div className={`text-[10.5px] whitespace-nowrap truncate leading-snug ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
                         {item.chipSub}
                       </div>
                     </button>
@@ -1378,14 +1378,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           </div>
 
                           {speedStep > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {SAMPLE_PC_PROGRAMS.map((p, idx) => {
                                 const asleep = isAsleep(p, idx);
                                 const wokeForBank = speedStep === 3 && p.neededForBank;
                                 return (
                                   <div
                                     key={p.id}
-                                    className={`rounded-lg px-3 py-2 flex items-center justify-between gap-2 text-[12.5px] border transition-all ${
+                                    className={`rounded-md px-2.5 py-1.5 flex items-center justify-between gap-2 text-[11.5px] border transition-all ${
                                       asleep
                                         ? 'bg-white/60 border-slate-200 text-slate-400'
                                         : wokeForBank
@@ -1394,7 +1394,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                     }`}
                                   >
                                     <span className="font-medium truncate">{p.name}</span>
-                                    <span className="text-[11.5px] font-medium shrink-0">
+                                    <span className="text-[10.5px] font-medium shrink-0">
                                       {asleep ? '절전 중' : wokeForBank ? '실행됨' : `${p.memMb}MB 상주`}
                                     </span>
                                   </div>
