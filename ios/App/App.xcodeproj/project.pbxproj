@@ -17,8 +17,8 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		8A71C0012F01000100AA1101 /* GhostKeySharedClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A71C0062F01000100AA1101 /* GhostKeySharedClipboardStore.swift */; };
 		8A71C0022F01000100AA1101 /* GhostKeySharedClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A71C0062F01000100AA1101 /* GhostKeySharedClipboardStore.swift */; };
-		8A71C0032F01000100AA1101 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A71C0072F01000100AA1101 /* KeyboardViewController.swift */; };
-		8A71C0042F01000100AA1101 /* GhostKeyKeyboardExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 8A71C0052F01000100AA1101 /* GhostKeyKeyboardExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8A71C0032F01000100AA1101 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A71C0072F01000100AA1101 /* ShareViewController.swift */; };
+		8A71C0042F01000100AA1101 /* GhostKeyShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 8A71C0052F01000100AA1101 /* GhostKeyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -28,7 +28,7 @@
 			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 8A71C00F2F01000100AA1101;
-			remoteInfo = GhostKeyKeyboardExtension;
+			remoteInfo = GhostKeyShareExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -39,7 +39,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				8A71C0042F01000100AA1101 /* GhostKeyKeyboardExtension.appex in Embed App Extensions */,
+				8A71C0042F01000100AA1101 /* GhostKeyShareExtension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -55,12 +55,13 @@
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		504EC3191FED79650016851F /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
-		8A71C0052F01000100AA1101 /* GhostKeyKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GhostKeyKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8A71C0052F01000100AA1101 /* GhostKeyShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GhostKeyShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A71C0062F01000100AA1101 /* GhostKeySharedClipboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhostKeySharedClipboardStore.swift; sourceTree = "<group>"; };
-		8A71C0072F01000100AA1101 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		8A71C0072F01000100AA1101 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		8A71C0082F01000100AA1101 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8A71C0092F01000100AA1101 /* GhostKeyKeyboardExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GhostKeyKeyboardExtension.entitlements; sourceTree = "<group>"; };
+		8A71C0092F01000100AA1101 /* GhostKeyShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GhostKeyShareExtension.entitlements; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -89,7 +90,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
-				8A71C00A2F01000100AA1101 /* GhostKeyKeyboardExtension */,
+				8A71C00A2F01000100AA1101 /* GhostKeyShareExtension */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -98,7 +99,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
-				8A71C0052F01000100AA1101 /* GhostKeyKeyboardExtension.appex */,
+				8A71C0052F01000100AA1101 /* GhostKeyShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -113,21 +114,22 @@
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
 				504EC3131FED79650016851F /* Info.plist */,
+				504EC3191FED79650016851F /* App.entitlements */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
 			sourceTree = "<group>";
 		};
-		8A71C00A2F01000100AA1101 /* GhostKeyKeyboardExtension */ = {
+		8A71C00A2F01000100AA1101 /* GhostKeyShareExtension */ = {
 			isa = PBXGroup;
 			children = (
 				8A71C0062F01000100AA1101 /* GhostKeySharedClipboardStore.swift */,
-				8A71C0072F01000100AA1101 /* KeyboardViewController.swift */,
+				8A71C0072F01000100AA1101 /* ShareViewController.swift */,
 				8A71C0082F01000100AA1101 /* Info.plist */,
-				8A71C0092F01000100AA1101 /* GhostKeyKeyboardExtension.entitlements */,
+				8A71C0092F01000100AA1101 /* GhostKeyShareExtension.entitlements */,
 			);
-			path = GhostKeyKeyboardExtension;
+			path = GhostKeyShareExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -155,9 +157,9 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
-		8A71C00F2F01000100AA1101 /* GhostKeyKeyboardExtension */ = {
+		8A71C00F2F01000100AA1101 /* GhostKeyShareExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 8A71C0142F01000100AA1101 /* Build configuration list for PBXNativeTarget "GhostKeyKeyboardExtension" */;
+			buildConfigurationList = 8A71C0142F01000100AA1101 /* Build configuration list for PBXNativeTarget "GhostKeyShareExtension" */;
 			buildPhases = (
 				8A71C00B2F01000100AA1101 /* Sources */,
 				8A71C00C2F01000100AA1101 /* Frameworks */,
@@ -167,9 +169,9 @@
 			);
 			dependencies = (
 			);
-			name = GhostKeyKeyboardExtension;
-			productName = GhostKeyKeyboardExtension;
-			productReference = 8A71C0052F01000100AA1101 /* GhostKeyKeyboardExtension.appex */;
+			name = GhostKeyShareExtension;
+			productName = GhostKeyShareExtension;
+			productReference = 8A71C0052F01000100AA1101 /* GhostKeyShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -209,7 +211,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
-				8A71C00F2F01000100AA1101 /* GhostKeyKeyboardExtension */,
+				8A71C00F2F01000100AA1101 /* GhostKeyShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -253,7 +255,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8A71C0022F01000100AA1101 /* GhostKeySharedClipboardStore.swift in Sources */,
-				8A71C0032F01000100AA1101 /* KeyboardViewController.swift in Sources */,
+				8A71C0032F01000100AA1101 /* ShareViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,7 +264,7 @@
 /* Begin PBXTargetDependency section */
 		8A71C0112F01000100AA1101 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 8A71C00F2F01000100AA1101 /* GhostKeyKeyboardExtension */;
+			target = 8A71C00F2F01000100AA1101 /* GhostKeyShareExtension */;
 			targetProxy = 8A71C0102F01000100AA1101 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -401,6 +403,7 @@
 			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -430,6 +433,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
@@ -458,11 +462,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = GhostKeyKeyboardExtension/GhostKeyKeyboardExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = GhostKeyShareExtension/GhostKeyShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = GhostKeyKeyboardExtension/Info.plist;
+				INFOPLIST_FILE = GhostKeyShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -470,7 +474,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.sundreamer.ghosti.keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = app.sundreamer.ghosti.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -483,11 +487,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_ENTITLEMENTS = GhostKeyKeyboardExtension/GhostKeyKeyboardExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = GhostKeyShareExtension/GhostKeyShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = GhostKeyKeyboardExtension/Info.plist;
+				INFOPLIST_FILE = GhostKeyShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -495,7 +499,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.sundreamer.ghosti.keyboard;
+				PRODUCT_BUNDLE_IDENTIFIER = app.sundreamer.ghosti.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
@@ -525,7 +529,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		8A71C0142F01000100AA1101 /* Build configuration list for PBXNativeTarget "GhostKeyKeyboardExtension" */ = {
+		8A71C0142F01000100AA1101 /* Build configuration list for PBXNativeTarget "GhostKeyShareExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				8A71C0122F01000100AA1101 /* Debug */,

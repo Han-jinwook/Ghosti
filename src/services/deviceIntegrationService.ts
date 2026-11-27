@@ -11,11 +11,11 @@ import {
 import { getSessionToken } from './merlin-hub-sdk/CoreLogic/client';
 import {
   consumePendingNativeClipboardOutbound,
-  isCapacitorAndroidRuntime,
   isCapacitorNativeMobileRuntime,
   readNativeMobileClipboardText,
   syncSharedNativeClipboardAuth,
   syncSharedNativeClipboardHistory,
+  triggerNativePcClipPushNotification,
   writeNativeMobileClipboardText,
 } from './ghostiMobileCareBridge';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
@@ -873,7 +873,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.122',
+    appVersion: '1.0.124',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
@@ -1841,6 +1841,63 @@ export async function pushCrossDeviceClipboardText(opts: {
   ]);
 
   return { ok: Boolean(bridgeRes?.ok || isRealtimeReady), item };
+}
+
+/**
+ * [PC ➔ 폰 명시적 선택 전송 (`[📱 폰으로 보내기]` 1클릭 ➔ 폰 푸시 알림 1건 + `[📋 복사]` 1탭)]
+ * - 평소 PC Ctrl+C 시에는 폰 알림을 전혀 울리지 않으며(0건), 사용자가 명시적으로 `[📱 폰으로 보내기]`를 눌렀을 때만
+ *   단 1건의 암호화 푸시 알림을 발송하여 앱을 열지 않고 `[📋 복사]` 1탭으로 즉시 붙여넣기하게 합니다.
+ */
+export async function sendClipToPhonePush(opts: {
+  text: string;
+  email: string;
+  userId: string;
+}): Promise<{ ok: boolean; pushId?: string; item?: GhostiSyncedClipItem }> {
+  const cleanText = (opts.text || '').trim();
+  const normEmail = (opts.email || '').trim().toLowerCase();
+  if (!cleanText || !normEmail || !opts.userId || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  if (thisDeviceRevokedLocally) {
+    return { ok: false };
+  }
+  const ident = getThisDeviceIdentity(normEmail);
+  const encrypted = await encryptClipboardE2ee(cleanText, normEmail, opts.userId);
+  const nowIso = new Date().toISOString();
+
+  const res = await callGhostiServerBridge<{
+    pushId?: string;
+    createdAt?: string;
+    canonicalUserId?: string;
+  }>('device_send_clip_to_phone_push', {
+    clipHash: encrypted.clipHash,
+    cipherB64: encrypted.cipherB64,
+    ivB64: encrypted.ivB64,
+    senderDeviceId: ident.deviceId,
+    senderName: ident.displayName,
+    createdAt: nowIso,
+  });
+
+  if (!res.ok) {
+    return { ok: false };
+  }
+  if (res.canonicalUserId) {
+    saveCanonicalE2eeUid(normEmail, res.canonicalUserId);
+  }
+  const item: GhostiSyncedClipItem = {
+    clipHash: encrypted.clipHash,
+    text: cleanText,
+    senderDeviceId: ident.deviceId,
+    senderName: `${ident.displayName} (폰 전송)`,
+    createdAt: res.createdAt || nowIso,
+    encryptedE2ee: true,
+  };
+  const nextList = pruneSyncedClipsToSevenDays([
+    item,
+    ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== item.clipHash),
+  ]);
+  saveCachedSyncedClips(nextList, normEmail);
+  return { ok: true, pushId: res.pushId, item };
 }
 
 export async function pullDelayedE2eeClipboardMailbox(opts: {
@@ -3446,6 +3503,13 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             return;
           }
 
+          // 모바일은 일반 PC Ctrl+C 수신 시 7일 보관함 목록만 조용히 갱신하고(알림·자동 클립보드 덮어쓰기 0건),
+          // 오직 PC↔PC 및 폰➔PC 수신(pc_master)일 때만 OS 클립보드(Ctrl+V)에 자동 장전합니다.
+          if (ident.deviceKind !== 'pc_master') {
+            rememberDeliveredEnvelope(resolvedEnvKey, normEmail);
+            return;
+          }
+
           const injected = await writeTextToLocalOsClipboard(plain, resolvedHash);
           if (injected) {
             osInjectedEnvelopeKeys.add(resolvedEnvKey);
@@ -3456,14 +3520,45 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             }
             opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
           } else {
-            // 모바일 백그라운드·포커스 전환 직전에는 토스트를 백그라운드에서 소모하지 않고,
-            // 창 포커스 확보 직후 실제 OS 클립보드 주입 성공과 동시에 도착 토스트를 띄웁니다.
             pendingOsInjectClip = { envKey: resolvedEnvKey, item: clipItem, createdAtMs };
-            if (ident.deviceKind === 'pc_master') {
-              opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
-            } else {
-              schedulePendingOsInjectFlush();
-            }
+            opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
+          }
+        })
+        .on('broadcast', { event: 'PC_TO_PHONE_CLIP_PUSH' }, async ({ payload }) => {
+          if (disposed || thisDeviceRevokedLocally || !payload?.cipherB64 || !payload?.ivB64) return;
+          if (ident.deviceKind !== 'mobile') return;
+          if (!isCurrentAccountSyncUnlocked(normEmail)) return;
+          const senderId = String(payload.senderDeviceId || '');
+          if (senderId && senderId === ident.deviceId) return;
+          const cachedUid = loadCanonicalE2eeUid(normEmail);
+          const plain = await decryptClipboardE2ee(
+            String(payload.cipherB64),
+            String(payload.ivB64),
+            normEmail,
+            opts.userId,
+            cachedUid ? [cachedUid] : undefined
+          );
+          if (!plain || !plain.trim()) return;
+          const pushId = String(payload.pushId || '');
+          const senderName = String(payload.senderName || '내 PC');
+          await triggerNativePcClipPushNotification(pushId, plain.trim(), senderName);
+        })
+        .on('broadcast', { event: 'DIRECT_PHOTO_TO_PC' }, async ({ payload }) => {
+          if (disposed || thisDeviceRevokedLocally || !payload) return;
+          if (ident.deviceKind !== 'pc_master' || !zCoreBridge.isConnected) return;
+          if (!isCurrentAccountSyncUnlocked(normEmail)) return;
+          if (payload.senderDeviceId && payload.senderDeviceId === ident.deviceId) return;
+          try {
+            await fetch(getZCoreUrl('/__sync/direct-photo-drop'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...payload,
+                accountEmail: normEmail,
+              }),
+            });
+          } catch {
+            /* Z-Core background poller handles fallback */
           }
         })
         .on('broadcast', { event: 'MONITOR_CAST_REMOTE' }, ({ payload }) => {
@@ -3716,150 +3811,26 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
   };
 
-  let mobileResumeRetryTimer: number | null = null;
-  let mobileResumeCaptureRunning = false;
-  let mobileResumeSyncPending = false;
-  let mobileResumeFireAtMs = 0;
   const isMobileRuntimeVisibleOrNativeActive = (bypassVisibilityGuard: boolean): boolean => {
     if (bypassVisibilityGuard || isCapacitorNativeMobileRuntime()) return true;
     return typeof document === 'undefined' || document.visibilityState === 'visible';
   };
 
-  const finishMobileForegroundSync = async (
-    pushedLocalNow: boolean,
-    alsoSyncRemoteAfter: boolean,
-    bypassVisibilityGuard = false,
-    prefetchedRemote?: Promise<{
-      items: GhostiSyncedClipItem[];
-      newlyDeliveredExternal: GhostiSyncedClipItem | null;
-    } | null> | null
-  ) => {
-    const shouldSyncRemote = alsoSyncRemoteAfter || mobileResumeSyncPending;
-    mobileResumeSyncPending = false;
-    if (!shouldSyncRemote || disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) {
-      return;
-    }
-    if (prefetchedRemote) {
-      const pulled = await prefetchedRemote.catch(() => null);
-      if (disposed) return;
-      if (pulled && pulled.items.length > 0 && opts.onClipsSynced) {
-        opts.onClipsSynced(pulled.items);
-      }
-    }
-    if (pushedLocalNow && pendingOsInjectClip) {
-      rememberDeliveredEnvelope(pendingOsInjectClip.envKey, normEmail);
-      pendingOsInjectClip = null;
-      return;
-    }
-    if (!pushedLocalNow && pendingOsInjectClip) {
-      const flushed = await tryFlushPendingOsInjectClip();
-      if (!flushed && pendingOsInjectClip) {
-        schedulePendingOsInjectFlush();
-      }
-      if (prefetchedRemote) return;
-    }
-    if (!prefetchedRemote) {
-      await syncRemoteMailboxToUi(!pushedLocalNow);
-    }
-  };
-
   const triggerMobileForegroundCapture = (
     alsoSyncRemoteAfter = false,
-    initialDelayMs = 25,
+    _initialDelayMs = 25,
     bypassVisibilityGuard = false
   ) => {
+    // [전면 재정립 — "앱 열었다 닫기 / iOS [붙여넣기 허용]" 동선 영구 폐기]:
+    // 모바일 앱을 열거나 복귀할 때 OS 클립보드를 자동으로 읽거나 덮어쓰지 않으므로
+    // 아이폰 [붙여넣기 허용] 팝업과 안드로이드 클립보드 읽기 알림이 0회로 완전 소멸됩니다.
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
+    if (!isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) return;
+    void flushPendingNativeMobileClips();
     if (alsoSyncRemoteAfter) {
-      mobileResumeSyncPending = true;
+      void syncRemoteMailboxToUi(false);
     }
-    // [0ms 병렬 원격 우체통 선행 조회]: 로컬 클립보드 점검(25~100ms)이 끝나기를 직렬 대기하지 않고,
-    // 앱을 여는 0ms 즉시 서버 우체통 조회를 병렬 출발시켜 도착 토스트·클립보드 장전 체감 지연을 ~0.2초로 단축합니다!
-    const prefetchedRemotePromise =
-      alsoSyncRemoteAfter &&
-      hasAuthenticatedHubAccountSession() &&
-      isCurrentAccountSyncUnlocked(normEmail)
-        ? pullDelayedE2eeClipboardMailbox({
-            email: normEmail,
-            userId: opts.userId,
-            injectToOsClipboard: false,
-          }).catch(() => null)
-        : null;
-
-    if (mobileResumeCaptureRunning) {
-      if (alsoSyncRemoteAfter && !pushedLocalGuardActive()) {
-        void prefetchedRemotePromise?.then(async (pulled) => {
-          if (disposed) return;
-          if (pulled && pulled.items.length > 0 && opts.onClipsSynced) {
-            opts.onClipsSynced(pulled.items);
-          }
-          if (pendingOsInjectClip) {
-            const flushed = await tryFlushPendingOsInjectClip();
-            if (!flushed && pendingOsInjectClip) schedulePendingOsInjectFlush();
-          }
-        });
-      }
-      return;
-    }
-    const clampedDelay = Math.max(15, initialDelayMs);
-    const targetFireAt = Date.now() + clampedDelay;
-    if (mobileResumeCaptureTimer !== null && mobileResumeFireAtMs > 0 && mobileResumeFireAtMs <= targetFireAt + 30) {
-      return;
-    }
-    if (mobileResumeCaptureTimer !== null) {
-      window.clearTimeout(mobileResumeCaptureTimer);
-    }
-    if (mobileResumeRetryTimer !== null) {
-      window.clearTimeout(mobileResumeRetryTimer);
-      mobileResumeRetryTimer = null;
-    }
-    mobileResumeFireAtMs = targetFireAt;
-    mobileResumeCaptureTimer = window.setTimeout(async () => {
-      mobileResumeCaptureTimer = null;
-      mobileResumeFireAtMs = 0;
-      if (disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) return;
-      mobileResumeCaptureRunning = true;
-      try {
-        await flushPendingNativeMobileClips();
-        const firstResult = await inspectAndPushLocalOsClipboard(false, false);
-        if (disposed) {
-          mobileResumeCaptureRunning = false;
-          return;
-        }
-        // 안드로이드 10+ 포커스 전환 찰나에 EMPTY였다면 75ms 뒤 1회만 빠르게 재확인 후 병렬 조회된 원격 우체통 즉시 주입
-        if (firstResult === 'EMPTY' && isCapacitorAndroidRuntime()) {
-          mobileResumeRetryTimer = window.setTimeout(async () => {
-            mobileResumeRetryTimer = null;
-            try {
-              if (disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) return;
-              const secondResult = await inspectAndPushLocalOsClipboard(false, false);
-              await finishMobileForegroundSync(
-                secondResult === 'PUSHED',
-                alsoSyncRemoteAfter,
-                bypassVisibilityGuard,
-                prefetchedRemotePromise
-              );
-            } finally {
-              mobileResumeCaptureRunning = false;
-            }
-          }, 75);
-          return;
-        }
-        await finishMobileForegroundSync(
-          firstResult === 'PUSHED',
-          alsoSyncRemoteAfter,
-          bypassVisibilityGuard,
-          prefetchedRemotePromise
-        );
-        mobileResumeCaptureRunning = false;
-      } catch {
-        mobileResumeCaptureRunning = false;
-      }
-    }, clampedDelay);
   };
-
-  function pushedLocalGuardActive(): boolean {
-    return lastLocalPushTimestampMs > 0 && Date.now() - lastLocalPushTimestampMs < 2200;
-  }
 
   const pushNativeClipboardAuthContext = () => {
     if (typeof window === 'undefined') return;
@@ -3930,19 +3901,12 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         }
       });
     } else {
-      // [안드로이드 AOS 신규 복사 삼킴 버그 수정]:
-      // 안드로이드에서는 앱 새로 열기·새로고침 시 방금 타 앱에서 복사해 온 글자를 baselineOnly로 삼키지 않고,
-      // 직전 동기화 해시(localStorage)와 다르면 즉시 PC로 전송합니다. (iOS는 불필요한 부팅 팝업 방지를 위해 baselineOnly 유지)
+      // 모바일은 앱 열기 시 OS 클립보드 자동 읽기/덮어쓰기를 수행하지 않음 ([붙여넣기 허용] 팝업 원천 제거)
       const persistedHash = loadLastSyncedOsClipHash(normEmail);
       if (persistedHash && !lastObservedOsClipHash) {
         lastObservedOsClipHash = persistedHash;
       }
-      if (isCapacitorAndroidRuntime()) {
-        triggerMobileForegroundCapture(false, 120);
-      } else {
-        void inspectAndPushLocalOsClipboard(true, false);
-      }
-      // Capacitor 네이티브 앱(Android/iOS) 백그라운드 복귀 이벤트(appStateChange) 직접 감지
+      // Capacitor 네이티브 앱(Android/iOS) 백그라운드 복귀 시 7일 보관함 목록만 조용히 동기화
       try {
         const capApp = (
           window as unknown as {
@@ -4040,9 +4004,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
 
     const wasUnlockedBeforeBootHb = isCurrentAccountSyncUnlocked(normEmail);
+    const shouldInjectOnMailboxPull = ident.deviceKind === 'pc_master';
     const [hb] = await Promise.all([
       pairedViaUrl ? Promise.resolve(null) : syncDeviceHeartbeatAndList(),
-      syncRemoteMailboxToUi(true),
+      syncRemoteMailboxToUi(shouldInjectOnMailboxPull),
       realtimePromise,
     ]);
 
@@ -4060,7 +4025,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       void prewarmAccountE2eeKey(normEmail, opts.userId);
       pushNativeClipboardAuthContext();
       if (!wasUnlockedBeforeBootHb && isCurrentAccountSyncUnlocked(normEmail)) {
-        void syncRemoteMailboxToUi(true);
+        void syncRemoteMailboxToUi(shouldInjectOnMailboxPull);
       }
     }
 
@@ -4188,19 +4153,18 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         },
       };
     } else {
-      // 모바일: 포그라운드 체류 중 1.5초마다 원격 우체통(Z-코어 직통 HTTPS 발송 포함)을 확인해 PC 연속 복사본도 즉시 주입
+      // 모바일: 포그라운드 체류 중에는 OS 클립보드를 건드리지 않고 7일 보관함 UI 목록만 조용히 동기화
       const mobileTimerId = window.setInterval(() => {
-        if (disposed || thisDeviceRevokedLocally || mobileResumeCaptureRunning) return;
+        if (disposed || thisDeviceRevokedLocally) return;
         if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
         mailboxTickCounter += 1;
-        if (typeof document === 'undefined' || document.hasFocus()) {
-          void inspectAndPushLocalOsClipboard(false, false);
-        }
         if (!isRealtimeChannelActuallyHealthy()) {
           void setupRealtimeChannel(true);
         }
-        void syncRemoteMailboxToUi(true);
-      }, 1500);
+        if (mailboxTickCounter % 2 === 0) {
+          void syncRemoteMailboxToUi(false);
+        }
+      }, 2500);
       mobileMailboxTicker = {
         stop: () => window.clearInterval(mobileTimerId),
       };
@@ -4285,7 +4249,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     if (!activePairSubscribed) {
       void setupRealtimeChannel();
     }
-    void syncRemoteMailboxToUi(true);
+    void syncRemoteMailboxToUi(ident.deviceKind === 'pc_master');
   };
 
   const onNativeClipCaptured = () => {
@@ -4374,10 +4338,6 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     if (mobileResumeCaptureTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(mobileResumeCaptureTimer);
       mobileResumeCaptureTimer = null;
-    }
-    if (mobileResumeRetryTimer !== null && typeof window !== 'undefined') {
-      window.clearTimeout(mobileResumeRetryTimer);
-      mobileResumeRetryTimer = null;
     }
     if (pendingInjectFlushTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(pendingInjectFlushTimer);

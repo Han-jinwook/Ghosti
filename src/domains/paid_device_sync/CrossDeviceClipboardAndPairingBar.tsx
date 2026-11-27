@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
 import {
-  captureAndPushCurrentOsClipboard,
   getThisDeviceIdentity,
+  readCurrentOsClipboardForDevice,
   writeTextToLocalOsClipboard,
 } from '../../services/deviceIntegrationService';
 import { zCoreBridge } from '../../services/zCoreBridge';
-import { isCapacitorIosRuntime } from '../../services/ghostiMobileCareBridge';
 import { formatKoreaDateShort } from '../../services/subscriptionPlanCatalog';
 
 export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> = ({
@@ -28,7 +27,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     reconnectThisDevice,
     reconnectPeerDevice,
     sendTextToPairedClipboard,
-    setDeviceIntegrationSnapshot,
+    sendClipToPhoneNotification,
     setShowProModal,
     openSubscriptionCheckout,
   } = useSaySeeStore();
@@ -41,6 +40,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [reconnectingBusy, setReconnectingBusy] = useState(false);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+  const [sentPhoneHash, setSentPhoneHash] = useState<string | null>(null);
   const [zCoreConnected, setZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
   const [clipSearchQuery, setClipSearchQuery] = useState('');
   const [showAllClips, setShowAllClips] = useState(false);
@@ -98,29 +98,26 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     if (ok) setClipDraft('');
   };
 
-  const handleSendCurrentOsClipboard = async () => {
+  const handleSendCurrentOsClipboardToPhone = async () => {
     if (!isLoggedIn || !merlinAuth?.email || !merlinAuth?.userId) {
       openLoginModal();
       return;
     }
     setPullingLocalClip(true);
     try {
-      const res = await captureAndPushCurrentOsClipboard({
-        email: merlinAuth.email,
-        userId: merlinAuth.userId,
-        isUserGesture: true,
-      });
-      if (res.ok && res.item) {
-        setDeviceIntegrationSnapshot({ incomingClip: res.item });
-        useSaySeeStore.setState({
-          lastQuarantineToast: '복사한 내용이 연결된 기기로 전송되었습니다.',
-        });
+      const draftClean = clipDraft.trim();
+      if (draftClean) {
+        const ok = await sendClipToPhoneNotification(draftClean);
+        if (ok) setClipDraft('');
+        return;
+      }
+      const read = await readCurrentOsClipboardForDevice({ isUserGesture: true });
+      const text = (read.text || '').trim();
+      if (text) {
+        await sendClipToPhoneNotification(text);
       } else {
         useSaySeeStore.setState({
-          lastQuarantineToast:
-            res.reason === 'EMPTY'
-              ? '복사된 텍스트가 없습니다. 먼저 텍스트를 복사해 주세요.'
-              : '아래 입력칸에 붙여넣기(Ctrl+V) 후 전송 버튼을 눌러 주세요.',
+          lastQuarantineToast: '전송할 텍스트를 입력하거나 먼저 복사(Ctrl+C)해 주세요.',
         });
       }
     } finally {
@@ -391,14 +388,14 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           }
           className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-900 text-[13px] placeholder-slate-400 focus:outline-none focus:border-slate-400"
         />
-        {isLoggedIn && (
+        {isLoggedIn && !isMobileDevice && (
           <button
             type="button"
             disabled={pullingLocalClip}
-            onClick={() => void handleSendCurrentOsClipboard()}
-            className="px-3 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium shrink-0 cursor-pointer disabled:opacity-50"
+            onClick={() => void handleSendCurrentOsClipboardToPhone()}
+            className="px-3 py-2 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-[12px] font-semibold shrink-0 cursor-pointer disabled:opacity-50"
           >
-            {pullingLocalClip ? '읽는 중...' : '복사한 글 보내기'}
+            {pullingLocalClip ? '전송 중...' : '📱 폰으로 보내기'}
           </button>
         )}
         <button
@@ -406,18 +403,13 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           disabled={sendingClip}
           className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold shrink-0 cursor-pointer disabled:opacity-50"
         >
-          {!isLoggedIn ? '로그인' : sendingClip ? '전송 중...' : '전송'}
+          {!isLoggedIn ? '로그인' : sendingClip ? '전송 중...' : isMobileDevice ? 'PC로 보내기' : '보관함 저장'}
         </button>
       </form>
 
       <p className="text-[11.5px] text-slate-500 leading-normal break-keep">
-        카톡 &lsquo;나에게 보내기&rsquo; 없이 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. <strong>PC끼리는 Ctrl+C만 누르면 바로 붙고</strong>, 스마트폰에서는 <strong>[드래그/공유 ➔ PC로 보내기] 1탭</strong>(또는 귀신같이 앱 열기)이면 PC Ctrl+V로 즉시 전송됩니다.
+        카톡 &lsquo;나에게 보내기&rsquo; 없이 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. <strong>PC끼리는 Ctrl+C만 누르면 바로 붙고</strong>, 스마트폰에서는 귀신같이 앱을 열 필요 없이 <strong>안드로이드 [드래그 ➔ PC로 보내기] 1탭 · 아이폰 [공유... ➔ 귀신같이] 2탭</strong>(사진·스크린샷은 <strong>[공유 ➔ 귀신같이] 2탭</strong>)으로 PC Ctrl+V에 즉시 도착합니다. PC에서 폰으로 보낼 때는 <strong>[📱 폰으로 보내기]</strong>를 눌러 폰 알림의 <strong>[📋 복사]</strong> 버튼 1탭으로 복사하세요.
       </p>
-      {isCapacitorIosRuntime() && (
-        <p className="text-[11px] text-slate-400 leading-snug break-keep">
-          팁: 아이폰에서 복사 후 앱을 열 때 뜨는 팝업이 번거로우시면 <strong>[아이폰 설정 &gt; 귀신같이 &gt; 다른 앱에서 붙여넣기 &gt; 허용]</strong>으로 1회만 바꿔두면 팝업 없이 즉시 동기화됩니다.
-        </p>
-      )}
 
       {/* 4. 최근 공유 목록 (7일 보관 · 최대 500건) */}
       {isLoggedIn && syncedClipboardItems.length > 0 && (() => {
@@ -457,6 +449,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
             <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white max-h-[360px] overflow-y-auto">
               {visibleClips.map((clip) => {
                 const isCopied = copiedHash === clip.clipHash;
+                const isSentPhone = sentPhoneHash === clip.clipHash;
                 return (
                   <div
                     key={`${clip.clipHash}:${clip.createdAt}`}
@@ -468,21 +461,42 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                       </span>
                       <p className="text-[13px] text-slate-800 truncate">{clip.text}</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await writeTextToLocalOsClipboard(clip.text, clip.clipHash);
-                        setCopiedHash(clip.clipHash);
-                        window.setTimeout(() => setCopiedHash(null), 2000);
-                      }}
-                      className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium shrink-0 cursor-pointer border ${
-                        isCopied
-                          ? 'bg-teal-600 text-white border-teal-600'
-                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                      }`}
-                    >
-                      {isCopied ? '복사됨' : '복사'}
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {!isMobileDevice && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await sendClipToPhoneNotification(clip.text);
+                            if (ok) {
+                              setSentPhoneHash(clip.clipHash);
+                              window.setTimeout(() => setSentPhoneHash(null), 2200);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold shrink-0 cursor-pointer border transition-colors ${
+                            isSentPhone
+                              ? 'bg-teal-600 text-white border-teal-600'
+                              : 'bg-teal-50 hover:bg-teal-100 text-teal-800 border-teal-200'
+                          }`}
+                        >
+                          {isSentPhone ? '전송됨' : '📱 폰으로 보내기'}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await writeTextToLocalOsClipboard(clip.text, clip.clipHash);
+                          setCopiedHash(clip.clipHash);
+                          window.setTimeout(() => setCopiedHash(null), 2000);
+                        }}
+                        className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium shrink-0 cursor-pointer border ${
+                          isCopied
+                            ? 'bg-teal-600 text-white border-teal-600'
+                            : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {isCopied ? '복사됨' : '복사'}
+                      </button>
+                    </div>
                   </div>
                 );
               })}

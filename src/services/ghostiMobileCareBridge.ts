@@ -180,6 +180,11 @@ export interface GhostiMobileCarePluginInterface {
   getNativeClipboardImeStatus(): Promise<{ ok: boolean; enabled?: boolean; selected?: boolean }>;
   openNativeClipboardImeSettings(options: { mode: 'settings' | 'picker' }): Promise<{ ok: boolean }>;
   extractPdfText(options: { base64: string }): Promise<{ ok: boolean; text?: string }>;
+  postLocalPcClipPushNotification(options: {
+    pushId: string;
+    text: string;
+    senderName?: string;
+  }): Promise<{ ok: boolean }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -957,6 +962,24 @@ export async function openNativeClipboardImeSettings(mode: 'settings' | 'picker'
   if (!isCapacitorAndroidRuntime()) return false;
   try {
     const res = await GhostiMobileCareNative.openNativeClipboardImeSettings({ mode });
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function triggerNativePcClipPushNotification(
+  pushId: string,
+  text: string,
+  senderName = '내 PC'
+): Promise<boolean> {
+  if (!isCapacitorNativeMobileRuntime() || !text?.trim()) return false;
+  try {
+    const res = await GhostiMobileCareNative.postLocalPcClipPushNotification({
+      pushId: pushId || '',
+      text: text.trim(),
+      senderName,
+    });
     return Boolean(res?.ok);
   } catch {
     return false;

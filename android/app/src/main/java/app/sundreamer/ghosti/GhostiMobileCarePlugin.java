@@ -3785,6 +3785,28 @@ public class GhostiMobileCarePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void postLocalPcClipPushNotification(PluginCall call) {
+        Context ctx = getContext();
+        String pushId = call.getString("pushId", "");
+        String text = call.getString("text", "");
+        String senderName = call.getString("senderName", "내 PC");
+        JSObject ret = new JSObject();
+        if (ctx == null || text == null || text.trim().isEmpty()) {
+            ret.put("ok", false);
+            call.resolve(ret);
+            return;
+        }
+        GhostiNativeClipboardSync.postOneTapCopyNotification(
+            ctx.getApplicationContext(),
+            pushId,
+            text.trim(),
+            senderName
+        );
+        ret.put("ok", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void getNativeClipboardImeStatus(PluginCall call) {
         Context ctx = getContext();
         JSObject ret = new JSObject();

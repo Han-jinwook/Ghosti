@@ -189,8 +189,21 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "consumePendingNativeClipboardOutbound", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "extractVideoNativeOcr", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openNativeVideoPlayerModal", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "extractPdfText", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "extractPdfText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "postLocalPcClipPushNotification", returnType: CAPPluginReturnPromise)
     ]
+
+    @objc func postLocalPcClipPushNotification(_ call: CAPPluginCall) {
+        let pushId = call.getString("pushId") ?? ""
+        let text = (call.getString("text") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let senderName = call.getString("senderName") ?? "내 PC"
+        guard !text.isEmpty else {
+            call.resolve(["ok": false])
+            return
+        }
+        AppDelegate.scheduleLocalPcClipNotification(pushId: pushId, plainText: text, senderName: senderName)
+        call.resolve(["ok": true])
+    }
 
     @objc func extractPdfText(_ call: CAPPluginCall) {
         guard let b64 = call.getString("base64"), !b64.isEmpty else {
@@ -1723,6 +1736,33 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var bgPushTaskId: UIBackgroundTaskIdentifier = .invalid
+    private var bgPushTimer: DispatchSourceTimer?
+
+    private func stopBackgroundPushWatch() {
+        bgPushTimer?.cancel()
+        bgPushTimer = nil
+        if bgPushTaskId != .invalid {
+            UIApplication.shared.endBackgroundTask(bgPushTaskId)
+            bgPushTaskId = .invalid
+        }
+    }
+
+    private func startBackgroundPushWatch() {
+        stopBackgroundPushWatch()
+        bgPushTaskId = UIApplication.shared.beginBackgroundTask(withName: "GhostiPcClipPushWatch") { [weak self] in
+            self?.stopBackgroundPushWatch()
+        }
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + 0.8, repeating: .milliseconds(1600))
+        timer.setEventHandler {
+            GhostKeySharedClipboardStore.pullPhonePushInboxOnce { pushId, plain, sender in
+                AppDelegate.scheduleLocalPcClipNotification(pushId: pushId, plainText: plain, senderName: sender)
+            }
+        }
+        bgPushTimer = timer
+        timer.resume()
+    }
 
     private func recordAndDispatchIncomingUrl(_ url: URL?) {
         guard let url = url else { return }
@@ -1761,11 +1801,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
+        stopBackgroundPushWatch()
         DispatchQueue.main.async { [weak self] in
+            if let pendingCopy = UserDefaults.standard.string(forKey: "ghosti_pending_push_copy_text"),
+               !pendingCopy.isEmpty {
+                UIPasteboard.general.string = pendingCopy
+                UserDefaults.standard.removeObject(forKey: "ghosti_pending_push_copy_text")
+            }
             guard let bridgeVC = self?.window?.rootViewController as? GhostiBridgeViewController else { return }
             let js = "window.dispatchEvent(new CustomEvent('ghostiNativeAppResumed', { detail: { hasWindowFocus: true, platform: 'ios' } }));"
             bridgeVC.webView?.evaluateJavaScript(js, completionHandler: nil)
         }
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        startBackgroundPushWatch()
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {

@@ -145,6 +145,7 @@ import {
   revokeConnectedDevice,
   saveCachedDeviceIntegrationSnapshot,
   saveRemoteShadowCache,
+  sendClipToPhonePush,
   syncDeviceHeartbeatAndList,
   syncEntitlementToLocalPcEngine,
   type GhostiConnectedDeviceDto,
@@ -194,6 +195,7 @@ export interface PaidDeviceSyncSlice {
   reconnectThisDevice: () => Promise<boolean>;
   reconnectPeerDevice: (targetDeviceId?: string) => Promise<boolean>;
   sendTextToPairedClipboard: (text: string) => Promise<boolean>;
+  sendClipToPhoneNotification: (text: string) => Promise<boolean>;
   setDeviceIntegrationSnapshot: (payload: {
     devices?: GhostiConnectedDeviceDto[];
     pairingCode?: string | null;
@@ -817,6 +819,50 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         ]),
         lastQuarantineToast:
           '연결된 기기로 클립보드 내용을 전송했습니다.',
+      }));
+    }
+    return true;
+  },
+
+  sendClipToPhoneNotification: async (text: string) => {
+    const { merlinAuth, deviceEntitlement } = get();
+    if (!merlinAuth?.email || !merlinAuth.userId || merlinAuth.userId === 'guest') {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openLoginModal'));
+      }
+      return false;
+    }
+    if (
+      (deviceEntitlement && !deviceEntitlement.unlimitedBindingUnlocked) ||
+      !isCurrentAccountSyncUnlocked(merlinAuth.email)
+    ) {
+      set({
+        lastQuarantineToast: deviceEntitlement?.trialExpired
+          ? '30일 무료체험이 종료되었습니다. 구독 결제창에서 내 기기 통합을 재개하실 수 있습니다.'
+          : '내 기기 통합 30일 무료체험 또는 구독 후 스마트폰 전송을 이용할 수 있습니다.',
+      });
+      get().openSubscriptionCheckout('personal_sub_3900');
+      return false;
+    }
+    const res = await sendClipToPhonePush({
+      text,
+      email: merlinAuth.email,
+      userId: merlinAuth.userId,
+    });
+    if (!res.ok) {
+      set({
+        lastQuarantineToast: '스마트폰 알림 전송에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      });
+      return false;
+    }
+    if (res.item) {
+      set((state) => ({
+        syncedClipboardItems: pruneSyncedClipsToSevenDays([
+          res.item!,
+          ...state.syncedClipboardItems.filter((c) => c.clipHash !== res.item!.clipHash),
+        ]),
+        lastQuarantineToast:
+          '📱 스마트폰에 푸시 알림 1건을 보냈습니다! 폰 알림의 [📋 복사] 버튼만 누르면 앱 열지 않고 바로 복사됩니다.',
       }));
     }
     return true;
