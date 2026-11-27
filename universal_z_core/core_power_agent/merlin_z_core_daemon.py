@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.10.29"
+CORE_VERSION = "2.10.69"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -689,7 +689,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1)·WMV·AVI 영상을 0.2초 내 초고속 H.264 MP4로 변환·캐싱하여 Range 탐색이 가능한 완전한 영상으로 스트리밍합니다."""
         ff = plugin_ghosti_os.find_ffmpeg_exe()
         dur_hint = plugin_ghosti_os._get_fast_video_duration_sec(file_path)
-        sync_budget = 0.25 if (ff and 0 < dur_hint <= 45.0) else (25.0 if not ff else 0.0)
+        sync_budget = 0.25 if (ff and 0 < dur_hint <= 45.0) else (12.0 if not ff else 0.0)
         cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(
             file_path,
             max_sync_sec=sync_budget,

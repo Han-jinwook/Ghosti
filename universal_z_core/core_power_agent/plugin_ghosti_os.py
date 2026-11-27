@@ -4450,9 +4450,16 @@ def _win32_shell_extract_media_thumb(src_path: Path, out_jpg: Path, max_px: int 
     return False
 
 
+_WINRT_THUMB_SEM = threading.Semaphore(1)
+
+
 def _winrt_extract_video_thumb(src_path: Path, seek_sec: float, out_jpg: Path) -> bool:
     """FFmpeg가 설치되지 않은 순정 Windows 10/11 PC에서 WinRT MediaComposition.GetThumbnailAsync로 동영상 썸네일 JPEG를 고속 추출합니다."""
     if os.name != "nt":
+        return False
+    if not _WINRT_THUMB_SEM.acquire(blocking=False):
+        # 크롬 127.0.0.1:5199 6소켓 풀 포화 및 동영상 재생 Stalled 원천 차단:
+        # 이미 다른 WinRT 썸네일 추출이 돌고 있으면 즉시 양보합니다.
         return False
     tmp_dir = out_jpg.parent
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -4496,7 +4503,7 @@ def _winrt_extract_video_thumb(src_path: Path, seek_sec: float, out_jpg: Path) -
                 "-File", str(ps_script), str(src_path), str(tmp_dir), f"{seek_sec:.2f}", tmp_name,
             ],
             capture_output=True,
-            timeout=12,
+            timeout=5,
             creationflags=0x08000000,
         )
         if tmp_file.exists() and tmp_file.stat().st_size > 1000:
@@ -4510,6 +4517,7 @@ def _winrt_extract_video_thumb(src_path: Path, seek_sec: float, out_jpg: Path) -
             tmp_file.unlink(missing_ok=True)
         except Exception:
             pass
+        _WINRT_THUMB_SEM.release()
     return False
 
 
@@ -6115,8 +6123,20 @@ def _list_local_videos_unlocked() -> Dict[str, Any]:
 
             has_video_transcoder = bool(ff or os.name == "nt")
             codec_tag = _detect_video_codec_fast(resolved, allow_file_io=allow_sync_io, st_hint=st)
-            if codec_tag in ("hevc", "mov_slow", "needs_transcode") and has_video_transcoder:
+            if codec_tag == "needs_transcode" and has_video_transcoder:
                 vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
+                if len(prewarm_targets) < 6:
+                    prewarm_targets.append(resolved)
+            elif codec_tag in ("hevc", "mov_slow") and has_video_transcoder:
+                # 최신 Chrome/Edge는 MP4/MOV(HEVC 포함)를 /__photos/file HTTP 206 원본 스트림으로 0.03초 즉시 재생 가능.
+                # FFmpeg 미설치 PC에서 25초 WinRT 동기 블로킹을 원천 제거하기 위해, 이미 완성된 고속 캐시가 있을 때만
+                # /__videos/stream을 쓰고 그 외엔 /__photos/file 직결 (미지원 시 프론트엔드 onError/videoWidth==0 자동 폴백).
+                _vc_key = hashlib.sha1(f"{resolved}|{st.st_size}|{int(st.st_mtime)}|v2".encode("utf-8", errors="ignore")).hexdigest()[:22]
+                _vc_path = _VIDEO_STREAM_CACHE_DIR / f"vc2_{_vc_key}.mp4"
+                if _vc_path.exists() and _vc_path.stat().st_size > 8192:
+                    vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
+                else:
+                    vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
                 if len(prewarm_targets) < 6:
                     prewarm_targets.append(resolved)
             else:

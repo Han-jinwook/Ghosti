@@ -618,7 +618,11 @@ export const VideoScenePreviewModal: React.FC = () => {
                 <video
                   ref={videoRef}
                   src={resolvedVideoSrc}
-                  poster={currentFrameThumbUrl}
+                  poster={
+                    resolvedVideoSrc.includes('127.0.0.1:5199')
+                      ? undefined
+                      : currentFrameThumbUrl
+                  }
                   controls
                   playsInline
                   autoPlay
