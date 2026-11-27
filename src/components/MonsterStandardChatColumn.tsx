@@ -2506,7 +2506,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 }
               }}
               placeholder={isMicListening ? '듣고 있습니다...' : currentRollingPlaceholder}
-              className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-[38px] px-3 py-0 m-0 box-border appearance-none rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] leading-normal text-slate-900 placeholder:text-slate-400 transition-colors"
+              style={{ height: 38, minHeight: 38, maxHeight: 38 }}
+              className="flex-1 min-w-0 h-[38px] min-h-[38px] max-h-[38px] px-3 py-0 m-0 box-border appearance-none rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] leading-[36px] text-slate-900 placeholder:text-slate-400 transition-colors"
             />
           ) : (
             <textarea
@@ -2532,6 +2533,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               onClick={toggleChatMicRecording}
               disabled={busy}
               title="음성으로 말하기"
+              style={{ height: 38, minHeight: 38, maxHeight: 38 }}
               className={`h-[38px] min-h-[38px] max-h-[38px] px-2.5 sm:px-3 py-0 m-0 box-border rounded-lg text-[12px] leading-none font-medium flex items-center justify-center gap-1 transition shrink-0 cursor-pointer border ${
                 isMicListening
                   ? 'bg-rose-600 text-white border-rose-600'
@@ -2546,6 +2548,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             type="submit"
             disabled={busy || !inputText.trim()}
             aria-label="전송"
+            style={isMobileOrStore ? { height: 38, minHeight: 38, maxHeight: 38 } : undefined}
             className={`${
               isMobileOrStore
                 ? `h-[38px] min-h-[38px] max-h-[38px] ${
