@@ -2444,18 +2444,18 @@ public class GhostiMobileCarePlugin extends Plugin {
             boolean ok = false;
             try {
                 Activity act = getActivity();
-                if (act == null || act.isFinishing() || act.isDestroyed()) {
+                if (act == null || act.isFinishing() || act.isDestroyed() || !act.hasWindowFocus()) {
                     JSObject ret = new JSObject();
                     ret.put("ok", false);
                     ret.put("clipHash", hash);
-                    ret.put("reason", "ACTIVITY_NOT_ACTIVE");
+                    ret.put("reason", (act != null && !act.hasWindowFocus()) ? "WINDOW_NOT_FOCUSED" : "ACTIVITY_NOT_ACTIVE");
                     call.resolve(ret);
                     return;
                 }
                 ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
                 if (cm != null) {
                     cm.setPrimaryClip(ClipData.newPlainText("Ghosti", limited));
-                    ok = true;
+                    ok = act.hasWindowFocus() && cm.hasPrimaryClip();
                 }
             } catch (Throwable ignored) {
                 ok = false;

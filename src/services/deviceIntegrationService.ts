@@ -873,7 +873,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.112',
+    appVersion: '1.0.122',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
@@ -1422,8 +1422,53 @@ let lastAutoPushedClipHash = '';
 let lastAutoPushedAtMs = 0;
 const recentRemoteInjectedHashes = new Map<string, number>();
 const deliveredRemoteEnvelopeKeys = new Set<string>();
-let pendingOsInjectClip: { envKey: string; clipHash: string; text: string; createdAtMs: number } | null = null;
+const lastDeliveredRemoteHashBySender = new Map<string, { hash: string; atMs: number }>();
+const inflightMailboxPullByEmail = new Map<
+  string,
+  Promise<{
+    ok?: boolean;
+    canonicalUserId?: string;
+    items?: Array<{
+      clipHash: string;
+      cipherB64: string;
+      ivB64: string;
+      senderDeviceId: string;
+      senderName: string;
+      createdAt: string;
+    }>;
+  }>
+>();
+let pendingOsInjectClip: {
+  envKey: string;
+  item: GhostiSyncedClipItem;
+  createdAtMs: number;
+} | null = null;
 let lastLocalPushTimestampMs = 0;
+
+function buildCanonicalEnvelopeKey(
+  senderDeviceId?: string,
+  clipHash?: string,
+  createdAt?: string
+): string {
+  const parsedMs = createdAt ? Date.parse(createdAt) : NaN;
+  const secTag = Number.isFinite(parsedMs) && parsedMs > 0 ? String(Math.floor(parsedMs / 1000)) : String(createdAt || '');
+  return `${senderDeviceId || ''}:${clipHash || ''}:${secTag}`;
+}
+
+function isDuplicateBurstFromSameSender(senderDeviceId: string, clipHash: string): boolean {
+  if (!senderDeviceId || !clipHash) return false;
+  const prev = lastDeliveredRemoteHashBySender.get(senderDeviceId);
+  if (!prev) return false;
+  return prev.hash === clipHash && Date.now() - prev.atMs < 4000;
+}
+
+function recordDeliveredSenderClipHash(senderDeviceId: string, clipHash: string): void {
+  if (!senderDeviceId || !clipHash) return;
+  if (lastDeliveredRemoteHashBySender.size > 40) {
+    lastDeliveredRemoteHashBySender.clear();
+  }
+  lastDeliveredRemoteHashBySender.set(senderDeviceId, { hash: clipHash, atMs: Date.now() });
+}
 
 function isRealtimeChannelActuallyHealthy(): boolean {
   if (!activePairChannel || !activePairSubscribed) return false;
@@ -1809,17 +1854,24 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
   }
   loadDeliveredEnvelopesOnce(normEmail);
   const ident = getThisDeviceIdentity(normEmail);
-  const res = await callGhostiServerBridge<{
-    canonicalUserId?: string;
-    items?: Array<{
-      clipHash: string;
-      cipherB64: string;
-      ivB64: string;
-      senderDeviceId: string;
-      senderName: string;
-      createdAt: string;
-    }>;
-  }>('device_pull_e2ee_clips', {});
+  let inflight = inflightMailboxPullByEmail.get(normEmail);
+  if (!inflight) {
+    inflight = callGhostiServerBridge<{
+      canonicalUserId?: string;
+      items?: Array<{
+        clipHash: string;
+        cipherB64: string;
+        ivB64: string;
+        senderDeviceId: string;
+        senderName: string;
+        createdAt: string;
+      }>;
+    }>('device_pull_e2ee_clips', {}).finally(() => {
+      inflightMailboxPullByEmail.delete(normEmail);
+    });
+    inflightMailboxPullByEmail.set(normEmail, inflight);
+  }
+  const res = await inflight;
 
   if (!res.ok || !Array.isArray(res.items)) {
     return { items: loadCachedSyncedClips(normEmail), newlyDeliveredExternal: null };
@@ -1855,9 +1907,11 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
       createdAt: env.createdAt,
       encryptedE2ee: true,
     };
-    const envKey = `${env.senderDeviceId || ''}:${resolvedHash}:${env.createdAt || ''}`;
+    const envKey = buildCanonicalEnvelopeKey(env.senderDeviceId, resolvedHash, env.createdAt);
     if (isFromOtherDevice && !deliveredRemoteEnvelopeKeys.has(envKey)) {
-      if (!newestExternalItem) {
+      if (isDuplicateBurstFromSameSender(env.senderDeviceId, resolvedHash)) {
+        rememberDeliveredEnvelope(envKey, normEmail);
+      } else if (!newestExternalItem) {
         newestExternalItem = itemObj;
         newestExternalEnvKey = envKey;
       } else {
@@ -1868,13 +1922,15 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
   }
 
   // 타 기기에서 새로 도착한 최신 클립보드를 내 OS 클립보드에 1회 자동 주입 (Echo-Loop 원천 차단)
-  // 주의: OS 주입에 실제로 성공한 뒤에만 deliveredRemoteEnvelopeKeys에 각인하며, injectToOsClipboard=false로 호출된 경우에도 절대 봉투를 소각하지 않고 pendingOsInjectClip에 보존합니다!
+  // 주의: 모바일(Android 포커스 직전·iOS .inactive 전환 애니메이션 중)에서 OS 주입이 실패한 경우에는
+  // 절대 봉투를 완료 각인하거나 도착 토스트를 조기 소진하지 않고 pendingOsInjectClip에 보관하여 포커스 확보 즉시 주입+토스트를 함께 실행합니다!
+  let confirmedDeliveredExternal: GhostiSyncedClipItem | null = null;
   if (newestExternalItem && newestExternalEnvKey) {
     const createdMs = Date.parse(newestExternalItem.createdAt || '') || Date.now();
     const isFresh = Date.now() - createdMs <= 10 * 60 * 1000;
-    const isOlderThanJustPushed =
-      lastLocalPushTimestampMs > 0 && createdMs < lastLocalPushTimestampMs - 1000;
-    if (!isFresh || isOlderThanJustPushed) {
+    const justPushedLocallyNow =
+      lastLocalPushTimestampMs > 0 && Date.now() - lastLocalPushTimestampMs < 2200;
+    if (!isFresh || justPushedLocallyNow) {
       rememberDeliveredEnvelope(newestExternalEnvKey, normEmail);
     } else if (opts.injectToOsClipboard) {
       if (!osInjectedEnvelopeKeys.has(newestExternalEnvKey)) {
@@ -1885,16 +1941,23 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
         if (injected) {
           osInjectedEnvelopeKeys.add(newestExternalEnvKey);
           rememberDeliveredEnvelope(newestExternalEnvKey, normEmail);
+          recordDeliveredSenderClipHash(
+            newestExternalItem.senderDeviceId,
+            newestExternalItem.clipHash
+          );
           if (pendingOsInjectClip?.envKey === newestExternalEnvKey) {
             pendingOsInjectClip = null;
           }
+          confirmedDeliveredExternal = newestExternalItem;
         } else {
           pendingOsInjectClip = {
             envKey: newestExternalEnvKey,
-            clipHash: newestExternalItem.clipHash,
-            text: newestExternalItem.text,
+            item: newestExternalItem,
             createdAtMs: createdMs,
           };
+          if (ident.deviceKind === 'pc_master') {
+            confirmedDeliveredExternal = newestExternalItem;
+          }
         }
       } else {
         rememberDeliveredEnvelope(newestExternalEnvKey, normEmail);
@@ -1902,8 +1965,7 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
     } else if (!osInjectedEnvelopeKeys.has(newestExternalEnvKey)) {
       pendingOsInjectClip = {
         envKey: newestExternalEnvKey,
-        clipHash: newestExternalItem.clipHash,
-        text: newestExternalItem.text,
+        item: newestExternalItem,
         createdAtMs: createdMs,
       };
     }
@@ -1915,7 +1977,7 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
       void syncSharedNativeClipboardHistory(decryptedList);
     }
   }
-  return { items: decryptedList, newlyDeliveredExternal: newestExternalItem };
+  return { items: decryptedList, newlyDeliveredExternal: confirmedDeliveredExternal };
 }
 
 export function clearPcZCoreClipboardAuthContext(): void {
@@ -2146,14 +2208,13 @@ export async function captureAndPushCurrentOsClipboard(opts: {
 
   lastObservedOsClipHash = h;
 
-  // [PC Z-코어 v2.9.20+ 0.2초 직통 발송 중복 방지 & Realtime 보완]:
-  // Z-코어 데몬이 이미 백그라운드에서 device_push_e2ee_clip으로 우체통 전송을 마쳤다면 중복 HTTP 발송을 생략하고,
-  // 브라우저가 깨어 있을 때만 Realtime WebSocket 패킷을 보조 발송합니다.
+  // [PC Z-코어 v2.9.20+ 직통 배치 발송 단일화 & Realtime 보조]:
+  // Z-코어 네이티브 데몬(nativeDirectActive=true)이 이미 0.12초 주기로 OS 클립보드를 배치 직통 발송하고 있으므로,
+  // 크롬 워커가 Z-코어보다 수 ms 먼저 읽더라도 중복 HTTP 쓰기 경쟁(덮어쓰기 레이스)을 일으키지 않고 WebSocket 즉시 전파만 보조합니다.
   if (
     !opts.isUserGesture &&
     read.source === 'zcore' &&
-    read.nativeDirectActive &&
-    read.lastNativePushedHash === h
+    read.nativeDirectActive
   ) {
     saveLastSyncedOsClipHash(h, normEmail);
     lastLocalPushTimestampMs = Date.now();
@@ -3331,10 +3392,16 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         .on('broadcast', { event: 'E2EE_CLIPBOARD_PUSH' }, async ({ payload }) => {
           if (disposed || thisDeviceRevokedLocally || !payload?.cipherB64 || !payload?.ivB64) return;
           if (!isCurrentAccountSyncUnlocked(normEmail)) return;
-          if (payload.senderDeviceId === ident.deviceId) return;
+          const senderId = String(payload.senderDeviceId || '');
+          if (senderId === ident.deviceId) return;
           const hash = String(payload.clipHash || '');
-          const envKey = `${String(payload.senderDeviceId || '')}:${hash}:${String(payload.createdAt || '')}`;
+          const createdAtStr = String(payload.createdAt || new Date().toISOString());
+          const envKey = buildCanonicalEnvelopeKey(senderId, hash, createdAtStr);
           if (deliveredRemoteEnvelopeKeys.has(envKey)) return;
+          if (hash && isDuplicateBurstFromSameSender(senderId, hash)) {
+            rememberDeliveredEnvelope(envKey, normEmail);
+            return;
+          }
 
           const cachedUid = loadCanonicalE2eeUid(normEmail);
           const plain = await decryptClipboardE2ee(
@@ -3346,30 +3413,21 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           );
           if (!plain) return;
           const resolvedHash = hash || (await sha256HexBrowser(plain));
-          const createdAtStr = String(payload.createdAt || new Date().toISOString());
-          const createdAtMs = Date.parse(createdAtStr) || Date.now();
-          const isOlderThanJustPushed =
-            lastLocalPushTimestampMs > 0 && createdAtMs < lastLocalPushTimestampMs - 1000;
-
-          if (!isOlderThanJustPushed) {
-            const injected = await writeTextToLocalOsClipboard(plain, resolvedHash);
-            if (injected) {
-              osInjectedEnvelopeKeys.add(envKey);
-              rememberDeliveredEnvelope(envKey, normEmail);
-              if (pendingOsInjectClip?.envKey === envKey) {
-                pendingOsInjectClip = null;
-              }
-            } else {
-              pendingOsInjectClip = { envKey, clipHash: resolvedHash, text: plain, createdAtMs };
-            }
-          } else {
-            rememberDeliveredEnvelope(envKey, normEmail);
+          const resolvedEnvKey = buildCanonicalEnvelopeKey(senderId, resolvedHash, createdAtStr);
+          if (deliveredRemoteEnvelopeKeys.has(resolvedEnvKey)) return;
+          if (isDuplicateBurstFromSameSender(senderId, resolvedHash)) {
+            rememberDeliveredEnvelope(resolvedEnvKey, normEmail);
+            return;
           }
+
+          const createdAtMs = Date.parse(createdAtStr) || Date.now();
+          const justPushedLocallyNow =
+            lastLocalPushTimestampMs > 0 && Date.now() - lastLocalPushTimestampMs < 2200;
 
           const clipItem: GhostiSyncedClipItem = {
             clipHash: resolvedHash,
             text: plain,
-            senderDeviceId: String(payload.senderDeviceId || ''),
+            senderDeviceId: senderId,
             senderName: String(payload.senderName || '연결된 내 기기'),
             createdAt: createdAtStr,
             encryptedE2ee: true,
@@ -3379,7 +3437,34 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== clipItem.clipHash),
           ]);
           saveCachedSyncedClips(nextClips, normEmail);
-          opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
+          if (opts.onClipsSynced) {
+            opts.onClipsSynced(nextClips);
+          }
+
+          if (justPushedLocallyNow) {
+            rememberDeliveredEnvelope(resolvedEnvKey, normEmail);
+            return;
+          }
+
+          const injected = await writeTextToLocalOsClipboard(plain, resolvedHash);
+          if (injected) {
+            osInjectedEnvelopeKeys.add(resolvedEnvKey);
+            rememberDeliveredEnvelope(resolvedEnvKey, normEmail);
+            recordDeliveredSenderClipHash(senderId, resolvedHash);
+            if (pendingOsInjectClip?.envKey === resolvedEnvKey) {
+              pendingOsInjectClip = null;
+            }
+            opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
+          } else {
+            // 모바일 백그라운드·포커스 전환 직전에는 토스트를 백그라운드에서 소모하지 않고,
+            // 창 포커스 확보 직후 실제 OS 클립보드 주입 성공과 동시에 도착 토스트를 띄웁니다.
+            pendingOsInjectClip = { envKey: resolvedEnvKey, item: clipItem, createdAtMs };
+            if (ident.deviceKind === 'pc_master') {
+              opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
+            } else {
+              schedulePendingOsInjectFlush();
+            }
+          }
         })
         .on('broadcast', { event: 'MONITOR_CAST_REMOTE' }, ({ payload }) => {
           if (disposed || !payload) return;
@@ -3541,8 +3626,63 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
     if (pulled.newlyDeliveredExternal) {
       opts.onIncomingClip(pulled.newlyDeliveredExternal, { isLocalAutoCapture: false });
+    } else if (injectToOs && pendingOsInjectClip && ident.deviceKind === 'mobile') {
+      schedulePendingOsInjectFlush();
     }
   };
+
+  let pendingInjectFlushTimer: number | null = null;
+  let pendingInjectAttempts = 0;
+
+  const tryFlushPendingOsInjectClip = async (): Promise<boolean> => {
+    if (disposed || !pendingOsInjectClip) return false;
+    const pending = pendingOsInjectClip;
+    if (Date.now() - pending.createdAtMs > 10 * 60 * 1000) {
+      rememberDeliveredEnvelope(pending.envKey, normEmail);
+      pendingOsInjectClip = null;
+      return false;
+    }
+    const justPushedLocallyNow =
+      lastLocalPushTimestampMs > 0 && Date.now() - lastLocalPushTimestampMs < 2200;
+    if (justPushedLocallyNow) {
+      rememberDeliveredEnvelope(pending.envKey, normEmail);
+      pendingOsInjectClip = null;
+      return false;
+    }
+    const ok = await writeTextToLocalOsClipboard(pending.item.text, pending.item.clipHash);
+    if (!ok) return false;
+
+    osInjectedEnvelopeKeys.add(pending.envKey);
+    rememberDeliveredEnvelope(pending.envKey, normEmail);
+    recordDeliveredSenderClipHash(pending.item.senderDeviceId, pending.item.clipHash);
+    if (pendingOsInjectClip?.envKey === pending.envKey) {
+      pendingOsInjectClip = null;
+    }
+    opts.onIncomingClip(pending.item, { isLocalAutoCapture: false });
+    return true;
+  };
+
+  function schedulePendingOsInjectFlush(resetAttempts = true): void {
+    if (disposed || typeof window === 'undefined' || !pendingOsInjectClip) return;
+    if (resetAttempts) {
+      pendingInjectAttempts = 0;
+    }
+    if (pendingInjectFlushTimer !== null) {
+      window.clearTimeout(pendingInjectFlushTimer);
+      pendingInjectFlushTimer = null;
+    }
+    const delays = [75, 180, 380, 750];
+    const delayMs = delays[Math.min(pendingInjectAttempts, delays.length - 1)];
+    pendingInjectFlushTimer = window.setTimeout(async () => {
+      pendingInjectFlushTimer = null;
+      if (disposed || !pendingOsInjectClip) return;
+      const flushed = await tryFlushPendingOsInjectClip();
+      if (!flushed && pendingOsInjectClip && pendingInjectAttempts < delays.length - 1) {
+        pendingInjectAttempts += 1;
+        schedulePendingOsInjectFlush(false);
+      }
+    }, delayMs);
+  }
 
   const flushPendingNativeMobileClips = async (): Promise<void> => {
     if (
@@ -3588,48 +3728,81 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const finishMobileForegroundSync = async (
     pushedLocalNow: boolean,
     alsoSyncRemoteAfter: boolean,
-    bypassVisibilityGuard = false
+    bypassVisibilityGuard = false,
+    prefetchedRemote?: Promise<{
+      items: GhostiSyncedClipItem[];
+      newlyDeliveredExternal: GhostiSyncedClipItem | null;
+    } | null> | null
   ) => {
     const shouldSyncRemote = alsoSyncRemoteAfter || mobileResumeSyncPending;
     mobileResumeSyncPending = false;
     if (!shouldSyncRemote || disposed || !isMobileRuntimeVisibleOrNativeActive(bypassVisibilityGuard)) {
       return;
     }
-    if (!pushedLocalNow && pendingOsInjectClip) {
-      const pending = pendingOsInjectClip;
-      const isNewerThanLocal =
-        lastLocalPushTimestampMs === 0 || pending.createdAtMs >= lastLocalPushTimestampMs - 1000;
-      if (isNewerThanLocal) {
-        const ok = await writeTextToLocalOsClipboard(pending.text, pending.clipHash);
-        if (ok) {
-          osInjectedEnvelopeKeys.add(pending.envKey);
-          rememberDeliveredEnvelope(pending.envKey, normEmail);
-          if (pendingOsInjectClip?.envKey === pending.envKey) {
-            pendingOsInjectClip = null;
-          }
-        }
-      } else {
-        pendingOsInjectClip = null;
+    if (prefetchedRemote) {
+      const pulled = await prefetchedRemote.catch(() => null);
+      if (disposed) return;
+      if (pulled && pulled.items.length > 0 && opts.onClipsSynced) {
+        opts.onClipsSynced(pulled.items);
       }
     }
-    await syncRemoteMailboxToUi(!pushedLocalNow);
+    if (pushedLocalNow && pendingOsInjectClip) {
+      rememberDeliveredEnvelope(pendingOsInjectClip.envKey, normEmail);
+      pendingOsInjectClip = null;
+      return;
+    }
+    if (!pushedLocalNow && pendingOsInjectClip) {
+      const flushed = await tryFlushPendingOsInjectClip();
+      if (!flushed && pendingOsInjectClip) {
+        schedulePendingOsInjectFlush();
+      }
+      if (prefetchedRemote) return;
+    }
+    if (!prefetchedRemote) {
+      await syncRemoteMailboxToUi(!pushedLocalNow);
+    }
   };
 
   const triggerMobileForegroundCapture = (
     alsoSyncRemoteAfter = false,
-    initialDelayMs = 45,
+    initialDelayMs = 25,
     bypassVisibilityGuard = false
   ) => {
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (alsoSyncRemoteAfter) {
       mobileResumeSyncPending = true;
     }
+    // [0ms 병렬 원격 우체통 선행 조회]: 로컬 클립보드 점검(25~100ms)이 끝나기를 직렬 대기하지 않고,
+    // 앱을 여는 0ms 즉시 서버 우체통 조회를 병렬 출발시켜 도착 토스트·클립보드 장전 체감 지연을 ~0.2초로 단축합니다!
+    const prefetchedRemotePromise =
+      alsoSyncRemoteAfter &&
+      hasAuthenticatedHubAccountSession() &&
+      isCurrentAccountSyncUnlocked(normEmail)
+        ? pullDelayedE2eeClipboardMailbox({
+            email: normEmail,
+            userId: opts.userId,
+            injectToOsClipboard: false,
+          }).catch(() => null)
+        : null;
+
     if (mobileResumeCaptureRunning) {
+      if (alsoSyncRemoteAfter && !pushedLocalGuardActive()) {
+        void prefetchedRemotePromise?.then(async (pulled) => {
+          if (disposed) return;
+          if (pulled && pulled.items.length > 0 && opts.onClipsSynced) {
+            opts.onClipsSynced(pulled.items);
+          }
+          if (pendingOsInjectClip) {
+            const flushed = await tryFlushPendingOsInjectClip();
+            if (!flushed && pendingOsInjectClip) schedulePendingOsInjectFlush();
+          }
+        });
+      }
       return;
     }
-    const clampedDelay = Math.max(20, initialDelayMs);
+    const clampedDelay = Math.max(15, initialDelayMs);
     const targetFireAt = Date.now() + clampedDelay;
-    if (mobileResumeCaptureTimer !== null && mobileResumeFireAtMs > 0 && mobileResumeFireAtMs <= targetFireAt + 40) {
+    if (mobileResumeCaptureTimer !== null && mobileResumeFireAtMs > 0 && mobileResumeFireAtMs <= targetFireAt + 30) {
       return;
     }
     if (mobileResumeCaptureTimer !== null) {
@@ -3640,7 +3813,6 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       mobileResumeRetryTimer = null;
     }
     mobileResumeFireAtMs = targetFireAt;
-    // 1단계: 네이티브 포그라운드 복귀 직후(45ms) 로컬 신규 복사 여부를 확인하고, 없으면 즉시 PC 우체통을 당겨 0.2초 내 클립보드에 꽂습니다.
     mobileResumeCaptureTimer = window.setTimeout(async () => {
       mobileResumeCaptureTimer = null;
       mobileResumeFireAtMs = 0;
@@ -3653,7 +3825,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           mobileResumeCaptureRunning = false;
           return;
         }
-        // 안드로이드 10+ 포커스 전환 찰나에 EMPTY였다면 150ms 뒤 1회만 빠르게 재확인 후 즉시 원격 우체통 수신
+        // 안드로이드 10+ 포커스 전환 찰나에 EMPTY였다면 75ms 뒤 1회만 빠르게 재확인 후 병렬 조회된 원격 우체통 즉시 주입
         if (firstResult === 'EMPTY' && isCapacitorAndroidRuntime()) {
           mobileResumeRetryTimer = window.setTimeout(async () => {
             mobileResumeRetryTimer = null;
@@ -3663,18 +3835,20 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
               await finishMobileForegroundSync(
                 secondResult === 'PUSHED',
                 alsoSyncRemoteAfter,
-                bypassVisibilityGuard
+                bypassVisibilityGuard,
+                prefetchedRemotePromise
               );
             } finally {
               mobileResumeCaptureRunning = false;
             }
-          }, 150);
+          }, 75);
           return;
         }
         await finishMobileForegroundSync(
           firstResult === 'PUSHED',
           alsoSyncRemoteAfter,
-          bypassVisibilityGuard
+          bypassVisibilityGuard,
+          prefetchedRemotePromise
         );
         mobileResumeCaptureRunning = false;
       } catch {
@@ -3682,6 +3856,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       }
     }, clampedDelay);
   };
+
+  function pushedLocalGuardActive(): boolean {
+    return lastLocalPushTimestampMs > 0 && Date.now() - lastLocalPushTimestampMs < 2200;
+  }
 
   const pushNativeClipboardAuthContext = () => {
     if (typeof window === 'undefined') return;
@@ -3746,11 +3924,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         if (disposed || !connected) return;
         pushNativeClipboardAuthContext();
         if (pendingOsInjectClip) {
-          const pending = pendingOsInjectClip;
-          pendingOsInjectClip = null;
-          void writeTextToLocalOsClipboard(pending.text, pending.clipHash).then((ok) => {
-            if (ok) osInjectedEnvelopeKeys.add(pending.envKey);
-          });
+          void tryFlushPendingOsInjectClip();
         } else if (!lastObservedOsClipHash) {
           void inspectAndPushLocalOsClipboard(true, false);
         }
@@ -3865,6 +4039,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       }
     }
 
+    const wasUnlockedBeforeBootHb = isCurrentAccountSyncUnlocked(normEmail);
     const [hb] = await Promise.all([
       pairedViaUrl ? Promise.resolve(null) : syncDeviceHeartbeatAndList(),
       syncRemoteMailboxToUi(true),
@@ -3884,6 +4059,9 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       // (실시간 브로드캐스트 또는 활성 연결 -> 해제 전환 시에만 1회 안내)
       void prewarmAccountE2eeKey(normEmail, opts.userId);
       pushNativeClipboardAuthContext();
+      if (!wasUnlockedBeforeBootHb && isCurrentAccountSyncUnlocked(normEmail)) {
+        void syncRemoteMailboxToUi(true);
+      }
     }
 
     // PC 마스터: 다른 앱(메모장·카톡·다른 크롬 탭)에서 Ctrl+C / Ctrl+V 할 때도 크롬 백그라운드 탭 60초 절전(Throttling)에 걸리지 않도록
@@ -4124,7 +4302,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       void setupRealtimeChannel(true);
     }
     if (ident.deviceKind === 'mobile') {
-      triggerMobileForegroundCapture(true, detail?.hasWindowFocus ? 40 : 140, true);
+      triggerMobileForegroundCapture(true, detail?.hasWindowFocus ? 20 : 85, true);
     } else {
       void inspectAndPushLocalOsClipboard(false, false);
       void syncRemoteMailboxToUi(true);
@@ -4200,6 +4378,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     if (mobileResumeRetryTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(mobileResumeRetryTimer);
       mobileResumeRetryTimer = null;
+    }
+    if (pendingInjectFlushTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(pendingInjectFlushTimer);
+      pendingInjectFlushTimer = null;
     }
     if (zCoreUnsubscribe) {
       zCoreUnsubscribe();

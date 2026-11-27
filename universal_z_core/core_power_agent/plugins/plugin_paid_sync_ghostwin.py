@@ -111,6 +111,10 @@ _E2EE_KEY_CACHE: Dict[str, bytes] = {}
 _AUTH_CTX_LOCK = threading.Lock()
 _AUTH_CTX_MEM: Optional[Dict[str, Any]] = None
 _PUSH_HTTP_LOCK = threading.Lock()
+_PUSH_QUEUE_LOCK = threading.Lock()
+_PUSH_QUEUE_EVENT = threading.Event()
+_NATIVE_PUSH_QUEUE: List[Dict[str, str]] = []
+_PERSISTENT_BRIDGE_CONN: Dict[str, Any] = {"host": "", "conn": None, "last_used": 0.0}
 _NATIVE_DAEMON_STARTED = False
 _NATIVE_DAEMON_LOCK = threading.Lock()
 
@@ -399,17 +403,63 @@ def get_clipboard_e2ee_auth_status(qp: Dict[str, Any] | None = None) -> Dict[str
 
 
 def _post_bridge_json(bridge_url: str, hub_token: str, body: Dict[str, Any], timeout_sec: float = 6.0) -> Optional[Dict[str, Any]]:
+    raw_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": f"Bearer {hub_token}",
+        "Cache-Control": "no-store",
+        "Connection": "keep-alive",
+    }
+    # 1순위: Keep-Alive TLS 세션 재사용으로 2·3회 연속 Ctrl+C 시 SSL 핸드셰이크(~350ms) 지연을 0ms로 단축
     try:
-        raw_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        import http.client
+        import urllib.parse
+
+        parsed_u = urllib.parse.urlsplit(bridge_url)
+        if parsed_u.scheme == "https" and parsed_u.netloc:
+            path_q = parsed_u.path or "/"
+            if parsed_u.query:
+                path_q = f"{path_q}?{parsed_u.query}"
+            with _PUSH_HTTP_LOCK:
+                conn = _PERSISTENT_BRIDGE_CONN.get("conn")
+                if (
+                    conn is None
+                    or _PERSISTENT_BRIDGE_CONN.get("host") != parsed_u.netloc
+                    or (time.time() - float(_PERSISTENT_BRIDGE_CONN.get("last_used") or 0.0)) > 45.0
+                ):
+                    try:
+                        if conn is not None:
+                            conn.close()
+                    except Exception:
+                        pass
+                    conn = http.client.HTTPSConnection(parsed_u.netloc, timeout=timeout_sec)
+                    _PERSISTENT_BRIDGE_CONN["host"] = parsed_u.netloc
+                    _PERSISTENT_BRIDGE_CONN["conn"] = conn
+                try:
+                    conn.request("POST", path_q, body=raw_bytes, headers=headers)
+                    resp = conn.getresponse()
+                    resp_bytes = resp.read()
+                    _PERSISTENT_BRIDGE_CONN["last_used"] = time.time()
+                    if 200 <= resp.status < 300:
+                        resp_txt = resp_bytes.decode("utf-8", errors="ignore")
+                        parsed = json.loads(resp_txt) if resp_txt.strip().startswith("{") else None
+                        if isinstance(parsed, dict):
+                            return parsed
+                except Exception:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    _PERSISTENT_BRIDGE_CONN["conn"] = None
+    except Exception:
+        pass
+
+    try:
         req = urllib.request.Request(
             bridge_url,
             data=raw_bytes,
             method="POST",
-            headers={
-                "Content-Type": "application/json; charset=utf-8",
-                "Authorization": f"Bearer {hub_token}",
-                "Cache-Control": "no-store",
-            },
+            headers=headers,
         )
         with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
             resp_txt = resp.read().decode("utf-8", errors="ignore")
@@ -419,41 +469,77 @@ def _post_bridge_json(bridge_url: str, hub_token: str, body: Dict[str, Any], tim
         return None
 
 
-def _push_native_clip_to_bridge(text_val: str, clip_hash: str, created_iso: str) -> None:
-    with _PUSH_HTTP_LOCK:
-        try:
-            ctx = _load_auth_context()
-            email = str(ctx.get("email") or "").strip().lower()
-            uid = str(ctx.get("canonicalUserId") or "").strip()
-            hub_tok = str(ctx.get("hubToken") or "").strip()
-            dev_id = str(ctx.get("deviceId") or "pc-zcore-direct").strip()
-            dev_name = str(ctx.get("deviceName") or "내 Windows PC").strip()
-            bridge_url = str(ctx.get("bridgeUrl") or DEFAULT_BRIDGE_URL).strip()
-            if not email or not uid or not hub_tok or ctx.get("syncUnlocked", True) is False:
-                return
-            if check_pc_account_owner_allowed(email) is not None:
-                return
+def _flush_native_clip_batch(batch: List[Dict[str, str]]) -> None:
+    if not batch:
+        return
+    try:
+        ctx = _load_auth_context()
+        email = str(ctx.get("email") or "").strip().lower()
+        uid = str(ctx.get("canonicalUserId") or "").strip()
+        hub_tok = str(ctx.get("hubToken") or "").strip()
+        dev_id = str(ctx.get("deviceId") or "pc-zcore-direct").strip()
+        dev_name = str(ctx.get("deviceName") or "내 Windows PC").strip()
+        bridge_url = str(ctx.get("bridgeUrl") or DEFAULT_BRIDGE_URL).strip()
+        if not email or not uid or not hub_tok or ctx.get("syncUnlocked", True) is False:
+            return
+        if check_pc_account_owner_allowed(email) is not None:
+            return
 
-            key32 = _derive_e2ee_key32(email, uid)
+        key32 = _derive_e2ee_key32(email, uid)
+        encrypted_items: List[Dict[str, str]] = []
+        for entry in batch:
+            t_val = str(entry.get("text") or "").strip()
+            c_hash = str(entry.get("clipHash") or "").strip()
+            c_iso = str(entry.get("createdAt") or _format_iso_utc_now()).strip()
+            if not t_val or not c_hash:
+                continue
             iv12 = os.urandom(12)
-            cipher_bytes = win32_aes256_gcm_encrypt(key32, iv12, text_val.encode("utf-8"))
-            req_body = {
-                "action": "device_push_e2ee_clip",
+            cipher_bytes = win32_aes256_gcm_encrypt(key32, iv12, t_val.encode("utf-8"))
+            encrypted_items.append(
+                {
+                    "clipHash": c_hash,
+                    "cipherB64": base64.b64encode(cipher_bytes).decode("ascii"),
+                    "ivB64": base64.b64encode(iv12).decode("ascii"),
+                    "senderDeviceId": dev_id,
+                    "senderName": dev_name,
+                    "createdAt": c_iso,
+                }
+            )
+        if not encrypted_items:
+            return
+
+        newest = encrypted_items[-1]
+        req_body: Dict[str, Any] = {
+            "action": "device_push_e2ee_clip",
+            "clipHash": newest["clipHash"],
+            "cipherB64": newest["cipherB64"],
+            "ivB64": newest["ivB64"],
+            "senderDeviceId": newest["senderDeviceId"],
+            "senderName": newest["senderName"],
+            "createdAt": newest["createdAt"],
+            "items": encrypted_items,
+        }
+        resp = _post_bridge_json(bridge_url, hub_tok, req_body, timeout_sec=6.0)
+        if isinstance(resp, dict) and resp.get("ok"):
+            srv_uid = str(resp.get("canonicalUserId") or "").strip()
+            if srv_uid and srv_uid != uid:
+                ctx["canonicalUserId"] = srv_uid
+                _save_auth_context(ctx)
+    except Exception:
+        pass
+
+
+def _enqueue_native_clip_push(text_val: str, clip_hash: str, created_iso: str) -> None:
+    with _PUSH_QUEUE_LOCK:
+        _NATIVE_PUSH_QUEUE[:] = [x for x in _NATIVE_PUSH_QUEUE if x.get("clipHash") != clip_hash][-29:]
+        _NATIVE_PUSH_QUEUE.append(
+            {
+                "text": text_val,
                 "clipHash": clip_hash,
-                "cipherB64": base64.b64encode(cipher_bytes).decode("ascii"),
-                "ivB64": base64.b64encode(iv12).decode("ascii"),
-                "senderDeviceId": dev_id,
-                "senderName": dev_name,
                 "createdAt": created_iso,
             }
-            resp = _post_bridge_json(bridge_url, hub_tok, req_body, timeout_sec=6.0)
-            if isinstance(resp, dict) and resp.get("ok"):
-                srv_uid = str(resp.get("canonicalUserId") or "").strip()
-                if srv_uid and srv_uid != uid:
-                    ctx["canonicalUserId"] = srv_uid
-                    _save_auth_context(ctx)
-        except Exception:
-            pass
+        )
+    _PUSH_QUEUE_EVENT.set()
 
 
 def _pull_remote_clips_to_pc_os() -> None:
@@ -587,6 +673,18 @@ def start_native_clipboard_e2ee_daemon() -> None:
             return
         _NATIVE_DAEMON_STARTED = True
 
+    def _push_worker_loop() -> None:
+        while True:
+            _PUSH_QUEUE_EVENT.wait()
+            _PUSH_QUEUE_EVENT.clear()
+            while True:
+                with _PUSH_QUEUE_LOCK:
+                    if not _NATIVE_PUSH_QUEUE:
+                        break
+                    batch = list(_NATIVE_PUSH_QUEUE)
+                    _NATIVE_PUSH_QUEUE.clear()
+                _flush_native_clip_batch(batch)
+
     def _daemon_loop() -> None:
         global _LAST_NATIVE_PUSHED_HASH, _LAST_NATIVE_PUSHED_TS
         u32, _ = _configure_win32_clip_funcs()
@@ -597,7 +695,7 @@ def start_native_clipboard_e2ee_daemon() -> None:
         last_pull_ts = 0.0
 
         while True:
-            time.sleep(0.22)
+            time.sleep(0.12)
             try:
                 curr_seq = int(u32.GetClipboardSequenceNumber())
             except Exception:
@@ -641,11 +739,7 @@ def start_native_clipboard_e2ee_daemon() -> None:
                             pushed_entry,
                             *[x for x in _RECENT_NATIVE_PUSHED_CLIPS if x.get("clipHash") != c_hash],
                         ][:20]
-                        threading.Thread(
-                            target=_push_native_clip_to_bridge,
-                            args=(txt, c_hash, created_iso),
-                            daemon=True,
-                        ).start()
+                        _enqueue_native_clip_push(txt, c_hash, created_iso)
 
             now_pull = time.time()
             if (now_pull - last_pull_ts) >= 1.5:
@@ -653,6 +747,7 @@ def start_native_clipboard_e2ee_daemon() -> None:
                 if _is_native_e2ee_ready():
                     _pull_remote_clips_to_pc_os()
 
+    threading.Thread(target=_push_worker_loop, name="zcore-native-clip-push", daemon=True).start()
     threading.Thread(target=_daemon_loop, name="zcore-native-clip-e2ee", daemon=True).start()
 
 

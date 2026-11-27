@@ -640,7 +640,48 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
   };
 }
 
+const deviceSyncUnlockCache = new Map();
+const DEVICE_SYNC_UNLOCK_CACHE_TTL_MS = 30 * 1000;
+
+function invalidateDeviceSyncUnlockCache(emailHash) {
+  if (!emailHash) return;
+  deviceSyncUnlockCache.delete(emailHash);
+}
+
+async function broadcastSupabaseRealtimeClipPush(supabaseUrl, serviceKey, email, payload) {
+  if (!supabaseUrl || !serviceKey || !email || !payload) return;
+  const topic = `ghosti:pair:${sha256Hex(String(email).trim().toLowerCase()).slice(0, 24)}`;
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const tid = ctrl ? setTimeout(() => ctrl.abort(), 650) : null;
+  try {
+    await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        messages: [
+          {
+            topic,
+            event: 'E2EE_CLIPBOARD_PUSH',
+            payload,
+            private: false,
+          },
+        ],
+      }),
+      ...(ctrl ? { signal: ctrl.signal } : {}),
+    });
+  } catch {
+    /* WebSocket broadcast is an optimization; Storage mailbox guarantees delivery */
+  } finally {
+    if (tid) clearTimeout(tid);
+  }
+}
+
 async function assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash) {
+  const nowMs = Date.now();
+  const cached = deviceSyncUnlockCache.get(emailHash);
+  if (cached && cached.expiresAtMs > nowMs) {
+    return { ok: true, entitlement: cached.entitlement };
+  }
   const entRaw = await readStorageJson(
     supabaseUrl,
     serviceKey,
@@ -650,8 +691,14 @@ async function assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash) {
   );
   const view = computeEntitlementView(entRaw, 1);
   if (view.unlimitedBindingUnlocked) {
+    if (deviceSyncUnlockCache.size > 300) deviceSyncUnlockCache.clear();
+    deviceSyncUnlockCache.set(emailHash, {
+      entitlement: view,
+      expiresAtMs: nowMs + DEVICE_SYNC_UNLOCK_CACHE_TTL_MS,
+    });
     return { ok: true, entitlement: view };
   }
+  deviceSyncUnlockCache.delete(emailHash);
   return {
     ok: false,
     response: {
@@ -2038,6 +2085,14 @@ export async function handleAuthedWorkAndDeviceAction({
     }
 
     const entitlement = computeEntitlementView(entRaw, safeDevices.length);
+    if (entitlement.unlimitedBindingUnlocked) {
+      deviceSyncUnlockCache.set(emailHash, {
+        entitlement,
+        expiresAtMs: Date.now() + DEVICE_SYNC_UNLOCK_CACHE_TTL_MS,
+      });
+    } else {
+      invalidateDeviceSyncUnlockCache(emailHash);
+    }
     return {
       status: 200,
       body: {
@@ -2504,6 +2559,7 @@ export async function handleAuthedWorkAndDeviceAction({
       }
       if (!entRaw.trialOptInStartedAt) {
         entRaw.trialOptInStartedAt = new Date().toISOString();
+        invalidateDeviceSyncUnlockCache(emailHash);
         await writeStorageJson(
           supabaseUrl,
           serviceKey,
@@ -2739,6 +2795,7 @@ export async function handleAuthedWorkAndDeviceAction({
       `${emailHash}/entitlement_v1.json`,
       entRaw
     );
+    invalidateDeviceSyncUnlockCache(emailHash);
     if (!saved) {
       return {
         status: 500,
@@ -2802,14 +2859,19 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'device_push_e2ee_clip') {
-    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
-    if (!gate.ok) return gate.response;
-    const cipherB64 = String(body.cipherB64 || '').trim();
-    const ivB64 = String(body.ivB64 || '').trim();
-    const clipHash = String(body.clipHash || '').trim().slice(0, 64);
-    const senderDeviceId = String(body.senderDeviceId || '').trim();
-    const senderName = String(body.senderName || actorNick || '내 기기').slice(0, 48);
-    if (!cipherB64 || !ivB64 || !clipHash || cipherB64.length > 128000) {
+    const rawBatch = Array.isArray(body.items) && body.items.length > 0 ? body.items : [body];
+    const sanitizedBatch = [];
+    for (const rawIt of rawBatch.slice(-30)) {
+      if (!rawIt || typeof rawIt !== 'object') continue;
+      const cipherB64 = String(rawIt.cipherB64 || '').trim();
+      const ivB64 = String(rawIt.ivB64 || '').trim();
+      const clipHash = String(rawIt.clipHash || '').trim().slice(0, 64);
+      const senderDeviceId = String(rawIt.senderDeviceId || body.senderDeviceId || '').trim();
+      const senderName = String(rawIt.senderName || body.senderName || actorNick || '내 기기').slice(0, 48);
+      if (!cipherB64 || !ivB64 || !clipHash || cipherB64.length > 128000) continue;
+      sanitizedBatch.push({ cipherB64, ivB64, clipHash, senderDeviceId, senderName });
+    }
+    if (sanitizedBatch.length === 0) {
       return { status: 400, body: { ok: false, reason: 'INVALID_E2EE_CLIP_PAYLOAD' } };
     }
     if (!globalThis.__ghostiClipMailboxLocks) {
@@ -2827,46 +2889,63 @@ export async function handleAuthedWorkAndDeviceAction({
     );
     try {
       await prevLock.catch(() => {});
+      const [gate, mailbox] = await Promise.all([
+        assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash),
+        readStorageJson(
+          supabaseUrl,
+          serviceKey,
+          DEVICE_BUCKET,
+          `${emailHash}/clipboard_mailbox_v1.json`,
+          { items: [] }
+        ),
+      ]);
+      if (!gate.ok) return gate.response;
+
       const nowMs = Date.now();
       const CLIPBOARD_TTL_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
       const CLIPBOARD_MAX_ITEMS = 500;
       const cutoffMs = nowMs - CLIPBOARD_TTL_MS;
-      const rawClientCreatedAt = String(body.createdAt || '').trim();
-      const parsedClientMs = rawClientCreatedAt ? Date.parse(rawClientCreatedAt) : NaN;
-      const effectiveCreatedAt =
-        Number.isFinite(parsedClientMs) && Math.abs(nowMs - parsedClientMs) <= 5 * 60 * 1000
-          ? new Date(parsedClientMs).toISOString()
-          : new Date(nowMs).toISOString();
-      const mailbox = await readStorageJson(
-        supabaseUrl,
-        serviceKey,
-        DEVICE_BUCKET,
-        `${emailHash}/clipboard_mailbox_v1.json`,
-        { items: [] }
-      );
       const existing = Array.isArray(mailbox.items) ? mailbox.items : [];
+      const incomingHashes = new Set(sanitizedBatch.map((x) => x.clipHash));
       const filtered = existing.filter(
-        (it) => it && it.clipHash !== clipHash && (Date.parse(it.createdAt || '') || 0) >= cutoffMs
+        (it) =>
+          it &&
+          !incomingHashes.has(it.clipHash) &&
+          (Date.parse(it.createdAt || '') || 0) >= cutoffMs
       );
-      filtered.unshift({
-        clipHash,
-        cipherB64,
-        ivB64,
-        senderDeviceId,
-        senderName,
-        createdAt: effectiveCreatedAt,
-      });
+      const prevTopMs = filtered.reduce(
+        (mx, it) => Math.max(mx, Date.parse(it?.createdAt || '') || 0),
+        0
+      );
+      // PC↔모바일 기기 간 시계 오차(Clock Skew)로 인해 신규 복사가 과거 시각으로 오판·증발하는 현상을 원천 차단하기 위해
+      // 서버 단조 증가 시각(Server Monotonic Timestamp)을 부여하여 연속 복사(1➔2➔3)의 마지막 문장이 100% 최상단에 위치하도록 보장합니다.
+      const baseStampMs = Math.max(nowMs, prevTopMs + 1);
+      const stampedBatch = sanitizedBatch.map((entry, idx) => ({
+        clipHash: entry.clipHash,
+        cipherB64: entry.cipherB64,
+        ivB64: entry.ivB64,
+        senderDeviceId: entry.senderDeviceId,
+        senderName: entry.senderName,
+        createdAt: new Date(baseStampMs + idx).toISOString(),
+      }));
+      for (const stamped of stampedBatch) {
+        filtered.unshift(stamped);
+      }
       filtered.sort(
         (a, b) => (Date.parse(b?.createdAt || '') || 0) - (Date.parse(a?.createdAt || '') || 0)
       );
       const trimmed = filtered.slice(0, CLIPBOARD_MAX_ITEMS);
-      const saved = await writeStorageJson(
-        supabaseUrl,
-        serviceKey,
-        DEVICE_BUCKET,
-        `${emailHash}/clipboard_mailbox_v1.json`,
-        { updatedAt: new Date(nowMs).toISOString(), items: trimmed }
-      );
+      const newestStamped = stampedBatch[stampedBatch.length - 1];
+      const [saved] = await Promise.all([
+        writeStorageJson(
+          supabaseUrl,
+          serviceKey,
+          DEVICE_BUCKET,
+          `${emailHash}/clipboard_mailbox_v1.json`,
+          { updatedAt: new Date(baseStampMs + stampedBatch.length).toISOString(), items: trimmed }
+        ),
+        broadcastSupabaseRealtimeClipPush(supabaseUrl, serviceKey, email, newestStamped),
+      ]);
       if (!saved) {
         return {
           status: 502,
@@ -2878,6 +2957,7 @@ export async function handleAuthedWorkAndDeviceAction({
         body: {
           ok: true,
           count: trimmed.length,
+          createdAt: newestStamped.createdAt,
           retentionDays: 7,
           maxItems: CLIPBOARD_MAX_ITEMS,
           canonicalUserId: userId,
@@ -2893,19 +2973,21 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'device_pull_e2ee_clips') {
-    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    const [gate, mailbox] = await Promise.all([
+      assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/clipboard_mailbox_v1.json`,
+        { items: [] }
+      ),
+    ]);
     if (!gate.ok) return gate.response;
     const nowMs = Date.now();
     const CLIPBOARD_TTL_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
     const CLIPBOARD_MAX_ITEMS = 500;
     const cutoffMs = nowMs - CLIPBOARD_TTL_MS;
-    const mailbox = await readStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/clipboard_mailbox_v1.json`,
-      { items: [] }
-    );
     const items = (Array.isArray(mailbox.items) ? mailbox.items : [])
       .filter((it) => it && (Date.parse(it.createdAt || '') || 0) >= cutoffMs)
       .sort(
