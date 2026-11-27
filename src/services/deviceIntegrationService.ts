@@ -1843,9 +1843,36 @@ export async function pushCrossDeviceClipboardText(opts: {
   return { ok: Boolean(bridgeRes?.ok || isRealtimeReady), item };
 }
 
+export interface GhostiDirectPhotoDropItem {
+  dropId: string;
+  fileName: string;
+  mimeType?: string;
+  signedDownloadUrl: string;
+  senderDeviceId?: string;
+  senderName?: string;
+  createdAtMs?: number;
+}
+
+export async function pullRecentDirectPhotoToPc(): Promise<GhostiDirectPhotoDropItem | null> {
+  if (!hasAuthenticatedHubAccountSession() || thisDeviceRevokedLocally) return null;
+  const ident = getThisDeviceIdentity();
+  if (ident.deviceKind !== 'pc_master') return null;
+  const res = await callGhostiServerBridge<{ item?: GhostiDirectPhotoDropItem | null }>(
+    'device_pull_photo_to_pc',
+    {
+      sinceMs: Date.now() - 10 * 60 * 1000,
+      callerDeviceId: ident.deviceId,
+    }
+  );
+  if (!res.ok || !res.item || !res.item.dropId || !res.item.signedDownloadUrl) {
+    return null;
+  }
+  return res.item;
+}
+
 /**
- * [PC ➔ 폰 명시적 선택 전송 (`[📱 폰으로 보내기]` 1클릭 ➔ 폰 푸시 알림 1건 + `[📋 복사]` 1탭)]
- * - 평소 PC Ctrl+C 시에는 폰 알림을 전혀 울리지 않으며(0건), 사용자가 명시적으로 `[📱 폰으로 보내기]`를 눌렀을 때만
+ * [PC ➔ 폰 명시적 선택 전송 (`4. 내 기기 통합` 웹 화면 `[📱 폰으로 보내기]` 1클릭 ➔ 폰 푸시 알림 1건 + `[📋 복사]` 1탭)]
+ * - 평소 PC Ctrl+C 시에는 폰 알림을 전혀 울리지 않으며(0건), 사용자가 `4. 내 기기 통합` 화면에서 `[📱 폰으로 보내기]`를 눌렀을 때만
  *   단 1건의 암호화 푸시 알림을 발송하여 앱을 열지 않고 `[📋 복사]` 1탭으로 즉시 붙여넣기하게 합니다.
  */
 export async function sendClipToPhonePush(opts: {
@@ -3545,9 +3572,15 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         })
         .on('broadcast', { event: 'DIRECT_PHOTO_TO_PC' }, async ({ payload }) => {
           if (disposed || thisDeviceRevokedLocally || !payload) return;
-          if (ident.deviceKind !== 'pc_master' || !zCoreBridge.isConnected) return;
+          if (ident.deviceKind !== 'pc_master') return;
           if (!isCurrentAccountSyncUnlocked(normEmail)) return;
           if (payload.senderDeviceId && payload.senderDeviceId === ident.deviceId) return;
+          if (typeof window !== 'undefined' && payload.dropId && payload.signedDownloadUrl) {
+            window.dispatchEvent(
+              new CustomEvent('ghosti_direct_photo_arrived', { detail: payload })
+            );
+          }
+          if (!zCoreBridge.isConnected) return;
           try {
             await fetch(getZCoreUrl('/__sync/direct-photo-drop'), {
               method: 'POST',

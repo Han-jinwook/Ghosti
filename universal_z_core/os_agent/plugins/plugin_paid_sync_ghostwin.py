@@ -1239,7 +1239,7 @@ def receive_direct_photo_drop(data: Dict[str, Any] | None = None) -> Dict[str, A
 
         clip_res = set_os_clipboard_image_and_file(str(drop_file), req_email)
 
-        # Ctrl+0 귀신창 / 사진·표 OCR 창 직행 신호 파일 기록
+        # 내 기기 통합 직송 사진 로컬 메타 기록
         try:
             sender_name = str(payload.get("senderName") or "내 스마트폰").strip()[:48]
             sig_path = Path(local_app) / "Merlin_Z_Core" / "latest_teleport_vanguard.json"

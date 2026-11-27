@@ -103,13 +103,18 @@
 
 ﻿# 🟠 `[3귀신]` 세션 인계장 (`SESSION_HANDOVER_3.md` — 사진 공유 · 내 기기 통합 · 모바일 앱)
 
-- **최종 갱신 일시**: 2026-11-27 11:00 (KST)
+- **최종 갱신 일시**: 2026-11-27 12:15 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정 · 3·4귀신 테스터는 해나라님이 아닌 달나라님으로 호칭)
-- **최신 배포 버전**: **`Merlin Z-Core v2.10.99+`** · 양대 스토어 **`v1.0.122 (122)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
-- **세션 창 제목**: `3귀신 클립보드즉시도착·v1.0.122`
+- **최신 배포 버전**: **`Merlin Z-Core v2.11.99`** · 양대 스토어 **`v1.0.124 (124)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
+- **세션 창 제목**: `3귀신 무화면직송·v1.0.124`
 
 ## 완료 내역 (2026-11-25 ~ 11-27)
+1. **폰↔PC 무화면 OS 직송(텍스트·링크·사진 `CF_DIB`+`CF_HDROP`) & PC➔폰 `[📱 폰으로 보내기]` 선택 푸시 ➔ 알림 `[📋 복사]` 1탭 복사 전면 개통 · 노션 QA 미션카드 개편 및 사진 공유 직송 미션 신설 (`Z-Core v2.11.99` · 양대 스토어 `v1.0.124 (124)`) (2026-11-27)**
+   - **"앱 열었다 닫기 / iOS `[붙여넣기 허용]` 터치" 억지 동선 및 폐기 커스텀 키보드(`GhostiClipboardImeService` · `GhostKeyKeyboardExtension`) 100% 제거**: 모바일 포그라운드 복귀 시 OS 클립보드 자동 읽기·덮어쓰기를 영구 제거해 iOS `[붙여넣기 허용]` 팝업과 Android 클립보드 읽기 알림을 0회로 소멸.
+   - **① `[폰 ➔ PC]` 무화면 직송**: Android `GhostiQuickClipActivity`(`ACTION_PROCESS_TEXT` `[PC로 보내기]` 1탭 + `ACTION_SEND` `[귀신같이]` 2탭 텍스트·사진 직송) 및 iOS `GhostKeyShareExtension`(`app.sundreamer.ghosti.share` 프로비저닝 개통 · `[공유... ➔ 귀신같이]` 2탭 텍스트·링크·사진 무화면 직송) 완결. PC Z-Core(`plugin_paid_sync_ghostwin.py` · `merlin_z_core_daemon.py`)는 Windows `gdiplus.dll` 기반 `CF_DIB` 비트맵 + `CF_HDROP` 파일 핸들을 동시에 장전해 카톡·엑셀·워드·탐색기 `Ctrl+V` 및 웹 `4. 내 기기 통합` 화면 도착 카드로 직결.
+   - **② `[PC ➔ 폰]` 알림 폭탄 0건 & `4. 내 기기 통합` 선택 푸시 `[📋 복사]` 1탭 복사**: 일반 PC `Ctrl+C`는 7일 보관함(`PC↔PC` 무버튼 직결)만 기록하고 폰 알림은 0건 유지. 귀신같이 PC 웹 `4. 내 기기 통합` 화면(7일 클립보드 보관함)에서 `[📱 폰으로 보내기]` 클릭 시에만 폰 상단 푸시 알림 1건 발송 ➔ Android `GhostiNotificationCopyActivity`(0ms 투명 포커스 복사) · iOS `GHOSTI_PC_CLIP`(`COPY_PC_CLIP`) 1탭으로 앱을 열지 않고 즉시 복사 (홀딩 중인 귀신Key/귀신창 관련 표현 일체 배제 완료).
+   - **전사 오리지널 문서 9종(`상황별_슬로건`, `귀신같이_통합_가격표_마스터`, `귀신Key_기능소속_최종확정안`, `기능명세`, `귀신같이_기획서`, `귀신같이_가치명세서`, `귀신비서_FAQ_원본`, `정책_및_핵심원칙`, `docs/README.md`) In-Place 정합화 완료.**
 1. **PC 연속 복사 ➔ 모바일 앱 열기 시 클립보드 도착 알림 누락 및 수 초 지연 근본 해결 (카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`, `Z-Core v2.10.99` · 양대 스토어 `v1.0.122 (122)`) (2026-11-27)**
    - 안드로이드 비포커스(`!act.hasWindowFocus()`) 거짓 성공 차단(`GhostiMobileCarePlugin.java`), 백그라운드 Realtime 수신 시 토스트 조기 소모 제거 및 포커스 확보 직후 주입·토스트 동시 보장 + 앱 복귀 `0ms` 병렬 원격 우체통 선행 수신(`deviceIntegrationService.ts`), PC Z-Core `0.12초` FIFO 배치 직렬화·Keep-Alive(`plugin_paid_sync_ghostwin.py`), 서버 단조 시각 및 Realtime HTTP 브로드캐스트(`workAndDeviceBridgeOps.mjs`) 반영 완료.
 2. **전 기기 배포 트랙 이원화(`3·4호컴` QA 직결 vs `1·2·5·6호컴` GitHub Releases Auto-Update) 및 MS 공인 코드서명(`https://krc.codesigning.azure.net/`, `sundream-public-cert`) 개통 지침 숙지·적용 (2026-11-27)**
@@ -149,7 +154,7 @@
    - 서버 `mirror_blobs/` 기보유 선대조(`skipExisting`), 클라이언트 `x-upsert: true`, `shadow_catalog` 중복 `thumbWebp` 페이로드 제거로 2회차 동기화를 `0.5초` 내로 단축.
 
 ## 직전 대화 맥락 및 결정사항
-- 모바일 클립보드는 복잡한 시스템 키보드 설정을 일반 유저에게 요구하지 않고 **간단한 `[붙여넣기 허용]` 팝업 + 앱 열기 기본 연동**으로 확정.
+- **"앱 열었다 닫기 / iOS `[붙여넣기 허용]` 터치" 동선 영구 폐기 확정**: ① `[폰 ➔ PC]`는 Android `[드래그 ➔ PC로 보내기]` 1탭 / iOS `[공유... ➔ 귀신같이]` 2탭(사진·스크린샷은 공통 `[공유 ➔ 귀신같이]` 2탭) 무화면 직송, ② `[PC ➔ 폰]`은 평소 `Ctrl+C` 알림 0건 + `[📱 폰으로 보내기]` 선택 푸시 ➔ 폰 알림 `[📋 복사]` 1탭 복사로 전면 재정립.
 - 한 PC 다중 프로필 동시 로그인은 카카오톡 PC 방식의 **동시 1계정 단독 점유**(전환 모달 1클릭 인수인계)로 통일하고, 부부·개인/업무 순차 교대 로그인 시 사진 백업 폴더는 계정별 하위 폴더로 100% 분리 보존.
 - 1~4귀신이 공용 엔진(`universal_z_core/`)·브릿지(`workAndDeviceBridgeOps.mjs`)를 수정할 때는 반드시 `zcore_board.py` 문패를 걸고 커밋·푸시 직후 즉시 내리는 원칙 확립.
 

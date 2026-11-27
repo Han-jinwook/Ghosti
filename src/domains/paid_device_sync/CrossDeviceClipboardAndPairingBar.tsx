@@ -3,10 +3,12 @@ import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
 import {
   getThisDeviceIdentity,
+  pullRecentDirectPhotoToPc,
   readCurrentOsClipboardForDevice,
   writeTextToLocalOsClipboard,
+  type GhostiDirectPhotoDropItem,
 } from '../../services/deviceIntegrationService';
-import { zCoreBridge } from '../../services/zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import { formatKoreaDateShort } from '../../services/subscriptionPlanCatalog';
 
 export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> = ({
@@ -28,6 +30,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     reconnectPeerDevice,
     sendTextToPairedClipboard,
     sendClipToPhoneNotification,
+    openLocalFolder,
     setShowProModal,
     openSubscriptionCheckout,
   } = useSaySeeStore();
@@ -44,6 +47,10 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
   const [zCoreConnected, setZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
   const [clipSearchQuery, setClipSearchQuery] = useState('');
   const [showAllClips, setShowAllClips] = useState(false);
+  const [recentDirectPhoto, setRecentDirectPhoto] = useState<GhostiDirectPhotoDropItem | null>(
+    null
+  );
+  const [reloadingPhotoClip, setReloadingPhotoClip] = useState(false);
 
   useEffect(() => zCoreBridge.subscribe((alive) => setZCoreConnected(alive)), []);
 
@@ -53,6 +60,32 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
   const hidePricingForStore = Boolean(isStoreAppMode) || isMobileOrStoreRuntime();
   const thisDeviceIdentity = getThisDeviceIdentity();
   const isMobileDevice = thisDeviceIdentity.deviceKind === 'mobile';
+
+  useEffect(() => {
+    if (!isLoggedIn || isMobileDevice || thisDeviceRevoked) {
+      setRecentDirectPhoto(null);
+      return;
+    }
+    let cancelled = false;
+    void pullRecentDirectPhotoToPc().then((item) => {
+      if (!cancelled && item) {
+        setRecentDirectPhoto(item);
+      }
+    });
+    const onDirectPhoto = (ev: Event) => {
+      const detail = (ev as CustomEvent<GhostiDirectPhotoDropItem>).detail;
+      if (!detail || !detail.dropId || !detail.signedDownloadUrl) return;
+      setRecentDirectPhoto(detail);
+      useSaySeeStore.setState({
+        lastQuarantineToast: `🖼️ 스마트폰 사진 도착 (${detail.fileName || '사진'}) — 바로 Ctrl+V로 붙여넣으세요!`,
+      });
+    };
+    window.addEventListener('ghosti_direct_photo_arrived', onDirectPhoto as EventListener);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('ghosti_direct_photo_arrived', onDirectPhoto as EventListener);
+    };
+  }, [isLoggedIn, isMobileDevice, thisDeviceRevoked, merlinAuth?.email]);
 
   const openLoginModal = () => {
     if (typeof window !== 'undefined') {
@@ -408,8 +441,79 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
       </form>
 
       <p className="text-[11.5px] text-slate-500 leading-normal break-keep">
-        카톡 &lsquo;나에게 보내기&rsquo; 없이 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. <strong>PC끼리는 Ctrl+C만 누르면 바로 붙고</strong>, 스마트폰에서는 귀신같이 앱을 열 필요 없이 <strong>안드로이드 [드래그 ➔ PC로 보내기] 1탭 · 아이폰 [공유... ➔ 귀신같이] 2탭</strong>(사진·스크린샷은 <strong>[공유 ➔ 귀신같이] 2탭</strong>)으로 PC Ctrl+V에 즉시 도착합니다. PC에서 폰으로 보낼 때는 <strong>[📱 폰으로 보내기]</strong>를 눌러 폰 알림의 <strong>[📋 복사]</strong> 버튼 1탭으로 복사하세요.
+        카톡 &lsquo;나에게 보내기&rsquo; 없이 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. <strong>PC끼리는 Ctrl+C만 누르면 바로 붙고</strong>, 스마트폰에서는 귀신같이 앱을 열 필요 없이 <strong>안드로이드 [드래그 ➔ PC로 보내기] 1탭 · 아이폰 [공유... ➔ 귀신같이] 2탭</strong>(사진·스크린샷은 <strong>[공유 ➔ 귀신같이] 2탭</strong>)으로 PC Ctrl+V와 이 화면에 즉시 도착합니다. PC에서 폰으로 보낼 때는 이 화면의 <strong>[📱 폰으로 보내기]</strong>를 눌러 폰 알림의 <strong>[📋 복사]</strong> 버튼 1탭으로 복사하세요.
       </p>
+
+      {/* 3.5. 스마트폰 [공유 ➔ 귀신같이] 최근 직송 도착 사진 (4. 내 기기 통합 화면 즉시 표시) */}
+      {isLoggedIn && !isMobileDevice && recentDirectPhoto && (
+        <div className="px-3 py-2.5 rounded-lg bg-teal-50/60 border border-teal-200/90 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <a
+              href={recentDirectPhoto.signedDownloadUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="w-12 h-12 rounded-lg overflow-hidden border border-teal-200 bg-white shrink-0 block"
+              title="원본 크게 보기"
+            >
+              <img
+                src={recentDirectPhoto.signedDownloadUrl}
+                alt={recentDirectPhoto.fileName}
+                className="w-full h-full object-cover"
+              />
+            </a>
+            <div className="flex flex-col min-w-0">
+              <span className="text-[11px] font-semibold text-teal-800">
+                🖼️ 스마트폰 사진 직송 도착 · 바로 Ctrl+V 가능
+              </span>
+              <span className="text-[12.5px] font-medium text-slate-900 truncate">
+                {recentDirectPhoto.fileName}
+              </span>
+              <span className="text-[11px] text-slate-500 truncate">
+                {recentDirectPhoto.senderName || '내 스마트폰'} · PC 클립보드(Ctrl+V) 및 내 기기 백업 폴더에 저장됨
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {zCoreConnected && (
+              <button
+                type="button"
+                disabled={reloadingPhotoClip}
+                onClick={async () => {
+                  setReloadingPhotoClip(true);
+                  try {
+                    await fetch(getZCoreUrl('/__sync/direct-photo-drop'), {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        ...recentDirectPhoto,
+                        dropId: `${recentDirectPhoto.dropId}_reload_${Date.now()}`,
+                        accountEmail: merlinAuth?.email || '',
+                      }),
+                    });
+                    useSaySeeStore.setState({
+                      lastQuarantineToast: '사진을 PC 클립보드(Ctrl+V)에 다시 담았습니다.',
+                    });
+                  } catch {
+                    /* ignore */
+                  } finally {
+                    setReloadingPhotoClip(false);
+                  }
+                }}
+                className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer disabled:opacity-50"
+              >
+                {reloadingPhotoClip ? '장전 중...' : 'Ctrl+V 다시 담기'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void openLocalFolder('phone_backup')}
+              className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
+            >
+              백업 폴더 열기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 4. 최근 공유 목록 (7일 보관 · 최대 500건) */}
       {isLoggedIn && syncedClipboardItems.length > 0 && (() => {
