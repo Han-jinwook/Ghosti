@@ -1145,7 +1145,7 @@ export async function executeTextSearch(
 
   // 쓰레기/문서 전용 검색어인지 판별 (일반 풍경/인물 검색 시 흔들린 사진·스크린샷·주차장메모 혼입 원천 차단)
   const isTrashOrDocQuery =
-    /흔들린|흐릿|초점|블러|스크린샷|화면\s*캡처|화면캡처|캡처|화면|로그인|앱|오류|게임|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|여권|학생증|명함|계약|견적|세금계산서|계산서|사업자등록증|보험|증권|청구서|명세서|고지서|증명서|등본|탑승권|결제|주문|화이트보드|칠판|회의/.test(
+    /흔들린|흐릿|초점|블러|스크린샷|화면\s*캡처|화면캡처|캡처|화면|로그인|앱|오류|게임|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|신분|여권|학생증|명함|계약|견적|세금계산서|계산서|종이|세금|계산|사업자등록증|등록증|운전면허증|면허증|운전|면허|보험|증권|청구서|명세서|고지서|증명서|증명|등본|초본|통장|탑승권|결제|주문|화이트보드|칠판|회의/.test(
       qLower
     );
   const isGroupQuery = /단체|단체사진|모임|여럿|일행|가족|친구들|동료들|아이들|어린이들/.test(qLower);
@@ -1385,16 +1385,13 @@ export async function executeTextSearch(
   }
 
   for (const photo of activePhotos) {
-    // 1) 일반 검색 시 흔들린 사진·스크린샷·일회성 메모 제외
-    if (
-      !isTrashOrDocQuery &&
-      (photo.trashCategory === 'blurry' ||
-        photo.trashCategory === 'screenshot' ||
-        photo.trashCategory === 'memo' ||
-        photo.isVaultDocument)
-    ) {
-      continue;
-    }
+    // 1) 일반 풍경·인물 검색 시 흔들린 사진·스크린샷·일회성 메모·서류 사진이 벡터 유사도만으로 섞이지 않도록 구분하되,
+    //    유저가 입력한 검색어(단어 일부 포함)가 해당 사진의 파일명·태그·OCR 캡션과 직접 일치(totalHits > 0 || compoundHit)할 때는 절대 누락하지 않고 100% 찾아줍니다!
+    const isTrashOrVaultPhoto =
+      photo.trashCategory === 'blurry' ||
+      photo.trashCategory === 'screenshot' ||
+      photo.trashCategory === 'memo' ||
+      Boolean(photo.isVaultDocument);
 
     const rawCap = photo.captionKo || '';
     const cap = /\(\d+x\d+\s*·\s*선명도/.test(rawCap) ? '' : rawCap.toLowerCase();
@@ -1638,7 +1635,10 @@ export async function executeTextSearch(
     const realVecSim = vecSimById.get(photo.id);
     const vecThresholdForPhoto = isStaticCapPhoto ? staticAdmitThreshold : visionAdmitThreshold;
     const passesVecGate =
-      !isTextBoundPhotoQuery && realVecSim !== undefined && realVecSim >= vecThresholdForPhoto;
+      (!isTrashOrVaultPhoto || isTrashOrDocQuery) &&
+      !isTextBoundPhotoQuery &&
+      realVecSim !== undefined &&
+      realVecSim >= vecThresholdForPhoto;
     const vecSim = realVecSim ?? 0.64;
 
     if (totalHits > 0 || compoundHit || passesVecGate) {

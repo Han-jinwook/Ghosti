@@ -3086,46 +3086,48 @@ export const createAssistantOnboardingSlice: StateCreator<
             });
         }
       } else if (cleanTargetPath) {
-        const osRes = await executeRealOsAction('open_file_location', cleanTargetPath);
-        if (osRes?.ok) {
+        // [바탕화면(Desktop) 파일 탐색기 창 미오픈 & 상세보기 깜빡임(사라졌다가 다시 뜸) 근본 해결]:
+        // 1) /__zcore/os-execute의 SHOpenFolderAndSelectItems는 바탕화면(Desktop) 파일일 때 탐색기 창을 새로 띄우지 않고
+        //    뒤쪽 바탕화면 배경 아이콘만 선택하므로, explorer.exe /select,<파일>을 직접 실행하는 /__quarantine/open-folder를 최우선 호출합니다.
+        // 2) 일시적 실패나 경로 이동 시에도 열려 있는 상세보기 모달(selectedPhoto)과 이미지 목록을 강제로 닫거나 삭제하지 않고,
+        //    상위 폴더(예: 바탕화면) 또는 기본 사진/문서 폴더로 자연스럽게 폴백하여 탐색기를 즉시 열어줍니다.
+        const rOpenFile = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target, targetPath: cleanTargetPath }),
+        }).catch(() => null);
+        const jOpenFile = rOpenFile && rOpenFile.ok ? await rOpenFile.json().catch(() => null) : null;
+        if (jOpenFile?.ok) {
           openedOk = true;
-        } else if (explicitTargetProvided) {
-          const fileLabel = cleanTargetPath.split(/[\\/]/).pop() || cleanTargetPath;
-          const normMissing = cleanTargetPath.toLowerCase();
-          set((s) => {
-            const closeDoc =
-              (s.selectedDocModal?.path || '').trim().toLowerCase() === normMissing;
-            const closePhoto =
-              (s.selectedPhoto?.fullPath || '').trim().toLowerCase() === normMissing;
-            return {
-              localDocuments: s.localDocuments.filter(
-                (d) => (d.path || '').trim().toLowerCase() !== normMissing
-              ),
-              matchedLocalDocs: s.matchedLocalDocs.filter(
-                (d) => (d.path || '').trim().toLowerCase() !== normMissing
-              ),
-              photos: s.photos.filter(
-                (p) => (p.fullPath || '').trim().toLowerCase() !== normMissing
-              ),
-              searchResults: s.searchResults.filter(
-                (sr) => (sr.photo.fullPath || '').trim().toLowerCase() !== normMissing
-              ),
-              ...(closeDoc ? { selectedDocModal: null } : {}),
-              ...(closePhoto ? { selectedPhoto: null, selectedPhotoBurstGroup: null } : {}),
-              lastQuarantineToast: `[${fileLabel}] 파일이 이미 삭제되었거나 이동되어 목록에서 정리했습니다.`,
-            };
-          });
-          void get().refreshLiveLocalFilesInSearchWindow();
-          return;
         } else {
-          cleanTargetPath = '';
-          const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target }),
-          });
-          const j = r.ok ? await r.json().catch(() => null) : null;
-          openedOk = Boolean(j?.ok);
+          const osRes = await executeRealOsAction('open_file_location', cleanTargetPath);
+          if (osRes?.ok) {
+            openedOk = true;
+          } else {
+            const parentDir = cleanTargetPath.replace(/[\\/][^\\/]+$/, '');
+            if (parentDir && parentDir !== cleanTargetPath) {
+              const rOpenParent = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target, targetPath: parentDir }),
+              }).catch(() => null);
+              const jOpenParent =
+                rOpenParent && rOpenParent.ok ? await rOpenParent.json().catch(() => null) : null;
+              if (jOpenParent?.ok) {
+                openedOk = true;
+              }
+            }
+            if (!openedOk && !explicitTargetProvided) {
+              cleanTargetPath = '';
+              const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target }),
+              }).catch(() => null);
+              const j = r && r.ok ? await r.json().catch(() => null) : null;
+              openedOk = Boolean(j?.ok);
+            }
+          }
         }
       } else {
         const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {

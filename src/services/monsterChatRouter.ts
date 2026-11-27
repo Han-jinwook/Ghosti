@@ -5977,19 +5977,79 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  // 단순 사진/영상/문서 찾기 발화("작년 가족사진 찾아줘", "바닷가에서 뛰노는 아이 보여줘")도 LLM 호출 대기 없이 0.00[🎯 찾기]로 즉시 토스!
-  const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
-  if (
-    earlySearchIntent.isSimpleSearchIntent &&
-    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|사라진|없어졌|없어진|날아갔|날아간|지운|지웠|지워진|삭제|버린|버렸|증발|어디\s*갔|못\s*찾겠|저장\s*(?:안|못)\s*하|미저장|꺼졌|살릴\s*수|살려|구출|압축|휴지통|정리|치워|복원|복구|되돌|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|복사\s*기록|실적|보고서/i.test(
+  const prevAssistantTurn = [...getSharedMonsterChatState().messages]
+    .reverse()
+    .find((m) => m.role === 'assistant');
+  const isReplyingToRecentAssistantPrompt =
+    Boolean(prevAssistantTurn) &&
+    clean.length <= 36 &&
+    !/(날씨|운세|주식|비트코인|환율|번역해|작문해|소설|레시피|요리법|법률|세무|정치|대통령)/i.test(clean) &&
+    (/[?？]|(?:까요|실래요|주세요|알려\s*주|말씀해\s*주|골라\s*주|입력해\s*주)/.test(prevAssistantTurn?.text || '') ||
+      Boolean(prevAssistantTurn?.followUpSuggestions && prevAssistantTurn.followUpSuggestions.length > 0));
+
+  // 단순 사진/영상/문서 찾기 발화("작년 가족사진 찾아줘", "바닷가에서 뛰노는 아이 보여줘") 또는
+  // 귀신검색창에 인덱싱되어 있는 사진·서류·동영상의 파일명·태그 일부(예: "종이세금계산서", "종이", "세금계산서", "운전면허증", "백은숙")를
+  // 입력했을 때도 외부 AI 바톤터치로 빠지지 않고 LLM 대기 없이 0.00[🎯 찾기]로 즉시 토스!
+  const isCareOrSystemCommandNotSimpleSearch =
+    /프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|사라진|없어졌|없어진|날아갔|날아간|지운|지웠|지워진|삭제|버린|버렸|증발|어디\s*갔|못\s*찾겠|저장\s*(?:안|못)\s*하|미저장|꺼졌|살릴\s*수|살려|구출|압축|휴지통|정리|치워|복원|복구|되돌|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|복사\s*기록|실적|보고서|요금|가격|구독|결제|해지|별명|닉네임/i.test(
       clean
-    )
+    );
+  const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
+  const storeForCorpusCheck = useSaySeeStore.getState();
+  const normalizedCorpusQuery = clean
+    .replace(/\s*(?:찾아\s*줘|찾아\s*주세요|찾아|보여\s*줘|보여\s*주세요|보여|열어\s*줘|열어|검색해\s*줘|검색|있어|있나)\??$/i, '')
+    .trim();
+  const corpusTokens = normalizedCorpusQuery
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+
+  const matchedCorpusPhotoOrDocNames: string[] = [];
+  if (
+    !isCareOrSystemCommandNotSimpleSearch &&
+    !isReplyingToRecentAssistantPrompt &&
+    normalizedCorpusQuery.length >= 2 &&
+    normalizedCorpusQuery.length <= 32 &&
+    corpusTokens.length >= 1 &&
+    corpusTokens.length <= 4 &&
+    !/^(?:안녕|안녕하세요|반가워|고마워|감사합니다|응|네|예|아니|좋아|싫어|확인|취소|진행해|실행해)$/i.test(normalizedCorpusQuery)
   ) {
-    const kw = earlySearchIntent.extractedKeyword || clean;
+    for (const p of storeForCorpusCheck.photos || []) {
+      if (p.quarantined) continue;
+      const baseName = p.fullPath ? p.fullPath.split(/[\\/]/).pop() || p.name : p.name;
+      const hay = `${baseName} ${p.name} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')} ${p.captionKo || ''}`.toLowerCase();
+      if (corpusTokens.every((tk) => hay.includes(tk))) {
+        matchedCorpusPhotoOrDocNames.push(
+          `${baseName}${p.locationKo ? ` (${p.locationKo})` : p.fullPath ? ` (${p.fullPath})` : ''}`
+        );
+        if (matchedCorpusPhotoOrDocNames.length >= 4) break;
+      }
+    }
+    if (matchedCorpusPhotoOrDocNames.length < 4) {
+      for (const d of storeForCorpusCheck.localDocuments || []) {
+        const hay = `${d.fileName || ''} ${d.title || ''} ${(d.keywords || []).join(' ')}`.toLowerCase();
+        if (corpusTokens.every((tk) => hay.includes(tk))) {
+          matchedCorpusPhotoOrDocNames.push(`${d.fileName || d.title}`);
+          if (matchedCorpusPhotoOrDocNames.length >= 4) break;
+        }
+      }
+    }
+  }
+
+  if (
+    !isCareOrSystemCommandNotSimpleSearch &&
+    (earlySearchIntent.isSimpleSearchIntent || matchedCorpusPhotoOrDocNames.length > 0)
+  ) {
+    const kw = earlySearchIntent.extractedKeyword || normalizedCorpusQuery || clean;
+    const foundPreviewLines =
+      matchedCorpusPhotoOrDocNames.length > 0
+        ? `\n• **찾은 항목**: ${matchedCorpusPhotoOrDocNames.slice(0, 3).map((n) => `**\`${n}\`**`).join(', ')}`
+        : '';
     speak(`말씀하신 ${kw} 검색 결과를 귀신검색 화면에서 바로 띄워드릴게요.`);
     return reply(
       sourceTab,
-      ` **[양방향 자동 토스   귀신검색 즉시 실행]**\n"${kw}"검색 결과를 **[귀신검색]** 화면에서 바로 찾아 띄워드릴게요!`,
+      ` **[양방향 자동 토스   귀신검색 즉시 실행]**\n"${kw}"검색 결과를 **[귀신검색]** 화면에서 바로 찾아 띄워드릴게요!${foundPreviewLines}`,
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: kw,
@@ -6001,16 +6061,6 @@ export async function processUnifiedMonsterChatQuery(params: {
   //      3단계 원칙에 따라 대화 내용을 클립보드에 복사해 두고 외부 AI로 바로 점프시켜 주는 버튼을 제공합니다 (무토큰 0원).
   //      단, 직전 귀신비서 말풍선이 질문/선택지를 던졌고 유저가 선택지 대신 직접 짧은 답변(예: 새 별명, 사이트명, 요일 등)을 입력한 경우에는
   //      범위 밖 질문으로 오판하지 않고 대화 맥락을 유지하여 처리합니다!
-  const prevAssistantTurn = [...getSharedMonsterChatState().messages]
-    .reverse()
-    .find((m) => m.role === 'assistant');
-  const isReplyingToRecentAssistantPrompt =
-    Boolean(prevAssistantTurn) &&
-    clean.length <= 36 &&
-    !/(날씨|운세|주식|비트코인|환율|번역해|작문해|소설|레시피|요리법|법률|세무|정치|대통령)/i.test(clean) &&
-    (/[?？]|(?:까요|실래요|주세요|알려\s*주|말씀해\s*주|골라\s*주|입력해\s*주)/.test(prevAssistantTurn?.text || '') ||
-      Boolean(prevAssistantTurn?.followUpSuggestions && prevAssistantTurn.followUpSuggestions.length > 0));
-
   const hasAnyAppOrPcCue =
     isReplyingToRecentAssistantPrompt ||
     /귀신|여권|라벨러|편의\s*기능|별명|닉네임|호칭|프로필|계정|로그인|가입|동기화|연동|요금|구독|결제|환불|해지|특판|무료|유료|모임|라운지|문패|캐스트|리모컨|싱크|알림|검진|손없는\s*날|손\s*없는\s*날|단축키|우클릭|ctrl|컨트롤|클립보드|복사|붙여넣기|오타|한영|서식|줄바꿈|합본|ocr|컴퓨터|피씨|pc|노트북|스마트폰|휴대폰|폰|갤러리|사진첩|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|음성|목소리|화면|글씨|글자|테마|다크|라이트|주사율|팝업|광고|보안|백신|바이러스|랜섬웨어|디펜더|시작프로그램|부팅|재부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|검색|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|버그|먹통|멈춤|꺼졌|스튜디오|문의|건의|제안|아이디어|진행|실행|완료|끝났|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|됐어|됐나|했어|했나|승인|동의/i.test(
@@ -6079,7 +6129,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     /느려|느린|느리|속도|버벅|답답|애드웨어|사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드/i.test(
       clean
     ) ||
-    /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean) ||
+    /독소\s*조항|소송|세금\s*계산(?!서)|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean) ||
     /고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|부팅\s*경과|켜\s*둔\s*지|경과\s*시간|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|부팅\s*컨디션|알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막/i.test(
       clean
     ) ||
@@ -7058,7 +7108,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 6) 3대 선 넘기 정직 컷오프 & 애착 AI 바통 터치 (문서 본문 또는 내 PC/폰 실시간 진단 스펙 자동 첨부)
   if (
     llmDecision?.intent === 'BATON_TOUCH_CUTOFF' ||
-    (!hasLlm && /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean))
+    (!hasLlm && /독소\s*조항|소송|세금\s*계산(?!서)|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean))
   ) {
     const store = useSaySeeStore.getState();
     const hw = store.telemetry;

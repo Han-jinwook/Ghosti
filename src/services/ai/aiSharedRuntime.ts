@@ -189,8 +189,8 @@ const MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS = new Set([  '풍경', '풍경사진',
   '여행', '여행사진', '휴가', '캠핑', '텐트', '수영장', '호텔', '리조트', '비행기', '공항',
   '가족', '가족사진', '아이', '아기', '어린이', '친구', '모임', '단체', '단체사진', '셀카', '인물', '인물사진', '결혼식', '생일', '졸업식',
   '사진', '이미지', '동영상', '영상', '비디오', '클립', '녹화',
-  '문서', '서류', '파일', '자료', '영수증', '전표', '계약서', '견적서', '명세서', '세금계산서', '계산서',
-  '사업자등록증', '등록증', '신분증', '운전면허증', '면허증', '주민등록등본', '등본', '초본', '여권', '명함',
+  '문서', '서류', '파일', '자료', '영수증', '전표', '계약서', '견적서', '명세서', '세금계산서', '종이세금계산서', '전자세금계산서', '계산서', '세금', '계산', '종이',
+  '사업자등록증', '등록증', '신분증', '운전면허증', '면허증', '운전', '면허', '주민등록등본', '등본', '초본', '여권', '명함',
   '이력서', '기획서', '제안서', '품의서', '기안서', '단가표', '가격표', '시간표', '일정표', '식단표',
   '청첩장', '초대장', '티켓', '항공권', '처방전', '진단서', '통장', '통장사본', '증명서', '수료증', '자격증',
 ]);
@@ -313,11 +313,13 @@ export function matchKoTokenInStems(
   }
 
   const falseFriendRx = KO_SUBSTRING_FALSE_FRIEND_RX[tk];
+  const allowFileSubKo = Boolean(options?.allowFilenameSubstring) && tk.length >= 2;
 
   for (const st of stems) {
     if (st === tk) return true;
     if (tk.length === 1) continue;
     if (falseFriendRx && falseFriendRx.test(st)) continue;
+    if (allowFileSubKo && st.includes(tk)) return true;
     if (tk.length === 2) {
       if (st.startsWith(tk)) {
         const rem = st.slice(tk.length);
@@ -337,7 +339,7 @@ export function matchKoTokenInStems(
     }
     if (st.includes(tk)) return true;
   }
-  if (tk.length >= 3 && rawText) {
+  if ((tk.length >= 3 || allowFileSubKo) && rawText) {
     const cleanedRaw = falseFriendRx ? rawText.toLowerCase().replace(new RegExp(falseFriendRx.source, 'g'), ' ') : rawText.toLowerCase();
     const noSpace = cleanedRaw.replace(/\s+/g, '');
     if (noSpace.includes(tk.replace(/\s+/g, ''))) return true;

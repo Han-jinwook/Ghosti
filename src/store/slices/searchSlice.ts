@@ -1306,7 +1306,8 @@ export const createSearchSlice: StateCreator<
     if (!sharedMode && !isExplicitPhotoOnlyQuery && rawTokens.length > 0) {
       for (const p of photosForSearch) {
         if (p.quarantined || !p.isVaultDocument) continue;
-        const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
+        const rawBaseName = p.fullPath ? p.fullPath.split(/[\\/]/).pop() || p.name : p.name;
+        const corpus = `${rawBaseName} ${p.name} ${p.tags.join(' ')} ${(p.keywordsKo || []).join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
         if (rawTokens.some((tk) => corpus.includes(tk))) {
           instantVaultMap.set(p.id, {
             photo: p,
