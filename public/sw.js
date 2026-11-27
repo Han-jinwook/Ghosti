@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghosti-pwa-v20261127-v22';
+const CACHE_NAME = 'ghosti-pwa-v20261127-v23';
 const IMMUTABLE_HASHED_ASSET_RX = /^\/assets\/.+-[A-Za-z0-9_-]{6,}\.(?:js|css|wasm|png|jpg|jpeg|webp|svg|woff2?)$/i;
 
 self.addEventListener('install', () => {

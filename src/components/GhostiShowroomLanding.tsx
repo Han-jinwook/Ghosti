@@ -106,7 +106,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   }, []);
 
   // 좌측 귀신비서 채팅창 ⇄ 우측 단일 인터랙티브 체험 스테이지 상태 (100% 독립 안전 상태)
-  const [demoTab, setDemoTab] = useState<OnboardingWeaponTab>('video');
+  const [demoTab, setDemoTab] = useState<OnboardingWeaponTab>('clean');
   const [showStageShortVideo, setShowStageShortVideo] = useState<boolean>(false);
   const [chatMessages, setChatMessages] = useState<SafeOnboardingChatMsg[]>(() => [
     {
@@ -800,7 +800,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
                 {[
                   {
                     key: 'secretary',
@@ -823,9 +823,22 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     title: '사진 공유',
                     sub: '가족 · 동호회 · 동창회 공유방',
                   },
+                  ...(!isStoreAppMode
+                    ? [
+                        {
+                          key: 'work',
+                          tab: 'clean' as OnboardingWeaponTab,
+                          stat: '팀 공용 드라이브',
+                          title: '업무 공유 (S:)',
+                          sub: '사내 문서 공용 폴더 · 30일 체험',
+                        },
+                      ]
+                    : []),
                 ].map((card) => {
                   const active =
-                    card.key === 'search'
+                    card.key === 'work'
+                      ? false
+                      : card.key === 'search'
                       ? demoTab === 'video' || demoTab === 'doc'
                       : card.key === 'share'
                       ? demoTab === 'share'
@@ -834,7 +847,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <button
                       key={card.key}
                       type="button"
-                      onClick={() => handleSelectWeaponChip(card.tab, true)}
+                      onClick={() => {
+                        if (card.key === 'work') {
+                          setB2bFocused(true);
+                          document
+                            .getElementById('work-share')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          return;
+                        }
+                        handleSelectWeaponChip(card.tab, true);
+                      }}
                       className={`p-3.5 rounded-xl border text-left transition-colors cursor-pointer ${
                         active
                           ? 'bg-teal-600 border-teal-600 text-white'
@@ -950,7 +972,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span>우측 화면 연동</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {(['video', 'doc', 'clean', 'share'] as OnboardingWeaponTab[]).map((tabKey) => {
+                {(['clean', 'video', 'doc', 'share'] as OnboardingWeaponTab[]).map((tabKey) => {
                   const item = WEAPON_META[tabKey];
                   const isActive = demoTab === tabKey;
                   return (
@@ -1007,9 +1029,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-white border border-slate-200 p-5 sm:p-7 shadow-xs space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
-                <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium mb-1">
-                  {activeMeta.stageBadge}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[12px] font-semibold">
+                    샘플 화면 체험
+                  </span>
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
+                    {activeMeta.stageBadge}
+                  </span>
+                </div>
                 <h2 className="text-lg sm:text-xl font-bold text-slate-900 break-keep">
                   {activeMeta.stageTitle}
                 </h2>
