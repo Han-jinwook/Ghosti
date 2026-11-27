@@ -956,6 +956,31 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         }
 
     # Case C: 30일 무제한이 만료된 🔒 유료 티어 기능 ➔ 즉시 깔끔하게 유료 잠금(EXPIRED_LOCKED)
+    # [확정 ⑤] 2. 귀신검색 Pro(월 3,900원) 유료 기능별(사진·표 OCR, 귀신 라벨링) 특정 손실회피 성적표 반환
+    # 실제 1회 이상 사용한 기능만 동적으로 노출 (0회 사용한 기능은 숨김 처리, 둘 다 0회면 1줄 기능 안내만 표시)
+    ocr_cnt = 0
+    lbl_cnt = 0
+    try:
+        ft_info = m_entry.get("featureTrials", {})
+        ocr_cnt = int(ft_info.get("feat_6_screen_ocr", {}).get("successCount", 0))
+        lbl_cnt = int(ft_info.get("feat_ghost_labeler", {}).get("successCount", 0))
+    except Exception:
+        pass
+
+    report_lines: list[str] = []
+    if ocr_cnt > 0:
+        report_lines.append(f"• 📝 사진·표 OCR: {ocr_cnt}회 사용 (약 {ocr_cnt * 2}분 절약)")
+    if lbl_cnt > 0:
+        report_lines.append(f"• 🏷️ 귀신 라벨링: {lbl_cnt}회 사용 (약 {lbl_cnt * 3}분 절약)")
+
+    if report_lines:
+        tot_min = (ocr_cnt * 2) + (lbl_cnt * 3)
+        h_str = f"{tot_min // 60}시간 " if tot_min >= 60 else ""
+        m_str = f"{tot_min % 60}분"
+        score_msg = f"📊 [30일 무료체험 만료 성적표]\n그동안 {', '.join(report_lines)}으로 총 약 {h_str}{m_str}의 노가다 시간을 아끼셨습니다!\n커피 한 잔 값(월 3,900원)으로 무제한 해금되며, 기본 검색은 평생 무료입니다."
+    else:
+        score_msg = f"🔒 [{feature_name}] 30일 무료체험이 만료되었습니다. [내 기기 통합 Pro · 월 3,900원]에서 무제한 해금되며, 기본 검색은 평생 0원입니다."
+
     return {
         "ok": False,
         "allowed": False,
@@ -969,7 +994,10 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         "daily_free_remaining": 0,
         "daily_free_limit": 0,
         "error": "TRIAL_EXPIRED_LOCKED",
-        "message": "🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.",
+        "ocr_used_count": ocr_cnt,
+        "labeler_used_count": lbl_cnt,
+        "report_summary": score_msg,
+        "message": score_msg,
     }
 
 

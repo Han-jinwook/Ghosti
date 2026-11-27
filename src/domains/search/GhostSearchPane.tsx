@@ -65,6 +65,7 @@ export const GhostSearchPane: React.FC<{
     sharedRoomSoftDeletedMap,
     sharedRoomAddedPhotos,
     sharedRoomHostPhotos,
+    joinedSharedRooms,
     setDesktopTab,
     openLocalFolder,
     hasExecutedUserSearch,
@@ -675,6 +676,75 @@ export const GhostSearchPane: React.FC<{
                                     className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
                                   >
                                     휴지통 · 숨긴 사진 ({trashedCount}장)
+                                  </button>
+                                );
+                              })()}
+                              {(() => {
+                                // [확정 ④] [⤢ 크게(갤러리)] 인물 검색 시 가족방 연결 버튼 (기존 방 유무 자동 분기)
+                                if (activeLoungeType !== 'personal' || !hasExecutedUserSearch || !activeQuery) {
+                                  return null;
+                                }
+                                const isPersonQuery = Boolean(
+                                  searchResults.some((r) => (r as unknown as { matchedBy?: string }).matchedBy === 'face' || ((r.photo as unknown as { face_person_names?: string[] }).face_person_names && (r.photo as unknown as { face_person_names?: string[] }).face_person_names!.length > 0)) ||
+                                  photos.some((p) => (p as unknown as { face_person_names?: string[] }).face_person_names && (p as unknown as { face_person_names?: string[] }).face_person_names!.some((fn: string) => activeQuery.includes(fn)))
+                                );
+                                if (!isPersonQuery) return null;
+
+                                const hasExistingFamilyRoom = Boolean(activeJoinedRoomMeta || joinedSharedRooms.length > 0 || (sharedRoomAddedPhotos && sharedRoomAddedPhotos.length > 0));
+                                const targetRoomName = (activeJoinedRoomMeta as unknown as { customTitle?: string; room_title?: string; title?: string })?.customTitle || (activeJoinedRoomMeta as unknown as { room_title?: string })?.room_title || activeFamilyRoom || '우리집';
+                                const btnText = hasExistingFamilyRoom
+                                  ? `👨‍👩‍👧‍👦 '${targetRoomName}' 가족방에 담기`
+                                  : '👨‍👩‍👧‍👦 이 사진들로 가족방 만들기';
+
+                                const handleAddToFamilyRoom = async () => {
+                                  try {
+                                    const currentRoomPhotos = sharedRoomAddedPhotos || [];
+                                    const existingPhotoIds = new Set(currentRoomPhotos.map((p) => p.id));
+                                    const existingHashes = new Set(
+                                      currentRoomPhotos.map((p) => (p as { dhash?: string; image_hash?: string }).dhash || (p as { dhash?: string; image_hash?: string }).image_hash).filter(Boolean)
+                                    );
+
+                                    let addedCount = 0;
+                                    let skippedCount = 0;
+                                    const toAdd: typeof searchResults[0]['photo'][] = [];
+
+                                    for (const item of searchResults) {
+                                      const p = item.photo;
+                                      const pHash = (p as { dhash?: string; image_hash?: string }).dhash || (p as { dhash?: string; image_hash?: string }).image_hash;
+                                      if (existingPhotoIds.has(p.id) || (pHash && existingHashes.has(pHash))) {
+                                        skippedCount++;
+                                      } else {
+                                        addedCount++;
+                                        toAdd.push(p);
+                                        if (pHash) existingHashes.add(pHash);
+                                        existingPhotoIds.add(p.id);
+                                      }
+                                    }
+
+                                    if (toAdd.length > 0) {
+                                      useSaySeeStore.setState((prev) => ({
+                                        sharedRoomAddedPhotos: [...(prev.sharedRoomAddedPhotos || []), ...toAdd],
+                                      }));
+                                    }
+
+                                    useSaySeeStore.setState({
+                                      lastQuarantineToast: `새 사진 ${addedCount}장 추가 · 이미 있는 ${skippedCount}장 자동 제외되었습니다!`,
+                                      activeLoungeType: 'family',
+                                    });
+                                  } catch {
+                                    useSaySeeStore.setState({
+                                      lastQuarantineToast: '가족방 사진 담기에 실패했습니다.',
+                                    });
+                                  }
+                                };
+
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleAddToFamilyRoom()}
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                                  >
+                                    <span>{btnText}</span>
                                   </button>
                                 );
                               })()}
