@@ -1299,8 +1299,6 @@ export function saveSessionCachedPcCleanupSnapshot(
         id: p.id,
         name: p.name,
         fullPath: p.fullPath,
-        folderName: p.folderName,
-        deviceSource: p.deviceSource,
         size: p.size,
         date: p.date,
         mtimeMs: p.mtimeMs,
