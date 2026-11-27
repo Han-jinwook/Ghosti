@@ -236,8 +236,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       {droppedBusinessDocName && activeLoungeType !== 'work' && !isStoreAppMode && (
         <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border border-slate-200/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <span className="text-[12.5px] text-amber-100 font-bold leading-relaxed">
-            계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
-            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 월 9,900원~ · 30일 무료체험]</strong>에서 바로 공유해 보세요!
+            계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 사내 공용 폴더(S: 드라이브)에서 바로 공유해 보세요!
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <button

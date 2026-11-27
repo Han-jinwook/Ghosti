@@ -6615,6 +6615,76 @@ def get_clipboard_text_ex(timeout_sec: float = 0.8) -> tuple[str, bool]:
     return (val or ""), ok
 
 
+def _grab_clipboard_image_raw():
+    """
+    [GIL 해제형 클립보드 이미지(CF_DIB) 읽기 — 귀신검색창 전체 정지 근본 처방]:
+    PIL ImageGrab.grabclipboard()는 C 코드 안에서 GIL을 쥔 채 클립보드 소유 앱의 지연 렌더링 응답을 기다려,
+    그동안 메인 루프·화면(닫기 버튼)·워치독까지 프로세스 전체를 멈춥니다(4호기 실측: 캡처 도구 소유 시 31.4초).
+    ctypes 호출(대기 중 GIL 해제)로 CF_DIB 원본만 읽고, 이미지 조립은 메모리 안에서만 수행합니다.
+    """
+    CF_DIB_FMT = 8
+    raw = b""
+    try:
+        k32.GlobalSize.argtypes = [wintypes.HANDLE]
+        k32.GlobalSize.restype = ctypes.c_size_t
+    except Exception:
+        pass
+    for _ in range(5):
+        if u32.OpenClipboard(None):
+            try:
+                if u32.IsClipboardFormatAvailable(CF_DIB_FMT):
+                    h_dib = u32.GetClipboardData(CF_DIB_FMT)
+                    if h_dib:
+                        ptr = k32.GlobalLock(h_dib)
+                        if ptr:
+                            try:
+                                sz = int(k32.GlobalSize(h_dib) or 0)
+                                if sz > 40:
+                                    raw = ctypes.string_at(ptr, sz)
+                            finally:
+                                k32.GlobalUnlock(h_dib)
+            finally:
+                u32.CloseClipboard()
+            break
+        time.sleep(0.01)
+    if len(raw) <= 40:
+        return None
+    try:
+        from PIL import BmpImagePlugin
+
+        im_dib = BmpImagePlugin.DibImageFile(io.BytesIO(raw))
+        im_dib.load()
+        return im_dib
+    except Exception:
+        pass
+    try:
+        from PIL import Image as _PILImage
+
+        hdr_sz = struct.unpack_from("<I", raw, 0)[0]
+        bit_cnt = struct.unpack_from("<H", raw, 14)[0]
+        comp = struct.unpack_from("<I", raw, 16)[0]
+        clr_used = struct.unpack_from("<I", raw, 32)[0]
+        if clr_used == 0 and bit_cnt <= 8:
+            clr_used = 1 << bit_cnt
+        extra_masks = 12 if (comp == 3 and hdr_sz == 40) else 0
+        off_bits = 14 + hdr_sz + extra_masks + clr_used * 4
+        bmp_b = b"BM" + struct.pack("<IHHI", 14 + len(raw), 0, 0, off_bits) + raw
+        im_bmp = _PILImage.open(io.BytesIO(bmp_b))
+        im_bmp.load()
+        return im_bmp
+    except Exception:
+        return None
+
+
+def grab_clipboard_image(timeout_sec: float = 3.0, wait_busy_sec: float = 0.0):
+    """클립보드 이미지(PIL Image 또는 None) — 다른 스레드를 절대 멈추지 않는 시간 제한 읽기."""
+    t_end_busy = time.time() + max(0.0, float(wait_busy_sec))
+    while _CLIP_IO_BUSY_SINCE[0] > 0.0 and time.time() < t_end_busy:
+        time.sleep(0.2)
+    val, _ok = _run_clipboard_read_bounded(_grab_clipboard_image_raw, None, timeout_sec)
+    return val
+
+
 def set_clipboard_text(text: str) -> bool:
     global _SELF_CLIP_SET_TEXT, _SELF_CLIP_SET_UNTIL
     safe_txt = (text or "").encode("utf-16-le", errors="replace").decode("utf-16-le", errors="replace")
@@ -8494,10 +8564,9 @@ def superpower_6_screen_ocr(daemon_set_cb) -> None:
     """
     tmp_img = Path(tempfile.gettempdir()) / "ghosti_ocr_temp.png"
     try:
-        from PIL import ImageGrab
         import ppocr_v5_worker
 
-        img = ImageGrab.grabclipboard()
+        img = grab_clipboard_image(timeout_sec=3.0)
         if img is None:
             show_ghost_toast("👻 귀신같이 글자추출 (Win+Shift+S 캡처 후 눌러주세요)")
             return
@@ -9767,7 +9836,7 @@ def superpower_9_image_or_pdf_file(
 
         # 2) 단일 스샷 이미지 변환 (귀신 라벨러 날짜 규칙 적용)
         out_path = Path(tempfile.gettempdir()) / f"{base_labeled_stem}.png"
-        clip_obj = ImageGrab.grabclipboard()
+        clip_obj = grab_clipboard_image(timeout_sec=3.0)
         if isinstance(clip_obj, Image.Image):
             clip_obj.save(out_path, "PNG")
             if set_clipboard_hdrop_file(str(out_path)):
@@ -11489,8 +11558,8 @@ def main(in_process: bool = False) -> None:
                         def _capture_clip_img_bg(ts_cap: float) -> None:
                             nonlocal last_image_sig, last_image_ts
                             try:
-                                from PIL import Image, ImageGrab
-                                clip_img = ImageGrab.grabclipboard()
+                                from PIL import Image
+                                clip_img = grab_clipboard_image(timeout_sec=40.0, wait_busy_sec=40.0)
                                 if isinstance(clip_img, Image.Image):
                                     buf = io.BytesIO()
                                     clip_img.save(buf, "PNG")

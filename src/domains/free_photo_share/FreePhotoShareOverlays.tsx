@@ -61,6 +61,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
   const [recentPickedNames, setRecentPickedNames] = useState<string[]>([]);
   const [uploadModalFilterMode, setUploadModalFilterMode] = useState<'all' | 'passport_recommended'>('all');
+  const [blockedBusinessDocName, setBlockedBusinessDocName] = useState<string | null>(null);
   const [, setThumbCacheTick] = useState(0);
   const scrollWrapRef = useRef<HTMLDivElement | null>(null);
   const [scrollState, setScrollState] = useState({
@@ -504,6 +505,52 @@ export const FreePhotoShareOverlays: React.FC = () => {
     };
   }, [activeLoungeType, activeFamilyRoom, activeSharedRoomId, syncActiveSharedRoomFromSupabase]);
 
+  // [3. 사진 공유 전 화면 드래그앤드롭 SSOT 가드]:
+  // 앨범 메인(GhostSearchPane)·방 관리·정리 대기실·배경 여백 어디에 엑셀·PDF·한글 등 업무 문서를 놓더라도
+  // 브라우저 기본 파일 다운로드/열기를 100% 원천 차단하고 상단 [사내 공용 폴더(S:)로 바로 이동] 안내 배너를 띄웁니다.
+  useEffect(() => {
+    setBlockedBusinessDocName(null);
+    if (!isSharedPhotoLounge(activeLoungeType) || typeof window === 'undefined') {
+      return;
+    }
+    const hasFilePayload = (dt: DataTransfer | null): boolean => {
+      if (!dt) return false;
+      if (dt.files && dt.files.length > 0) return true;
+      return Array.from(dt.types || []).includes('Files');
+    };
+    const onWindowDragOver = (e: DragEvent) => {
+      if (!hasFilePayload(e.dataTransfer)) return;
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+    const onWindowDrop = (e: DragEvent) => {
+      const fileList = e.dataTransfer?.files;
+      if (!fileList || fileList.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const files = Array.from(fileList);
+      const nonMediaDoc = files.find(
+        (f) => !/\.(jpe?g|png|gif|webp|heic|heif|bmp|mp4|mov|m4v|webm|avi|mkv)$/i.test(f.name)
+      );
+      if (nonMediaDoc) {
+        setBlockedBusinessDocName(nonMediaDoc.name);
+        return;
+      }
+      setBlockedBusinessDocName(null);
+      setShowSharedPhotoUploadModal(true);
+      void importMobileLocalPhotos(files);
+    };
+    window.addEventListener('dragover', onWindowDragOver, true);
+    window.addEventListener('drop', onWindowDrop, true);
+    return () => {
+      window.removeEventListener('dragover', onWindowDragOver, true);
+      window.removeEventListener('drop', onWindowDrop, true);
+    };
+  }, [activeLoungeType, importMobileLocalPhotos, setShowSharedPhotoUploadModal]);
+
   const inviteMeta = readCurrentInviteDisplayMeta(
     isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family',
     activeFamilyRoom
@@ -571,6 +618,42 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
   return (
     <>
+      {/* 🛡️ [3. 사진 공유] 업무 문서 드래그앤드롭 업로드·다운로드 차단 및 [사내 공용 폴더(S:)로 바로 이동] 상단 안내 배너 */}
+      {blockedBusinessDocName && isSharedPhotoLounge(activeLoungeType) && !isStoreAppMode && (
+        <div className="fixed top-14 inset-x-3 sm:inset-x-6 z-[115] flex justify-center pointer-events-none">
+          <section
+            role="alert"
+            className="pointer-events-auto w-full max-w-[1040px] px-4 py-3 rounded-2xl bg-zinc-950/95 backdrop-blur-md border border-amber-400/70 flex flex-wrap items-center justify-between gap-3 shadow-[0_12px_36px_rgba(0,0,0,0.45)]"
+          >
+            <span className="text-[13px] text-amber-100 font-bold leading-relaxed break-keep">
+              📄 계약서·엑셀 등 업무 문서(
+              <code className="text-amber-300 font-mono">{blockedBusinessDocName}</code>)는 사내 공용 폴더(S: 드라이브)에서 바로 공유해 보세요!
+            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setBlockedBusinessDocName(null);
+                  useSaySeeStore.getState().setActiveLoungeType('work');
+                  useSaySeeStore.getState().setDesktopTab('dashboard');
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold cursor-pointer shadow-xs"
+              >
+                사내 공용 폴더(S:)로 바로 이동
+              </button>
+              <button
+                type="button"
+                onClick={() => setBlockedBusinessDocName(null)}
+                className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11.5px] font-bold cursor-pointer"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* 🔔 모바일 웹 구경 중 비간섭 하단 슬림 바 — Step 3: 3대 본능 스위치 (새 사진 알림 / 사진 올리기 / 원본 일괄 저장) */}
       {isGuestPreviewMode &&
         isMobileWebBrowser &&
