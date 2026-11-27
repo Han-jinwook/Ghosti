@@ -1,18 +1,21 @@
 ﻿# 🟠 `[3귀신]` 세션 인계장 (`SESSION_HANDOVER_3.md` — 사진 공유 · 내 기기 통합 · 모바일 앱)
 
-- **최종 갱신 일시**: 2026-11-27 22:56 (KST)
+- **최종 갱신 일시**: 2026-11-28 00:33 (KST)
 - **담당 역할**: `[3귀신]` (사진 공유 · 내 기기 통합 Pro · 모바일 웹 브릿지 · 양대 스토어 앱)
 - **QA 담당 테스터**: **달나라님** (노션 `담당 = 달나라` 고정 · 3·4귀신 테스터는 해나라님이 아닌 달나라님으로 호칭)
 - **최신 배포 버전**: **`Merlin Z-Core v2.13.39`** · 양대 스토어 **`v1.0.130 (130)`** (Google Play 내부 테스트 & Apple TestFlight 동시 출시)
 - **세션 창 제목**: `3귀신 사진공유·모바일통합`
 
-## 완료 내역 (2026-11-25 ~ 11-27)
-1. **사진 공유 누락 4건 멀린님 최종 확정 정공법 일괄 완결 (`Z-Core v2.13.39`, `[즉시실행]` 공문 완결) (2026-11-27)**
+## 완료 내역 (2026-11-25 ~ 11-28)
+1. **사진 공유 누락 4건 멀린님 최종 확정 정공법 일괄 완결 & 달나라님 노션 QA 미션 카드 2건 분할 출제 (`49a1a828`, `Z-Core v2.13.39`) (2026-11-27~28)**
    - **① 중복 사진 `EXIF + 픽셀 해상도(width × height)` 비교·고화질 자동 교체**: `sharedPhotoRoomSupabase.ts`(`isHigherQualityOriginalCandidate` · `upgradeHigherQualitySharedPhoto`), `workAndDeviceBridgeOps.mjs`(`photo_upgrade_higher_quality`), `FreePhotoShareOverlays.tsx`, `freePhotoShareSlice.ts` 구현으로 `dHash` 일치 시 기존 댓글·하트 100% 보존하며 고화질 원본 자동 교체.
    - **② 모바일 24시간 삭제 제한 적용 & 방장 권한 설정 서버 동기화**: `MobileAppView.tsx`에 PC와 동일한 `evaluateSharedPhotoDeletePermission` 연결 + `workAndDeviceBridgeOps.mjs`(`photo_get_room_settings` / `photo_set_room_settings`) · `ghosti_zero_cloud_schema.sql`(`host_retains_hide_permission`) · `LoungeCustomSettingsHeader.tsx` · `GhostSearchPane.tsx` 방별 서버 동기화 완결.
    - **③ 동창회 연도 제보 반쪽 버튼 1차 출시 숨김(2웨이브 이관)**: `AlumniRetroBannerAndTwoTrackBar.tsx` 미작동 `연도 제보 승인` 버튼 제거 및 `기능명세.md` In-Place 반영.
    - **④ 타 멤버 `[원본 동기화]` 듀얼 엔진 아웃바운드 HTTPS 직통 터널 고화질 원본(5~20MB) 스트리밍 다운로드 (`Z-Core v2.13.39`)**: `plugin_ghosti_os.py`(`ensure_photo_room_outbound_tunnel` · `resolve_shared_room_original_file` · `_save_shared_room_items_to_dir` 13KB 썸네일 저장 금지), `merlin_z_core_daemon.py`(`POST /__club/tunnel` · `GET /__club/original-file` `X-Ghosti-Photo-Key` 256-bit 인증), `workAndDeviceBridgeOps.mjs`(`photo_register_room_tunnel` · `photo_get_room_tunnel`), `LoungeFeedContextBanner.tsx`(방장 PC 오프라인 시 정직한 대기 안내 + 45초 자동 이어받기) 완결.
    - **⑤ `PaidDeviceSyncPane.tsx` 하단 미사용 `else` 죽은 코드 청소** 및 `tsc --noEmit` · `vite build` · `node --check` · `py_compile` 전수 통과.
+   - **⑥ 노션 QA 미션 카드 2건 출제 (`담당 = 달나라` · 카드당 2항목 준수)**:
+     - `🟣 [3귀신] 📸 [사진 공유: 고화질 원본 직통 동기화 & 방장 PC 꺼짐 대기 안내]` (`425f9ffd-2c1d-81c5-92cc-cdc39f58fd4b`)
+     - `🟣 [3귀신] 📸 [사진 공유: 중복 사진 고화질 자동 교체 & PC↔폰 삭제 권한 동기화]` (`425f9ffd-2c1d-81ab-b9c9-f4a778341ec2`)
 2. **Apple APNs HTTP/2 · Google FCM HTTP v1 정식 백그라운드 & 앱종료 푸시 직결 (`v1.0.130 (130)` 양대 스토어 출시, 카드 `423f9ffd-2c1d-8060-a898-e06972a3376c` `'재테스트 대기'`) (2026-11-27)**
    - 멀린님 지침 1안 승인에 따라 1호컴 비서(`Secretary`)와 협업하여 `APNs Key (.p8 / 39TQVWY2YM)` 및 `Firebase FCM(google-services.json + 서비스 계정)` 전사 키 확보 및 Netlify 환경변수 4종 세팅 완료.
    - 외부 의존성 0개의 정식 서버 발송 엔진(`netlify/functions/lib/mobilePushDispatcher.mjs`) 탑재. PC `[📱 폰으로 보내기]` 클릭 시 기기별 `APNs / FCM` 토큰으로 즉시 원격 신호 발사.
