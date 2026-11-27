@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.10.69"
+CORE_VERSION = "2.10.79"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -642,7 +642,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                     end = total_len - 1
                 else:
                     start = int(start_s) if start_s else 0
-                    end = int(end_s) if end_s else total_len - 1
+                    if end_s:
+                        end = int(end_s)
+                    elif content_type.startswith("video/") and total_len > 2 * 1024 * 1024:
+                        # 오픈 레인지(bytes=0-) 시 400MB 전체를 한 번에 밀어 넣어 크롬 6소켓 풀을
+                        # 점유하는 현상을 방지하기 위해 2MB 윈도우 단위로 206 즉시 반환합니다.
+                        end = min(total_len - 1, start + 2 * 1024 * 1024 - 1)
+                    else:
+                        end = total_len - 1
                 if start >= total_len:
                     self.send_response(416)
                     self.send_header("Content-Range", f"bytes */{total_len}")
@@ -688,6 +695,34 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
     def _send_transcoded_video_stream(self, file_path: Path, seek_sec: float = 0.0) -> None:
         """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1)·WMV·AVI 영상을 0.2초 내 초고속 H.264 MP4로 변환·캐싱하여 Range 탐색이 가능한 완전한 영상으로 스트리밍합니다."""
         ff = plugin_ghosti_os.find_ffmpeg_exe()
+        ext = file_path.suffix.lower()
+        # FFmpeg 미설치 PC에서 브라우저가 네이티브 재생할 수 없는 대용량 레거시 포맷(.wmv/.avi 등 >30MB)은
+        # 캐시가 없을 때 12~25초 WinRT 동기 블로킹 대신 0.005초 만에 415를 반환해 PC 기본 플레이어 즉시 실행을 안내합니다.
+        if not ff and ext in (".wmv", ".avi", ".mkv", ".3gp", ".flv", ".mts"):
+            try:
+                st = file_path.stat()
+                if st.st_size > 30 * 1024 * 1024:
+                    cached_only = plugin_ghosti_os.get_or_create_faststart_video_cache(
+                        file_path,
+                        max_sync_sec=0.0,
+                        interactive=False,
+                    )
+                    if cached_only is not None and cached_only.exists():
+                        self._send_file_stream(cached_only, content_type="video/mp4", cache_max_age=3600)
+                        return
+                    self._send_json(
+                        {
+                            "ok": False,
+                            "error": "LEGACY_VIDEO_OPEN_NATIVE",
+                            "ext": ext,
+                            "sizeMB": round(st.st_size / (1024 * 1024), 1),
+                        },
+                        status=415,
+                    )
+                    return
+            except Exception:
+                pass
+
         dur_hint = plugin_ghosti_os._get_fast_video_duration_sec(file_path)
         sync_budget = 0.25 if (ff and 0 < dur_hint <= 45.0) else (12.0 if not ff else 0.0)
         cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(

@@ -6366,11 +6366,18 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
         target = str(data.get("target") or "photos").strip()
         target_path = str(data.get("targetPath") or data.get("fullPath") or "").strip()
         strict_file = bool(data.get("strictFile"))
+        open_native_player = bool(data.get("openNativePlayer"))
         if target_path:
             tp = Path(target_path)
             if not tp.exists() and target_path in _PHOTO_PATH_INDEX:
                 tp = _PHOTO_PATH_INDEX[target_path]
             if tp.exists():
+                if open_native_player and tp.is_file() and tp.suffix.lower() in _VIDEO_EXTS:
+                    try:
+                        os.startfile(str(tp))
+                        return {"ok": True, "opened": str(tp), "nativePlayer": True}
+                    except Exception:
+                        pass
                 zos.open_file_location_on_interactive_desktop(tp, mode="open_file_location")
                 return {"ok": True, "opened": str(tp), "selectedFile": tp.is_file()}
             if strict_file or tp.is_absolute():

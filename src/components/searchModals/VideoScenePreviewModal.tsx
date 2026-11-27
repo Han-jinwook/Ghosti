@@ -300,6 +300,17 @@ export const VideoScenePreviewModal: React.FC = () => {
     return () => {
       ocrCancelled = true;
       window.clearTimeout(ocrDeferTimer);
+      // 영상 전환·닫기 시 이전 HTTP 206 스트림 소켓을 즉시 0ms 해제해 크롬 6소켓 풀 포화 방지
+      const el = videoRef.current;
+      if (el) {
+        try {
+          el.pause();
+          el.removeAttribute('src');
+          el.load();
+        } catch {
+          /* ignore */
+        }
+      }
     };
   }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl, selectedVideoModal?.matchedSeekSec, hasExecutedUserSearch, activeQuery]);
 
@@ -454,7 +465,14 @@ export const VideoScenePreviewModal: React.FC = () => {
       return true;
     }
     const rawUrl = selectedVideoModal.videoUrl || '';
-    if (!rawUrl.includes('127.0.0.1:5199') || !selectedVideoModal.videoFileName) return false;
+    if (
+      !rawUrl.includes('127.0.0.1:5199') ||
+      rawUrl.includes('/__videos/stream') ||
+      resolvedVideoSrc.includes('/__videos/stream') ||
+      !selectedVideoModal.videoFileName
+    ) {
+      return false;
+    }
     triedTranscodeFallbackRef.current = true;
     const seekTarget = hasExecutedUserSearch && activeQuery ? (selectedVideoModal.matchedSeekSec ?? 0) : 0;
     pendingSeekSecRef.current = seekTarget;
@@ -749,14 +767,48 @@ export const VideoScenePreviewModal: React.FC = () => {
                     className="w-full h-full object-contain"
                   />
                 ) : null}
-                <div className="absolute inset-0 bg-black/45 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                <div className="absolute inset-0 bg-black/55 flex flex-col items-center justify-center gap-3 px-4 text-center">
                   <span className="px-3.5 py-1.5 rounded-full bg-black/80 border border-white/25 text-white text-[12.5px] font-medium">
                     {videoPlaybackError
-                      ? '이 영상 형식을 재생할 수 없습니다.'
+                      ? '웹 브라우저에서 바로 재생하기 어려운 대용량·특수 형식(.wmv/.avi 등) 영상이에요.'
                       : isResolvingVideo
                       ? '원본 동영상을 불러오는 중...'
                       : '동영상을 불러오는 중...'}
                   </span>
+                  {videoPlaybackError &&
+                    (selectedVideoModal.fullPath ||
+                      String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199')) && (
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            const targetPath =
+                              selectedVideoModal.fullPath || selectedVideoModal.videoFileName || '';
+                            const resp = await fetch('http://127.0.0.1:5199/__quarantine/open-folder', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                target: 'videos',
+                                targetPath,
+                                openNativePlayer: true,
+                              }),
+                            });
+                            if (resp.ok) {
+                              showToast('PC 기본 동영상 플레이어에서 바로 재생합니다.');
+                              return;
+                            }
+                          } catch {
+                            /* fallback */
+                          }
+                          void openLocalFolder('videos', selectedVideoModal.fullPath);
+                        }}
+                        className="px-4 py-2 rounded-full bg-teal-500 hover:bg-teal-400 text-slate-950 text-[13px] font-bold shadow-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                        <span>PC 기본 플레이어로 바로 재생</span>
+                      </button>
+                    )}
                 </div>
               </div>
             )}
