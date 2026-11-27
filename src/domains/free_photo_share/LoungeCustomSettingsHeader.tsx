@@ -51,6 +51,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     photos,
     localDocuments,
     setSelectedPhoto,
+    setSelectedDocModal,
     setDesktopTab,
     setSearchSpace,
     openLocalFolder,
@@ -990,20 +991,45 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                   </>
                 )}
                 {remoteSyncedDocs.length > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                    <span className="text-[12px] font-semibold text-slate-700">
-                      연결된 다른 기기의 문서 ({remoteSyncedDocs.length}건)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchSpace('vault');
-                        setDesktopTab('dashboard');
-                      }}
-                      className="text-[12px] text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
-                    >
-                      전체 보기 →
-                    </button>
+                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[12px] font-semibold text-slate-700">
+                        연결된 다른 기기·클라우드 문서 ({remoteSyncedDocs.length}건)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchSpace('vault');
+                          setDesktopTab('dashboard');
+                        }}
+                        className="text-[12px] text-slate-600 hover:text-slate-900 font-medium cursor-pointer"
+                      >
+                        전체 보기 →
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {remoteSyncedDocs.slice(0, 8).map((rd) => (
+                        <button
+                          key={rd.id}
+                          type="button"
+                          onClick={() => setSelectedDocModal(rd)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left flex items-center gap-1.5 max-w-[260px] cursor-pointer transition-colors"
+                          title={`${rd.fileName} (${rd.deviceSource})`}
+                        >
+                          <span className="text-[11px] font-bold text-teal-700 shrink-0">
+                            {rd.ext || 'DOC'}
+                          </span>
+                          <span className="text-[12px] text-slate-800 font-medium truncate">
+                            {rd.fileName}
+                          </span>
+                          {rd.deviceSource && rd.deviceSource.includes('·') && (
+                            <span className="text-[10.5px] text-slate-500 shrink-0">
+                              {rd.deviceSource.split('·')[1]?.trim()}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

@@ -247,22 +247,27 @@ export const LocalDocPreviewModal: React.FC = () => {
             >
               본문 복사
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                void openLocalDocWithMissingGuard(selectedDocModal);
-              }}
-              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center cursor-pointer"
-            >
-              원본 파일 열기
-            </button>
-            <button
-              type="button"
-              onClick={() => void openLocalFolder('docs', selectedDocModal.path)}
-              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center gap-1 cursor-pointer"
-            >
-              <span>문서 폴더</span>
-            </button>
+            {Boolean(selectedDocModal.path) &&
+              !selectedDocModal.id.startsWith('shadow-remote-doc-') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void openLocalDocWithMissingGuard(selectedDocModal);
+                    }}
+                    className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center cursor-pointer"
+                  >
+                    원본 파일 열기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void openLocalFolder('docs', selectedDocModal.path)}
+                    className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center gap-1 cursor-pointer"
+                  >
+                    <span>문서 폴더</span>
+                  </button>
+                </>
+              )}
             <button
               type="button"
               onClick={handleCloseModal}

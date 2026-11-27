@@ -109,6 +109,7 @@ export const MobileAppView: React.FC = () => {
     activeLoungeType,
     setActiveLoungeType,
     photos,
+    localDocuments,
     searchSpace,
     setSearchSpace,
     resetSearchSpaceToAll,
@@ -1734,6 +1735,53 @@ export const MobileAppView: React.FC = () => {
                                       alt={rp.name}
                                       className="w-full h-full object-cover"
                                     />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {(() => {
+                          const remoteSyncedDocs = localDocuments.filter((d) =>
+                            d.id.startsWith('shadow-remote-doc-')
+                          );
+                          if (remoteSyncedDocs.length === 0) return null;
+                          return (
+                            <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-col gap-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[12px] font-semibold text-slate-800">
+                                  연결된 기기·클라우드 문서 ({remoteSyncedDocs.length}건)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSearchSpace('vault');
+                                    window.setTimeout(() => {
+                                      document
+                                        .getElementById('ghosti-search-results')
+                                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }, 120);
+                                  }}
+                                  className="px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 text-[11px] font-medium cursor-pointer shrink-0"
+                                >
+                                  문서 목록 보기
+                                </button>
+                              </div>
+                              <div className="flex flex-col gap-1.5">
+                                {remoteSyncedDocs.slice(0, 5).map((rd) => (
+                                  <button
+                                    key={rd.id}
+                                    type="button"
+                                    onClick={() => setSelectedDocModal(rd)}
+                                    className="px-2.5 py-1.5 rounded-md bg-white border border-slate-200 text-left flex items-center justify-between gap-2 cursor-pointer"
+                                  >
+                                    <span className="text-[12px] text-slate-800 font-medium truncate">
+                                      {rd.fileName}
+                                    </span>
+                                    <span className="text-[10.5px] text-teal-700 font-semibold shrink-0">
+                                      {rd.deviceSource}
+                                    </span>
                                   </button>
                                 ))}
                               </div>

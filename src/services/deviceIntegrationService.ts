@@ -2603,6 +2603,41 @@ export async function pullPendingMirrorOriginalsToPcBackupFolder(
   return task;
 }
 
+function resolveCloudDriveHint(rawPathOrSource: string): {
+  badgeSuffix: string;
+  extraKeywords: string[];
+} {
+  const probe = (rawPathOrSource || '').toLowerCase();
+  if (!probe) return { badgeSuffix: '', extraKeywords: [] };
+  if (probe.includes('mybox') || probe.includes('마이박스') || probe.includes('ndrive')) {
+    return {
+      badgeSuffix: '네이버 MYBOX',
+      extraKeywords: ['네이버마이박스', '마이박스', 'MYBOX'],
+    };
+  }
+  if (
+    probe.startsWith('g:\\') ||
+    probe.startsWith('g:/') ||
+    probe.includes('내 드라이브') ||
+    probe.includes('my drive') ||
+    probe.includes('google sheets') ||
+    probe.includes('google drive') ||
+    /\.(gsheet|gdoc|gslides)$/i.test(probe)
+  ) {
+    return {
+      badgeSuffix: '구글 드라이브(G:)',
+      extraKeywords: ['구글드라이브', 'G드라이브', 'GoogleDrive'],
+    };
+  }
+  if (probe.includes('onedrive') || probe.includes('원드라이브')) {
+    return {
+      badgeSuffix: 'OneDrive',
+      extraKeywords: ['원드라이브', 'OneDrive'],
+    };
+  }
+  return { badgeSuffix: '', extraKeywords: [] };
+}
+
 export async function executeRealDeviceSyncNow(opts: {
   strategy: PrivateSyncStrategy;
   photos: PhotoItem[];
@@ -2968,6 +3003,12 @@ export async function executeRealDeviceSyncNow(opts: {
           packedThumbCache.set(shaKey, thumbWebp);
         }
       }
+      const photoCloud = resolveCloudDriveHint(
+        `${p.fullPath || ''} ${p.locationKo || ''} ${p.name || ''}`
+      );
+      const photoSourceLabel = photoCloud.badgeSuffix
+        ? `${ident.displayName} · ${photoCloud.badgeSuffix}`
+        : ident.displayName;
       outgoing[i] = {
         sig,
         payload: {
@@ -2975,11 +3016,13 @@ export async function executeRealDeviceSyncNow(opts: {
           kind: 'photo',
           title: p.name,
           thumbWebp,
-          keywords: (p.tags || []).slice(0, 12),
+          keywords: Array.from(
+            new Set([...(p.tags || []), ...photoCloud.extraKeywords])
+          ).slice(0, 14),
           ocrSnippet: p.captionKo || (p.keywordsKo || []).join(' ') || '',
           shotDate: p.date || '',
           sourceDeviceId: ident.deviceId,
-          sourceDeviceName: ident.displayName,
+          sourceDeviceName: photoSourceLabel,
           byteSize: p.size || 512000,
           sha256: shaKey,
           hasMirrorBlob: mirrorUploadedIds.has(p.id),
@@ -2996,17 +3039,33 @@ export async function executeRealDeviceSyncNow(opts: {
     });
 
     for (const { doc, shaShort, sig } of docsToPack) {
+      const docCloud = resolveCloudDriveHint(
+        `${doc.path || ''} ${doc.deviceSource || ''} ${doc.fileName || ''}`
+      );
+      const docSourceLabel = docCloud.badgeSuffix
+        ? `${ident.displayName} · ${docCloud.badgeSuffix}`
+        : ident.displayName;
+      const fullDocText = (doc.extractedText || doc.title || '').trim();
+      const gUrlMatch = fullDocText.match(
+        /https:\/\/(?:docs|drive)\.google\.com\/[^\s"'<>]+/
+      );
+      let compactDocSnippet = fullDocText.slice(0, 1100);
+      if (gUrlMatch && !compactDocSnippet.includes(gUrlMatch[0])) {
+        compactDocSnippet = `${gUrlMatch[0]}\n${fullDocText.slice(0, 950)}`;
+      }
       outgoing.push({
         sig,
         payload: {
           id: `doc-${doc.id}`,
           kind: 'doc',
           title: doc.fileName,
-          keywords: (doc.keywords || []).slice(0, 14),
-          ocrSnippet: (doc.extractedText || doc.title || '').slice(0, 750),
+          keywords: Array.from(
+            new Set([...(doc.keywords || []), ...docCloud.extraKeywords])
+          ).slice(0, 16),
+          ocrSnippet: compactDocSnippet,
           shotDate: doc.date || '',
           sourceDeviceId: ident.deviceId,
-          sourceDeviceName: ident.displayName,
+          sourceDeviceName: docSourceLabel,
           byteSize: Math.round((doc.sizeKB || 120) * 1024),
           sha256: shaShort,
           hasMirrorBlob: false,
