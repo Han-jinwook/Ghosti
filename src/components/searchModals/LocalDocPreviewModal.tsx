@@ -13,6 +13,7 @@ import { VoiceActorControlPill } from '../VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../../services/voiceSearchAndAiBatonEngine';
 import {
   openLocalDocWithMissingGuard,
+  renderDocTextWithInlineCredentialCopy,
   renderHighlightedDocText,
   resolveDocExtBadge,
 } from './docAndVideoFormatUtils';
@@ -143,7 +144,7 @@ export const LocalDocPreviewModal: React.FC = () => {
               문서 본문 미리보기
             </span>
             <p className="text-[13.5px] text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
-              {renderHighlightedDocText(
+              {renderDocTextWithInlineCredentialCopy(
                 displayDocText,
                 effectiveQuery,
                 safeKeywords.slice(0, 4)

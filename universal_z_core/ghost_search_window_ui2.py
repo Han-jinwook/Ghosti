@@ -25,6 +25,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import tkinter as tk
@@ -37,6 +38,94 @@ try:
 except Exception:
     Image = None
     ImageTk = None
+
+
+_UI2_RECENT_SEARCH_PATH = (
+    Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir())
+    / "Merlin"
+    / "ui2_recent_searches_v1.json"
+)
+
+
+def _load_ui2_recent_searches() -> list[str]:
+    try:
+        if not _UI2_RECENT_SEARCH_PATH.exists():
+            return []
+        data = json.loads(_UI2_RECENT_SEARCH_PATH.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            return []
+        return [str(x).strip() for x in data if str(x).strip()][:5]
+    except Exception:
+        return []
+
+
+def _push_ui2_recent_search(query: str) -> list[str]:
+    clean = str(query or "").strip()
+    if not clean:
+        return _load_ui2_recent_searches()
+    prev = _load_ui2_recent_searches()
+    nxt = [clean] + [x for x in prev if x.lower() != clean.lower()]
+    nxt = nxt[:5]
+    try:
+        _UI2_RECENT_SEARCH_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _UI2_RECENT_SEARCH_PATH.write_text(json.dumps(nxt, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return nxt
+
+
+def _copy_video_frame_to_win32_clipboard(video_path: str) -> bool:
+    """동영상 대표 장면 프레임을 Windows CF_DIB 비트맵으로 클립보드에 복사."""
+    if sys.platform != "win32" or not video_path or not os.path.exists(video_path):
+        return False
+    try:
+        if Image is None:
+            return False
+        img_pil = None
+        try:
+            from os_agent.plugin_ghosti_os import _win32_shell_extract_media_thumb
+
+            raw_jpg = _win32_shell_extract_media_thumb(video_path, max_size=960)
+            if raw_jpg:
+                img_pil = Image.open(io.BytesIO(raw_jpg)).convert("RGB")
+        except Exception:
+            img_pil = None
+        if img_pil is None:
+            return False
+
+        bmp_buf = io.BytesIO()
+        img_pil.save(bmp_buf, "BMP")
+        dib_bytes = bmp_buf.getvalue()[14:]  # BITMAPFILEHEADER(14B) 제거 -> 순수 CF_DIB
+
+        k32 = ctypes.windll.kernel32
+        u32 = ctypes.windll.user32
+        k32.GlobalAlloc.argtypes = [wintypes.UINT, ctypes.c_size_t]
+        k32.GlobalAlloc.restype = wintypes.HGLOBAL
+        k32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+        k32.GlobalLock.restype = ctypes.c_void_p
+        k32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+        k32.GlobalUnlock.restype = wintypes.BOOL
+        u32.SetClipboardData.argtypes = [wintypes.UINT, wintypes.HANDLE]
+        u32.SetClipboardData.restype = wintypes.HANDLE
+
+        if not u32.OpenClipboard(None):
+            return False
+        try:
+            u32.EmptyClipboard()
+            h_mem = k32.GlobalAlloc(0x0002, len(dib_bytes))  # GMEM_MOVEABLE
+            if not h_mem:
+                return False
+            ptr = k32.GlobalLock(h_mem)
+            if not ptr:
+                return False
+            ctypes.memmove(ptr, dib_bytes, len(dib_bytes))
+            k32.GlobalUnlock(h_mem)
+            u32.SetClipboardData(8, h_mem)  # CF_DIB = 8
+            return True
+        finally:
+            u32.CloseClipboard()
+    except Exception:
+        return False
 
 
 class _UI2_GUID(ctypes.Structure):
@@ -86,6 +175,39 @@ _IID_UI2_ShellItemImageFactory = _UI2_GUID(
     0x442F,
     (ctypes.c_ubyte * 8)(0x80, 0xC4, 0x8A, 0x59, 0xC3, 0x0C, 0x46, 0x3B),
 )
+
+_RECENT_SEARCH_QUERIES_FILE = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "Merlin" / "ghosti_recent_search_queries_v1.json"
+_RECENT_SEARCH_QUERIES: list[str] = []
+_RECENT_QUERIES_LOADED = False
+
+def _load_recent_search_queries() -> list[str]:
+    global _RECENT_SEARCH_QUERIES, _RECENT_QUERIES_LOADED
+    if _RECENT_QUERIES_LOADED:
+        return _RECENT_SEARCH_QUERIES
+    try:
+        if _RECENT_SEARCH_QUERIES_FILE.exists():
+            data = json.loads(_RECENT_SEARCH_QUERIES_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                _RECENT_SEARCH_QUERIES = [str(x).strip() for x in data if str(x).strip()][:5]
+    except Exception:
+        pass
+    _RECENT_QUERIES_LOADED = True
+    return _RECENT_SEARCH_QUERIES
+
+def _push_recent_search_query(q: str) -> None:
+    global _RECENT_SEARCH_QUERIES
+    clean = str(q or "").strip()
+    if not clean or len(clean) < 2:
+        return
+    cur = [x for x in _load_recent_search_queries() if x != clean]
+    cur.insert(0, clean)
+    _RECENT_SEARCH_QUERIES = cur[:5]
+    try:
+        _RECENT_SEARCH_QUERIES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _RECENT_SEARCH_QUERIES_FILE.write_text(json.dumps(_RECENT_SEARCH_QUERIES, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
 
 
 def _extract_win32_shell_pil_image(file_path_str: str, max_px: int = 360) -> Any:
@@ -1149,6 +1271,60 @@ def build_ui2_search_window(
     smart_tip_frame = tk.Frame(outer, bg="#0B1120")
     smart_tip_frame.pack(fill="x")
 
+    # [확정 ②] 2.7단 슬림 최근 검색어 5개 바 (검색창 비어있을 때 1줄 노출, 타이핑 즉시 숨김)
+    recent_q_frame = tk.Frame(outer, bg="#0B1120", padx=6, pady=2)
+    # 초기에는 검색창이 비어있으면 노출
+    recent_q_chips: list[tk.Widget] = []
+
+    def _render_recent_queries_bar(current_q: str) -> None:
+        clean_q = str(current_q or "").strip()
+        for w in recent_q_chips:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        recent_q_chips.clear()
+        if clean_q:
+            recent_q_frame.pack_forget()
+            return
+        qs = _load_recent_search_queries()
+        if not qs:
+            recent_q_frame.pack_forget()
+            return
+        recent_q_frame.pack_forget()
+        # fbar 바로 아래, body_frame 위에 배치
+        recent_q_frame.pack(fill="x", before=body_frame)
+        title_l = tk.Label(
+            recent_q_frame,
+            text="⏱️ 최근:",
+            fg="#94A3B8",
+            bg="#0B1120",
+            font=("Malgun Gothic", 8, "bold"),
+        )
+        title_l.pack(side="left", padx=(0, 4))
+        recent_q_chips.append(title_l)
+
+        def _apply_recent_q(target_word: str) -> None:
+            s_entry.delete(0, tk.END)
+            s_entry.insert(0, target_word)
+            _schedule_query_render(target_word)
+
+        for q_item in qs[:5]:
+            chip = tk.Label(
+                recent_q_frame,
+                text=q_item[:12],
+                fg="#E2E8F0",
+                bg="#1E293B",
+                padx=6,
+                pady=1,
+                font=("Malgun Gothic", 8),
+                cursor="hand2",
+            )
+            chip.pack(side="left", padx=(0, 4))
+            chip.bind("<Button-1>", lambda _e, tw=q_item: _apply_recent_q(tw))
+            recent_q_chips.append(chip)
+
+
     # 3단 결과 영역
     body_frame = tk.Frame(outer, bg="#0B1120")
     body_frame.pack(fill="both", expand=True)
@@ -1387,6 +1563,7 @@ def build_ui2_search_window(
             pass
 
     def _render_search_results() -> None:
+        _render_recent_queries_bar(_get_live_entry_query())
         for ch in smart_tip_frame.winfo_children():
             ch.destroy()
         for ch in body_frame.winfo_children():
@@ -1479,6 +1656,42 @@ def build_ui2_search_window(
             return
 
         q = _get_live_entry_query().strip()
+        # [최근 검색어 5개 슬림 1줄 바]: 검색창이 비어있을 때만 노출, 타이핑 시작 즉시 숨김 (삭제 버튼 없음)
+        if not q:
+            recent_terms = _load_ui2_recent_searches()
+            if recent_terms:
+                recent_bar = tk.Frame(body_frame, bg="#0F172A")
+                recent_bar.pack(fill="x", padx=2, pady=(0, 4))
+                tk.Label(
+                    recent_bar,
+                    text="⏱️",
+                    fg="#94A3B8",
+                    bg="#0F172A",
+                    font=("Malgun Gothic", 8),
+                ).pack(side="left", padx=(4, 4), pady=2)
+                for r_term in recent_terms:
+                    r_chip = tk.Label(
+                        recent_bar,
+                        text=r_term[:16],
+                        fg="#E2E8F0",
+                        bg="#1E293B",
+                        padx=7,
+                        pady=1,
+                        font=("Malgun Gothic", 8),
+                        cursor="hand2",
+                    )
+                    r_chip.pack(side="left", padx=(0, 4), pady=2)
+
+                    def _apply_recent(_e=None, term=r_term):
+                        _push_ui2_recent_search(term)
+                        s_entry.delete(0, "end")
+                        s_entry.insert(0, term)
+                        st_state["sel_idx"] = 0
+                        _render_search_results()
+                        _resize_for_stage(activate=True)
+
+                    r_chip.bind("<Button-1>", _apply_recent)
+
         vid_ocr_map = _load_local_video_ocr_by_name(
             on_async_updated=lambda: st_state.update({"bg_ui_dirty": True})
         )
@@ -2331,6 +2544,26 @@ def build_ui2_search_window(
                     lambda _e, ip=s_fpath: toast_queue.put((f"__UI3_OCR__|{ip}", 8000)),
                 )
             elif sel_rec.get("kind") == "video":
+                if s_fpath:
+                    vcap_b = tk.Label(
+                        preview_pane,
+                        text="📸 이 장면 캡처 이미지 복사",
+                        fg="#0B1120",
+                        bg="#5EEAD4",
+                        padx=8,
+                        pady=4,
+                        font=("Malgun Gothic", 9, "bold"),
+                        cursor="hand2",
+                    )
+                    vcap_b.pack(fill="x", pady=2)
+
+                    def _on_copy_vid_frame(_e=None, vp=s_fpath):
+                        if _copy_video_frame_to_win32_clipboard(vp):
+                            toast_queue.put(("📸 동영상 장면 캡처 이미지를 복사했습니다 (Ctrl+V로 바로 붙여넣기)", 2600))
+                        else:
+                            toast_queue.put(("⚠️ 이 동영상의 캡처 썸네일을 불러오지 못했습니다.", 2200))
+
+                    vcap_b.bind("<Button-1>", _on_copy_vid_frame)
                 vocr_extract_b = tk.Label(
                     preview_pane,
                     text="📝 영상 속 글자 뽑기" if not sel_rec.get("video_ocr_full") else "📝 추출된 영상 글자 보기",
@@ -2402,6 +2635,9 @@ def build_ui2_search_window(
         def _apply_debounced() -> None:
             st_state["debounce_job"] = None
             if current_win[0] is win:
+                _render_recent_queries_bar(cur_q)
+                if cur_q and len(cur_q.strip()) >= 2:
+                    _push_recent_search_query(cur_q)
                 _render_search_results()
 
         st_state["debounce_job"] = win.after(75, _apply_debounced)
@@ -2432,6 +2668,9 @@ def build_ui2_search_window(
         return "break"
 
     def _on_ret(_e=None):
+        cur_q_ret = _get_live_entry_query().strip()
+        if cur_q_ret:
+            _push_ui2_recent_search(cur_q_ret)
         if st_state["items"]:
             r = st_state["items"][st_state["sel_idx"]]
             fpath = str(r.get("file_path") or r.get("img_path") or "").strip()

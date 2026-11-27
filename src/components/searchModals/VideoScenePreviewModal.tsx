@@ -10,6 +10,7 @@ import {
   type VideoOcrLineItem,
 } from '../../services/aiEngine';
 import { renderHighlightedDocText } from './docAndVideoFormatUtils';
+import { zCoreBridge } from '../../services/zCoreBridge';
 
 export const VideoScenePreviewModal: React.FC = () => {
   const {
@@ -978,6 +979,89 @@ export const VideoScenePreviewModal: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-2.5 border-t border-slate-100 shrink-0">
+          <button
+            type="button"
+            onClick={async () => {
+              const curSec =
+                videoRef.current && Number.isFinite(videoRef.current.currentTime)
+                  ? Math.floor(videoRef.current.currentTime)
+                  : Math.max(0, Math.floor(selectedVideoModal.matchedSeekSec || 0));
+              const tsLabel = `${String(Math.floor(curSec / 60)).padStart(2, '0')}:${String(curSec % 60).padStart(2, '0')}`;
+              try {
+                const canvas = document.createElement('canvas');
+                let drawn = false;
+                if (videoRef.current && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+                  canvas.width = videoRef.current.videoWidth;
+                  canvas.height = videoRef.current.videoHeight;
+                  const ctx2d = canvas.getContext('2d');
+                  if (ctx2d) {
+                    ctx2d.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                    drawn = true;
+                  }
+                } else if (currentFrameThumbUrl) {
+                  const img = new Image();
+                  img.crossOrigin = 'anonymous';
+                  await new Promise<void>((res, rej) => {
+                    img.onload = () => res();
+                    img.onerror = () => rej(new Error('thumb-load-fail'));
+                    img.src = currentFrameThumbUrl;
+                  });
+                  canvas.width = img.naturalWidth || 640;
+                  canvas.height = img.naturalHeight || 360;
+                  const ctx2d = canvas.getContext('2d');
+                  if (ctx2d) {
+                    ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    drawn = true;
+                  }
+                }
+                if (!drawn) {
+                  showToast('캡처할 영상 화면이 아직 준비되지 않았습니다.');
+                  return;
+                }
+                const blob: Blob | null = await new Promise((resolve) =>
+                  canvas.toBlob((b) => resolve(b), 'image/png')
+                );
+                if (!blob) {
+                  showToast('화면 캡처 이미지 생성에 실패했습니다.');
+                  return;
+                }
+                let copied = false;
+                if (typeof navigator !== 'undefined' && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+                  try {
+                    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                    copied = true;
+                  } catch {
+                    /* fallback to z-core */
+                  }
+                }
+                if (!copied && zCoreBridge.isConnected) {
+                  const dataUrl = canvas.toDataURL('image/png');
+                  const r = await fetch('http://127.0.0.1:5199/__merlin/clipboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageDataUrl: dataUrl }),
+                  }).catch(() => null);
+                  if (r?.ok) copied = true;
+                }
+                if (copied) {
+                  showToast(`📸 이 장면(${tsLabel}) 캡처 이미지를 복사했습니다. Ctrl+V로 바로 붙여넣으세요!`);
+                } else {
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${selectedVideoModal.title || 'video'}_${tsLabel.replace(':', '-')}.png`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  showToast(`📸 이 장면(${tsLabel}) 캡처 이미지를 저장했습니다.`);
+                }
+              } catch {
+                showToast('이 영상은 브라우저 보안 정책으로 캡처할 수 없습니다.');
+              }
+            }}
+            className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <span>📸 이 장면({cleanTs}) 캡처 복사</span>
+          </button>
           <button
             type="button"
             onClick={() => {

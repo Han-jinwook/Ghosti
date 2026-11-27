@@ -7189,13 +7189,48 @@ def is_recent_undo_available(max_sec: float = RECENT_GHOST_UNDO_WINDOW_SEC) -> b
     return ts_u > 0.0 and (time.time() - ts_u) <= max_sec
 
 
+_LAST_LABELER_RENAME_BATCH: dict[str, Any] = {"ts": 0.0, "pairs": []}
+
+
+def _try_undo_last_labeler_rename() -> bool:
+    """귀신 라벨러 직후 60초 이내 Ctrl+Z 시 별도 버튼 없이 원래 파일명으로 1초 원복."""
+    pairs = list(_LAST_LABELER_RENAME_BATCH.get("pairs") or [])
+    ts_val = float(_LAST_LABELER_RENAME_BATCH.get("ts") or 0.0)
+    if not pairs or (time.time() - ts_val) > 60.0:
+        return False
+    _LAST_LABELER_RENAME_BATCH["pairs"] = []
+    _LAST_LABELER_RENAME_BATCH["ts"] = 0.0
+    restored = 0
+    first_restored_name = ""
+    for orig_s, new_s in reversed(pairs):
+        try:
+            p_orig = Path(orig_s)
+            p_new = Path(new_s)
+            if p_new.exists() and not p_orig.exists():
+                p_new.rename(p_orig)
+                restored += 1
+                if not first_restored_name:
+                    first_restored_name = p_orig.name
+        except Exception:
+            pass
+    if restored > 0:
+        _LOCAL_FILE_CACHE["ts"] = 0.0
+        sfx = f" 외 {restored - 1}건" if restored > 1 else ""
+        show_ghost_toast(f"↩️ 원래 파일명으로 되돌렸습니다: {first_restored_name}{sfx}", duration_ms=2600)
+        return True
+    return False
+
+
 def on_native_ctrl_z_observed() -> None:
     """
     [Ctrl+Z 순정 100% 보존 원칙]:
     - Ctrl+Z 키 자체는 절대 가로채지 않고 메모장·앱 고유 실행취소(Undo)가 그대로 동작하게 둡니다.
-    - 단, 귀신 변환 직후 유저가 순정 Ctrl+Z를 누른 것을 옆에서 관찰하면 해당 원문에 재변환 면역 락(2분)을 걸고
+    - 단, 귀신 라벨러 직후(60초 이내) Ctrl+Z가 눌리면 원래 파일명으로 1초 원복하고,
+      귀신 변환 직후 유저가 순정 Ctrl+Z를 누른 것을 옆에서 관찰하면 해당 원문에 재변환 면역 락(2분)을 걸고
       이전 한/영 키보드 상태만 조용히 복원하여 다시 한글로 뒤집히지 않도록 보조합니다.
     """
+    if _try_undo_last_labeler_rename():
+        return
     if not _UNDO_SNAPSHOT.get("active"):
         return
     snap = dict(_UNDO_SNAPSHOT)
@@ -9891,6 +9926,7 @@ def superpower_9_image_or_pdf_file(
         if target_files:
             renamed_paths: list[str] = []
             rename_pairs: list[tuple[str, str]] = []
+            undo_path_pairs: list[tuple[str, str]] = []
             for tf in target_files:
                 p_orig = Path(tf)
                 if not p_orig.exists() or not p_orig.is_file():
@@ -9917,6 +9953,7 @@ def superpower_9_image_or_pdf_file(
                         p_orig.rename(p_new)
                         renamed_paths.append(str(p_new))
                         rename_pairs.append((p_orig.name, p_new.name))
+                        undo_path_pairs.append((str(p_orig), str(p_new)))
                     except Exception:
                         renamed_paths.append(str(p_orig))
                         rename_pairs.append((p_orig.name, p_orig.name))
@@ -9926,10 +9963,14 @@ def superpower_9_image_or_pdf_file(
 
             if renamed_paths:
                 _LOCAL_FILE_CACHE["ts"] = 0.0
+                if undo_path_pairs:
+                    _LAST_LABELER_RENAME_BATCH["ts"] = time.time()
+                    _LAST_LABELER_RENAME_BATCH["pairs"] = undo_path_pairs
                 first_old, first_new = rename_pairs[0]
                 set_clipboard_hdrop_files(renamed_paths, label_text=first_new)
                 more_sfx = f" 외 {len(rename_pairs) - 1}건" if len(rename_pairs) > 1 else ""
-                show_ghost_toast(f"🏷️ 귀신 라벨러 완료: {first_old} ➔ {first_new}{more_sfx} (라벨명·파일 복사됨)", duration_ms=3400)
+                undo_hint = " (되돌리기: Ctrl+Z)" if undo_path_pairs else " (라벨명·파일 복사됨)"
+                show_ghost_toast(f"🏷️ 귀신 라벨러 완료: {first_old} ➔ {first_new}{more_sfx}{undo_hint}", duration_ms=3400)
                 return
 
         from PIL import Image, ImageGrab

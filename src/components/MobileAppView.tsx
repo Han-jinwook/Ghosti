@@ -42,6 +42,7 @@ import {
   PcMasterQuickSendPanel,
   buildDocPreviewSnippet,
   formatVideoCardOcrSummary,
+  renderDocTextWithInlineCredentialCopy,
   renderHighlightedDocText,
   resolveDocExtBadge,
   maskSensitiveDocText,
@@ -1318,7 +1319,7 @@ export const MobileAppView: React.FC = () => {
                           )}
                         </h4>
                         <p className="text-[12px] text-slate-600 line-clamp-3 leading-relaxed m-0 p-0">
-                          {renderHighlightedDocText(
+                          {renderDocTextWithInlineCredentialCopy(
                             buildDocPreviewSnippet(
                               maskSensitiveDocText(doc.extractedText),
                               hasExecutedUserSearch ? activeQuery : '',

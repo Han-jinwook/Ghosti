@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
-import { evaluateProFeatureGate } from '../services/proFeatureGate';
+import {
+  buildExpiredLossAversionSummary,
+  evaluateProFeatureGate,
+  recordProFeatureUsage,
+} from '../services/proFeatureGate';
 import { markGhostDojoStep } from './ghostDojo/ghostSearchDojoShared';
 import { recognizeDataUrlWithPaddleOcr } from '../services/ai/aiPaddleOcrEngine';
 import type { PhotoItem } from '../types/saysee';
@@ -161,6 +165,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
           if (cancelled) return;
           const ft = String(webOcr.text || '').trim();
           const webChips = ft ? Array.from(new Set(ft.split(/[\s\n]+/).filter((w) => w.length >= 2))).slice(0, 18) : [];
+          if (!isDemoSamplePhoto) recordProFeatureUsage('feat_6_screen_ocr');
           setOcrResult({
             ok: true,
             hasText: ft.length > 0,
@@ -428,31 +433,43 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
             </div>
           </div>
         ) : gateState === 'expired' ? (
-          <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center gap-3.5">
-            <span className="px-2.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 text-[11.5px] font-medium">
-              무료체험 종료
-            </span>
-            <h3 className="text-[16px] font-bold text-slate-900 max-w-lg leading-snug">{gateMessage}</h3>
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  useSaySeeStore.getState().setShowProModal(true);
-                }}
-                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-semibold cursor-pointer"
-              >
-                내 기기 통합 Pro 안내 보기
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleDownloadOriginalPhoto()}
-                className="px-4 py-2 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12.5px] font-medium cursor-pointer"
-              >
-                원본 사진 저장
-              </button>
-            </div>
-          </div>
+          (() => {
+            const scorecard = buildExpiredLossAversionSummary('feat_6_screen_ocr');
+            return (
+              <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center gap-3.5">
+                <span className="px-2.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 text-[11.5px] font-medium">
+                  무료체험 종료
+                </span>
+                <h3 className="text-[16px] font-bold text-slate-900 max-w-lg leading-snug">
+                  {scorecard.hasScorecard ? scorecard.headline : gateMessage || scorecard.headline}
+                </h3>
+                {scorecard.hasScorecard && scorecard.detailLine && (
+                  <p className="text-[12.5px] text-slate-500 max-w-lg">
+                    {scorecard.detailLine}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      useSaySeeStore.getState().setShowProModal(true);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-semibold cursor-pointer"
+                  >
+                    내 기기 통합 Pro 안내 보기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadOriginalPhoto()}
+                    className="px-4 py-2 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12.5px] font-medium cursor-pointer"
+                  >
+                    원본 사진 저장
+                  </button>
+                </div>
+              </div>
+            );
+          })()
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             {/* 좌측 */}

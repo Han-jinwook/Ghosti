@@ -15,6 +15,7 @@ export {
   resolveDocExtBadge,
   formatVideoCardOcrSummary,
   buildDocPreviewSnippet,
+  renderDocTextWithInlineCredentialCopy,
   renderHighlightedDocText,
   maskSensitiveDocText,
   hasSensitiveDocInfo,

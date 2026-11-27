@@ -16,6 +16,10 @@ import {
   PLACEHOLDER_ROLLING_INTERVAL_MS,
   getAndAdvanceSessionPlaceholderStartIndex,
 } from '../services/weeklyCareAndPlaceholderEngine';
+import {
+  loadRecentSearches,
+  pushRecentSearch,
+} from '../services/recentSearchHistory';
 
 export const VoiceHeroStage: React.FC = () => {
   const {
@@ -169,11 +173,16 @@ export const VoiceHeroStage: React.FC = () => {
     }
   };
 
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     unlockMobileAudioOnUserGesture();
     const q = textInput.trim();
     if (!q) return;
+    setRecentSearches(pushRecentSearch(q));
+    setIsSearchFocused(false);
     if (isMobile && typeof document !== 'undefined') {
       (document.activeElement as HTMLElement | null)?.blur?.();
     }
@@ -197,6 +206,13 @@ export const VoiceHeroStage: React.FC = () => {
               id="ghosti-voice-hero-search-input"
               type="text"
               value={textInput}
+              onFocus={() => {
+                setRecentSearches(loadRecentSearches());
+                setIsSearchFocused(true);
+              }}
+              onBlur={() => {
+                window.setTimeout(() => setIsSearchFocused(false), 120);
+              }}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={searchPlaceholder}
               className={`w-full ${
@@ -205,6 +221,28 @@ export const VoiceHeroStage: React.FC = () => {
                 textInput ? 'pr-24' : 'pr-16'
               } rounded-xl bg-white border border-slate-300 focus:border-slate-600 shadow-xs outline-none text-[13.5px] md:text-[14.5px] text-slate-900 placeholder:text-slate-400 transition-colors`}
             />
+            {isSearchFocused && !textInput.trim() && recentSearches.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 z-30 px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-md flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                <span className="text-[11px] text-slate-400 shrink-0 select-none">⏱️</span>
+                {recentSearches.map((term) => (
+                  <button
+                    key={term}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setTextInput(term);
+                      setRecentSearches(pushRecentSearch(term));
+                      setIsSearchFocused(false);
+                      void runTextQuery(term);
+                      scrollToResults();
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-700 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
+            )}
             {textInput && (
               <button
                 type="button"

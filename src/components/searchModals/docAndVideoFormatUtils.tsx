@@ -2,6 +2,7 @@ import React from 'react';
 import { stripKoSearchParticle } from '../../services/aiEngine';
 import { formatQuickKoreanLabelCore } from '../../services/ai/aiSharedRuntime';
 import { executeRealOsAction } from '../../services/setupMonsterEngine';
+import { copyTextSafeToClipboard } from '../../services/proFeatureGate';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 
 const DOC_SNIPPET_STOP_WORDS = new Set([
@@ -150,6 +151,63 @@ export function renderHighlightedDocText(
   fallbackKeywords: string[] = []
 ): React.ReactNode {
   if (!text) return text;
+
+  // [확정 ①] 비밀번호·계정 문서 ID/PW 인라인 복사 아이콘(📋) 지원:
+  // 텍스트 내 "아이디: xxx", "비밀번호: yyy", "ID: xxx", "PW: yyy" 등 계정/암호 패턴이 있는 경우
+  // 복사 느낌을 살린 📋 인라인 복사 버튼을 부착하여 0.1초 원클릭 복사를 지원합니다.
+  const credRegex = /(?:(아이디|ID|계정|이메일|ID\/이메일|Email|User|Username)[\s:=]+([^\s,;]+))|(?:(비밀번호|비번|패스워드|PW|Password)[\s:=]+([^\s,;]+))/gi;
+  if (credRegex.test(text)) {
+    credRegex.lastIndex = 0;
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+    let keyIdx = 0;
+    while ((match = credRegex.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        parts.push(renderHighlightedDocTextSimple(text.slice(lastIdx, match.index), query, fallbackKeywords));
+      }
+      const label = match[1] || match[3] || '';
+      const val = match[2] || match[4] || '';
+      const fullMatch = match[0];
+      const sep = fullMatch.slice(label.length, fullMatch.length - val.length);
+      parts.push(
+        <span key={`cred-${keyIdx++}`} className="inline-flex items-center gap-1 font-medium">
+          <span>{label}{sep}</span>
+          <span className="font-mono bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-[11.5px] font-semibold">{val}</span>
+          <button
+            type="button"
+            title={`${label} 복사`}
+            aria-label={`${label} 복사`}
+            onClick={(e) => {
+              e.stopPropagation();
+              void navigator.clipboard?.writeText(val);
+              useSaySeeStore.setState({
+                lastQuarantineToast: `[${label}] ${val} 클립보드에 복사되었습니다!`,
+              });
+            }}
+            className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200 text-slate-600 hover:text-slate-900 cursor-pointer transition-colors text-[12px]"
+          >
+            📋
+          </button>
+        </span>
+      );
+      lastIdx = credRegex.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      parts.push(renderHighlightedDocTextSimple(text.slice(lastIdx), query, fallbackKeywords));
+    }
+    return <>{parts}</>;
+  }
+
+  return renderHighlightedDocTextSimple(text, query, fallbackKeywords);
+}
+
+function renderHighlightedDocTextSimple(
+  text: string,
+  query: string,
+  fallbackKeywords: string[] = []
+): React.ReactNode {
+  if (!text) return text;
   const activeTokens = extractDocHighlightTokens(query, fallbackKeywords);
   if (activeTokens.length === 0) return text;
 
@@ -184,6 +242,76 @@ export function renderHighlightedDocText(
 
 export function maskSensitiveDocText(text: string, _forVoice = false): string {
   return text || '';
+}
+
+const CREDENTIAL_INLINE_RX =
+  /((?:아이디|계정|ID|이메일|비밀번호|비번|패스워드|PW|Password)\s*[:：=]\s*)([^\s,;|/()[\]{}]+)/gi;
+
+export function renderDocTextWithInlineCredentialCopy(
+  text: string,
+  query: string,
+  fallbackKeywords: string[] = []
+): React.ReactNode {
+  if (!text) return text;
+  CREDENTIAL_INLINE_RX.lastIndex = 0;
+  if (!CREDENTIAL_INLINE_RX.test(text)) {
+    return renderHighlightedDocText(text, query, fallbackKeywords);
+  }
+  CREDENTIAL_INLINE_RX.lastIndex = 0;
+  const nodes: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  let k = 0;
+
+  while ((match = CREDENTIAL_INLINE_RX.exec(text)) !== null) {
+    const start = match.index;
+    const prefix = match[1] || '';
+    const value = match[2] || '';
+    const end = start + match[0].length;
+    if (start > lastIdx) {
+      nodes.push(
+        <React.Fragment key={`txt_${k++}`}>
+          {renderHighlightedDocText(text.slice(lastIdx, start), query, fallbackKeywords)}
+        </React.Fragment>
+      );
+    }
+    const isPw = /(?:비밀번호|비번|패스워드|PW|Password)/i.test(prefix);
+    const labelKo = isPw ? '비밀번호' : '아이디';
+    nodes.push(
+      <React.Fragment key={`cred_${k++}`}>
+        {renderHighlightedDocText(prefix, query, fallbackKeywords)}
+        <span className="font-semibold text-slate-900">
+          {renderHighlightedDocText(value, query, fallbackKeywords)}
+        </span>
+        <button
+          type="button"
+          title={`${labelKo} 복사`}
+          aria-label={`${labelKo} 복사`}
+          onClick={(e) => {
+            e.stopPropagation();
+            void copyTextSafeToClipboard(value).then(() => {
+              useSaySeeStore.setState({
+                lastQuarantineToast: `${labelKo}가 클립보드에 복사되었습니다.`,
+              });
+            });
+          }}
+          className="inline-flex items-center justify-center ml-0.5 px-1 py-0 rounded hover:bg-slate-200/80 text-[11px] leading-none align-baseline cursor-pointer transition-colors"
+        >
+          📋
+        </button>
+      </React.Fragment>
+    );
+    lastIdx = end;
+  }
+
+  if (lastIdx < text.length) {
+    nodes.push(
+      <React.Fragment key={`tail_${k++}`}>
+        {renderHighlightedDocText(text.slice(lastIdx), query, fallbackKeywords)}
+      </React.Fragment>
+    );
+  }
+  return nodes;
 }
 
 export function hasSensitiveDocInfo(_text: string): boolean {

@@ -11,10 +11,15 @@ import {
   buildDocPreviewSnippet,
   formatVideoCardOcrSummary,
   openLocalDocWithMissingGuard,
+  renderDocTextWithInlineCredentialCopy,
   renderHighlightedDocText,
   resolveDocExtBadge,
   maskSensitiveDocText,
 } from '../searchModals/docAndVideoFormatUtils';
+import {
+  loadRecentSearches,
+  pushRecentSearch,
+} from '../../services/recentSearchHistory';
 import {
   requestConnectMyComputer,
   zCoreBridge,
@@ -138,6 +143,8 @@ const Stage1IsolatedSearchInputForm: React.FC<{
       );
     };
 
+    const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+
     const handleTextSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       unlockMobileAudioOnUserGesture();
@@ -145,6 +152,8 @@ const Stage1IsolatedSearchInputForm: React.FC<{
       const q = (textInput.trim() || fallbackExample).trim();
       if (!q) return;
       setTextInput(q);
+      setRecentSearches(pushRecentSearch(q));
+      setIsInputFocused(false);
       await onExecuteQuery(q);
     };
 
@@ -154,6 +163,8 @@ const Stage1IsolatedSearchInputForm: React.FC<{
       const q = fallbackExample.trim();
       if (!q) return;
       setTextInput(q);
+      setRecentSearches(pushRecentSearch(q));
+      setIsInputFocused(false);
       await onExecuteQuery(q);
     };
 
@@ -170,8 +181,13 @@ const Stage1IsolatedSearchInputForm: React.FC<{
           <input
             type="text"
             value={textInput}
-            onFocus={() => setIsInputFocused(true)}
-            onBlur={() => setIsInputFocused(false)}
+            onFocus={() => {
+              setRecentSearches(loadRecentSearches());
+              setIsInputFocused(true);
+            }}
+            onBlur={() => {
+              window.setTimeout(() => setIsInputFocused(false), 120);
+            }}
             onChange={(e) => setTextInput(e.target.value)}
             placeholder={
               searchSpace === 'video'
@@ -180,6 +196,27 @@ const Stage1IsolatedSearchInputForm: React.FC<{
             }
             className="w-full h-11 md:h-12 pl-10 pr-[92px] sm:pr-[240px] rounded-xl bg-white border border-slate-300 focus:border-slate-600 shadow-xs outline-none text-[13.5px] md:text-[14.5px] text-slate-900 placeholder:text-slate-400 transition-colors"
           />
+          {isInputFocused && !textInput.trim() && recentSearches.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-30 px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-md flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <span className="text-[11px] text-slate-400 shrink-0 select-none">⏱️</span>
+              {recentSearches.map((term) => (
+                <button
+                  key={term}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setTextInput(term);
+                    setRecentSearches(pushRecentSearch(term));
+                    setIsInputFocused(false);
+                    void onExecuteQuery(term);
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-700 text-[11.5px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer"
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="absolute right-1.5 inset-y-0 flex items-center gap-1">
             {!textInput.trim() ? (
@@ -918,7 +955,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
 
                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                           <p className="text-[12px] text-slate-600 line-clamp-3 leading-relaxed m-0 p-0">
-                            {renderHighlightedDocText(
+                            {renderDocTextWithInlineCredentialCopy(
                               maskSensitiveDocText(
                                 hasExecutedUserSearch && activeQuery
                                   ? buildDocPreviewSnippet(
@@ -1055,6 +1092,81 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[12px] font-medium">
                   {hasExecutedUserSearch ? searchResults.length : gallerySceneCount}장
                 </span>
+                {hasExecutedUserSearch &&
+                  activeQuery &&
+                  !forceSampleOnly &&
+                  searchResults.length > 0 &&
+                  (() => {
+                    const qLower = activeQuery.trim().toLowerCase();
+                    const isPersonQuery = searchResults.some((r) => {
+                      const tags = r.photo.tags || [];
+                      return tags.some((t) => {
+                        const cleanTag = String(t || '').replace(/^#/, '').trim().toLowerCase();
+                        return cleanTag.length >= 2 && (qLower === cleanTag || qLower.includes(cleanTag));
+                      }) && tags.some((t) => /인물|가족|여권|얼굴/.test(String(t || '')));
+                    });
+                    if (!isPersonQuery) return null;
+                    const familyRoomName = store.activeFamilyRoom || '우리집';
+                    const existingFamilyPhotos = [
+                      ...(store.sharedRoomAddedPhotos || []),
+                      ...(store.sharedRoomHostPhotos || []),
+                    ].filter((p) => p && !p.sharedDeletedAt);
+                    const hasExistingFamilyRoom = existingFamilyPhotos.length > 0;
+                    const btnLabel = hasExistingFamilyRoom
+                      ? `👨‍👩‍👧‍👦 '${familyRoomName}' 가족방에 담기`
+                      : '👨‍👩‍👧‍👦 이 사진들로 가족방 만들기';
+                    return (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const existingHashes = new Set(
+                            existingFamilyPhotos.map((p) => String(p.dhash || '').trim()).filter(Boolean)
+                          );
+                          const existingNames = new Set(
+                            existingFamilyPhotos
+                              .map((p) => `${String(p.name || '').trim().toLowerCase()}::${Number(p.size || 0)}`)
+                          );
+                          const existingIds = new Set(existingFamilyPhotos.map((p) => p.id));
+                          const candidates = searchResults.map((r) => r.photo);
+                          const toAddIds: string[] = [];
+                          let skippedDup = 0;
+                          for (const c of candidates) {
+                            const dh = String(c.dhash || '').trim();
+                            const nameSig = `${String(c.name || '').trim().toLowerCase()}::${Number(c.size || 0)}`;
+                            if (
+                              existingIds.has(c.id) ||
+                              (dh && existingHashes.has(dh)) ||
+                              existingNames.has(nameSig)
+                            ) {
+                              skippedDup += 1;
+                            } else {
+                              toAddIds.push(c.id);
+                            }
+                          }
+                          if (toAddIds.length === 0) {
+                            useSaySeeStore.setState({
+                              lastQuarantineToast: `새 사진 0장 추가 · 이미 있는 ${skippedDup}장 자동 제외`,
+                            });
+                            store.setActiveLoungeType('family');
+                            store.setDesktopTab('dashboard');
+                            return;
+                          }
+                          store.setActiveLoungeType('family');
+                          store.setDesktopTab('dashboard');
+                          await store.addLocalPhotosToSharedRoom(toAddIds);
+                          useSaySeeStore.setState({
+                            lastQuarantineToast:
+                              skippedDup > 0
+                                ? `새 사진 ${toAddIds.length}장 추가 · 이미 있는 ${skippedDup}장 자동 제외`
+                                : `새 사진 ${toAddIds.length}장을 '${familyRoomName}' 가족방에 담았습니다.`,
+                          });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 text-[12px] font-semibold whitespace-nowrap transition-colors cursor-pointer"
+                      >
+                        {btnLabel}
+                      </button>
+                    );
+                  })()}
               </div>
               <span className="text-[11.5px] text-slate-500 font-medium">
                 <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 촬영일·사진 내용으로 정리된 한글 파일명을 바로 복사합니다

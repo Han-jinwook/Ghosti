@@ -3,6 +3,83 @@ import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 
 export type ProFeatureActionType = 'feat_6_screen_ocr' | 'feat_ghost_labeler';
 
+export interface ProFeatureUsageStats {
+  ocrCount: number;
+  labelerCount: number;
+}
+
+const PRO_FEATURE_USAGE_KEY = 'ghosti_pro_feature_usage_v1';
+
+export function getProFeatureUsageStats(): ProFeatureUsageStats {
+  if (typeof window === 'undefined') return { ocrCount: 0, labelerCount: 0 };
+  try {
+    const raw = window.localStorage.getItem(PRO_FEATURE_USAGE_KEY);
+    if (!raw) return { ocrCount: 0, labelerCount: 0 };
+    const parsed = JSON.parse(raw) as Partial<ProFeatureUsageStats>;
+    return {
+      ocrCount: Math.max(0, Number(parsed?.ocrCount || 0) || 0),
+      labelerCount: Math.max(0, Number(parsed?.labelerCount || 0) || 0),
+    };
+  } catch {
+    return { ocrCount: 0, labelerCount: 0 };
+  }
+}
+
+export function recordProFeatureUsage(actionType: ProFeatureActionType): ProFeatureUsageStats {
+  const cur = getProFeatureUsageStats();
+  const next: ProFeatureUsageStats = {
+    ocrCount: cur.ocrCount + (actionType === 'feat_6_screen_ocr' ? 1 : 0),
+    labelerCount: cur.labelerCount + (actionType === 'feat_ghost_labeler' ? 1 : 0),
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(PRO_FEATURE_USAGE_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+  }
+  return next;
+}
+
+export function buildExpiredLossAversionSummary(targetAction: ProFeatureActionType): {
+  hasScorecard: boolean;
+  headline: string;
+  detailLine: string;
+} {
+  const { ocrCount, labelerCount } = getProFeatureUsageStats();
+  const usedParts: string[] = [];
+  if (ocrCount > 0) usedParts.push(`📝 사진·표 OCR ${ocrCount}번`);
+  if (labelerCount > 0) usedParts.push(`🏷️ 귀신 라벨링 ${labelerCount}번`);
+
+  const totalCount = ocrCount + labelerCount;
+  if (usedParts.length === 0 || totalCount <= 0) {
+    const featureLabel =
+      targetAction === 'feat_6_screen_ocr' ? '사진·표 OCR 창' : '귀신 라벨링';
+    return {
+      hasScorecard: false,
+      headline: `30일 무료체험이 종료되었습니다. ${featureLabel}은 내 기기 통합 Pro(월 3,900원) 구독 시 계속 이용할 수 있습니다.`,
+      detailLine: '',
+    };
+  }
+
+  const savedMinutes = totalCount; // 1회당 평균 1분 절약 환산
+  const hours = Math.floor(savedMinutes / 60);
+  const mins = savedMinutes % 60;
+  const timeText =
+    hours > 0
+      ? mins > 0
+        ? `약 ${hours}시간 ${mins}분`
+        : `약 ${hours}시간`
+      : `약 ${mins}분`;
+
+  return {
+    hasScorecard: true,
+    headline: `그동안 ${usedParts.join(' · ')}으로 ${timeText}을 아끼셨습니다!`,
+    detailLine:
+      '내 기기 통합 Pro(월 3,900원)를 구독하면 사진·표 OCR과 귀신 라벨링을 계속 무제한으로 사용할 수 있습니다.',
+  };
+}
+
 export interface ProFeatureGateResult {
   allowed: boolean;
   state: 'allowed' | 'need_opt_in' | 'expired';
@@ -212,11 +289,12 @@ export async function evaluateProFeatureGate(options: {
           };
         }
 
+        const expiredSummary = buildExpiredLossAversionSummary(actionType);
         return {
           allowed: false,
           state: 'expired',
           message: isMachineCodeMsg
-            ? `30일 무료체험이 종료되었습니다. 내 기기 통합 Pro(월 3,900원) 구독 시 계속 사용할 수 있습니다${sDriveNote}.`
+            ? expiredSummary.headline
             : rawMsg,
           trialBadge: '',
         };

@@ -10,6 +10,7 @@ import { formatQuickKoreanLabelForFile } from './searchModals/docAndVideoFormatU
 import {
   copyTextSafeToClipboard,
   evaluateProFeatureGate,
+  recordProFeatureUsage,
 } from '../services/proFeatureGate';
 import { markGhostDojoStep } from './ghostDojo/ghostSearchDojoShared';
 
@@ -88,6 +89,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
               if (mySeq !== _latestGhostLabelerSeq) return;
               await copyTextSafeToClipboard(newLabel);
               if (mySeq !== _latestGhostLabelerSeq) return;
+              if (!forceSampleOnly) recordProFeatureUsage('feat_ghost_labeler');
               markGhostDojoStep('labeler');
               useSaySeeStore.setState({
                 lastQuarantineToast: `파일명 생성 완료: ${newLabel} (복사됨)`,
