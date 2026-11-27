@@ -112,12 +112,28 @@ export function isMonsterCareIntentFromSearch(utterance: string): boolean {
 export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCommand {
   const raw = (utterance || '').trim();
 
-  // 0) [✋ 손보기 전용 PC 사양·메모리·CPU·속도·애드웨어·정리·복원 후속 질문 가드]
+  // 0-A) 미저장 종료·실종·휴지통 복구·압축 요청은 문서 종류('계약서' 등)가 포함되어 있어도 서류함 수치 Q&A로 가로채지 않고 귀신비서 본진으로 직행!
+  if (
+    /(저장\s*(?:못|안)\s*하|미저장|꺼졌|날아갔|날아간|사라졌|사라진|없어졌|없어진|지웠|지운|지워진|삭제한|삭제된|버린|버렸|살릴\s*수|살려|복구|복원\s*기록|원복|되돌|구출|휴지통|압축)/i.test(
+      raw
+    )
+  ) {
+    return {
+      intentType: 'SIMPLE_PERSPECTIVE_SEARCH',
+      targetDocKeyword: raw,
+      extractKeywords: [],
+      kakaoRecipientName: '',
+      rawQuestion: raw,
+      serverTokenCostWon: 0,
+    };
+  }
+
+  // 0-B) [✋ 손보기 전용 PC 사양·메모리·CPU·속도·애드웨어·정리·복원 후속 질문 가드]
   // "메모리 얼마나 세이브된거야?", "속도 개선된거야?", "얼마나 빨라진거야?", "CPU 점유율 어때?", "왜 아직 남아있어?" 등
   // PC 상태/최적화/정리 관련 질문이 '얼마/알려줘/있어?' 때문에 서류함 검색(DOC_FACT_QA_READ ➔ SEARCH_ROUTING)으로 오인되어
   // 갑자기 [🎯 찾기] 화면으로 튕기는 현상을 원천 차단합니다.
   if (
-    /(메모리|램|\bram\b|\bcpu\b|씨피유|점유율|부하|세이브|개선된|빨라진|느려|느린|속도|버벅|애드웨어|보안\s*모듈|보안\s*프로그램|시작\s*프로그램|상주|프로세스|백그라운드|최적화|사양|스펙|용량|디스크|글카|그래픽|주사율|프린터|와이파이|블루투스|스피커|바탕화면|다운로드|설치\s*파일|잡파일|복원\s*기록|원복|되돌|저장\s*(?:못|안)\s*하|미저장|꺼졌|날아갔|날아간|사라졌|사라진|없어졌|없어진|지웠|지운|삭제|살릴\s*수|살려|복구|구출|압축)/i.test(
+    /(메모리|램|\bram\b|\bcpu\b|씨피유|점유율|부하|세이브|개선된|빨라진|느려|느린|속도|버벅|애드웨어|보안\s*모듈|보안\s*프로그램|시작\s*프로그램|상주|프로세스|백그라운드|최적화|사양|스펙|용량|디스크|글카|그래픽|주사율|프린터|와이파이|블루투스|스피커|바탕화면|다운로드|설치\s*파일|잡파일)/i.test(
       raw
     ) &&
     !/(계약서|견적서|명세서|영수증|등록증|면허증|등본|여권|증권|약관|특약|보증금|월세|임대료|위약금)/i.test(raw)
@@ -132,12 +148,12 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
     };
   }
 
-  // 1) 카톡 실채팅방 파일 전달 ("사무실 계약서 찾아서 이쁜이에게 카톡 전달해줘")
+  // 1) 카톡 실채팅방 파일 전달 ("사무실 계약서 찾아서 김 대리님에게 카톡 전달해줘", "사무실 계약서 찾아서 팀장님에게 카톡 전달해줘")
   const kakaoMatchA = raw.match(
-    /^(.+?)\s*(?:찾아서\s*)?(?:카톡|카카오톡)(?:으로)?\s*['"]?([가-힣a-zA-Z0-9_]+?)['"]?(?:에게|한테|님께|방에)\s*(?:전달|보내|전송)/i
+    /^(.+?)\s*(?:찾아서\s*)?(?:카톡|카카오톡)(?:으로)?\s*['"]?([가-힣a-zA-Z0-9_\s]{1,15}?)['"]?(?:에게|한테|님께|방에)\s*(?:바로\s*)?(?:전달|보내|전송)/i
   );
   const kakaoMatchB = raw.match(
-    /^(.+?)\s*(?:찾아서\s*)?['"]?([가-힣a-zA-Z0-9_]+?)['"]?(?:에게|한테|님께|방에)\s*(?:카톡|카카오톡)(?:으로)?\s*(?:전달|보내|전송)/i
+    /^(.+?)\s*(?:찾아서\s*)?['"]?([가-힣a-zA-Z0-9_\s]{1,15}?)['"]?(?:에게|한테|님께|방에)\s*(?:카톡|카카오톡)(?:으로)?\s*(?:바로\s*)?(?:전달|보내|전송)/i
   );
   const kakaoMatch = kakaoMatchA || kakaoMatchB;
   if (kakaoMatch) {
@@ -637,7 +653,7 @@ export async function speakWithHyunsuOrSunhi(
 }
 
 /**
- * "계약서 찾아서 카톡 '이쁜이'에게 전달해줘" — 실제 카카오톡 대화방 직행 장전 & 전송 후 귀신같이 복귀
+ * "계약서 찾아서 카톡 '김 대리님'에게 전달해줘" — 실제 카카오톡 대화방 직행 장전 & 전송 후 귀신같이 복귀
  */
 export async function dispatchFileToKakaoRealChatroom(params: {
   recipientName: string;

@@ -4969,9 +4969,10 @@ export async function processUnifiedMonsterChatQuery(params: {
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: voiceDocCmd.targetDocKeyword,
-        followUpSuggestions: [          '이 계약서 보증금이랑 월세 얼마야?',
+        followUpSuggestions: [
+          '이 계약서 보증금이랑 월세 얼마야?',
           '계약서에서 위약금이나 해지 나오는 문장 다 읽어줘',
-          '이 계약서에서 나한테 불리한 조항 있어?',
+          '계약서 핵심 내용 3줄로 요약해서 읽어줘',
         ],
       }
     );
@@ -4992,9 +4993,10 @@ export async function processUnifiedMonsterChatQuery(params: {
       {
         cardKind: 'SEARCH_ROUTING',
         searchKeyword: matchedDoc?.title || voiceDocCmd.targetDocKeyword,
-        followUpSuggestions: [          '사무실 계약서 찾아서 이쁜이에게 카톡 전달해줘',
+        followUpSuggestions: [
+          '사무실 계약서 찾아서 김 대리님에게 카톡 전달해줘',
           '계약서에서 위약금이나 해지 나오는 문장 다 읽어줘',
-          '이 계약서에서 나한테 불리한 독소조항 있어?',
+          '계약서 핵심 내용 3줄로 요약해서 읽어줘',
         ],
       }
     );

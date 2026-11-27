@@ -1179,6 +1179,18 @@ export function isSuggestionRedundantWithRecentTurn(
   return false;
 }
 
+/**
+ * 귀신비서가 자체 답변하지 못하고 외부 AI 바톤터치(BATON_TOUCH_CUTOFF)로 넘기는 심층 법률/세무/범위 밖 질문인지 판별합니다.
+ * 이런 질문은 유저가 직접 물어봤을 때만 외부 AI로 연결하고, 귀신비서가 먼저 추천 선택지(Chip)로 제시하지 않습니다.
+ */
+export function isUnanswerableBatonTouchSuggestionChip(chip: string): boolean {
+  const s = (chip || '').trim();
+  if (!s) return true;
+  return /(불리한|유리한|독소\s*조항|법적으로|위험한\s*조항|소송|세금\s*계산|법률\s*자문|변호사|번역해|작문해|소설|레시피|요리법|날씨|운세|주식|비트코인|환율|메인보드\s*타|전원\s*안\s*켜|액정\s*깨)/i.test(
+    s
+  );
+}
+
 export function normalizeSuggestionChips(
   chips?: string[],
   context?: { recentUserQuery?: string; assistantReplyText?: string }
@@ -1189,8 +1201,12 @@ export function normalizeSuggestionChips(
   const out: string[] = [];
 
   for (const raw of chips) {
-    const norm = normalizeSuggestionChipTone(raw);
+    const sanitizedRaw = String(raw || '').replace(/이쁜이(?=(?:에게|한테|님께|방에|\s|$))/g, '김 대리님');
+    const norm = normalizeSuggestionChipTone(sanitizedRaw);
     if (!norm) continue;
+    if (isUnanswerableBatonTouchSuggestionChip(norm)) {
+      continue;
+    }
     if (context && isSuggestionRedundantWithRecentTurn(norm, context.recentUserQuery, context.assistantReplyText)) {
       continue;
     }
