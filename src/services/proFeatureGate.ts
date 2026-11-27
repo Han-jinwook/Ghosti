@@ -91,25 +91,45 @@ export function isWorkShareDriveExempt(filePath?: string): boolean {
   const fp = String(filePath || '').trim();
   if (!fp) return false;
   const normFp = fp.replace(/\\/g, '/').toLowerCase();
-  
+
   // 1) 기본 S: 드라이브 매칭
   if (/^[sS]:/.test(fp) || normFp.includes('/s:/')) return true;
 
-  // 2) S: 점유 충돌로 인한 폴백 드라이브(Y:~P:) 및 실제 업무 공유 타겟 폴더 매칭
+  // 2) S: 점유 충돌로 인한 폴백 드라이브(Y:~P:) 및 실제 업무 공유 타겟 폴더(driveTargetPath) SSOT 매칭
   if (typeof window !== 'undefined') {
     try {
-      // 로컬 스토리지에 캐시된 마운트 메타 확인
-      for (let i = 0; i < localStorage.length; i++) {
+      for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
         if (key && key.startsWith('ghosti_work_sdrive_mount_meta_v1::')) {
           const raw = localStorage.getItem(key);
           if (raw) {
-            const meta = JSON.parse(raw);
+            const meta = JSON.parse(raw) as {
+              mounted?: boolean;
+              driveLetter?: string;
+              targetDir?: string;
+            };
             if (meta?.mounted) {
-              const driveLetter = String(meta?.driveLetter || '').trim().toLowerCase();
-              if (driveLetter && normFp.startsWith(`${driveLetter}:`)) return true;
-              const targetDir = String(meta?.targetDir || '').replace(/\\/g, '/').toLowerCase();
-              if (targetDir && normFp.startsWith(targetDir)) return true;
+              const cleanLetter = String(meta.driveLetter || '')
+                .replace(/[:\\/]+$/g, '')
+                .trim()
+                .toLowerCase();
+              if (
+                cleanLetter.length === 1 &&
+                (normFp === `${cleanLetter}:` || normFp.startsWith(`${cleanLetter}:/`))
+              ) {
+                return true;
+              }
+              const cleanTargetDir = String(meta.targetDir || '')
+                .replace(/\\/g, '/')
+                .replace(/\/+$/, '')
+                .trim()
+                .toLowerCase();
+              if (
+                cleanTargetDir &&
+                (normFp === cleanTargetDir || normFp.startsWith(`${cleanTargetDir}/`))
+              ) {
+                return true;
+              }
             }
           }
         }
@@ -119,7 +139,7 @@ export function isWorkShareDriveExempt(filePath?: string): boolean {
     }
   }
 
-  // 3) 폴더 경로명에 기본 업무공유폴더가 포함된 경우
+  // 3) 기본 업무공유폴더 경로 포함 시 예외 인정
   if (normFp.includes('업무공유폴더_s') || normFp.includes('merlin/업무공유폴더')) return true;
 
   return false;
@@ -170,7 +190,8 @@ export async function evaluateProFeatureGate(options: {
     return { allowed: true, state: 'allowed', message: '', trialBadge: '' };
   }
 
-  if (allowSDriveFree && isWorkShareDriveExempt(filePath)) {
+  // 업무 공유(S: 및 폴백 드라이브·지정 업무 폴더) 무료 예외는 '🏷️ 귀신 라벨러'에만 적용되며, '📝 사진·표 OCR'은 Pro 전용 게이트를 통과해야 함
+  if (allowSDriveFree && actionType === 'feat_ghost_labeler' && isWorkShareDriveExempt(filePath)) {
     return {
       allowed: true,
       state: 'allowed',

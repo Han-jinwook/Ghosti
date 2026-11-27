@@ -59,10 +59,25 @@ export interface WorkRoomPresenceMember {
 export interface WorkBackupServerNodeDto {
   id: string;
   slot?: number;
+  memberEmail?: string;
   label: string;
   role: string;
   status: string;
+  freeGb?: number;
+  lowSpace?: boolean;
+  lastMirroredAt?: string;
+  mirroredCount?: number;
   updatedAt?: string;
+}
+
+export interface WorkBackupVersionItemDto {
+  versionId: string;
+  relPath: string;
+  fileName: string;
+  savedAtIso: string;
+  savedAtFormatted: string;
+  size: number;
+  sizeFormatted: string;
 }
 
 export interface WorkHostTunnelEndpointDto {
@@ -70,6 +85,7 @@ export interface WorkHostTunnelEndpointDto {
   accessKey: string;
   updatedAt?: string | null;
   masterServerName?: string;
+  promotedMasterEmail?: string;
   backupServers?: WorkBackupServerNodeDto[];
 }
 
@@ -221,6 +237,7 @@ const LOCAL_WORK_MOUNT_META_PREFIX = 'ghosti_work_sdrive_mount_meta_v1::';
 
 export interface CachedLocalWorkMountMeta {
   mounted: boolean;
+  driveLetter?: string;
   targetDir: string;
 }
 
@@ -237,6 +254,7 @@ export function readCachedLocalWorkMountMetaSync(
     if (typeof parsed?.mounted !== 'boolean') return null;
     return {
       mounted: parsed.mounted,
+      driveLetter: parsed.driveLetter ? String(parsed.driveLetter).trim() : undefined,
       targetDir: String(parsed.targetDir || '').trim(),
     };
   } catch {
@@ -261,6 +279,7 @@ export function saveCachedLocalWorkMountMeta(
       key,
       JSON.stringify({
         mounted: Boolean(meta.mounted),
+        ...(meta.driveLetter ? { driveLetter: String(meta.driveLetter).trim() } : {}),
         targetDir: String(meta.targetDir || '').trim(),
       })
     );
@@ -1385,6 +1404,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
   unchanged?: boolean;
   listSig?: string;
   mounted: boolean;
+  driveLetter?: string;
   targetDir?: string;
   previewPendingCount?: number;
   docs: WorkLoungeDocDto[];
@@ -1429,6 +1449,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
       unchanged?: boolean;
       listSig?: string;
       mounted?: boolean;
+      driveLetter?: string;
       targetDir?: string;
       previewPendingCount?: number;
       files?: Array<Record<string, unknown>>;
@@ -1441,6 +1462,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
         unchanged: true,
         listSig: typeof data.listSig === 'string' ? data.listSig : opts?.knownSig,
         mounted: Boolean(data.mounted),
+        driveLetter: data.driveLetter,
         targetDir: data.targetDir,
         previewPendingCount: Number(data.previewPendingCount || 0),
         docs: [],
@@ -1465,6 +1487,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
       unchanged: false,
       listSig: typeof data.listSig === 'string' ? data.listSig : '',
       mounted: Boolean(data.mounted),
+      driveLetter: data.driveLetter,
       targetDir: data.targetDir,
       previewPendingCount: Number(data.previewPendingCount || 0),
       docs: data.files.map((rf, i) => mapRawWorkFileToDto(rf, i)),
@@ -2426,23 +2449,47 @@ export async function setWorkNightPowerSaveNative(
 }
 
 export async function manageWorkBackupServersNative(opts: {
-  subAction: 'get' | 'save' | 'sync-now' | 'promote-master';
+  subAction:
+    | 'get'
+    | 'save'
+    | 'sync-now'
+    | 'promote-master'
+    | 'mirror-from-tunnel'
+    | 'list-versions'
+    | 'restore-version';
   masterServerName?: string;
   newMasterServerName?: string;
   backupServers?: WorkBackupServerNodeDto[];
   localBackupServerDir?: string;
+  secondaryBackupServerDir?: string;
+  tunnelUrl?: string;
+  accessKey?: string;
+  versionId?: string;
+  relPath?: string;
+  roomId?: string;
+  email?: string;
 }): Promise<{
   ok: boolean;
   masterServerName?: string;
   isPromotedMaster?: boolean;
+  targetDir?: string;
+  mounted?: boolean;
+  driveLetter?: string;
+  tunnel?: { ok?: boolean; status?: string; tunnelUrl?: string; accessKey?: string };
   backupServers?: WorkBackupServerNodeDto[];
   localBackupServerDir?: string;
+  secondaryBackupServerDir?: string;
+  lastActiveBackupDir?: string;
   lastBackupSyncedAt?: string;
   lastBackupSyncedCount?: number;
   newlyCopiedCount?: number;
+  primaryFreeGb?: number;
   warningLowDisk?: boolean;
   warningDiskMsg?: string;
   targetSlotUsed?: number;
+  versions?: WorkBackupVersionItemDto[];
+  relPath?: string;
+  fileName?: string;
   message?: string;
 }> {
   if (!zCoreBridge.isConnected) {
@@ -2459,14 +2506,24 @@ export async function manageWorkBackupServersNative(opts: {
       ok: boolean;
       masterServerName?: string;
       isPromotedMaster?: boolean;
+      targetDir?: string;
+      mounted?: boolean;
+      driveLetter?: string;
+      tunnel?: { ok?: boolean; status?: string; tunnelUrl?: string; accessKey?: string };
       backupServers?: WorkBackupServerNodeDto[];
       localBackupServerDir?: string;
+      secondaryBackupServerDir?: string;
+      lastActiveBackupDir?: string;
       lastBackupSyncedAt?: string;
       lastBackupSyncedCount?: number;
       newlyCopiedCount?: number;
+      primaryFreeGb?: number;
       warningLowDisk?: boolean;
       warningDiskMsg?: string;
       targetSlotUsed?: number;
+      versions?: WorkBackupVersionItemDto[];
+      relPath?: string;
+      fileName?: string;
       message?: string;
     };
   } catch {
@@ -2474,13 +2531,73 @@ export async function manageWorkBackupServersNative(opts: {
   }
 }
 
+export async function promoteBackupPcToMasterOnServer(opts: {
+  roomId: string;
+  tunnelUrl: string;
+  accessKey: string;
+  masterServerName: string;
+}): Promise<{
+  ok: boolean;
+  hostTunnel?: WorkHostTunnelEndpointDto;
+  message?: string;
+}> {
+  if (!opts.roomId || !opts.tunnelUrl || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  const res = await callGhostiServerBridge<{
+    hostTunnel?: WorkHostTunnelEndpointDto;
+    message?: string;
+  }>('work_promote_backup_to_master', opts);
+  if (res.ok && res.hostTunnel?.tunnelUrl) {
+    setActiveHostTunnelSession(opts.roomId, res.hostTunnel);
+  }
+  return {
+    ok: Boolean(res.ok),
+    hostTunnel: res.hostTunnel,
+    message: res.message,
+  };
+}
+
+export async function reportBackupNodeMirrorStatusOnServer(opts: {
+  roomId: string;
+  freeGb?: number;
+  lowSpace?: boolean;
+  mirroredCount?: number;
+  lastMirroredAt?: string;
+}): Promise<{ ok: boolean; backupServers?: WorkBackupServerNodeDto[] }> {
+  if (!opts.roomId || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  const res = await callGhostiServerBridge<{ backupServers?: WorkBackupServerNodeDto[] }>(
+    'work_report_backup_node_status',
+    opts
+  );
+  return {
+    ok: Boolean(res.ok),
+    backupServers: Array.isArray(res.backupServers) ? res.backupServers : undefined,
+  };
+}
+
 export async function restoreDeletedWorkFileShared(opts: {
+  roomId?: string;
   relPath: string;
-}): Promise<{ ok: boolean; restoredRealFile?: boolean; localDeletedTombstones?: WorkDeletedTombstoneMap; message?: string }> {
+}): Promise<{
+  ok: boolean;
+  restoredRealFile?: boolean;
+  localDeletedTombstones?: WorkDeletedTombstoneMap;
+  message?: string;
+}> {
   const cleanRel = (opts.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
   if (!cleanRel) return { ok: false };
 
-  // 1) 로컬 Z-코어 직결 시도
+  let restoredRes: {
+    ok: boolean;
+    restoredRealFile?: boolean;
+    localDeletedTombstones?: WorkDeletedTombstoneMap;
+    message?: string;
+  } | null = null;
+
+  // 1) 로컬 Z-코어 직결 복원 시도
   if (zCoreBridge.isConnected) {
     try {
       const res = await fetch(getZCoreUrl('/__work/restore-deleted'), {
@@ -2489,19 +2606,22 @@ export async function restoreDeletedWorkFileShared(opts: {
         body: JSON.stringify({ relPath: cleanRel }),
       });
       if (res.ok) {
-        return (await res.json()) as {
+        const parsed = (await res.json()) as {
           ok: boolean;
           restoredRealFile?: boolean;
           localDeletedTombstones?: WorkDeletedTombstoneMap;
           message?: string;
         };
+        if (parsed?.ok) {
+          restoredRes = parsed;
+        }
       }
     } catch {
-      /* ignore */
+      /* fallback to tunnel below */
     }
   }
 
-  // 2) 원격 팀원인 경우 대장 PC 직통 터널을 통해 대장 PC 로컬 금고에서 실물 원복
+  // 2) 원격 팀원(또는 대장 PC 터널 경유 삭제 건)인 경우 대장 PC 직통 터널을 통해 대장 PC에서 실물 원복
   if (activeHostTunnelSession?.tunnelUrl) {
     try {
       const res = await fetch(`${activeHostTunnelSession.tunnelUrl}/__work/restore-deleted`, {
@@ -2515,19 +2635,41 @@ export async function restoreDeletedWorkFileShared(opts: {
         body: JSON.stringify({ relPath: cleanRel }),
       });
       if (res.ok) {
-        return (await res.json()) as {
+        const parsed = (await res.json()) as {
           ok: boolean;
           restoredRealFile?: boolean;
           localDeletedTombstones?: WorkDeletedTombstoneMap;
           message?: string;
         };
+        if (parsed?.ok && !restoredRes) {
+          restoredRes = parsed;
+        }
       }
     } catch {
       /* ignore */
     }
   }
 
-  return { ok: false, message: '복원 엔드포인트에 연결할 수 없습니다.' };
+  // 3) 서버 공유 Tombstone 즉시 해제 (15초 주기 조회 시 구 Tombstone으로 재삭제되는 현상 100% 차단)
+  const effectiveRoomId =
+    (opts.roomId || '').trim() || readCachedMyWorkRoomMeta()?.roomId || '';
+  if (effectiveRoomId && hasAuthenticatedHubAccountSession()) {
+    try {
+      const srv = await callGhostiServerBridge<{
+        deletedTombstones?: WorkDeletedTombstoneMap;
+      }>('work_restore_deleted_file', {
+        roomId: effectiveRoomId,
+        relPath: cleanRel,
+      });
+      if (srv.ok && srv.deletedTombstones && restoredRes) {
+        restoredRes.localDeletedTombstones = normalizeWorkTombstoneMap(srv.deletedTombstones);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return restoredRes || { ok: false, message: '복원 엔드포인트에 연결할 수 없습니다.' };
 }
 
 export async function updateWorkRoomMemberRoleOnServer(opts: {

@@ -1,8 +1,8 @@
 /**
  * [Ghosti Server Bridge Ops]
- * - 6. 💼 업무 공유 (S: 드라이브): 방 생성·초대 수락(ghosti_lounge_members 정식 편입)·24시간 무설치 프리뷰·
- *   대용량(>512KB~50MB) 서명 URL 원본 동기화·최신 mtime 보호·파일 삭제 Tombstone 전파
- * - 5. 📱 내 기기 통합 (PC+폰+PC+): ghosti_devices 정식 SQL 등록/조회·6자리/QR 페어링(ghosti_pairing_codes)·
+ * - 5. 💼 업무 공유 (S: 드라이브): 방 생성·초대 수락(ghosti_lounge_members 정식 편입)·24시간 무설치 프리뷰·
+ *   아웃바운드 HTTPS 직통 터널 중매·1클릭 백업 PC 대장 승격·삭제 취소(Undo) 및 Tombstone 전파
+ * - 4. 📱 내 기기 통합 (PC+폰+PC+): ghosti_devices 정식 SQL 등록/조회·6자리/QR 페어링(ghosti_pairing_codes)·
  *   2번째 기기 연결 30일 무료체험(D-30) 및 요금제 영속화·AES-256-GCM E2EE 클립보드 지연 우체통·13KB 섀도우/원본 미러링
  */
 import crypto from 'node:crypto';
@@ -354,6 +354,7 @@ async function readWorkRoomP2pState(supabaseUrl, serviceKey, roomId) {
         hostAccessKey: '',
         hostUpdatedAt: null,
         masterServerName: '사내 대장 PC (S:)',
+        promotedMasterEmail: '',
         backupServers: [],
         deletedTombstones: {},
       }
@@ -376,6 +377,7 @@ async function readWorkRoomP2pState(supabaseUrl, serviceKey, roomId) {
       hostAccessKey: String(p2pState?.hostAccessKey || '').trim(),
       hostUpdatedAt: p2pState?.hostUpdatedAt || null,
       masterServerName: String(p2pState?.masterServerName || '사내 대장 PC (S:)').slice(0, 48),
+      promotedMasterEmail: String(p2pState?.promotedMasterEmail || '').trim().toLowerCase(),
       backupServers: Array.isArray(p2pState?.backupServers) ? p2pState.backupServers.slice(0, 2) : [],
       deletedTombstones: mergedTombstones,
     },
@@ -391,6 +393,7 @@ async function writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, nextState)
     hostAccessKey: String(nextState?.hostAccessKey || '').trim(),
     hostUpdatedAt: nextState?.hostUpdatedAt || null,
     masterServerName: String(nextState?.masterServerName || '사내 대장 PC (S:)').slice(0, 48),
+    promotedMasterEmail: String(nextState?.promotedMasterEmail || '').trim().toLowerCase(),
     backupServers: Array.isArray(nextState?.backupServers) ? nextState.backupServers.slice(0, 2) : [],
     deletedTombstones: cleanTombs,
   };
@@ -818,7 +821,7 @@ export async function handleDaemonWorkTunnelRefreshAction({
   );
   const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
   const room = Array.isArray(roomRows) ? roomRows[0] : null;
-  if (!room || String(room.master_email || '').trim().toLowerCase() !== hostEmail) {
+  if (!room) {
     return { status: 403, body: { ok: false, reason: 'WORK_ROOM_MASTER_MISMATCH' } };
   }
 
@@ -828,6 +831,12 @@ export async function handleDaemonWorkTunnelRefreshAction({
   }
 
   const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+  const isOrigMaster = String(room.master_email || '').trim().toLowerCase() === hostEmail;
+  const isPromotedMaster =
+    Boolean(state.promotedMasterEmail) && state.promotedMasterEmail === hostEmail;
+  if (!isOrigMaster && !isPromotedMaster) {
+    return { status: 403, body: { ok: false, reason: 'WORK_ROOM_MASTER_MISMATCH' } };
+  }
   const savedKey = String(state.hostAccessKey || '').trim();
   if (savedKey.length < 24) {
     return { status: 403, body: { ok: false, reason: 'HOST_ACCESS_KEY_NOT_BOUND_YET' } };
@@ -1256,6 +1265,7 @@ export async function handleAuthedWorkAndDeviceAction({
           accessKey: state.hostAccessKey,
           updatedAt: state.hostUpdatedAt,
           masterServerName: state.masterServerName,
+          promotedMasterEmail: state.promotedMasterEmail || undefined,
           backupServers: state.backupServers,
         },
       },
@@ -1454,7 +1464,10 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!ownerGate.ok) {
       return ownerGate.response;
     }
-    if (!ctx.isMaster) {
+    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const isPromotedMaster =
+      Boolean(state.promotedMasterEmail) && state.promotedMasterEmail === email;
+    if (!ctx.isMaster && !isPromotedMaster) {
       return { status: 403, body: { ok: false, reason: 'WORK_TUNNEL_REGISTER_MASTER_ONLY' } };
     }
     const rawUrl = String(body.tunnelUrl || '').trim().replace(/\/+$/, '');
@@ -1462,10 +1475,12 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 400, body: { ok: false, reason: 'INVALID_TUNNEL_URL' } };
     }
     const accessKey = String(body.accessKey || '').trim().slice(0, 96);
-    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
     state.hostTunnelUrl = rawUrl;
     state.hostAccessKey = accessKey;
     state.hostUpdatedAt = new Date().toISOString();
+    if (ctx.isMaster) {
+      state.promotedMasterEmail = '';
+    }
     if (body.masterServerName) {
       state.masterServerName = String(body.masterServerName).trim().slice(0, 48);
     }
@@ -1486,10 +1501,120 @@ export async function handleAuthedWorkAndDeviceAction({
           accessKey: state.hostAccessKey,
           updatedAt: state.hostUpdatedAt,
           masterServerName: state.masterServerName,
+          promotedMasterEmail: state.promotedMasterEmail || undefined,
           backupServers: state.backupServers,
         },
       },
     };
+  }
+
+  if (action === 'work_promote_backup_to_master') {
+    const roomId = String(body.roomId || '').trim();
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
+      return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
+    }
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
+    }
+    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const isDesignatedBackup = (state.backupServers || []).some(
+      (b) => String(b?.memberEmail || '').trim().toLowerCase() === email
+    );
+    if (!ctx.isMaster && !isDesignatedBackup) {
+      return {
+        status: 403,
+        body: {
+          ok: false,
+          reason: 'NOT_DESIGNATED_BACKUP_SERVER',
+          message: '예비 서버(1·2호)로 지정된 PC 또는 방장 계정만 대장 PC로 수동 승격할 수 있습니다.',
+        },
+      };
+    }
+    const rawUrl = String(body.tunnelUrl || '').trim().replace(/\/+$/, '');
+    if (!rawUrl || !ALLOWED_WORK_TUNNEL_URL_RE.test(rawUrl)) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_TUNNEL_URL' } };
+    }
+    const accessKey = String(body.accessKey || '').trim().slice(0, 96);
+    state.hostTunnelUrl = rawUrl;
+    state.hostAccessKey = accessKey;
+    state.hostUpdatedAt = new Date().toISOString();
+    state.promotedMasterEmail = ctx.isMaster ? '' : email;
+    state.masterServerName = String(
+      body.masterServerName || `${actorNick || email.split('@')[0]} 대장 승격 PC (S:)`
+    )
+      .trim()
+      .slice(0, 48);
+    state.backupServers = (state.backupServers || []).map((b) =>
+      String(b?.memberEmail || '').trim().toLowerCase() === email
+        ? { ...b, status: '⚡ 대장 PC로 수동 승격 가동 중', updatedAt: state.hostUpdatedAt }
+        : b
+    );
+    const okWrite = await writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, state);
+    if (!okWrite) {
+      return { status: 502, body: { ok: false, reason: 'WORK_PROMOTE_SAVE_FAILED' } };
+    }
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId,
+        hostTunnel: {
+          tunnelUrl: state.hostTunnelUrl,
+          accessKey: state.hostAccessKey,
+          updatedAt: state.hostUpdatedAt,
+          masterServerName: state.masterServerName,
+          promotedMasterEmail: state.promotedMasterEmail || undefined,
+          backupServers: state.backupServers,
+        },
+      },
+    };
+  }
+
+  if (action === 'work_report_backup_node_status') {
+    const roomId = String(body.roomId || '').trim();
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
+      return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
+    }
+    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const list = Array.isArray(state.backupServers) ? [...state.backupServers] : [];
+    const idx = list.findIndex(
+      (b) => String(b?.memberEmail || '').trim().toLowerCase() === email
+    );
+    if (idx < 0 && !ctx.isMaster) {
+      return { status: 403, body: { ok: false, reason: 'NOT_BACKUP_NODE' } };
+    }
+    if (idx >= 0) {
+      const lowSpace = Boolean(body.lowSpace);
+      const freeGb = typeof body.freeGb === 'number' ? Number(body.freeGb.toFixed(1)) : list[idx].freeGb;
+      const mirroredCount =
+        typeof body.mirroredCount === 'number' ? Math.max(0, Math.floor(body.mirroredCount)) : list[idx].mirroredCount;
+      const nowIso = new Date().toISOString();
+      list[idx] = {
+        ...list[idx],
+        freeGb,
+        lowSpace,
+        mirroredCount,
+        lastMirroredAt: body.lastMirroredAt || nowIso,
+        status: lowSpace
+          ? `⚠️ 용량 부족 (${freeGb ?? 0}GB < 10GB · 2호 우회)`
+          : `✓ 단방향 미러링 완료 (${mirroredCount ?? 0}건${typeof freeGb === 'number' ? ` · 여유 ${freeGb}GB` : ''})`,
+        updatedAt: nowIso,
+      };
+      if (idx === 0 && lowSpace && list[1]) {
+        list[1] = {
+          ...list[1],
+          status: list[1].status?.includes('우회 가동')
+            ? list[1].status
+            : '🛡️ 1호 용량 부족으로 2호 우선 백업 가동 중',
+        };
+      }
+      state.backupServers = list;
+      await writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, state);
+    }
+    return { status: 200, body: { ok: true, backupServers: state.backupServers } };
   }
 
   if (action === 'work_get_room_state') {
@@ -1541,6 +1666,7 @@ export async function handleAuthedWorkAndDeviceAction({
           accessKey: state.hostAccessKey,
           updatedAt: state.hostUpdatedAt,
           masterServerName: state.masterServerName,
+          promotedMasterEmail: state.promotedMasterEmail || undefined,
           backupServers: state.backupServers,
         },
         files: [], // Zero-Cloud: 서버에는 파일·본문을 0 Byte 보관하며 대장 PC 터널에서 직접 조회
@@ -1734,6 +1860,35 @@ export async function handleAuthedWorkAndDeviceAction({
     return {
       status: 200,
       body: { ok: true, relPath, files: [], deletedTombstones: tombstones },
+    };
+  }
+
+  if (action === 'work_restore_deleted_file') {
+    const roomId = String(body.roomId || '').trim();
+    const relPath = String(body.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+    if (!roomId || !relPath || relPath.includes('..')) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_OR_INVALID_RELPATH' } };
+    }
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
+      return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
+    }
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
+    }
+    if (ctx.role === 'viewer') {
+      return { status: 403, body: { ok: false, reason: 'WORK_VIEWER_READ_ONLY' } };
+    }
+    const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const canonKey = relPath.toLowerCase();
+    delete tombstones[canonKey];
+    delete tombstones[relPath];
+    state.deletedTombstones = tombstones;
+    await writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, state);
+    return {
+      status: 200,
+      body: { ok: true, relPath, deletedTombstones: tombstones },
     };
   }
 

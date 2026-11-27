@@ -57,9 +57,9 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
       allowSDriveFree: true,
     });
     if (!outcome.allowed) {
-      useSaySeeStore.setState({
-        lastQuarantineToast: outcome.message,
-      });
+      const msg = outcome.message || '귀신 라벨러 권한 확인이 필요합니다.';
+      useSaySeeStore.setState({ lastQuarantineToast: msg });
+      useSaySeeStore.getState().showToast(msg);
       return false;
     }
     return true;
@@ -91,9 +91,11 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
               if (mySeq !== _latestGhostLabelerSeq) return;
               if (!forceSampleOnly) recordProFeatureUsage('feat_ghost_labeler');
               markGhostDojoStep('labeler');
+              const doneMsg = `🏷️ 파일명 생성 완료: ${newLabel} (복사됨)`;
               useSaySeeStore.setState({
-                lastQuarantineToast: `파일명 생성 완료: ${newLabel} (복사됨)`,
+                lastQuarantineToast: doneMsg,
               });
+              useSaySeeStore.getState().showToast(doneMsg);
             } catch {
               if (mySeq !== _latestGhostLabelerSeq) return;
               useSaySeeStore.setState({

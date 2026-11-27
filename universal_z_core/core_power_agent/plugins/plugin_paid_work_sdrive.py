@@ -2518,7 +2518,7 @@ def _scan_work_vault(
                     if entry.is_symlink():
                         continue
                     if entry.is_dir(follow_symlinks=False):
-                        if name.startswith("."):
+                        if name.startswith(".") or name.lower() in ("_versions", "work_undo_vault", "_work_undo_staging"):
                             continue
                         try:
                             attrs = getattr(entry.stat(follow_symlinks=False), "st_file_attributes", 0) or 0
@@ -2954,17 +2954,37 @@ def _parse_iso_mtime_sec(raw_iso: Any) -> float:
 def _move_to_recycle_bin_safe(target: Path) -> bool:
     """OS [휴지통]으로만 이동합니다. 휴지통 이동이 실패하면 절대 영구 삭제하지 않고 False를 반환합니다.
     (명세 8.3-③: 귀신같이 앱은 어떤 경우에도 스스로 파일을 영구 삭제하지 않음)"""
-    if not target:
+    if not target or not target.exists():
         return True
     try:
-        # 1초 실행 취소(Undo) 시 100% 실물 파일 복원을 위해 임시 안전 금고에 백업 보관 (최대 20개 FIFO)
-        undo_vault = _get_merlin_appdata_dir() / "work_undo_vault"
-        undo_vault.mkdir(parents=True, exist_ok=True)
-        undo_dest = undo_vault / (hashlib.sha256(str(target).encode("utf-8")).hexdigest()[:16] + "_" + target.name)
-        try:
-            shutil.copy2(target, undo_dest)
-        except Exception:
-            pass
+        # 1초 실행 취소(Undo) 시 512KB 초과 대용량·외장/클라우드 폴더까지 100% 실물 복원하기 위해 임시 안전 금고에 보관 (최대 20개·2시간 FIFO 자동 청소)
+        if target.is_file() and target.stat().st_size <= WORK_MAX_FILE_BYTES:
+            undo_vault = _get_merlin_appdata_dir() / "work_undo_vault"
+            undo_vault.mkdir(parents=True, exist_ok=True)
+            key_prefix = hashlib.sha256(os.path.normcase(os.path.abspath(str(target))).encode("utf-8")).hexdigest()[:16]
+            undo_dest = undo_vault / f"{key_prefix}_{target.name}"
+            if undo_dest.exists():
+                undo_dest.unlink(missing_ok=True)
+            linked = False
+            try:
+                os.link(str(target), str(undo_dest))
+                linked = True
+            except OSError:
+                pass
+            if not linked:
+                shutil.copy2(str(target), str(undo_dest))
+            now_t = time.time()
+            staged_files = sorted(
+                [p for p in undo_vault.iterdir() if p.is_file()],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            for idx_u, up in enumerate(staged_files):
+                try:
+                    if idx_u >= 20 or (now_t - up.stat().st_mtime) > 7200:
+                        up.unlink(missing_ok=True)
+                except OSError:
+                    pass
     except Exception:
         pass
     if os.name != "nt":
@@ -3346,50 +3366,127 @@ def delete_or_apply_tombstones(data: Dict[str, Any] | None = None) -> Dict[str, 
     return {"ok": True, "relPath": rel_p, "deletedAt": deleted_at, "localDeletedTombstones": local_tombs}
 
 
+def _restore_from_windows_recycle_bin(target: Path) -> bool:
+    """Windows OS [휴지통]($Recycle.Bin) $I/$R 메타 매칭으로 원래 경로 파일을 직접 복원합니다."""
+    if os.name != "nt" or not target.drive:
+        return False
+    try:
+        import struct
+
+        rb_root = Path(f"{target.drive}\\$Recycle.Bin")
+        if not rb_root.is_dir():
+            return False
+        want_norm = os.path.normcase(os.path.abspath(str(target)))
+        candidates: List[Tuple[int, Path, Path]] = []
+        for sid_dir in rb_root.iterdir():
+            try:
+                if not sid_dir.is_dir():
+                    continue
+                for i_file in sid_dir.glob("$I*"):
+                    try:
+                        raw = i_file.read_bytes()[:2048]
+                        if len(raw) < 28:
+                            continue
+                        ver, _sz, del_ft = struct.unpack_from("<QQQ", raw, 0)
+                        if ver == 2:
+                            char_cnt = struct.unpack_from("<I", raw, 24)[0]
+                            orig_str = raw[28 : min(len(raw), 28 + char_cnt * 2)].decode("utf-16-le", errors="ignore").rstrip("\x00").strip()
+                        elif ver == 1:
+                            orig_str = raw[24:544].decode("utf-16-le", errors="ignore").split("\x00", 1)[0].strip()
+                        else:
+                            continue
+                        if not orig_str or os.path.normcase(os.path.abspath(orig_str)) != want_norm:
+                            continue
+                        r_file = i_file.with_name("$R" + i_file.name[2:])
+                        if r_file.is_file():
+                            candidates.append((int(del_ft), r_file, i_file))
+                    except OSError:
+                        continue
+            except OSError:
+                continue
+        if not candidates:
+            return False
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        _ft, best_r, best_i = candidates[0]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(best_r), str(target))
+        best_i.unlink(missing_ok=True)
+        return target.is_file()
+    except Exception:
+        return False
+
+
 def restore_deleted_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """[↩️ 1초 실행 취소(Undo)] 대장 PC 로컬 및 직통 터널을 통해 삭제된 파일을 임시 금고(_undo_vault)에서 100% 실물 파일로 복원하고 Tombstone을 즉시 해제합니다."""
+    """[↩️ 1초 실행 취소(Undo)] 대장 PC 로컬 및 직통 터널을 통해 삭제된 파일을 OS 휴지통·임시 금고에서 용량 무관 100% 실물 파일로 복원하고 Tombstone을 즉시 해제합니다."""
     payload = data or {}
     rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
     if not rel_p:
         return {"ok": False, "error": "EMPTY_REL_PATH"}
     vault_dir = get_work_vault_dir(ensure_dirs=True)
     target = _safe_resolve_inside_vault(vault_dir, rel_p)
-    if target is None:
+    if target is None or target.suffix.lower() in _BLOCKED_EXEC_EXTS:
         return {"ok": False, "error": "INVALID_REL_PATH"}
+    if target.exists() and detect_file_lock_owner(target):
+        return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
 
-    restored_real_file = False
+    restored_real_file = target.is_file()
+    if not restored_real_file and _restore_from_windows_recycle_bin(target):
+        restored_real_file = True
+
     undo_vault = _get_merlin_appdata_dir() / "work_undo_vault"
-    if undo_vault.is_dir():
-        # 임시 금고 내 해시 접두사 매칭
-        cand_hash = hashlib.sha256(str(target).encode("utf-8")).hexdigest()[:16] + "_" + target.name
-        undo_source = undo_vault / cand_hash
+    if not restored_real_file and undo_vault.is_dir():
+        norm_key = hashlib.sha256(os.path.normcase(os.path.abspath(str(target))).encode("utf-8")).hexdigest()[:16] + "_" + target.name
+        legacy_key = hashlib.sha256(str(target).encode("utf-8")).hexdigest()[:16] + "_" + target.name
+        undo_source = undo_vault / norm_key
         if not undo_source.is_file():
-            # 파일명 단독 폴백 검색
-            for cand in undo_vault.glob(f"*_{target.name}"):
-                if cand.is_file():
-                    undo_source = cand
-                    break
+            undo_source = undo_vault / legacy_key
+        if not undo_source.is_file():
+            matches = sorted(
+                [c for c in undo_vault.glob(f"*_{target.name}") if c.is_file()],
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if matches:
+                undo_source = matches[0]
         if undo_source.is_file():
             try:
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(undo_source, target)
+                tmp_r = target.with_name(f".{target.name}.ghosti_restore_tmp")
+                shutil.copy2(str(undo_source), str(tmp_r))
+                os.replace(str(tmp_r), str(target))
+                undo_source.unlink(missing_ok=True)
                 restored_real_file = True
             except Exception:
                 pass
+
+    if not restored_real_file:
+        return {
+            "ok": False,
+            "relPath": rel_p,
+            "restoredRealFile": False,
+            "message": "복원할 원본 파일을 찾지 못했습니다. 윈도우 [휴지통]을 확인해 주세요.",
+        }
+
+    now_sec = time.time()
+    try:
+        os.utime(str(target), (now_sec, now_sec))
+    except OSError:
+        pass
 
     def _apply_restore(cur: Dict[str, Any]) -> None:
         known = set(cur.get("knownRelPaths") or [])
         known.add(rel_p)
         cur["knownRelPaths"] = sorted(known)
         tombs = dict(cur.get("deletedTombstones") or {})
-        tombs.pop(rel_p, None)
+        for k_rm in [k for k in tombs if k.lower() == rel_p.lower()]:
+            tombs.pop(k_rm, None)
         cur["deletedTombstones"] = tombs
 
     local_tombs = dict(_mutate_sdrive_config(_apply_restore).get("deletedTombstones") or {})
     return {
         "ok": True,
         "relPath": rel_p,
-        "restoredRealFile": restored_real_file,
+        "restoredRealFile": True,
         "localDeletedTombstones": local_tombs,
         "message": f"'{target.name}' 파일이 100% 정상 복원되었습니다.",
     }
@@ -3912,8 +4009,169 @@ def set_night_power_save_mode(data: Dict[str, Any] | None = None) -> Dict[str, A
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# [🛡️ 백업 PC (예비 서버 1·2호)] — 대장 PC 고장·도난 대비 업무 폴더(S:) 이중화 설정 및 실제 증분 예비 백업
+# [🛡️ 백업 PC (예비 서버 1·2호)] — 단방향 자동 백업 미러링 + 최근 5버전 타임머신 + <10GB 용량 부족 우회 + 1클릭 수동 대장 승격
 # ─────────────────────────────────────────────────────────────────────────────
+WORK_BACKUP_LOW_DISK_BYTES = 10 * 1024 * 1024 * 1024  # 10GB 미만 시 사전 경고 및 2호 경로 자동 우회
+MAX_BACKUP_VERSIONS_PER_FILE = 5
+
+
+def _probe_backup_free_bytes(target_dir: Path, simulated_override: Optional[int] = None) -> int:
+    if simulated_override is not None and simulated_override >= 0:
+        return int(simulated_override)
+    probe = target_dir
+    while not probe.exists() and probe.parent != probe:
+        probe = probe.parent
+    try:
+        return int(shutil.disk_usage(str(probe)).free)
+    except Exception:
+        return WORK_BACKUP_LOW_DISK_BYTES * 2
+
+
+def _archive_backup_file_version(backup_root: Path, rel_p: str, src_file: Path) -> Optional[str]:
+    """백업 시 업무 파일을 <backup_root>/_versions/<rel_dir>/<stem>__v<UTC시각><ext>로 스냅샷 보관하고,
+    파일당 최신 5개 버전(MAX_BACKUP_VERSIONS_PER_FILE = 5)만 자동 유지합니다."""
+    if not src_file.is_file():
+        return None
+    clean_rel = rel_p.replace("\\", "/").lstrip("/")
+    if not clean_rel or clean_rel.startswith("_versions/"):
+        return None
+    try:
+        versions_root = backup_root / "_versions"
+        rel_obj = Path(clean_rel)
+        parent_str = str(rel_obj.parent).replace("\\", "/")
+        ver_parent = (
+            _safe_resolve_inside_vault(versions_root, parent_str)
+            if parent_str not in ("", ".")
+            else versions_root
+        )
+        if ver_parent is None:
+            return None
+        ver_parent.mkdir(parents=True, exist_ok=True)
+        stem, ext = rel_obj.stem, rel_obj.suffix
+        existing = sorted(
+            [
+                f
+                for f in ver_parent.iterdir()
+                if f.is_file() and f.name.startswith(f"{stem}__v") and f.name.endswith(ext)
+            ],
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        src_st = src_file.stat()
+        if existing:
+            latest_f = existing[0]
+            if latest_f.stat().st_size == src_st.st_size:
+                if hashlib.sha256(latest_f.read_bytes()).digest() == hashlib.sha256(src_file.read_bytes()).digest():
+                    return str(latest_f.relative_to(versions_root)).replace("\\", "/")
+
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
+        ver_file = ver_parent / f"{stem}__v{stamp}{ext}"
+        shutil.copy2(str(src_file), str(ver_file))
+        all_vers = sorted(
+            [
+                f
+                for f in ver_parent.iterdir()
+                if f.is_file() and f.name.startswith(f"{stem}__v") and f.name.endswith(ext)
+            ],
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        for old_v in all_vers[MAX_BACKUP_VERSIONS_PER_FILE:]:
+            try:
+                old_v.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return str(ver_file.relative_to(versions_root)).replace("\\", "/")
+    except Exception:
+        return None
+
+
+def _list_backup_versions(backup_root: Path, filter_rel_path: str = "") -> List[Dict[str, Any]]:
+    versions_root = backup_root / "_versions"
+    if not versions_root.is_dir():
+        return []
+    clean_filter = filter_rel_path.strip().replace("\\", "/").lstrip("/").lower()
+    items: List[Dict[str, Any]] = []
+    for root_w, _dirs_w, files_w in os.walk(str(versions_root)):
+        for fname in files_w:
+            if "__v" not in fname:
+                continue
+            fp = Path(root_w) / fname
+            try:
+                ver_id = str(fp.relative_to(versions_root)).replace("\\", "/")
+                stem_part, rest = fname.rsplit("__v", 1)
+                dot_idx = rest.find(".")
+                ext = rest[dot_idx:] if dot_idx >= 0 else ""
+                stamp_raw = rest[:dot_idx] if dot_idx >= 0 else rest
+                orig_name = f"{stem_part}{ext}"
+                parent_rel = str(Path(ver_id).parent).replace("\\", "/")
+                orig_rel = orig_name if parent_rel in ("", ".") else f"{parent_rel}/{orig_name}"
+                if clean_filter and orig_rel.lower() != clean_filter:
+                    continue
+                st = fp.stat()
+                saved_ts = st.st_mtime
+                try:
+                    if len(stamp_raw) >= 22 and "_" in stamp_raw[15:]:
+                        dt = datetime.strptime(stamp_raw[:22], "%Y%m%d_%H%M%S_%f").replace(tzinfo=timezone.utc)
+                    else:
+                        dt = datetime.strptime(stamp_raw[:15], "%Y%m%d_%H%M%S").replace(tzinfo=timezone.utc)
+                    saved_ts = dt.timestamp()
+                except Exception:
+                    pass
+                items.append({
+                    "versionId": ver_id,
+                    "relPath": orig_rel,
+                    "fileName": orig_name,
+                    "savedAtIso": _iso_utc(saved_ts),
+                    "savedAtFormatted": _format_mtime_ko(saved_ts),
+                    "size": st.st_size,
+                    "sizeFormatted": _format_size(st.st_size),
+                })
+            except Exception:
+                continue
+    items.sort(key=lambda x: (x["savedAtIso"], x["versionId"]), reverse=True)
+    return items[:120]
+
+
+def _is_allowed_outbound_work_tunnel_url(raw_url: str) -> bool:
+    try:
+        import urllib.parse as _up
+
+        u = _up.urlparse(str(raw_url or "").strip())
+        host = (u.hostname or "").lower()
+        if u.scheme == "http" and host in ("127.0.0.1", "localhost"):
+            return True
+        if u.scheme != "https":
+            return False
+        return (
+            host.endswith(".trycloudflare.com")
+            or host.endswith(".lhr.life")
+            or host.endswith(".lhr.domains")
+        )
+    except Exception:
+        return False
+
+
+def _validate_backup_target_dir(raw_target: Any) -> Tuple[Optional[Path], str]:
+    """백업 전용 경로 검증: 로컬·외장 드라이브 하위 폴더뿐만 아니라 사내 NAS 네트워크 공유 폴더(\\\\NAS\\공유\\백업)도 안전하게 허용합니다."""
+    s = str(raw_target or "").strip()
+    if not s:
+        return None, "EMPTY_BACKUP_DIR"
+    if (s.startswith("\\\\") or s.startswith("//")) and not s.upper().startswith("\\\\?\\"):
+        norm_unc = s.replace("/", "\\").rstrip("\\")
+        parts = [p for p in norm_unc.lstrip("\\").split("\\") if p]
+        if len(parts) < 3 or ".." in parts:
+            return None, "UNC_SHARE_SUBFOLDER_REQUIRED"
+        if any(p.lower() in ("$recycle.bin", "system volume information", "admin$", "c$") for p in parts):
+            return None, "SYSTEM_UNC_SHARE_NOT_ALLOWED"
+        return Path("\\\\" + "\\".join(parts)), ""
+    if os.environ.get("GHOSTI_HEADLESS_TEST") == "1":
+        cand_test = Path(s)
+        if cand_test.is_absolute() and len(cand_test.parts) >= 3:
+            return _norm_vault_path(cand_test), ""
+    return _validate_custom_work_target(s)
+
+
 def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     payload = data or {}
     act = str(payload.get("subAction") or payload.get("action") or "get").strip().lower()
@@ -3921,6 +4179,7 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
     default_master = str(cfg.get("masterServerName") or os.environ.get("COMPUTERNAME") or "사내 대장 PC (S:)")
     cur_nodes: List[Dict[str, Any]] = list(cfg.get("backupServers") or [])
     local_backup_dir_str = str(cfg.get("localBackupServerDir") or "").strip()
+    secondary_backup_dir_str = str(cfg.get("secondaryBackupServerDir") or "").strip()
 
     if act == "save":
         new_master = str(payload.get("masterServerName") or default_master).strip()[:48] or default_master
@@ -3930,15 +4189,21 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
             for idx, item in enumerate(raw_nodes[:2]):  # 예비 서버 최대 2대 (1호·2호)
                 if not isinstance(item, dict):
                     continue
-                label = str(item.get("label") or "").strip()[:48]
+                member_email = str(item.get("memberEmail") or "").strip().lower()[:120]
+                label = str(item.get("label") or member_email.split("@")[0] or "").strip()[:48]
                 if not label:
                     continue
                 clean_nodes.append({
-                    "id": str(item.get("id") or f"backup-{idx + 1}"),
+                    "id": str(item.get("id") or (f"backup-{member_email}" if member_email else f"backup-{idx + 1}")),
                     "slot": idx + 1,
+                    "memberEmail": member_email,
                     "label": label,
                     "role": f"예비 서버 {idx + 1}호",
-                    "status": str(item.get("status") or "대기·자동 이중화"),
+                    "status": str(item.get("status") or "단방향 자동 백업 미러링 대기"),
+                    "freeGb": item.get("freeGb"),
+                    "lowSpace": bool(item.get("lowSpace", False)),
+                    "lastMirroredAt": str(item.get("lastMirroredAt") or ""),
+                    "mirroredCount": int(item.get("mirroredCount") or 0),
                     "updatedAt": _iso_utc(),
                 })
         patch: Dict[str, Any] = {
@@ -3948,7 +4213,7 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
         if "localBackupServerDir" in payload:
             raw_bdir = str(payload.get("localBackupServerDir") or "").strip()
             if raw_bdir:
-                valid_b, reason = _validate_custom_work_target(raw_bdir)
+                valid_b, reason = _validate_backup_target_dir(raw_bdir)
                 if valid_b is None:
                     return {"ok": False, "error": "INVALID_BACKUP_DIR", "reason": reason}
                 patch["localBackupServerDir"] = str(valid_b)
@@ -3956,62 +4221,291 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
             else:
                 patch["localBackupServerDir"] = ""
                 local_backup_dir_str = ""
+        if "secondaryBackupServerDir" in payload:
+            raw_sdir = str(payload.get("secondaryBackupServerDir") or "").strip()
+            if raw_sdir:
+                valid_s, reason_s = _validate_backup_target_dir(raw_sdir)
+                if valid_s is None:
+                    return {"ok": False, "error": "INVALID_SECONDARY_BACKUP_DIR", "reason": reason_s}
+                patch["secondaryBackupServerDir"] = str(valid_s)
+                secondary_backup_dir_str = str(valid_s)
+            else:
+                patch["secondaryBackupServerDir"] = ""
+                secondary_backup_dir_str = ""
         _save_sdrive_config(patch)
         cur_nodes = clean_nodes
         default_master = new_master
+        cfg = _load_sdrive_config()
 
-    synced_files = 0
-    warning_low_disk = False
-    warning_disk_msg = ""
-    target_slot_used = 1
+    vault_dir = get_work_vault_dir(ensure_dirs=True)
+    default_bdir = (
+        Path(local_backup_dir_str)
+        if local_backup_dir_str
+        else (_get_merlin_appdata_dir() / "업무공유_예비서버_백업")
+    )
 
-    if act == "promote-master":
-        # [1클릭 수동 대장 승격]: 예비 백업 PC를 즉시 사내 대장 PC(S:)로 승격
-        new_master_name = str(payload.get("newMasterServerName") or os.environ.get("COMPUTERNAME") or "승격된 대장 PC").strip()
+    if act == "list-versions":
+        active_bdir = Path(str(cfg.get("lastActiveBackupDir") or default_bdir))
+        versions = _list_backup_versions(active_bdir, str(payload.get("relPath") or ""))
+        if not versions and default_bdir.is_dir() and not _same_path(active_bdir, default_bdir):
+            versions = _list_backup_versions(default_bdir, str(payload.get("relPath") or ""))
+        return {"ok": True, "versions": versions, "backupDir": str(active_bdir)}
+
+    if act == "restore-version":
+        version_id = str(payload.get("versionId") or "").strip().replace("\\", "/").lstrip("/")
+        if not version_id or ".." in version_id:
+            return {"ok": False, "error": "INVALID_VERSION_ID"}
+        active_bdir = Path(str(cfg.get("lastActiveBackupDir") or default_bdir))
+        ver_file = _safe_resolve_inside_vault(active_bdir / "_versions", version_id)
+        if (ver_file is None or not ver_file.is_file()) and default_bdir.is_dir():
+            ver_file = _safe_resolve_inside_vault(default_bdir / "_versions", version_id)
+            active_bdir = default_bdir
+        if ver_file is None or not ver_file.is_file() or "__v" not in ver_file.name:
+            return {"ok": False, "error": "VERSION_FILE_NOT_FOUND"}
+
+        stem_part, rest = ver_file.name.rsplit("__v", 1)
+        dot_idx = rest.find(".")
+        ext = rest[dot_idx:] if dot_idx >= 0 else ""
+        orig_name = f"{stem_part}{ext}"
+        parent_rel = str(Path(version_id).parent).replace("\\", "/")
+        orig_rel = orig_name if parent_rel in ("", ".") else f"{parent_rel}/{orig_name}"
+
+        dest_vault_file = _safe_resolve_inside_vault(vault_dir, orig_rel)
+        if dest_vault_file is None or dest_vault_file.suffix.lower() in _BLOCKED_EXEC_EXTS:
+            return {"ok": False, "error": "INVALID_RESTORE_TARGET"}
+        if dest_vault_file.exists() and detect_file_lock_owner(dest_vault_file):
+            return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
+
+        if dest_vault_file.is_file():
+            _archive_backup_file_version(active_bdir, orig_rel, dest_vault_file)
+        dest_vault_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp_v = dest_vault_file.with_name(f".{dest_vault_file.name}.ghosti_ver_tmp")
+        shutil.copy2(str(ver_file), str(tmp_v))
+        os.replace(str(tmp_v), str(dest_vault_file))
+        now_sec = time.time()
+        try:
+            os.utime(str(dest_vault_file), (now_sec, now_sec))
+        except OSError:
+            pass
+
+        def _clear_tomb_ver(cur: Dict[str, Any]) -> None:
+            known = set(cur.get("knownRelPaths") or [])
+            known.add(orig_rel)
+            cur["knownRelPaths"] = sorted(known)
+            tombs = dict(cur.get("deletedTombstones") or {})
+            for k_rm in [k for k in tombs if k.lower() == orig_rel.lower()]:
+                tombs.pop(k_rm, None)
+            cur["deletedTombstones"] = tombs
+
+        _mutate_sdrive_config(_clear_tomb_ver)
+        return {
+            "ok": True,
+            "relPath": orig_rel,
+            "fileName": orig_name,
+            "versionId": version_id,
+            "restoredPath": str(dest_vault_file),
+            "message": f"'{orig_name}' 파일을 선택한 이전 버전으로 복원했습니다.",
+        }
+
+    if act in ("promote-master", "promote-to-master"):
+        # [⚡ 이 백업 PC를 대장 PC로 즉시 승격]: 미러링 백업 폴더를 S: 정본으로 마운트 + 아웃바운드 직통 터널 즉시 기동 (무인 Auto-Failover 배제)
+        new_master_name = str(
+            payload.get("newMasterServerName")
+            or payload.get("masterServerName")
+            or os.environ.get("COMPUTERNAME")
+            or "승격된 대장 PC (S:)"
+        ).strip()[:48]
+        cand_dirs = [
+            str(payload.get("backupDir") or "").strip(),
+            str(cfg.get("lastActiveBackupDir") or "").strip(),
+            local_backup_dir_str,
+            str(_get_merlin_appdata_dir() / "업무공유_예비서버_미러"),
+            str(_get_merlin_appdata_dir() / "업무공유_예비서버_백업"),
+        ]
+        chosen_mirror: Optional[Path] = None
+        for cd in cand_dirs:
+            if not cd:
+                continue
+            p_cand = Path(cd)
+            if p_cand.is_dir():
+                entries_chk, _, _ = _scan_work_vault(p_cand, set(), include_hidden=True)
+                if entries_chk:
+                    chosen_mirror = p_cand
+                    break
+        if chosen_mirror is None:
+            chosen_mirror = vault_dir
+
+        email = str(payload.get("email") or cfg.get("activeAccountEmail") or "").strip().lower()
+        room_id = str(payload.get("roomId") or cfg.get("activeWorkRoomId") or "").strip()
         _save_sdrive_config({
+            "targetDir": str(chosen_mirror),
             "masterServerName": new_master_name,
             "isPromotedMaster": True,
+            "isWorkHost": True,
+            "workEntitlementLocked": False,
             "promotedAt": _iso_utc(),
+            **({"activeAccountEmail": email} if email else {}),
+            **({"activeWorkRoomId": room_id} if room_id else {}),
         })
+        mount_res = mount_or_unmount_s_drive({
+            "action": "mount",
+            "targetDir": str(chosen_mirror),
+            "email": email,
+            "forceMount": True,
+            "openExplorer": False,
+        })
+        tunnel_info = ensure_outbound_work_tunnel({"waitSeconds": 6})
         cfg = _load_sdrive_config()
         return {
             "ok": True,
             "masterServerName": new_master_name,
             "isPromotedMaster": True,
+            "targetDir": str(chosen_mirror),
+            "mounted": bool(mount_res.get("mounted")),
+            "driveLetter": mount_res.get("driveLetter") or WORK_DRIVE_PREFERRED,
+            "tunnel": tunnel_info,
             "backupServers": list(cfg.get("backupServers") or []),
             "message": f"'{new_master_name}' 컴퓨터가 사내 대장 PC(S:)로 1클릭 수동 승격되었습니다.",
         }
 
-    if act == "sync-now":
-        vault_dir = get_work_vault_dir(ensure_dirs=True)
+    def _resolve_target_with_disk_guard(default_subdir: str) -> Tuple[Optional[Path], bool, str, int, float]:
         target_bdir_str = str(payload.get("localBackupServerDir") or local_backup_dir_str).strip()
         if not target_bdir_str:
-            target_bdir = _get_merlin_appdata_dir() / "업무공유_예비서버_백업"
+            t_bdir = _get_merlin_appdata_dir() / default_subdir
         else:
-            valid_b, reason = _validate_custom_work_target(target_bdir_str)
+            valid_b, reason = _validate_backup_target_dir(target_bdir_str)
             if valid_b is None:
-                return {"ok": False, "error": "INVALID_BACKUP_DIR", "reason": reason}
-            target_bdir = valid_b
-        if _same_path(target_bdir, vault_dir):
-            return {"ok": False, "error": "BACKUP_DIR_SAME_AS_VAULT"}
-        
-        # 가용 용량 < 10GB 사전 경고 및 2호기 자동 우회 검사 (shutil.disk_usage)
+                return None, False, f"INVALID_BACKUP_DIR:{reason}", 1, 0.0
+            t_bdir = valid_b
+        if _same_path(t_bdir, vault_dir):
+            return None, False, "BACKUP_DIR_SAME_AS_VAULT", 1, 0.0
+
+        sim_free = payload.get("simulatePrimaryFreeBytes")
+        free_bytes = _probe_backup_free_bytes(
+            t_bdir, int(sim_free) if isinstance(sim_free, (int, float)) else None
+        )
+        free_gb = round(free_bytes / (1024 ** 3), 1)
+        if free_bytes < WORK_BACKUP_LOW_DISK_BYTES:
+            sec_str = str(payload.get("secondaryBackupServerDir") or secondary_backup_dir_str).strip()
+            fallback_bdir: Optional[Path] = None
+            if sec_str:
+                vs, _rs = _validate_backup_target_dir(sec_str)
+                if vs is not None and not _same_path(vs, vault_dir) and not _same_path(vs, t_bdir):
+                    fallback_bdir = vs
+            if fallback_bdir is None:
+                fallback_bdir = _get_merlin_appdata_dir() / "업무공유_예비서버_2호_백업"
+            msg = f"⚠️ 백업 PC 1호 용량 부족 (가용 {free_gb:.1f}GB < 10GB) — 백업 2호 경로로 자동 우회 백업합니다."
+            return fallback_bdir, True, msg, 2, free_gb
+        return t_bdir, False, "", 1, free_gb
+
+    if act == "mirror-from-tunnel":
+        import urllib.parse as _up_q
+
+        tunnel_url = str(payload.get("tunnelUrl") or "").strip().rstrip("/")
+        access_key = str(payload.get("accessKey") or "").strip()
+        if not tunnel_url or not _is_allowed_outbound_work_tunnel_url(tunnel_url):
+            return {"ok": False, "error": "INVALID_MASTER_TUNNEL_URL"}
+        target_bdir, warn_low, warn_msg, slot_used, free_gb = _resolve_target_with_disk_guard("업무공유_예비서버_미러")
+        if target_bdir is None:
+            return {"ok": False, "error": warn_msg}
+        target_bdir.mkdir(parents=True, exist_ok=True)
+        hdrs = {"X-Ghosti-Work-Key": access_key} if access_key else {}
         try:
-            usage = shutil.disk_usage(target_bdir.drive or target_bdir.anchor or target_bdir.parent)
-            free_gb = usage.free / (1024 ** 3)
-            if free_gb < 10.0:
-                warning_low_disk = True
-                warning_disk_msg = f"예비 백업 드라이브의 가용 공간이 10GB 미만({free_gb:.1f}GB)입니다. 예비 2호 폴더로 자동 우회 백업합니다."
-                # 2호기 슬롯 보조 백업 폴더로 자동 전환
-                target_bdir = _get_merlin_appdata_dir() / "업무공유_예비서버_2호_백업"
-                target_slot_used = 2
-        except Exception:
-            pass
+            req_list = urllib.request.Request(f"{tunnel_url}/__work/files", headers=hdrs, method="GET")
+            with urllib.request.urlopen(req_list, timeout=12) as resp_l:
+                list_data = json.loads(resp_l.read().decode("utf-8", errors="replace"))
+        except Exception as exc:
+            return {"ok": False, "error": f"MASTER_TUNNEL_UNREACHABLE: {exc}"}
+        if not list_data.get("ok") or not isinstance(list_data.get("files"), list):
+            return {"ok": False, "error": "MASTER_FILES_INVALID_RESPONSE"}
+
+        remote_files: List[Dict[str, Any]] = list_data["files"]
+        remote_tombs: Dict[str, Any] = list_data.get("localDeletedTombstones") or {}
+        for t_rel in remote_tombs.keys():
+            clean_t = str(t_rel or "").strip().replace("\\", "/").lstrip("/")
+            dst_t = _safe_resolve_inside_vault(target_bdir, clean_t)
+            if dst_t and dst_t.is_file() and not detect_file_lock_owner(dst_t):
+                _archive_backup_file_version(target_bdir, clean_t, dst_t)
+                _move_to_recycle_bin_safe(dst_t)
+
+        mirrored_new = 0
+        for rf in remote_files:
+            if not isinstance(rf, dict):
+                continue
+            rel_p = str(rf.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+            if not rel_p or rel_p.startswith("_versions/"):
+                continue
+            dest = _safe_resolve_inside_vault(target_bdir, rel_p)
+            if dest is None or dest.suffix.lower() in _BLOCKED_EXEC_EXTS:
+                continue
+            r_size = int(rf.get("size") or 0)
+            r_mtime = _parse_iso_mtime_sec(rf.get("mtime"))
+            r_sha = str(rf.get("sha256") or "").strip().lower()
+            if dest.is_file():
+                dst_st = dest.stat()
+                if r_sha and len(r_sha) == 64 and dst_st.st_size == r_size:
+                    if hashlib.sha256(dest.read_bytes()).hexdigest().lower() == r_sha:
+                        continue
+                elif dst_st.st_size == r_size and r_mtime > 0 and abs(dst_st.st_mtime - r_mtime) <= 2.0:
+                    continue
+                _archive_backup_file_version(target_bdir, rel_p, dest)
+
+            dl_url = f"{tunnel_url}/__work/download?relPath={_up_q.quote(rel_p)}"
+            try:
+                req_dl = urllib.request.Request(dl_url, headers=hdrs, method="GET")
+                with urllib.request.urlopen(req_dl, timeout=30) as resp_dl:
+                    raw_bytes = resp_dl.read(WORK_MAX_FILE_BYTES + 1)
+                if len(raw_bytes) > WORK_MAX_FILE_BYTES:
+                    continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                tmp_m = dest.with_name(f".{dest.name}.ghosti_mirror_tmp")
+                tmp_m.write_bytes(raw_bytes)
+                os.replace(str(tmp_m), str(dest))
+                if r_mtime > 0:
+                    try:
+                        os.utime(str(dest), (r_mtime, r_mtime))
+                    except OSError:
+                        pass
+                _archive_backup_file_version(target_bdir, rel_p, dest)
+                mirrored_new += 1
+            except Exception:
+                continue
+
+        now_iso = _iso_utc()
+        _save_sdrive_config({
+            "lastActiveBackupDir": str(target_bdir),
+            "lastBackupSyncedAt": now_iso,
+            "lastBackupSyncedCount": len(remote_files),
+        })
+        return {
+            "ok": True,
+            "lastBackupSyncedAt": now_iso,
+            "lastBackupSyncedCount": len(remote_files),
+            "newlyCopiedCount": mirrored_new,
+            "activeBackupDir": str(target_bdir),
+            "primaryFreeGb": free_gb,
+            "warningLowDisk": warn_low,
+            "warningDiskMsg": warn_msg,
+            "targetSlotUsed": slot_used,
+            "versions": _list_backup_versions(target_bdir)[:20],
+        }
+
+    synced_files = 0
+    warning_low_disk = False
+    warning_disk_msg = ""
+    target_slot_used = 1
+    primary_free_gb = round(_probe_backup_free_bytes(default_bdir) / (1024 ** 3), 1)
+
+    if act == "sync-now":
+        target_bdir, warning_low_disk, warning_disk_msg, target_slot_used, primary_free_gb = (
+            _resolve_target_with_disk_guard("업무공유_예비서버_백업")
+        )
+        if target_bdir is None:
+            if warning_disk_msg == "BACKUP_DIR_SAME_AS_VAULT":
+                return {"ok": False, "error": "BACKUP_DIR_SAME_AS_VAULT"}
+            return {"ok": False, "error": "INVALID_BACKUP_DIR", "reason": warning_disk_msg}
 
         target_bdir.mkdir(parents=True, exist_ok=True)
-        versions_root = target_bdir / "_versions"
-        versions_root.mkdir(parents=True, exist_ok=True)
-
         entries, _locks, _complete = _scan_work_vault(vault_dir, set(), include_hidden=True)
         for full_p, rel_p, st in entries:
             dest = _safe_resolve_inside_vault(target_bdir, rel_p)
@@ -4022,50 +4516,41 @@ def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, 
                     dst_st = dest.stat()
                     if dst_st.st_size == st.st_size and abs(dst_st.st_mtime - st.st_mtime) < 1.0:
                         continue
-                    
-                    # 파일 변경 감지 시 최근 5개 버전 타임머신 보관 (_versions/파일명/시각_파일명)
-                    file_ver_dir = versions_root / rel_p.replace("/", "_")
-                    file_ver_dir.mkdir(parents=True, exist_ok=True)
-                    ver_stamp = datetime.datetime.fromtimestamp(dst_st.st_mtime).strftime("%Y%m%d_%H%M%S")
-                    ver_file = file_ver_dir / f"{ver_stamp}_{dest.name}"
-                    try:
-                        shutil.copy2(dest, ver_file)
-                        # 최대 최근 5개 버전 초과분 FIFO 정리
-                        existing_vers = sorted(file_ver_dir.glob("*"), key=lambda p: p.stat().st_mtime)
-                        if len(existing_vers) > 5:
-                            for old_v in existing_vers[:-5]:
-                                try:
-                                    old_v.unlink(missing_ok=True)
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
+                    _archive_backup_file_version(target_bdir, rel_p, dest)
 
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(full_p, dest)
+                _archive_backup_file_version(target_bdir, rel_p, dest)
                 synced_files += 1
             except Exception:
                 pass
         now_iso = _iso_utc()
-        local_backup_dir_str = str(target_bdir)
+        if target_slot_used == 1:
+            local_backup_dir_str = str(target_bdir)
         _save_sdrive_config({
             "localBackupServerDir": local_backup_dir_str,
+            "lastActiveBackupDir": str(target_bdir),
             "lastBackupSyncedAt": now_iso,
             "lastBackupSyncedCount": len(entries),
         })
         cfg = _load_sdrive_config()
 
+    active_ver_root = Path(str(cfg.get("lastActiveBackupDir") or default_bdir))
     return {
         "ok": True,
         "masterServerName": default_master,
         "backupServers": cur_nodes,
         "localBackupServerDir": local_backup_dir_str,
+        "secondaryBackupServerDir": secondary_backup_dir_str,
+        "lastActiveBackupDir": str(active_ver_root),
         "lastBackupSyncedAt": str(cfg.get("lastBackupSyncedAt") or ""),
         "lastBackupSyncedCount": int(cfg.get("lastBackupSyncedCount") or 0),
         "newlyCopiedCount": synced_files,
+        "primaryFreeGb": primary_free_gb,
         "warningLowDisk": warning_low_disk,
         "warningDiskMsg": warning_disk_msg,
         "targetSlotUsed": target_slot_used,
+        "versions": _list_backup_versions(active_ver_root)[:25],
     }
 
 

@@ -85,8 +85,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
   const isDemoSamplePhoto = Boolean(
     photo &&
       (photo.fullUrl?.startsWith('/sample_photos_301/') ||
-        photo.thumbUrl?.startsWith('/sample_photos_301/') ||
-        !zCoreBridge.isConnected)
+        photo.thumbUrl?.startsWith('/sample_photos_301/'))
   );
 
   useEffect(() => {

@@ -1,9 +1,9 @@
 import React from 'react';
 import {
-  manageWorkBackupServersNative,
   removeWorkRoomMemberOnServer,
   updateWorkRoomMemberRoleOnServer,
   type WorkBackupServerNodeDto,
+  type WorkBackupVersionItemDto,
   type WorkRoomServerMemberDto,
 } from '../../services/workRoomSyncService';
 
@@ -28,6 +28,9 @@ export interface WorkLoungeHostAdminPanelsProps {
   onApplyCustomWorkFolderPath?: (rawPath: string) => Promise<void>;
   onResetDefaultWorkFolder?: () => Promise<void>;
   backupServers: WorkBackupServerNodeDto[];
+  backupVersions?: WorkBackupVersionItemDto[];
+  backupLowDiskMsg?: string;
+  currentUserEmail?: string;
   lastBackupSyncedAt: string | null;
   lastBackupSyncedCount: number;
   newBackupServerName: string;
@@ -42,6 +45,9 @@ export interface WorkLoungeHostAdminPanelsProps {
     nextBackupDir?: string
   ) => Promise<void>;
   handleRunBackupSyncNow: () => Promise<void>;
+  onPromoteBackupPcToMaster?: (preferredLabel?: string) => Promise<void>;
+  onRestoreBackupVersion?: (versionId: string, fileName: string) => Promise<void>;
+  onRefreshBackupVersions?: () => Promise<void>;
   showMemberPermissions: boolean;
   teamMembers: WorkTeamMemberViewItem[];
   roomSeatLimit: number;
@@ -66,6 +72,9 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   onApplyCustomWorkFolderPath,
   onResetDefaultWorkFolder,
   backupServers,
+  backupVersions = [],
+  backupLowDiskMsg = '',
+  currentUserEmail = '',
   lastBackupSyncedAt,
   lastBackupSyncedCount,
   newBackupServerName,
@@ -76,6 +85,9 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   syncingBackupNow,
   handleSaveBackupServerConfig,
   handleRunBackupSyncNow,
+  onPromoteBackupPcToMaster,
+  onRestoreBackupVersion,
+  onRefreshBackupVersions,
   showMemberPermissions,
   teamMembers,
   roomSeatLimit,
@@ -92,6 +104,29 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
     null
   );
   const [isKickingMember, setIsKickingMember] = React.useState<boolean>(false);
+  const [showVersionHistory, setShowVersionHistory] = React.useState<boolean>(false);
+  const [selectedBackupMemberEmail, setSelectedBackupMemberEmail] = React.useState<string>('');
+  const [promotingMasterNow, setPromotingMasterNow] = React.useState<boolean>(false);
+
+  const cleanCurrentEmail = currentUserEmail.trim().toLowerCase();
+  const isCurrentPcDesignatedBackup = Boolean(
+    cleanCurrentEmail &&
+      backupServers.some(
+        (b) => (b.memberEmail || '').trim().toLowerCase() === cleanCurrentEmail
+      )
+  );
+  const eligibleBackupCandidates = React.useMemo(
+    () =>
+      teamMembers.filter(
+        (m) =>
+          m.role !== 'host' &&
+          Boolean(m.email) &&
+          !backupServers.some(
+            (b) => (b.memberEmail || '').trim().toLowerCase() === m.email.trim().toLowerCase()
+          )
+      ),
+    [teamMembers, backupServers]
+  );
 
   React.useEffect(() => {
     if (!pendingKickMember) return undefined;
@@ -262,14 +297,72 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
             <div className="lg:col-span-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[12.5px] text-slate-900 font-semibold">
-                  예비 서버 ({backupServers.length}/2대 지정됨)
+                  🛡️ 예비 서버 ({backupServers.length}/2대 지정됨 · 단방향 자동 미러링 &amp; 최근 5버전 타임머신)
                 </span>
-                <span className="text-[11.5px] text-slate-500">
-                  {lastBackupSyncedAt
-                    ? `최근 백업: ${lastBackupSyncedCount}건 완료`
-                    : '예비 서버에 동일한 폴더 구성을 유지합니다'}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11.5px] text-slate-500">
+                    {lastBackupSyncedAt
+                      ? `최근 백업: ${lastBackupSyncedCount}건 완료`
+                      : '무인 자동 승계(Split-Brain) 없이 안전하게 단방향 미러링합니다'}
+                  </span>
+                  {!isMobileOrStore && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextOpen = !showVersionHistory;
+                        setShowVersionHistory(nextOpen);
+                        if (nextOpen) void onRefreshBackupVersions?.();
+                      }}
+                      className="px-2.5 py-1 rounded-md bg-white hover:bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold cursor-pointer"
+                    >
+                      🕰️ 5버전 타임머신 {showVersionHistory ? '닫기' : `보기 (${backupVersions.length})`}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {backupLowDiskMsg && (
+                <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11.5px] font-bold">
+                  {backupLowDiskMsg}
+                </div>
+              )}
+
+              {!isMobileOrStore && (isCurrentPcDesignatedBackup || myRoomRole === 'host') && onPromoteBackupPcToMaster && (
+                <div className="p-2.5 rounded-lg bg-amber-50/80 border border-amber-200 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11.5px] text-amber-900 font-medium break-keep">
+                    대장 PC 전원 OFF·점검 시, 미러링된 백업본을 손실 없이 즉시 사내 대장 PC(S:)로 전환합니다 (1클릭 수동 승격).
+                  </span>
+                  <button
+                    type="button"
+                    disabled={promotingMasterNow}
+                    onClick={async () => {
+                      const myNode = backupServers.find(
+                        (b) => (b.memberEmail || '').trim().toLowerCase() === cleanCurrentEmail
+                      );
+                      const nextLabel = myNode?.label || '승격된 백업 대장 PC (S:)';
+                      if (
+                        !window.confirm(
+                          `이 백업 PC를 사내 대장 PC(S:)로 즉시 수동 승격하시겠습니까?\n(현재 백업된 문서를 S: 정본으로 마운트하고 전 팀원 직통 터널을 이 PC로 연결합니다)`
+                        )
+                      ) {
+                        return;
+                      }
+                      setPromotingMasterNow(true);
+                      try {
+                        await onPromoteBackupPcToMaster(nextLabel);
+                      } finally {
+                        setPromotingMasterNow(false);
+                      }
+                    }}
+                    data-testid="work-promote-this-backup-pc-btn"
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11.5px] font-bold shrink-0 cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    {promotingMasterNow
+                      ? '⚡ 대장 승격 중...'
+                      : '⚡ 이 백업 PC를 대장 PC로 즉시 승격'}
+                  </button>
+                </div>
+              )}
 
               {backupServers.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -282,29 +375,16 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                         <span className="text-[12px] text-slate-900 font-semibold truncate">
                           예비 서버 {idx + 1}호 · {node.label}
                         </span>
-                        <span className="text-[11px] text-slate-500">
+                        {node.memberEmail && (
+                          <span className="text-[10.5px] text-slate-400 font-mono truncate">
+                            {node.memberEmail}
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-500 truncate">
                           {node.status}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!window.confirm(`'${node.label}' 컴퓨터를 사내 대장 PC(S:)로 1클릭 수동 승격하시겠습니까?`)) return;
-                            const res = await manageWorkBackupServersNative({
-                              subAction: 'promote-master',
-                              newMasterServerName: node.label,
-                            });
-                            if (res.ok) {
-                              void handleSaveBackupServerConfig(node.label, backupServers);
-                              showToast(`⚡ '${node.label}' 컴퓨터가 사내 대장 PC(S:)로 즉시 승격되었습니다!`);
-                            }
-                          }}
-                          className="px-2 py-1 rounded-md bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-[11px] font-bold shrink-0 cursor-pointer transition-colors"
-                          title="대장 PC 고장·부재 시 이 백업 PC를 사내 대장 PC로 즉시 승격합니다"
-                        >
-                          ⚡ 대장 승격
-                        </button>
+                      {myRoomRole === 'host' && (
                         <button
                           type="button"
                           onClick={() => {
@@ -315,51 +395,127 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                         >
                           해제
                         </button>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
 
+              {showVersionHistory && !isMobileOrStore && (
+                <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex flex-col gap-1.5 max-h-48 overflow-y-auto">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11.5px] font-bold text-slate-800">
+                      🕰️ 파일당 최근 5개 버전 보관 목록 (_versions/)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void onRefreshBackupVersions?.()}
+                      className="text-[11px] text-teal-700 hover:underline font-semibold cursor-pointer"
+                    >
+                      새로고침
+                    </button>
+                  </div>
+                  {backupVersions.length === 0 ? (
+                    <span className="text-[11.5px] text-slate-500 py-2">
+                      아직 보관된 백업 버전이 없습니다. [지금 백업 실행]을 누르면 파일당 최근 5개 버전이 자동 기록됩니다.
+                    </span>
+                  ) : (
+                    backupVersions.map((ver) => (
+                      <div
+                        key={ver.versionId}
+                        className="px-2 py-1.5 rounded bg-slate-50 border border-slate-100 flex items-center justify-between gap-2 text-[11.5px]"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-slate-900 truncate">{ver.relPath}</div>
+                          <div className="text-[10.5px] text-slate-500">
+                            보관 시각: {ver.savedAtFormatted} · {ver.sizeFormatted}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void onRestoreBackupVersion?.(ver.versionId, ver.fileName)}
+                          className="px-2.5 py-1 rounded bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
+                        >
+                          이 버전 복원
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200">
-                <input
-                  type="text"
-                  value={newBackupServerName}
-                  onChange={(e) => setNewBackupServerName(e.target.value)}
-                  placeholder="예비 서버 PC 이름"
-                  className="flex-1 min-w-[160px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-[12px] outline-none focus:border-slate-900"
-                />
-                <input
-                  type="text"
-                  value={localBackupDir}
-                  onChange={(e) => setLocalBackupDir(e.target.value)}
-                  placeholder="백업 폴더 경로 (비워두면 기본 폴더)"
-                  className="flex-1 min-w-[180px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-[12px] font-mono outline-none focus:border-slate-900"
-                />
-                <button
-                  type="button"
-                  disabled={backupServers.length >= 2}
-                  onClick={() => {
-                    if (backupServers.length >= 2) return;
-                    const label =
-                      newBackupServerName.trim() || `예비 서버 ${backupServers.length + 1}호 PC`;
-                    const next: WorkBackupServerNodeDto[] = [
-                      ...backupServers,
-                      {
-                        id: `backup-${Date.now()}`,
-                        slot: backupServers.length + 1,
-                        label,
-                        role: `예비 서버 ${backupServers.length + 1}호`,
-                        status: '✓ 자동 백업 대기 중',
-                      },
-                    ];
-                    setNewBackupServerName('');
-                    void handleSaveBackupServerConfig(masterWorkPcName, next, localBackupDir);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer shrink-0 disabled:opacity-40 transition-colors"
-                >
-                  + 예비 서버 등록
-                </button>
+                {myRoomRole === 'host' &&
+                  (eligibleBackupCandidates.length > 0 ? (
+                    <select
+                      value={selectedBackupMemberEmail}
+                      onChange={(e) => setSelectedBackupMemberEmail(e.target.value)}
+                      className="flex-1 min-w-[180px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-[12px] outline-none focus:border-slate-900 cursor-pointer"
+                    >
+                      <option value="">예비 서버로 지정할 팀원 PC 선택...</option>
+                      {eligibleBackupCandidates.map((cand) => (
+                        <option key={cand.email} value={cand.email}>
+                          {cand.name} ({cand.email})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={newBackupServerName}
+                      onChange={(e) => setNewBackupServerName(e.target.value)}
+                      placeholder="예비 서버 PC·외장 드라이브 별칭 (팀원 합류 시 팀원 PC 선택 지원)"
+                      className="flex-1 min-w-[180px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-[12px] outline-none focus:border-slate-900"
+                    />
+                  ))}
+                {!isMobileOrStore && (
+                  <input
+                    type="text"
+                    value={localBackupDir}
+                    onChange={(e) => setLocalBackupDir(e.target.value)}
+                    placeholder="백업 폴더 경로 (비워두면 기본 백업 폴더 · <10GB 시 2호 자동 우회)"
+                    className="flex-1 min-w-[190px] px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-[12px] font-mono outline-none focus:border-slate-900"
+                  />
+                )}
+                {myRoomRole === 'host' && (
+                  <button
+                    type="button"
+                    disabled={
+                      backupServers.length >= 2 ||
+                      (eligibleBackupCandidates.length > 0 && !selectedBackupMemberEmail)
+                    }
+                    onClick={() => {
+                      if (backupServers.length >= 2) return;
+                      const pickedMember = eligibleBackupCandidates.find(
+                        (c) => c.email === selectedBackupMemberEmail
+                      );
+                      const label = pickedMember
+                        ? `${pickedMember.name} PC`
+                        : newBackupServerName.trim() || `예비 백업 ${backupServers.length + 1}호`;
+                      const next: WorkBackupServerNodeDto[] = [
+                        ...backupServers,
+                        {
+                          id: pickedMember
+                            ? `backup-${pickedMember.email.toLowerCase()}`
+                            : `backup-${Date.now()}`,
+                          slot: backupServers.length + 1,
+                          memberEmail: pickedMember?.email.toLowerCase(),
+                          label,
+                          role: `예비 서버 ${backupServers.length + 1}호`,
+                          status: pickedMember
+                            ? '✓ 팀원 PC 단방향 자동 백업 미러링 대기'
+                            : '✓ 로컬·외장 백업 슬롯 등록됨',
+                        },
+                      ];
+                      setSelectedBackupMemberEmail('');
+                      setNewBackupServerName('');
+                      void handleSaveBackupServerConfig(masterWorkPcName, next, localBackupDir);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer shrink-0 disabled:opacity-40 transition-colors"
+                  >
+                    + 예비 서버 지정
+                  </button>
+                )}
                 {!isMobileOrStore && (
                   <button
                     type="button"

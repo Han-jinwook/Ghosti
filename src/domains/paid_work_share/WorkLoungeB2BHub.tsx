@@ -47,6 +47,7 @@ import {
   mountWorkSDriveNative,
   normalizeWorkTombstoneMap,
   openGhostSearchForWorkSDrive,
+  promoteBackupPcToMasterOnServer,
   pullSyncRemoteWorkFilesToLocalSDrive,
   readActiveWorkRoomInviteMeta,
   readCachedHostTunnelEndpointSync,
@@ -54,6 +55,7 @@ import {
   readCachedLocalWorkMountMetaSync,
   readCachedMyWorkRoomMeta,
   restoreDeletedWorkFileShared,
+  reportBackupNodeMirrorStatusOnServer,
   readPendingKickedWorkRoomNotice,
   readPendingWorkSeatLimitNotice,
   removeWorkRoomMemberOnServer,
@@ -73,6 +75,7 @@ import {
   upsertWorkFilesToSupabase,
   type JoinedWorkRoomSummary,
   type WorkBackupServerNodeDto,
+  type WorkBackupVersionItemDto,
   type WorkDeletedTombstoneMap,
   type WorkLoungeDocDto,
   type WorkRoomPresenceMember,
@@ -269,6 +272,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [lastBackupSyncedCount, setLastBackupSyncedCount] = useState<number>(0);
   const [newBackupServerName, setNewBackupServerName] = useState<string>('');
   const [syncingBackupNow, setSyncingBackupNow] = useState<boolean>(false);
+  const [backupVersions, setBackupVersions] = useState<WorkBackupVersionItemDto[]>([]);
+  const [backupLowDiskMsg, setBackupLowDiskMsg] = useState<string>('');
+  const lastBackupMirrorSigRef = useRef<string>('');
   const [nightPowerSaveEnabled, setNightPowerSaveEnabled] = useState<boolean>(false);
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
   const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(
@@ -1119,6 +1125,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     saveCachedLocalWorkMountMeta(
       {
         mounted: Boolean(res.mounted),
+        driveLetter: res.driveLetter,
         targetDir: res.targetDir || '',
       },
       merlinAuth?.email || undefined
@@ -1432,7 +1439,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
           setSDriveMounted(Boolean(mRes.mounted));
           if (mRes.targetDir) setDriveTargetPath(mRes.targetDir);
           saveCachedLocalWorkMountMeta(
-            { mounted: Boolean(mRes.mounted), targetDir: mRes.targetDir || '' },
+            {
+              mounted: Boolean(mRes.mounted),
+              driveLetter: mRes.driveLetter,
+              targetDir: mRes.targetDir || '',
+            },
             merlinAuth?.email || undefined
           );
         }
@@ -2335,6 +2346,72 @@ export const WorkLoungeB2BHub: React.FC = () => {
     syncRealWorkFiles,
   ]);
 
+  // 예비 서버(1·2호)로 지정된 타 사내 PC에서 대장 PC 직통 터널로부터 단방향 자동 백업 미러링 + 5버전 타임머신 보관 + <10GB 용량 보고
+  useEffect(() => {
+    const myEmailLow = (merlinAuth?.email || '').trim().toLowerCase();
+    const myBackupSlot = myEmailLow
+      ? backupServers.find((b) => (b.memberEmail || '').trim().toLowerCase() === myEmailLow)
+      : undefined;
+    const ep = getActiveHostTunnelSession();
+    if (
+      !isZCoreConnected ||
+      !isWorkUnlocked ||
+      !activeWorkRoomId ||
+      !myBackupSlot ||
+      !ep?.tunnelUrl ||
+      remoteDocs.length === 0
+    ) {
+      return;
+    }
+    const mirrorSig = `${ep.tunnelUrl}::${remoteDocs
+      .map((d) => `${d.relPath}:${d.byteSize}:${d.fileMtimeIso}`)
+      .sort()
+      .join('|')}`;
+    if (mirrorSig === lastBackupMirrorSigRef.current) return;
+    lastBackupMirrorSigRef.current = mirrorSig;
+
+    void manageWorkBackupServersNative({
+      subAction: 'mirror-from-tunnel',
+      tunnelUrl: ep.tunnelUrl,
+      accessKey: ep.accessKey,
+      localBackupServerDir: localBackupDir || undefined,
+    }).then((mRes) => {
+      if (!mRes.ok) {
+        lastBackupMirrorSigRef.current = '';
+        return;
+      }
+      if (mRes.lastBackupSyncedAt) setLastBackupSyncedAt(mRes.lastBackupSyncedAt);
+      if (typeof mRes.lastBackupSyncedCount === 'number') {
+        setLastBackupSyncedCount(mRes.lastBackupSyncedCount);
+      }
+      if (Array.isArray(mRes.versions)) setBackupVersions(mRes.versions);
+      if (mRes.warningLowDisk && mRes.warningDiskMsg) {
+        setBackupLowDiskMsg(mRes.warningDiskMsg);
+      } else {
+        setBackupLowDiskMsg('');
+      }
+      void reportBackupNodeMirrorStatusOnServer({
+        roomId: activeWorkRoomId,
+        freeGb: mRes.primaryFreeGb,
+        lowSpace: Boolean(mRes.warningLowDisk),
+        mirroredCount: mRes.lastBackupSyncedCount ?? remoteDocs.length,
+        lastMirroredAt: mRes.lastBackupSyncedAt,
+      }).then((rep) => {
+        if (rep.ok && rep.backupServers) {
+          setBackupServers(rep.backupServers);
+        }
+      });
+    });
+  }, [
+    isZCoreConnected,
+    isWorkUnlocked,
+    activeWorkRoomId,
+    merlinAuth?.email,
+    backupServers,
+    remoteDocs,
+    localBackupDir,
+  ]);
+
   // 로컬 S:\ 파일 + 대장 PC 터널 파일 통합 및 삭제 Tombstone · 실시간 잠금 상태 병합
   const docs = useMemo<WorkLoungeDocDto[]>(() => {
     if (!isWorkUnlocked && !hasOwnExpiredHostVault) {
@@ -2953,24 +3030,111 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const { doc } = lastDeletedUndoItem;
     setLastDeletedUndoItem(null);
     mergeAndPersistTombstones({}, [doc.relPath]);
-    
-    // Z-코어 및 직통 터널을 통해 실물 파일 100% 복원
-    await restoreDeletedWorkFileShared({ relPath: doc.relPath });
 
-    if (doc.inlineSyncBase64 && isZCoreConnected) {
+    // Z-코어·대장 PC 직통 터널·서버 Tombstone을 동시에 복원해 512KB 초과 대용량 및 원격 파일까지 100% 실물 원복 보장
+    const restoreRes = await restoreDeletedWorkFileShared({
+      roomId: activeWorkRoomId,
+      relPath: doc.relPath,
+    });
+
+    if (doc.inlineSyncBase64 && isZCoreConnected && !restoreRes.ok) {
       await pullSyncRemoteWorkFilesToLocalSDrive([doc], {
         roomId: activeWorkRoomId,
         deletedTombstones: {},
       });
-      await syncRealWorkFiles();
+    }
+    if (isZCoreConnected) {
+      lastWorkFilesSigRef.current = '';
+      await syncRealWorkFiles(true);
     } else {
+      const nextRemote = [doc, ...remoteDocsRef.current.filter((d) => d.relPath !== doc.relPath)];
+      setRemoteDocs(nextRemote);
       setLocalDocs((prev) => [doc, ...prev.filter((d) => d.relPath !== doc.relPath)]);
-      setRemoteDocs((prev) => [doc, ...prev.filter((d) => d.relPath !== doc.relPath)]);
-      if (isZCoreConnected) {
-        await syncRealWorkFiles();
+      realtimeRef.current?.broadcastSnapshot(nextRemote);
+    }
+    showToast(`↩️ '${doc.fileName}' 파일 삭제를 취소하고 공유 폴더(S:\\)에 100% 정상 복원했습니다.`);
+  };
+
+  const handleRefreshBackupVersions = useCallback(async () => {
+    if (!isZCoreConnected) return;
+    const res = await manageWorkBackupServersNative({ subAction: 'list-versions' });
+    if (res.ok && Array.isArray(res.versions)) {
+      setBackupVersions(res.versions);
+    }
+  }, [isZCoreConnected]);
+
+  const handleRestoreBackupVersion = async (versionId: string, fileName: string) => {
+    if (!isZCoreConnected) {
+      openZCoreConnectModal();
+      return;
+    }
+    const res = await manageWorkBackupServersNative({
+      subAction: 'restore-version',
+      versionId,
+    });
+    if (res.ok) {
+      if (res.relPath) {
+        mergeAndPersistTombstones({}, [res.relPath]);
+      }
+      lastWorkFilesSigRef.current = '';
+      await syncRealWorkFiles(true);
+      await handleRefreshBackupVersions();
+      showToast(`🕰️ '${fileName}' 파일을 선택한 백업 버전으로 S:\\ 폴더에 복원했습니다!`);
+    } else {
+      showToast('선택한 파일이 현재 열려 있거나 버전 파일을 찾지 못했습니다.');
+    }
+  };
+
+  const handlePromoteBackupPcToMaster = async (preferredLabel?: string) => {
+    if (!isZCoreConnected) {
+      showToast('대장 PC 승격은 PC 엔진이 연결된 컴퓨터에서 실행할 수 있습니다.');
+      openZCoreConnectModal();
+      return;
+    }
+    const nextLabel = preferredLabel || '승격된 사내 대장 PC (S:)';
+    const localPromoted = await manageWorkBackupServersNative({
+      subAction: 'promote-master',
+      newMasterServerName: nextLabel,
+      roomId: activeWorkRoomId || undefined,
+      email: merlinAuth?.email || undefined,
+    });
+    if (!localPromoted.ok) {
+      showToast('로컬 백업 폴더 마운트 및 터널 전환에 실패했습니다.');
+      return;
+    }
+    setMasterWorkPcName(localPromoted.masterServerName || nextLabel);
+    if (localPromoted.targetDir) setDriveTargetPath(localPromoted.targetDir);
+    if (localPromoted.mounted) {
+      setSDriveMounted(true);
+      saveCachedLocalWorkMountMeta(
+        {
+          mounted: true,
+          driveLetter: localPromoted.driveLetter,
+          targetDir: localPromoted.targetDir || '',
+        },
+        merlinAuth?.email || undefined
+      );
+    }
+    const tUrl = localPromoted.tunnel?.tunnelUrl || '';
+    const tKey = localPromoted.tunnel?.accessKey || '';
+    if (activeWorkRoomId && tUrl) {
+      const srvPromoted = await promoteBackupPcToMasterOnServer({
+        roomId: activeWorkRoomId,
+        tunnelUrl: tUrl,
+        accessKey: tKey,
+        masterServerName: localPromoted.masterServerName || nextLabel,
+      });
+      if (srvPromoted.ok && srvPromoted.hostTunnel) {
+        setHostTunnelStatus('connected');
+        if (srvPromoted.hostTunnel.backupServers) {
+          setBackupServers(srvPromoted.hostTunnel.backupServers);
+        }
+        realtimeRef.current?.broadcastTunnelEndpoint(srvPromoted.hostTunnel);
       }
     }
-    showToast(`↩️ '${doc.fileName}' 파일 삭제를 취소하고 100% 정상 복원했습니다.`);
+    lastWorkFilesSigRef.current = '';
+    await syncRealWorkFiles(true);
+    showToast(`⚡ '${localPromoted.masterServerName || nextLabel}'가 사내 대장 PC(S:)로 1클릭 수동 승격되어 팀원 직통 연결을 이어받았습니다!`);
   };
 
   const handleSaveBackupServerConfig = async (
@@ -3015,11 +3179,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (typeof res.lastBackupSyncedCount === 'number') {
           setLastBackupSyncedCount(res.lastBackupSyncedCount);
         }
+        if (Array.isArray(res.versions)) {
+          setBackupVersions(res.versions);
+        }
         if (res.warningLowDisk && res.warningDiskMsg) {
-          showToast(`⚠️ ${res.warningDiskMsg}`);
+          setBackupLowDiskMsg(res.warningDiskMsg);
+          showToast(res.warningDiskMsg);
         } else {
+          setBackupLowDiskMsg('');
           showToast(
-            `예비 서버 폴더로 업무 파일 ${res.lastBackupSyncedCount ?? docs.length}건 이중화 백업이 완료되었습니다! (5버전 타임머신 보관)`
+            `예비 서버 폴더로 업무 파일 ${res.lastBackupSyncedCount ?? docs.length}건 이중화 백업이 완료되었습니다! (최근 5버전 타임머신 자동 보관)`
           );
         }
       } else {
@@ -3679,6 +3848,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
           onApplyCustomWorkFolderPath={handleApplyCustomWorkFolderPath}
           onResetDefaultWorkFolder={handleResetDefaultWorkFolder}
           backupServers={backupServers}
+          backupVersions={backupVersions}
+          backupLowDiskMsg={backupLowDiskMsg}
+          currentUserEmail={merlinAuth?.email || ''}
           lastBackupSyncedAt={lastBackupSyncedAt}
           lastBackupSyncedCount={lastBackupSyncedCount}
           newBackupServerName={newBackupServerName}
@@ -3689,6 +3861,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
           syncingBackupNow={syncingBackupNow}
           handleSaveBackupServerConfig={handleSaveBackupServerConfig}
           handleRunBackupSyncNow={handleRunBackupSyncNow}
+          onPromoteBackupPcToMaster={handlePromoteBackupPcToMaster}
+          onRestoreBackupVersion={handleRestoreBackupVersion}
+          onRefreshBackupVersions={handleRefreshBackupVersions}
           showMemberPermissions={showMemberPermissions && isWorkUnlocked}
           teamMembers={teamMembers}
           roomSeatLimit={roomSeatLimit}

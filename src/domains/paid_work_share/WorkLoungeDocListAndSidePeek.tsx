@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import type { LocalDocumentFile, PhotoItem, PricingPlanId } from '../../types/saysee';
+import type { PhotoItem, PricingPlanId } from '../../types/saysee';
 import { GhostLabelerActionButton } from '../../components/GhostLabelerActionButton';
 import { GhostPhotoOcrTeleportModal } from '../../components/GhostPhotoOcrTeleportModal';
+import { getZCoreUrl } from '../../services/zCoreBridge';
 import {
   cacheWorkRoomPreviewLocally,
   deleteWorkFileShared,
   downloadWorkFileOriginalWithMeta,
+  getActiveHostTunnelSession,
   readCachedMyWorkRoomMeta,
   type WorkDeletedTombstoneMap,
   type WorkFileDownloadProgressInfo,
@@ -461,13 +463,13 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                 : '원본 파일 다운로드'}
             </button>
 
-            {/* 귀신 라벨링 버튼 (업무 공유 파일 팀원 무료) */}
+            {/* 귀신 라벨링 버튼 (업무 공유 S: 및 폴백 드라이브·지정 업무 폴더 소속 파일은 팀원 전원 무료) */}
             <GhostLabelerActionButton
               variant="doc"
               doc={{
                 id: selectedDoc.id,
                 fileName: selectedDoc.fileName,
-                path: selectedDoc.relPath,
+                path: `${(selectedDoc.folderPath || 'S:\\').replace(/[\\/]+$/, '')}\\${selectedDoc.fileName}`,
                 ext: selectedDoc.ext,
                 title: selectedDoc.summaryTitle || selectedDoc.fileName,
                 categoryBadge: selectedDoc.ext,
@@ -479,21 +481,31 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
               }}
             />
 
-            {/* 사진·표 글자 추출 OCR 버튼 (이미지 파일인 경우 Pro 게이트 모달 연결) */}
+            {/* 사진·표 글자 추출 OCR 버튼 (Pro 전용 게이트 모달 직결) */}
             {Boolean(selectedDoc.isImage || /\.(png|jpe?g|webp|bmp|gif)$/i.test(selectedDoc.fileName)) && (
               <button
                 type="button"
                 onClick={() => {
-                  const imgUrl = selectedDoc.imageBase64 || '';
+                  const activeEp = getActiveHostTunnelSession();
+                  const resolvedImgUrl =
+                    selectedDoc.imageBase64 ||
+                    (isZCoreConnected
+                      ? getZCoreUrl(`/__work/download?relPath=${encodeURIComponent(selectedDoc.relPath)}`)
+                      : activeEp?.tunnelUrl
+                      ? `${activeEp.tunnelUrl}/__work/download?relPath=${encodeURIComponent(selectedDoc.relPath)}${
+                          activeEp.accessKey ? `&workKey=${encodeURIComponent(activeEp.accessKey)}` : ''
+                        }`
+                      : '');
+                  const fullWorkPath = `${(selectedDoc.folderPath || 'S:\\').replace(/[\\/]+$/, '')}\\${selectedDoc.fileName}`;
                   setOcrModalPhoto({
                     id: selectedDoc.id,
                     name: selectedDoc.fileName,
-                    fullPath: selectedDoc.relPath,
+                    fullPath: fullWorkPath,
                     size: selectedDoc.byteSize,
                     date: selectedDoc.updatedAt || selectedDoc.fileMtimeIso || '',
                     mtimeMs: Date.now(),
-                    thumbUrl: imgUrl,
-                    fullUrl: imgUrl,
+                    thumbUrl: resolvedImgUrl,
+                    fullUrl: resolvedImgUrl,
                     tags: [],
                   });
                 }}
