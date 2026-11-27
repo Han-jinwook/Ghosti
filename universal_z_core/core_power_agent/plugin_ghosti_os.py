@@ -1965,6 +1965,72 @@ def _make_collision_safe_media_key(resolved: Path, folder_name: str, seen_keys: 
     return key
 
 
+_AV_DECOY_DIR_CACHE: Dict[str, bool] = {}
+_AV_DECOY_STEMS: set[str] = set()
+
+
+def _is_antivirus_ransomware_decoy_dir(d: Path) -> bool:
+    """알약·안랩 V3 등 백신이 랜섬웨어 탐지용으로 생성하는 미끼(Decoy) 폴더를 일반 규칙으로 판별합니다.
+    (동일 파일명 stem + 동일 바이트 크기로 4개 이상의 이종 확장자(.bmp/.jpg/.docx/.hwp/.xlsx 등)가 공존하는 폴더)"""
+    d_key = str(d).lower()
+    cached = _AV_DECOY_DIR_CACHE.get(d_key)
+    if cached is not None:
+        return cached
+    is_decoy = False
+    try:
+        sig_exts: Dict[tuple[str, int], set[str]] = {}
+        cnt = 0
+        with os.scandir(d) as it:
+            for ent in it:
+                cnt += 1
+                if cnt > 24:
+                    break
+                if not ent.is_file(follow_symlinks=False):
+                    continue
+                nm = ent.name
+                dot = nm.rfind(".")
+                if dot <= 0:
+                    continue
+                stem_l = nm[:dot].lower()
+                ext_l = nm[dot:].lower()
+                sz = int(ent.stat(follow_symlinks=False).st_size)
+                if sz <= 0:
+                    continue
+                k = (stem_l, sz)
+                s = sig_exts.get(k)
+                if s is None:
+                    s = set()
+                    sig_exts[k] = s
+                s.add(ext_l)
+                if len(s) >= 4:
+                    is_decoy = True
+                    _AV_DECOY_STEMS.add(stem_l)
+                    if d.name:
+                        _AV_DECOY_STEMS.add(d.name.lower())
+                    break
+    except Exception:
+        is_decoy = False
+    if len(_AV_DECOY_DIR_CACHE) > 2000:
+        _AV_DECOY_DIR_CACHE.clear()
+    _AV_DECOY_DIR_CACHE[d_key] = is_decoy
+    return is_decoy
+
+
+def _is_antivirus_decoy_sibling_file(parent_dir: Path, stem_low: str) -> bool:
+    """백신 미끼 폴더(예: Documents\\(JX^6B5) 바로 옆에 동명으로 생성되는 미끼 파일(예: Documents\\(Jx^6b5.jpg)을 제외합니다."""
+    if not stem_low:
+        return False
+    if stem_low in _AV_DECOY_STEMS:
+        return True
+    try:
+        sib_dir = parent_dir / stem_low
+        if sib_dir.is_dir() and _is_antivirus_ransomware_decoy_dir(sib_dir):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 _VIRTUAL_DIR_PHOTO_SCAN_CACHE: Dict[str, tuple[float, int, List[tuple[Path, str, str, os.stat_result, Path, str]]]] = {}
 _LOCAL_DIR_PHOTO_SCAN_CACHE: Dict[str, tuple[int, List[tuple[Path, str, str, os.stat_result, Path, str]]]] = {}
 
@@ -2056,6 +2122,8 @@ def _list_local_photos_unlocked(
                     continue
 
         t_p0 = time.monotonic()
+        if _is_antivirus_ransomware_decoy_dir(d):
+            continue
         p_bucket: List[tuple[Path, str, str, os.stat_result, Path, str]] = []
         d_label = _detect_folder_label(d)
         d_low = str(d).lower()
@@ -2071,6 +2139,8 @@ def _list_local_photos_unlocked(
                         continue
                     dot = nm.rfind(".")
                     if dot < 0 or nm[dot:].lower() not in _IMAGE_EXTS:
+                        continue
+                    if _is_antivirus_decoy_sibling_file(d, nm[:dot].lower()):
                         continue
                     # os.scandir의 WIN32_FIND_DATA 캐시(dent.stat)에서 커널 핸들 오픈 0회로 오프라인 클라우드 속성 판별
                     st = dent.stat(follow_symlinks=False)
@@ -3783,6 +3853,8 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                     continue
 
         t_d0 = time.monotonic()
+        if _is_antivirus_ransomware_decoy_dir(d):
+            continue
         dir_bucket: List[tuple[Path, Path, os.stat_result]] = []
         try:
             with os.scandir(d) as it:
@@ -3795,6 +3867,8 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                     if dot < 0 or nm_low[dot:] not in _DOC_EXTS:
                         continue
                     if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
+                        continue
+                    if _is_antivirus_decoy_sibling_file(d, nm_low[:dot]):
                         continue
                     st = dent.stat(follow_symlinks=False)
                     if (

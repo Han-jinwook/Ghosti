@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.11.19"
+CORE_VERSION = "2.11.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1685,9 +1685,12 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             "targetVersion": target_version,
         }
 
-    # PyInstaller 단일 실행파일(.exe)로 실행 중일 때만 바이너리 자가 교체 수행 (개발 중 python 스크립트 실행 시에는 소스 보호)
+    # PyInstaller 단일 실행파일(.exe)로 실행 중일 때만 바이너리 자가 교체 수행
+    # (개발용 Python 스크립트로 실행 중이더라도 영구 설치 경로 %LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe 가 존재하면
+    #  실유저와 동일하게 해당 영구 설치 폴더를 GitHub Releases 패키지로 교체하고 .exe 모드로 재기동합니다!)
     is_frozen_exe = bool(getattr(sys, "frozen", False))
-    if not is_frozen_exe:
+    fallback_installed_exe = Path(os.path.expandvars(r"%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe"))
+    if not is_frozen_exe and not fallback_installed_exe.exists():
         return {
             "ok": True,
             "status": "DEV_SCRIPT_MODE_SKIPPED",
@@ -1700,7 +1703,7 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
     def _bg_swap_worker() -> None:
         global _SELF_UPDATE_IN_PROGRESS
         try:
-            current_exe = Path(sys.executable).resolve()
+            current_exe = Path(sys.executable).resolve() if is_frozen_exe else fallback_installed_exe.resolve()
             update_dir = Path(tempfile.gettempdir()) / "merlin_zcore_silent_update"
             update_dir.mkdir(parents=True, exist_ok=True)
             zip_path = update_dir / "Merlin_Z_Core_latest.zip"

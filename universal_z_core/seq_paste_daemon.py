@@ -4112,6 +4112,30 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
             else:
                 fd_badge = fd.name or drv_prefix or "C:\\"
             try:
+                # 백신 랜섬웨어 미끼(Decoy) 폴더(동일 stem·동일 용량 4종 이상 이종 확장자) 자동 제외
+                _av_sig_exts: dict[tuple[str, int], set[str]] = {}
+                _av_is_decoy_dir = False
+                with os.scandir(fd) as it_chk:
+                    for _ci, _ce in enumerate(it_chk):
+                        if _ci >= 24:
+                            break
+                        if not _ce.is_file(follow_symlinks=False):
+                            continue
+                        _cn = _ce.name
+                        _cd = _cn.rfind(".")
+                        if _cd <= 0:
+                            continue
+                        _csz = int(_ce.stat(follow_symlinks=False).st_size)
+                        if _csz <= 0:
+                            continue
+                        _ck = (_cn[:_cd].lower(), _csz)
+                        _cs = _av_sig_exts.setdefault(_ck, set())
+                        _cs.add(_cn[_cd:].lower())
+                        if len(_cs) >= 4:
+                            _av_is_decoy_dir = True
+                            break
+                if _av_is_decoy_dir:
+                    continue
                 with os.scandir(fd) as it:
                     for _idx_ent, entry in enumerate(it):
                         if (_idx_ent & 255) == 255:
