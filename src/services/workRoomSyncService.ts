@@ -5,6 +5,12 @@ import {
   hasAuthenticatedHubAccountSession,
   supabase,
 } from './supabaseClient';
+import {
+  isAndroidMobileBrowserOrApp,
+  isCapacitorAndroidRuntime,
+  isCapacitorIosRuntime,
+  isIosMobileBrowserOrApp,
+} from './ghostiMobileCareBridge';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 
 export interface WorkLoungeDocDto {
@@ -1551,16 +1557,33 @@ export async function uploadWorkFileToNativeSDrive(opts: {
     return { ok: false, error: 'EXCEEDS_50MB_LIMIT' };
   }
   const localUrl = resolveWorkApiUrl('/__work/upload');
+  // 로컬 PC 엔진(localUrl)이 없는 스마트폰·외부망 브라우저에서는 방장 본인 계정(opts.isHost === true)이든 초대 팀원이든
+  // 반드시 대장 PC의 상시 아웃바운드 HTTPS 직통 터널을 통해 S:\ 폴더로 업로드해야 합니다!
+  const shouldUseTunnel = !localUrl || !opts.isHost;
+
+  if (
+    shouldUseTunnel &&
+    (!activeHostTunnelSession ||
+      (opts.roomId && activeHostTunnelSession.roomId !== opts.roomId) ||
+      !activeHostTunnelSession.tunnelUrl) &&
+    opts.roomId
+  ) {
+    const cachedEp = readCachedHostTunnelEndpointSync(opts.roomId);
+    if (cachedEp?.tunnelUrl) {
+      setActiveHostTunnelSession(opts.roomId, cachedEp);
+    }
+  }
+
   let tunnel =
-    !opts.isHost &&
+    shouldUseTunnel &&
     activeHostTunnelSession &&
     (!opts.roomId || activeHostTunnelSession.roomId === opts.roomId) &&
     activeHostTunnelSession.tunnelUrl
       ? activeHostTunnelSession
       : null;
 
-  // 초대 팀원이 업로드할 때 아직 메모리에 대장 PC 터널 주소가 없다면 서버에서 최신 터널 주소를 즉시 1회 확보
-  if (!opts.isHost && !tunnel && opts.roomId && hasAuthenticatedHubAccountSession()) {
+  // 메모리에 대장 PC 터널 주소가 없다면 서버에서 최신 터널 주소를 즉시 1회 확보
+  if (shouldUseTunnel && !tunnel && opts.roomId && hasAuthenticatedHubAccountSession()) {
     try {
       const freshState = await callGhostiServerBridge<{ hostTunnel?: WorkHostTunnelEndpointDto }>(
         'work_get_room_state',
@@ -1595,7 +1618,7 @@ export async function uploadWorkFileToNativeSDrive(opts: {
     author: opts.author || '',
   });
 
-  // 1) 내 PC 엔진 연결 시 로컬 S:\에 즉시 기록 (15초 타임아웃으로 무한 대기 원천 차단)
+  // 1) 내 PC 엔진 연결 시 로컬 S:\에 즉시 기록 (20초 타임아웃으로 무한 대기 원천 차단)
   let localResult: { ok: boolean; relPath?: string; sDrivePath?: string; error?: string } | null =
     null;
   if (localUrl) {
@@ -1607,7 +1630,7 @@ export async function uploadWorkFileToNativeSDrive(opts: {
           headers: { 'Content-Type': 'application/json' },
           body: bodyPayload,
         },
-        15000
+        20000
       );
       localResult = (await res.json()) as {
         ok: boolean;
@@ -1620,8 +1643,9 @@ export async function uploadWorkFileToNativeSDrive(opts: {
     }
   }
 
-  // 2) 초대 팀원(또는 모바일)인 경우 대장 PC 직통 HTTPS 터널로도 전송해 방장 S:\에도 즉시 반영 (12초 타임아웃 + 터널 회전 시 1회 자동 재획득)
-  if (!opts.isHost && tunnel) {
+  // 2) 초대 팀원 또는 모바일(방장·팀원 외부망 LTE 포함)인 경우 대장 PC 직통 HTTPS 터널로 전송해 방장 S:\에 즉시 반영
+  //    (고해상도 스마트폰 사진 LTE 전송 여유 35초 타임아웃 + 터널 회전·재기동 시 서버 최신 주소 재조회 후 자동 재시도)
+  if (shouldUseTunnel && tunnel) {
     const pushToTunnel = async (ep: NonNullable<typeof tunnel>) => {
       const tRes = await fetchWithTimeout(
         `${ep.tunnelUrl}/__work/upload`,
@@ -1633,7 +1657,7 @@ export async function uploadWorkFileToNativeSDrive(opts: {
           },
           body: bodyPayload,
         },
-        12000
+        35000
       );
       if (!tRes.ok) return null;
       const tj = (await tRes.json()) as {
@@ -1661,7 +1685,7 @@ export async function uploadWorkFileToNativeSDrive(opts: {
           { roomId: opts.roomId }
         );
         const nextUrl = (refreshed.hostTunnel?.tunnelUrl || '').trim().replace(/\/+$/, '');
-        if (refreshed.ok && nextUrl && nextUrl !== tunnel.tunnelUrl) {
+        if (refreshed.ok && nextUrl) {
           setActiveHostTunnelSession(opts.roomId, refreshed.hostTunnel);
           const nextSession = getActiveHostTunnelSession();
           if (nextSession) {
@@ -1969,60 +1993,267 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
   return { ok: true, syncedCount: syncedTotal, removedCount: removedTotal };
 }
 
-export async function downloadWorkFileOriginal(
+export interface WorkFileDownloadProgressInfo {
+  percent: number;
+  loadedBytes: number;
+  totalBytes: number;
+  loadedLabel: string;
+  totalLabel: string;
+}
+
+export interface WorkFileDownloadResult {
+  ok: boolean;
+  saveLocationLabel: string;
+  sizeLabel: string;
+  sharedFile?: File;
+  directDownloadUrl?: string;
+}
+
+function resolveSaveLocationGuideLabel(): string {
+  if (isIosMobileBrowserOrApp()) {
+    return '아이폰 [파일 앱 > 다운로드( 또는 나의 iPhone )] 폴더';
+  }
+  if (isAndroidMobileBrowserOrApp()) {
+    return '스마트폰 [내 파일(파일 앱) > 다운로드(Download)] 폴더 및 상단 알림창';
+  }
+  return '내 PC [다운로드(Downloads)] 폴더';
+}
+
+async function readResponseBlobWithProgress(
+  res: Response,
+  fallbackTotalBytes: number,
+  onProgress?: (info: WorkFileDownloadProgressInfo) => void
+): Promise<Blob> {
+  const headerLen = Number(res.headers.get('Content-Length') || 0);
+  const expectedTotal = headerLen > 0 ? headerLen : Math.max(0, fallbackTotalBytes || 0);
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const blob = await res.blob();
+    const finalSize = blob.size || expectedTotal;
+    onProgress?.({
+      percent: 100,
+      loadedBytes: finalSize,
+      totalBytes: finalSize,
+      loadedLabel: formatBytesLabel(finalSize),
+      totalLabel: formatBytesLabel(finalSize),
+    });
+    return blob;
+  }
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let loaded = 0;
+  onProgress?.({
+    percent: 5,
+    loadedBytes: 0,
+    totalBytes: expectedTotal,
+    loadedLabel: '0.0 KB',
+    totalLabel: expectedTotal > 0 ? formatBytesLabel(expectedTotal) : '계산 중',
+  });
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value && value.byteLength > 0) {
+      chunks.push(value);
+      loaded += value.byteLength;
+      const pct =
+        expectedTotal > 0
+          ? Math.min(99, Math.max(8, Math.round((loaded / expectedTotal) * 100)))
+          : 70;
+      onProgress?.({
+        percent: pct,
+        loadedBytes: loaded,
+        totalBytes: expectedTotal || loaded,
+        loadedLabel: formatBytesLabel(loaded),
+        totalLabel: formatBytesLabel(expectedTotal || loaded),
+      });
+    }
+  }
+
+  const mime = res.headers.get('Content-Type') || 'application/octet-stream';
+  const blob = new Blob(chunks as BlobPart[], { type: mime });
+  const finalTotal = blob.size || loaded || expectedTotal;
+  onProgress?.({
+    percent: 100,
+    loadedBytes: finalTotal,
+    totalBytes: finalTotal,
+    loadedLabel: formatBytesLabel(finalTotal),
+    totalLabel: formatBytesLabel(finalTotal),
+  });
+  return blob;
+}
+
+async function deliverDownloadedWorkBlobToDevice(
+  blob: Blob,
   doc: WorkLoungeDocDto,
-  _opts?: { roomId?: string; inviteToken?: string }
-): Promise<boolean> {
-  // 1순위: 내 PC 엔진 연결 시 로컬 S:\에서 즉시 다운로드
+  directTunnelAttachmentUrl?: string
+): Promise<WorkFileDownloadResult> {
+  const mime = blob.type || 'application/octet-stream';
+  const safeFile = new File([blob], doc.fileName, { type: mime });
+  const finalSizeLabel = formatBytesLabel(blob.size || doc.byteSize || 0);
+  const saveLocationLabel = resolveSaveLocationGuideLabel();
+
+  // 1) Capacitor Android 네이티브 앱: WebView 내부 blob: 링크는 시스템 DownloadManager가 무시하므로,
+  //    인증된 직통 첨부 URL(allowNavigation 외부 도메인 -> 시스템 브라우저 DownloadManager 자동 이관)로
+  //    [내 파일 > 다운로드(Download)] 폴더 저장 + 상단바 다운로드 완료 알림을 즉시 실행합니다.
+  if (isCapacitorAndroidRuntime() && directTunnelAttachmentUrl) {
+    try {
+      const extLink = document.createElement('a');
+      extLink.href = directTunnelAttachmentUrl;
+      extLink.target = '_blank';
+      extLink.rel = 'noopener noreferrer';
+      document.body.appendChild(extLink);
+      extLink.click();
+      extLink.remove();
+      return {
+        ok: true,
+        saveLocationLabel,
+        sizeLabel: finalSizeLabel,
+        sharedFile: safeFile,
+        directDownloadUrl: directTunnelAttachmentUrl,
+      };
+    } catch {
+      /* fallback below */
+    }
+  }
+
+  // 2) Capacitor iOS 네이티브 앱(또는 Android 오프라인 인라인 폴백): 공식 OS 파일 공유 시트([파일에 저장]) 즉시 호출
+  if (isCapacitorIosRuntime() || (isCapacitorAndroidRuntime() && !directTunnelAttachmentUrl)) {
+    const nav = navigator as Navigator & {
+      canShare?: (data?: ShareData) => boolean;
+    };
+    if (typeof nav.share === 'function' && (!nav.canShare || nav.canShare({ files: [safeFile] }))) {
+      try {
+        await nav.share({
+          files: [safeFile],
+          title: doc.fileName,
+        });
+      } catch {
+        /* 사용자가 시트를 닫아도 아래 재저장 버튼(sharedFile)으로 언제든 다시 저장 가능 */
+      }
+      return {
+        ok: true,
+        saveLocationLabel,
+        sizeLabel: finalSizeLabel,
+        sharedFile: safeFile,
+        directDownloadUrl: directTunnelAttachmentUrl,
+      };
+    }
+  }
+
+  // 3) 데스크톱 브라우저 & 모바일 웹 브라우저(Chrome / Safari / Samsung Internet): 표준 다운로드 트리거
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl;
+  a.download = doc.fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objUrl), 8000);
+
+  return {
+    ok: true,
+    saveLocationLabel,
+    sizeLabel: finalSizeLabel,
+    sharedFile: safeFile,
+    directDownloadUrl: directTunnelAttachmentUrl,
+  };
+}
+
+export async function downloadWorkFileOriginalWithMeta(
+  doc: WorkLoungeDocDto,
+  opts?: {
+    roomId?: string;
+    inviteToken?: string;
+    onProgress?: (info: WorkFileDownloadProgressInfo) => void;
+  }
+): Promise<WorkFileDownloadResult> {
+  const failResult: WorkFileDownloadResult = {
+    ok: false,
+    saveLocationLabel: resolveSaveLocationGuideLabel(),
+    sizeLabel: doc.sizeLabel || formatBytesLabel(doc.byteSize || 0),
+  };
+
+  // 1순위: 내 PC 엔진 연결 시 로컬 S:\에서 즉시 스트리밍 다운로드
   if (zCoreBridge.isConnected) {
     try {
       const res = await fetch(
         getZCoreUrl(`/__work/download?relPath=${encodeURIComponent(doc.relPath)}`)
       );
       if (res.ok) {
-        const blob = await res.blob();
-        const objUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objUrl;
-        a.download = doc.fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.setTimeout(() => URL.revokeObjectURL(objUrl), 3000);
-        return true;
+        const blob = await readResponseBlobWithProgress(res, doc.byteSize, opts?.onProgress);
+        return deliverDownloadedWorkBlobToDevice(blob, doc);
       }
     } catch {
       /* fallback below */
     }
   }
+
   // 2순위: 대장 PC 상시 아웃바운드 HTTPS 직통 터널에서 직접 스트리밍 다운로드 (서버 저장 0 Byte)
+  if ((!activeHostTunnelSession || !activeHostTunnelSession.tunnelUrl) && opts?.roomId) {
+    const cachedEp = readCachedHostTunnelEndpointSync(opts.roomId);
+    if (cachedEp?.tunnelUrl) {
+      setActiveHostTunnelSession(opts.roomId, cachedEp);
+    } else if (hasAuthenticatedHubAccountSession()) {
+      try {
+        const fresh = await callGhostiServerBridge<{ hostTunnel?: WorkHostTunnelEndpointDto }>(
+          'work_get_room_state',
+          { roomId: opts.roomId }
+        );
+        if (fresh.ok && fresh.hostTunnel?.tunnelUrl) {
+          setActiveHostTunnelSession(opts.roomId, fresh.hostTunnel);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const tryTunnelDownload = async (
+    ep: NonNullable<typeof activeHostTunnelSession>
+  ): Promise<WorkFileDownloadResult | null> => {
+    const directUrl = `${ep.tunnelUrl}/__work/download?relPath=${encodeURIComponent(doc.relPath)}${
+      ep.accessKey ? `&workKey=${encodeURIComponent(ep.accessKey)}` : ''
+    }`;
+    const res = await fetch(
+      `${ep.tunnelUrl}/__work/download?relPath=${encodeURIComponent(doc.relPath)}`,
+      {
+        method: 'GET',
+        headers: ep.accessKey ? { 'X-Ghosti-Work-Key': ep.accessKey } : {},
+      }
+    );
+    if (!res.ok) return null;
+    const blob = await readResponseBlobWithProgress(res, doc.byteSize, opts?.onProgress);
+    return deliverDownloadedWorkBlobToDevice(blob, doc, directUrl);
+  };
+
   if (activeHostTunnelSession?.tunnelUrl) {
     try {
-      const res = await fetch(
-        `${activeHostTunnelSession.tunnelUrl}/__work/download?relPath=${encodeURIComponent(doc.relPath)}`,
-        {
-          method: 'GET',
-          headers: activeHostTunnelSession.accessKey
-            ? { 'X-Ghosti-Work-Key': activeHostTunnelSession.accessKey }
-            : {},
-        }
-      );
-      if (res.ok) {
-        const blob = await res.blob();
-        const objUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objUrl;
-        a.download = doc.fileName;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.setTimeout(() => URL.revokeObjectURL(objUrl), 3000);
-        return true;
-      }
+      const firstTry = await tryTunnelDownload(activeHostTunnelSession);
+      if (firstTry?.ok) return firstTry;
     } catch {
-      /* fallback below */
+      /* refresh tunnel below */
+    }
+    if (opts?.roomId && hasAuthenticatedHubAccountSession()) {
+      try {
+        const fresh = await callGhostiServerBridge<{ hostTunnel?: WorkHostTunnelEndpointDto }>(
+          'work_get_room_state',
+          { roomId: opts.roomId }
+        );
+        if (fresh.ok && fresh.hostTunnel?.tunnelUrl) {
+          setActiveHostTunnelSession(opts.roomId, fresh.hostTunnel);
+          const nextEp = getActiveHostTunnelSession();
+          if (nextEp) {
+            const secondTry = await tryTunnelDownload(nextEp).catch(() => null);
+            if (secondTry?.ok) return secondTry;
+          }
+        }
+      } catch {
+        /* fallback below */
+      }
     }
   }
+
   // 3순위: Realtime Broadcast로 이미 수신된 경량 인라인 데이터
   if (doc.inlineSyncBase64) {
     try {
@@ -2035,20 +2266,31 @@ export async function downloadWorkFileOriginal(
         bytes[i] = bin.charCodeAt(i);
       }
       const blob = new Blob([bytes]);
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objUrl;
-      a.download = doc.fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.setTimeout(() => URL.revokeObjectURL(objUrl), 3000);
-      return true;
+      opts?.onProgress?.({
+        percent: 100,
+        loadedBytes: blob.size,
+        totalBytes: blob.size,
+        loadedLabel: formatBytesLabel(blob.size),
+        totalLabel: formatBytesLabel(blob.size),
+      });
+      return deliverDownloadedWorkBlobToDevice(blob, doc);
     } catch {
-      return false;
+      return failResult;
     }
   }
-  return false;
+  return failResult;
+}
+
+export async function downloadWorkFileOriginal(
+  doc: WorkLoungeDocDto,
+  opts?: {
+    roomId?: string;
+    inviteToken?: string;
+    onProgress?: (info: WorkFileDownloadProgressInfo) => void;
+  }
+): Promise<boolean> {
+  const res = await downloadWorkFileOriginalWithMeta(doc, opts);
+  return res.ok;
 }
 
 export async function deleteWorkFileShared(opts: {

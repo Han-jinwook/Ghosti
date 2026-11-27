@@ -9,6 +9,8 @@ import crypto from 'node:crypto';
 
 const WORK_BUCKET = 'ghosti-work-vault';
 const DEVICE_BUCKET = 'ghosti-device-vault';
+const ALLOWED_WORK_TUNNEL_URL_RE =
+  /^https:\/\/(?:[a-z0-9-]+\.trycloudflare\.com|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:lhr\.life|lhr\.domains))$/i;
 
 let bucketsEnsured = false;
 
@@ -805,7 +807,7 @@ export async function handleDaemonWorkTunnelRefreshAction({
     !roomId ||
     !hostEmail ||
     accessKey.length < 24 ||
-    !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(rawUrl)
+    !ALLOWED_WORK_TUNNEL_URL_RE.test(rawUrl)
   ) {
     return { status: 400, body: { ok: false, reason: 'INVALID_DAEMON_TUNNEL_REFRESH_PARAMS' } };
   }
@@ -1456,7 +1458,7 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 403, body: { ok: false, reason: 'WORK_TUNNEL_REGISTER_MASTER_ONLY' } };
     }
     const rawUrl = String(body.tunnelUrl || '').trim().replace(/\/+$/, '');
-    if (rawUrl && !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(rawUrl)) {
+    if (rawUrl && !ALLOWED_WORK_TUNNEL_URL_RE.test(rawUrl)) {
       return { status: 400, body: { ok: false, reason: 'INVALID_TUNNEL_URL' } };
     }
     const accessKey = String(body.accessKey || '').trim().slice(0, 96);

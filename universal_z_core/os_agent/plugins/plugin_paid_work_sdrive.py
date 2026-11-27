@@ -3379,11 +3379,19 @@ _TUNNEL_STATE: Dict[str, Any] = {
     "status": "idle",  # idle | downloading_binary | starting | connected | error | stopped
     "error": "",
     "startedAt": "",
+    "startingMono": 0.0,
+    "cfCooldownUntilMono": 0.0,
+    "lastBridgeNotifyMono": 0.0,
+    "lastBridgeNotifiedUrl": "",
 }
 _CLOUDFLARED_RELEASE_URL = (
     "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
 )
-_TRYCLOUDFLARE_URL_RE = re.compile(r"(https://[a-z0-9-]+\.trycloudflare\.com)", re.IGNORECASE)
+_OUTBOUND_TUNNEL_URL_RE = re.compile(
+    r"(https://(?:[a-z0-9-]+\.trycloudflare\.com|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:lhr\.life|lhr\.domains)))",
+    re.IGNORECASE,
+)
+_TRYCLOUDFLARE_URL_RE = _OUTBOUND_TUNNEL_URL_RE
 
 
 def get_or_create_work_access_key(rotate: bool = False) -> str:
@@ -3473,12 +3481,15 @@ def get_outbound_work_tunnel_status() -> Dict[str, Any]:
     cfg = _load_sdrive_config()
     access_key = get_or_create_work_access_key(rotate=False)
     active_owner = str(cfg.get("activeAccountEmail") or "").strip().lower()
+    now_mono = time.monotonic()
     with _TUNNEL_LOCK:
         proc = _TUNNEL_STATE.get("proc")
         alive = proc is not None and (proc.poll() is None)
         url = str(_TUNNEL_STATE.get("url") or "") if alive else ""
         status = str(_TUNNEL_STATE.get("status") or "idle")
-        if not alive and status in ("connected", "starting"):
+        starting_mono = float(_TUNNEL_STATE.get("startingMono") or 0.0)
+        in_startup_grace = status in ("starting", "downloading_binary") and (now_mono - starting_mono) < 22.0
+        if not alive and status in ("connected", "starting") and not in_startup_grace:
             status = "stopped"
             _TUNNEL_STATE["status"] = status
             _TUNNEL_STATE["url"] = ""
@@ -3498,13 +3509,13 @@ def get_outbound_work_tunnel_status() -> Dict[str, Any]:
 
 
 def _cleanup_orphan_cloudflared_processes(keep_pid: int = 0) -> None:
-    """이전 Z-코어 세션에서 종료되지 않고 남은 고아 cloudflared.exe(--url http://127.0.0.1:5199) 프로세스를 정리해 26개 중복 누수를 원천 차단합니다."""
+    """이전 Z-코어 세션에서 종료되지 않고 남은 고아 cloudflared.exe / ssh(nokey@localhost.run) 프로세스를 정리해 중복 누수를 원천 차단합니다."""
     if os.name != "nt":
         return
     try:
         ps_cmd = (
             f"$kp={int(keep_pid or 0)}; "
-            "Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" -ErrorAction SilentlyContinue | "
+            "Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe' or Name='ssh.exe'\" -ErrorAction SilentlyContinue | "
             "Where-Object { $_.ProcessId -ne $kp -and $_.CommandLine -like '*127.0.0.1:5199*' } | "
             "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
         )
@@ -3526,17 +3537,17 @@ _SERVER_BRIDGE_ENDPOINTS = (
 
 
 def _notify_server_bridge_tunnel_url(tunnel_url: str) -> bool:
-    """대장 PC의 Z-코어가 새 아웃바운드 터널 주소(*.trycloudflare.com)를 확보한 즉시,
+    """대장 PC의 Z-코어가 새 아웃바운드 터널 주소(*.trycloudflare.com / *.lhr.life)를 확보한 즉시,
     브라우저 창이 닫혀 있거나 다른 탭에 있어도 서버 중매 상태(p2p_state_v2.json)에 즉시 자동 갱신합니다."""
     clean_url = str(tunnel_url or "").strip().rstrip("/")
-    if not clean_url or ".trycloudflare.com" not in clean_url.lower():
+    if not clean_url or not _OUTBOUND_TUNNEL_URL_RE.fullmatch(clean_url):
         return False
     cfg = _load_sdrive_config()
     if cfg.get("workEntitlementLocked") is True or not cfg.get("isWorkHost"):
         return False
     room_id = str(cfg.get("activeWorkRoomId") or "").strip()
     host_email = str(cfg.get("activeAccountEmail") or "").strip().lower()
-    access_key = str(cfg.get("workRoomAccessKey") or "").strip()
+    access_key = get_or_create_work_access_key(rotate=False)
     if not room_id or not host_email or len(access_key) < 24:
         return False
     payload_bytes = json.dumps(
@@ -3560,34 +3571,66 @@ def _notify_server_bridge_tunnel_url(tunnel_url: str) -> bool:
                 headers={
                     "Content-Type": "application/json",
                     "Origin": "https://sundreamer.app",
-                    "User-Agent": "MerlinZCoreWorkTunnel/2.8",
+                    "User-Agent": "MerlinZCoreWorkTunnel/2.13",
                 },
             )
             with urllib.request.urlopen(req, timeout=6.0) as resp:
                 body_raw = resp.read().decode("utf-8", errors="ignore")
                 parsed = json.loads(body_raw or "{}")
                 if resp.status == 200 and parsed.get("ok"):
+                    with _TUNNEL_LOCK:
+                        _TUNNEL_STATE["lastBridgeNotifyMono"] = time.monotonic()
+                        _TUNNEL_STATE["lastBridgeNotifiedUrl"] = clean_url
                     return True
         except Exception:
             continue
     return False
 
 
+def _find_windows_openssh_binary() -> Optional[str]:
+    which_ssh = shutil.which("ssh")
+    if which_ssh:
+        return which_ssh
+    if os.name == "nt":
+        cand = Path(os.environ.get("SystemRoot") or r"C:\Windows") / "System32" / "OpenSSH" / "ssh.exe"
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
 def _tunnel_watchdog_loop() -> None:
     import time as _time
 
+    first_pass = True
     while True:
-        _time.sleep(25.0)
+        _time.sleep(3.5 if first_pass else 25.0)
+        first_pass = False
         try:
             cfg = _load_sdrive_config()
             if cfg.get("workEntitlementLocked") is True or not cfg.get("isWorkHost"):
                 continue
+            now_m = _time.monotonic()
+            need_start = False
+            need_repush_url = ""
             with _TUNNEL_LOCK:
                 proc = _TUNNEL_STATE.get("proc")
                 alive = proc is not None and (proc.poll() is None)
                 status = str(_TUNNEL_STATE.get("status") or "idle")
-            if not alive and status not in ("starting", "downloading_binary"):
+                cur_url = str(_TUNNEL_STATE.get("url") or "")
+                starting_m = float(_TUNNEL_STATE.get("startingMono") or 0.0)
+                last_push_m = float(_TUNNEL_STATE.get("lastBridgeNotifyMono") or 0.0)
+                last_push_url = str(_TUNNEL_STATE.get("lastBridgeNotifiedUrl") or "")
+                if not alive:
+                    if status not in ("starting", "downloading_binary") or (now_m - starting_m) > 22.0:
+                        _TUNNEL_STATE["status"] = "stopped"
+                        _TUNNEL_STATE["url"] = ""
+                        need_start = True
+                elif cur_url and (cur_url != last_push_url or (now_m - last_push_m) > 120.0):
+                    need_repush_url = cur_url
+            if need_start:
                 ensure_outbound_work_tunnel()
+            elif need_repush_url:
+                _notify_server_bridge_tunnel_url(need_repush_url)
         except Exception:
             pass
 
@@ -3601,7 +3644,10 @@ def _ensure_tunnel_watchdog_started() -> None:
 
 
 def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다 (방화벽 인바운드 포트 개방 불필요 · 단일 인스턴스 락으로 중복 스폰 0%)."""
+    """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다.
+    - 1순위: Cloudflare QuickTunnel (cloudflared.exe -> *.trycloudflare.com)
+    - 2순위(자동 무중단 폴백): 사내 공유 공인 IP 다중 기동 등으로 trycloudflare HTTP 429 레이트리밋 발생 시,
+      추가 설치·계정 0건인 Windows 내장 OpenSSH 역방향 TLS 터널(nokey@localhost.run -> *.lhr.life)로 1초 내 즉시 자동 전환합니다."""
     cfg = _load_sdrive_config()
     if cfg.get("workEntitlementLocked") is True or not bool(cfg.get("isWorkHost")):
         stop_outbound_work_tunnel()
@@ -3614,70 +3660,145 @@ def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str,
 
     _ensure_tunnel_watchdog_started()
 
+    now_mono = time.monotonic()
     already_running = False
     with _TUNNEL_LOCK:
         proc_existing = _TUNNEL_STATE.get("proc")
         alive_existing = proc_existing is not None and (proc_existing.poll() is None)
         cur_status = str(_TUNNEL_STATE.get("status") or "idle")
         cur_url = str(_TUNNEL_STATE.get("url") or "")
-        if (alive_existing and cur_url) or cur_status in ("starting", "downloading_binary"):
+        starting_mono = float(_TUNNEL_STATE.get("startingMono") or 0.0)
+        if (alive_existing and cur_url) or (
+            cur_status in ("starting", "downloading_binary") and (now_mono - starting_mono) < 22.0
+        ):
             already_running = True
         else:
-            # 동시 요청 경합(Race Condition)으로 2개 이상 스폰되지 않도록 락 안에서 즉시 starting 선점!
+            # 동시 요청 경합(Race Condition) 및 get_outbound_work_tunnel_status 조기 stopped 오판 원천 차단!
             _TUNNEL_STATE["status"] = "starting"
+            _TUNNEL_STATE["startingMono"] = now_mono
             _TUNNEL_STATE["error"] = ""
     if already_running:
         return get_outbound_work_tunnel_status()
 
+    def _run_tunnel_cmd_and_stream(cmd_args: List[str], provider_tag: str) -> Tuple[bool, bool]:
+        """터널 프로세스를 실행하고 URL 발급 시 connected 전환 후 종료될 때까지 대기합니다.
+        반환값: (ever_connected, hit_rate_limit_429)"""
+        ever_connected = False
+        hit_429 = False
+        proc = subprocess.Popen(
+            cmd_args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            creationflags=_CREATE_NO_WINDOW,
+        )
+        with _TUNNEL_LOCK:
+            _TUNNEL_STATE["proc"] = proc
+            _TUNNEL_STATE["startedAt"] = _iso_utc()
+            _TUNNEL_STATE["startingMono"] = time.monotonic()
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            low_line = (line or "").lower()
+            if "status 429" in low_line or "429 too many requests" in low_line or "provisioning failed" in low_line:
+                hit_429 = True
+            m = _OUTBOUND_TUNNEL_URL_RE.search(line or "")
+            if m and not ever_connected:
+                found_url = m.group(1).rstrip("/")
+                ever_connected = True
+                with _TUNNEL_LOCK:
+                    _TUNNEL_STATE["url"] = found_url
+                    _TUNNEL_STATE["status"] = "connected"
+                    _TUNNEL_STATE["error"] = ""
+                _save_sdrive_config({"lastTunnelUrl": found_url, "lastTunnelProvider": provider_tag})
+                threading.Thread(
+                    target=_notify_server_bridge_tunnel_url,
+                    args=(found_url,),
+                    daemon=True,
+                ).start()
+        try:
+            proc.wait(timeout=1.5)
+        except Exception:
+            pass
+        return ever_connected, hit_429
+
     def _spawn_worker() -> None:
         _cleanup_orphan_cloudflared_processes(keep_pid=0)
-        bin_p = _find_or_download_cloudflared_binary()
-        if bin_p is None:
-            with _TUNNEL_LOCK:
-                if _TUNNEL_STATE["status"] != "error":
-                    _TUNNEL_STATE["status"] = "error"
-                    _TUNNEL_STATE["error"] = "CLOUDFLARED_BINARY_UNAVAILABLE"
-            return
+        ever_ok = False
         with _TUNNEL_LOCK:
-            _TUNNEL_STATE["status"] = "starting"
-            _TUNNEL_STATE["error"] = ""
-        try:
-            proc = subprocess.Popen(
-                [
-                    str(bin_p),
-                    "tunnel",
-                    "--url",
-                    "http://127.0.0.1:5199",
-                    "--no-autoupdate",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="ignore",
-                creationflags=_CREATE_NO_WINDOW,
-            )
-            with _TUNNEL_LOCK:
-                _TUNNEL_STATE["proc"] = proc
-                _TUNNEL_STATE["startedAt"] = _iso_utc()
-            assert proc.stdout is not None
-            for line in proc.stdout:
-                m = _TRYCLOUDFLARE_URL_RE.search(line or "")
-                if m:
-                    found_url = m.group(1).rstrip("/")
+            cf_cooldown_until = float(_TUNNEL_STATE.get("cfCooldownUntilMono") or 0.0)
+
+        # 1순위: Cloudflare QuickTunnel (쿨다운 중이 아닐 때 우선 시도)
+        if time.monotonic() >= cf_cooldown_until:
+            bin_p = _find_or_download_cloudflared_binary()
+            if bin_p is not None:
+                try:
+                    ever_ok, hit_429 = _run_tunnel_cmd_and_stream(
+                        [
+                            str(bin_p),
+                            "tunnel",
+                            "--url",
+                            "http://127.0.0.1:5199",
+                            "--no-autoupdate",
+                        ],
+                        "cloudflare",
+                    )
+                    if hit_429 or not ever_ok:
+                        with _TUNNEL_LOCK:
+                            _TUNNEL_STATE["cfCooldownUntilMono"] = time.monotonic() + (900.0 if hit_429 else 180.0)
+                except Exception as exc:
                     with _TUNNEL_LOCK:
-                        _TUNNEL_STATE["url"] = found_url
-                        _TUNNEL_STATE["status"] = "connected"
-                    _save_sdrive_config({"lastTunnelUrl": found_url})
-                    threading.Thread(
-                        target=_notify_server_bridge_tunnel_url,
-                        args=(found_url,),
-                        daemon=True,
-                    ).start()
-        except Exception as exc:
-            with _TUNNEL_LOCK:
-                _TUNNEL_STATE["status"] = "error"
-                _TUNNEL_STATE["error"] = str(exc)
+                        _TUNNEL_STATE["error"] = str(exc)
+
+        # 2순위: cloudflared 429 레이트리밋 또는 바이너리 차단 시 Windows 내장 OpenSSH 역방향 HTTPS 터널 즉시 폴백
+        if not ever_ok:
+            ssh_bin = _find_windows_openssh_binary()
+            if ssh_bin:
+                try:
+                    with _TUNNEL_LOCK:
+                        _TUNNEL_STATE["status"] = "starting"
+                        _TUNNEL_STATE["startingMono"] = time.monotonic()
+                    ever_ok, _ = _run_tunnel_cmd_and_stream(
+                        [
+                            ssh_bin,
+                            "-T",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-o",
+                            "UserKnownHostsFile=NUL",
+                            "-o",
+                            "BatchMode=yes",
+                            "-o",
+                            "ServerAliveInterval=25",
+                            "-o",
+                            "ServerAliveCountMax=3",
+                            "-o",
+                            "ExitOnForwardFailure=yes",
+                            "-R",
+                            "80:127.0.0.1:5199",
+                            "nokey@localhost.run",
+                        ],
+                        "localhost_run_ssh",
+                    )
+                except Exception as exc:
+                    with _TUNNEL_LOCK:
+                        _TUNNEL_STATE["status"] = "error"
+                        _TUNNEL_STATE["error"] = f"SSH_FALLBACK_FAILED: {exc}"
+            else:
+                with _TUNNEL_LOCK:
+                    _TUNNEL_STATE["status"] = "error"
+                    _TUNNEL_STATE["error"] = "OUTBOUND_TUNNEL_UNAVAILABLE"
+
+        # 프로세스 종료 시 상태 정리 -> 워치독이 자동 재기동
+        with _TUNNEL_LOCK:
+            proc_cur = _TUNNEL_STATE.get("proc")
+            if proc_cur is None or proc_cur.poll() is not None:
+                _TUNNEL_STATE["proc"] = None
+                _TUNNEL_STATE["url"] = ""
+                if _TUNNEL_STATE.get("status") != "error":
+                    _TUNNEL_STATE["status"] = "stopped"
 
     threading.Thread(target=_spawn_worker, name="ghosti-work-outbound-tunnel", daemon=True).start()
     return get_outbound_work_tunnel_status()

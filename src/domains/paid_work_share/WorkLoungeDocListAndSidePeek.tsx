@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { PricingPlanId } from '../../types/saysee';
 import {
   cacheWorkRoomPreviewLocally,
   deleteWorkFileShared,
-  downloadWorkFileOriginal,
+  downloadWorkFileOriginalWithMeta,
   readCachedMyWorkRoomMeta,
   type WorkDeletedTombstoneMap,
+  type WorkFileDownloadProgressInfo,
   type WorkLoungeDocDto,
 } from '../../services/workRoomSyncService';
 
@@ -85,6 +86,54 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
   setShowProModal,
 }) => {
   const merlinAuth = { email: merlinAuthEmail };
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<WorkFileDownloadProgressInfo | null>(null);
+  const [lastDownloadedShareFile, setLastDownloadedShareFile] = useState<{
+    docId: string;
+    fileName: string;
+    file: File;
+  } | null>(null);
+
+  const handleDownloadSelectedDoc = async (doc: WorkLoungeDocDto) => {
+    setDownloadingDocId(doc.id);
+    setLastDownloadedShareFile(null);
+    setDownloadProgress({
+      percent: 5,
+      loadedBytes: 0,
+      totalBytes: doc.byteSize || 0,
+      loadedLabel: '0.0 KB',
+      totalLabel: doc.sizeLabel || '계산 중',
+    });
+    setDocActionNotice(`⏳ '${doc.fileName}' 파일 다운로드 중입니다... 잠시만 기다려 주세요.`);
+    try {
+      const dlRes = await downloadWorkFileOriginalWithMeta(doc, {
+        roomId: activeWorkRoomId,
+        inviteToken: inviteMeta.inviteToken,
+        onProgress: (info) => {
+          setDownloadProgress(info);
+        },
+      });
+      if (dlRes.ok) {
+        if (dlRes.sharedFile) {
+          setLastDownloadedShareFile({
+            docId: doc.id,
+            fileName: doc.fileName,
+            file: dlRes.sharedFile,
+          });
+        }
+        const completeMsg = `✅ '${doc.fileName}' (${dlRes.sizeLabel}) 다운로드 완료 (100%)!\n📂 저장 위치: ${dlRes.saveLocationLabel}`;
+        setDocActionNotice(completeMsg);
+        showToast(`✅ '${doc.fileName}' 다운로드 완료! (${dlRes.saveLocationLabel})`);
+      } else {
+        setDownloadProgress(null);
+        setDocActionNotice(
+          `원본 파일을 받으려면 대장 PC(업무 서버) 직통 연결 또는 로컬 PC 엔진 연결이 필요합니다.`
+        );
+      }
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
@@ -285,15 +334,13 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  void downloadWorkFileOriginal(selectedDoc, {
-                    roomId: activeWorkRoomId,
-                    inviteToken: inviteMeta.inviteToken,
-                  })
-                }
-                className="w-full py-1.5 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer text-center transition-colors"
+                disabled={downloadingDocId === selectedDoc.id}
+                onClick={() => void handleDownloadSelectedDoc(selectedDoc)}
+                className="w-full py-1.5 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-65 text-white text-[12px] font-medium cursor-pointer text-center transition-colors"
               >
-                읽기 모드로 열기
+                {downloadingDocId === selectedDoc.id
+                  ? `⏳ 다운로드 중... ${downloadProgress?.percent ?? 0}%`
+                  : '읽기 모드로 열기'}
               </button>
             </div>
           ) : (
@@ -402,20 +449,13 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
             })()}
             <button
               type="button"
-              onClick={async () => {
-                const ok = await downloadWorkFileOriginal(selectedDoc, {
-                  roomId: activeWorkRoomId,
-                  inviteToken: inviteMeta.inviteToken,
-                });
-                setDocActionNotice(
-                  ok
-                    ? `'${selectedDoc.fileName}' 원본 파일(${selectedDoc.sizeLabel}) 다운로드를 시작했습니다.`
-                    : `원본 파일을 받으려면 메인 서버 PC 또는 로컬 PC 엔진 연결이 필요합니다.`
-                );
-              }}
-              className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer transition-colors"
+              disabled={downloadingDocId === selectedDoc.id}
+              onClick={() => void handleDownloadSelectedDoc(selectedDoc)}
+              className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-65 text-white text-[12px] font-medium cursor-pointer transition-colors"
             >
-              원본 파일 다운로드
+              {downloadingDocId === selectedDoc.id
+                ? `⏳ 다운로드 중... ${downloadProgress?.percent ?? 0}%`
+                : '원본 파일 다운로드'}
             </button>
 
             {myRoomRole !== 'viewer' && (
@@ -482,16 +522,76 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
             )}
           </div>
 
-          {docActionNotice && (
-            <div className="p-2.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-800 text-[12px] flex items-center justify-between gap-2">
-              <span>{docActionNotice}</span>
-              <button
-                type="button"
-                onClick={() => setDocActionNotice(null)}
-                className="text-[11px] text-slate-600 hover:text-slate-900 font-medium px-2 py-0.5 rounded bg-white border border-slate-200 shrink-0 cursor-pointer"
-              >
-                닫기
-              </button>
+          {(downloadingDocId === selectedDoc.id || docActionNotice) && (
+            <div
+              data-testid="work-doc-download-status-box"
+              className={`p-3 rounded-lg border text-[12px] flex flex-col gap-2 ${
+                downloadingDocId === selectedDoc.id
+                  ? 'bg-teal-50/80 border-teal-200 text-teal-950'
+                  : docActionNotice?.startsWith('✅')
+                  ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950'
+                  : 'bg-slate-100 border-slate-200 text-slate-800'
+              }`}
+            >
+              {downloadingDocId === selectedDoc.id && downloadProgress && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-[11.5px] font-semibold text-teal-800">
+                    <span>
+                      ⏳ 다운로드 현황: {downloadProgress.percent}% ({downloadProgress.loadedLabel} /{' '}
+                      {downloadProgress.totalLabel})
+                    </span>
+                    <span>수신 중...</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-teal-100 overflow-hidden">
+                    <div
+                      className="h-full bg-teal-600 transition-all duration-150"
+                      style={{ width: `${Math.max(6, downloadProgress.percent)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {docActionNotice && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="whitespace-pre-line leading-relaxed font-medium">
+                    {docActionNotice}
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isMobileOrStore &&
+                      lastDownloadedShareFile &&
+                      lastDownloadedShareFile.docId === selectedDoc.id &&
+                      typeof navigator !== 'undefined' &&
+                      typeof navigator.share === 'function' && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await navigator.share({
+                                files: [lastDownloadedShareFile.file],
+                                title: lastDownloadedShareFile.fileName,
+                              });
+                            } catch {
+                              /* 사용자가 공유 시트를 닫은 경우 무시 */
+                            }
+                          }}
+                          className="text-[11px] text-emerald-800 hover:text-emerald-950 font-semibold px-2.5 py-1 rounded bg-white border border-emerald-300 cursor-pointer"
+                        >
+                          📂 파일 열기 · 다른 폴더 저장
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDocActionNotice(null);
+                        setDownloadProgress(null);
+                      }}
+                      className="text-[11px] text-slate-600 hover:text-slate-900 font-medium px-2 py-0.5 rounded bg-white border border-slate-200 cursor-pointer"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

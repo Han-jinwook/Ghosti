@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.09"
+CORE_VERSION = "2.13.19"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -474,6 +474,17 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             sec_dest = (self.headers.get("Sec-Fetch-Dest") or "").strip().lower()
             if (
                 req_path in (
+                    "/__work/download",
+                    "/api/work/download",
+                )
+                and self._is_external_tunnel_request()
+                and sec_dest in ("document", "empty", "")
+            ):
+                # 외부 직통 터널 첨부파일 직접 다운로드(<a target="_blank"> / 시스템 DownloadManager)는
+                # do_GET 최상단 _reject_if_unauthorized_tunnel(path, qp)에서 이미 256-bit workKey 검증을 통과한 요청에 한해 허용합니다.
+                return (True, None)
+            if (
+                req_path in (
                     "/__photos/file",
                     "/api/ghosti/photos/file",
                     "/__videos/thumb",
@@ -521,13 +532,25 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             "Content-Type, Authorization, X-Merlin-App, X-Ghosti-Work-Key, Range",
         )
         if expose_range:
-            self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+            self.send_header(
+                "Access-Control-Expose-Headers",
+                "Content-Range, Accept-Ranges, Content-Length, Content-Disposition",
+            )
+        else:
+            self.send_header(
+                "Access-Control-Expose-Headers",
+                "Content-Length, Content-Disposition",
+            )
         self.send_header("Access-Control-Allow-Private-Network", "true")
 
     def _is_external_tunnel_request(self) -> bool:
-        """아웃바운드 터널(*.trycloudflare.com / CF-Connecting-IP / X-Forwarded-For)을 통해 외부에서 들어온 요청인지 판별합니다."""
+        """아웃바운드 터널(*.trycloudflare.com / *.lhr.life / CF-Connecting-IP / X-Forwarded-For)을 통해 외부에서 들어온 요청인지 판별합니다."""
         host_hdr = (self.headers.get("Host") or "").strip().lower()
-        if ".trycloudflare.com" in host_hdr:
+        if (
+            ".trycloudflare.com" in host_hdr
+            or ".lhr.life" in host_hdr
+            or ".lhr.domains" in host_hdr
+        ):
             return True
         if self.headers.get("CF-Connecting-IP") or self.headers.get("X-Forwarded-For"):
             return True

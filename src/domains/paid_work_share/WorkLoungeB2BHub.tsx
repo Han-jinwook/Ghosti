@@ -1538,7 +1538,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
     void ensureTunnel();
     const timer = window.setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden' &&
+        Boolean(getActiveHostTunnelSession()?.tunnelUrl)
+      ) {
+        return;
+      }
       void ensureTunnel();
     }, 20000);
     return () => {
@@ -2857,10 +2863,15 @@ export const WorkLoungeB2BHub: React.FC = () => {
       showToast('읽기 전용 팀원은 파일을 추가할 수 없습니다. 방장님께 편집 권한을 요청해 주세요.');
       return;
     }
-    const hasTunnel = Boolean(getActiveHostTunnelSession()?.tunnelUrl);
+    const effectiveRoomIdForUpload =
+      activeWorkRoomId ||
+      readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
+      '';
+    const hasTunnelOrRoom =
+      Boolean(getActiveHostTunnelSession()?.tunnelUrl) || Boolean(effectiveRoomIdForUpload);
     if (
       !isZCoreConnected &&
-      !hasTunnel &&
+      !hasTunnelOrRoom &&
       window.location.hostname !== 'localhost' &&
       window.location.hostname !== '127.0.0.1'
     ) {
@@ -2869,6 +2880,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
     setUploadingFiles(true);
+    if (!isZCoreConnected && fileList.length > 0) {
+      showToast(
+        `⏳ '${fileList[0].name}'${
+          fileList.length > 1 ? ` 외 ${fileList.length - 1}건` : ''
+        } 파일을 대장 PC S:\\ 공유 폴더로 전송 중입니다...`
+      );
+    }
     let okCount = 0;
     let lastError = '';
     const uploadedRelPaths: string[] = [];
@@ -2879,7 +2897,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           file,
           folderId: selectedFolderId,
           author: actorNickname,
-          roomId: activeWorkRoomId,
+          roomId: effectiveRoomIdForUpload,
           isHost: amHost,
         });
         if (uploaded.ok) {
@@ -2893,21 +2911,29 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (uploadedRelPaths.length > 0) {
           mergeAndPersistTombstones({}, uploadedRelPaths);
         }
-        showToast(`업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
+        showToast(`✅ 업무 파일 ${okCount}건이 대장 PC S:\\ 폴더 및 팀원 공유 목록에 즉시 반영되었습니다!`);
         if (isZCoreConnected) {
           await syncRealWorkFiles(true);
-        } else if (hasTunnel) {
+        } else if (getActiveHostTunnelSession()?.tunnelUrl) {
           const fromTunnel = await fetchWorkFilesFromHostTunnel();
           if (fromTunnel.ok) {
             setHasLiveTunnelSnapshot(true);
             setRemoteDocs(fromTunnel.docs);
+            if (effectiveRoomIdForUpload) {
+              void cacheWorkRoomPreviewLocally(
+                effectiveRoomIdForUpload,
+                fromTunnel.docs,
+                merlinAuth?.email || undefined
+              );
+            }
+            realtimeRef.current?.broadcastSnapshot(fromTunnel.docs);
           }
         }
       } else {
         showToast(
           lastError === 'EXCEEDS_50MB_LIMIT'
             ? '한 번에 50MB 이하 파일만 추가할 수 있습니다.'
-            : '파일 업로드 연결이 지연되었습니다. 잠시 후 다시 시도해 주세요.'
+            : '대장 PC 직통 연결을 확인 중입니다. 대장 PC가 켜져 있는지 확인 후 다시 시도해 주세요.'
         );
       }
     } finally {
