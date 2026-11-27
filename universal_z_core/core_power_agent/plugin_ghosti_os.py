@@ -2295,7 +2295,15 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
     if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.18:
         return cached_ws
 
-    with _WATCH_SIG_BUILD_LOCK:
+    # [요청 스레드 적체 0 — Stale-While-Revalidate]: 다른 요청이 이미 재계산 중이면 줄 서서 기다리지 않고
+    # 직전 시그니처를 즉시 반환합니다 (4호기 실측: 동시 3건이 락 대기하며 5199 응답 스레드를 점유).
+    if cached_ws is not None:
+        if not _WATCH_SIG_BUILD_LOCK.acquire(blocking=False):
+            return cached_ws
+    elif not _WATCH_SIG_BUILD_LOCK.acquire(timeout=10.0):
+        return {"ok": False, "busy": True, "sig": "", "fsSig": "", "fileCount": 0, "folderCount": 0}
+
+    try:
         now_mono = time.monotonic()
         cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
         if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.18:
@@ -2350,6 +2358,8 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
         _WATCH_SIG_TTL_CACHE["ts"] = time.monotonic()
         _WATCH_SIG_TTL_CACHE["resp"] = resp_ws
         return resp_ws
+    finally:
+        _WATCH_SIG_BUILD_LOCK.release()
 
 
 def _guess_image_mime(p: Path, name: str) -> str:
@@ -6003,11 +6013,42 @@ def get_teleport_ocr_vanguard(params: Dict[str, Any] | None = None) -> Dict[str,
         return {"ok": True, "packet": _VANGUARD_PACKETS[target_id]}
 
 
+_VIDEO_OCR_SCAN_GATE = threading.Lock()
+_VIDEO_OCR_SCAN_LAST_TS: List[float] = [0.0]
+
+
 def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
-    """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다."""
-    global _VIDEO_OCR_BG_RUNNING
+    """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다.
+    [Single-Flight + 20초 스로틀]: 검색 요청마다 요청 스레드에서 전 드라이브 동영상 목록을 다시 훑던 구조(4호기 실측 동시 2건)를
+    단일 백그라운드 스캔으로 통합해 5199 응답 스레드·GIL 점유를 원천 제거합니다."""
     if os.name != "nt":
         return
+    if _VIDEO_OCR_BG_RUNNING:
+        return
+    now_gate = time.monotonic()
+    if (now_gate - _VIDEO_OCR_SCAN_LAST_TS[0]) < 20.0:
+        return
+    if not _VIDEO_OCR_SCAN_GATE.acquire(blocking=False):
+        return
+    _VIDEO_OCR_SCAN_LAST_TS[0] = now_gate
+    scan_done = threading.Event()
+
+    def _scan_and_dispatch_video_ocr() -> None:
+        try:
+            _ensure_local_videos_ocr_indexed_scan()
+        except Exception:
+            pass
+        finally:
+            _VIDEO_OCR_SCAN_GATE.release()
+            scan_done.set()
+
+    threading.Thread(target=_scan_and_dispatch_video_ocr, daemon=True, name="GhostiVideoOcrScan").start()
+    if sync_wait_sec > 0:
+        scan_done.wait(timeout=sync_wait_sec)
+
+
+def _ensure_local_videos_ocr_indexed_scan() -> None:
+    global _VIDEO_OCR_BG_RUNNING
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     cache = _load_video_ocr_cache()
     missing: List[tuple[str, Path, float]] = []
@@ -6042,8 +6083,6 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
             _VIDEO_OCR_BG_RUNNING = True
             worker = threading.Thread(target=_run_batch_video_ocr, args=(missing,), daemon=True)
             worker.start()
-    if worker is not None and sync_wait_sec > 0:
-        worker.join(timeout=sync_wait_sec)
 
 
 _VIDEO_THUMB_PREWARM_RUNNING = False
@@ -6441,6 +6480,134 @@ def _resolve_listed_photo(name: str) -> Path | None:
     return p
 
 
+def _sanitize_shared_room_folder_name(raw_label: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", (raw_label or "").strip())
+    cleaned = re.sub(r"\s+", "_", cleaned).strip("._ ")
+    return cleaned[:48] or "공유방_원본"
+
+
+def _resolve_shared_room_sync_dir(room_label: str, custom_dir: str = "") -> Path:
+    safe_room = _sanitize_shared_room_folder_name(room_label)
+    cand_raw = (custom_dir or "").strip()
+    if cand_raw and cand_raw.lower() not in (r"d:\ghosti\다운로드_원본", "d:/ghosti/다운로드_원본"):
+        try:
+            cp = Path(cand_raw)
+            if cp.is_absolute():
+                drive_root = Path(cp.anchor) if cp.anchor else None
+                lower_str = str(cp).lower()
+                blocked_sys = any(
+                    lower_str.startswith(p)
+                    for p in ("c:\\windows", "c:\\program files", "c:\\programdata")
+                )
+                if drive_root and drive_root.exists() and not blocked_sys:
+                    cp.mkdir(parents=True, exist_ok=True)
+                    return cp
+        except Exception:
+            pass
+
+    base_pic = safe.known_folder("pictures")
+    target_dir = base_pic / "Ghosti_Shared_Rooms" / safe_room
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir
+    except Exception:
+        fallback = Path.home() / "Pictures" / "Ghosti_Shared_Rooms" / safe_room
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
+def _save_shared_room_items_to_dir(target_dir: Path, items: list[Any]) -> int:
+    import base64
+    import shutil
+    import urllib.request
+
+    saved = 0
+    for idx, it in enumerate(items[:300]):
+        if not isinstance(it, dict):
+            continue
+        raw_name = os.path.basename(str(it.get("name") or f"shared_photo_{idx + 1:03d}.jpg").strip())
+        safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "_", raw_name).strip("._ ")
+        if not safe_name:
+            safe_name = f"shared_photo_{idx + 1:03d}.jpg"
+        if not Path(safe_name).suffix:
+            safe_name = f"{safe_name}.jpg"
+        dest = target_dir / safe_name
+        if dest.exists() and dest.stat().st_size > 0:
+            continue
+
+        full_path = str(it.get("fullPath") or "").strip()
+        if full_path:
+            src_p = Path(full_path)
+            if src_p.exists() and src_p.is_file():
+                try:
+                    shutil.copy2(str(src_p), str(dest))
+                    saved += 1
+                    continue
+                except Exception:
+                    pass
+
+        url_cand = str(it.get("fullUrl") or it.get("thumbUrl") or "").strip()
+        if url_cand.startswith("data:image/") and "," in url_cand:
+            try:
+                b64_part = url_cand.split(",", 1)[1]
+                raw_bytes = base64.b64decode(b64_part)
+                if raw_bytes:
+                    dest.write_bytes(raw_bytes)
+                    saved += 1
+                    continue
+            except Exception:
+                pass
+        elif url_cand.startswith(("https://", "http://127.0.0.1:", "http://localhost:")):
+            try:
+                req = urllib.request.Request(url_cand, headers={"User-Agent": "MerlinZCore/2.12"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    raw_bytes = resp.read()
+                if raw_bytes:
+                    dest.write_bytes(raw_bytes)
+                    saved += 1
+                    continue
+            except Exception:
+                pass
+    return saved
+
+
+def sync_and_open_shared_room_originals(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """3. 사진 공유(가족·동호회·동창회) 원본 동기화 로컬 폴더 생성·사진 자동 저장 및 윈도우 탐색기 즉시 오픈"""
+    payload = data or {}
+    room_label = str(payload.get("roomLabel") or payload.get("roomTitle") or "가족_모임_공유방").strip()
+    custom_dir = str(payload.get("customDir") or payload.get("targetPath") or "").strip()
+    open_explorer = bool(payload.get("openExplorer"))
+    raw_items = payload.get("items")
+    items = raw_items if isinstance(raw_items, list) else []
+
+    target_dir = _resolve_shared_room_sync_dir(room_label, custom_dir)
+
+    if open_explorer:
+        zos.open_file_location_on_interactive_desktop(target_dir, mode="open_file_location")
+
+    if items:
+        if open_explorer:
+            threading.Thread(
+                target=_save_shared_room_items_to_dir,
+                args=(target_dir, items),
+                daemon=True,
+            ).start()
+        else:
+            _save_shared_room_items_to_dir(target_dir, items)
+
+    try:
+        file_count = sum(1 for p in target_dir.iterdir() if p.is_file())
+    except Exception:
+        file_count = 0
+
+    return {
+        "ok": True,
+        "downloadDir": str(target_dir),
+        "opened": open_explorer,
+        "fileCount": file_count,
+    }
+
+
 def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """사진 정리: OS 기본 휴지통 이동 / 휴지통에서 원위치 복원 / 폴더 열기"""
     data = payload or {}
@@ -6468,6 +6635,8 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
 
     if act in ("open-folder", "open"):
         target = str(data.get("target") or "photos").strip()
+        if target == "shared_room_originals":
+            return sync_and_open_shared_room_originals({**data, "openExplorer": True})
         target_path = str(data.get("targetPath") or data.get("fullPath") or "").strip()
         strict_file = bool(data.get("strictFile"))
         open_native_player = bool(data.get("openNativePlayer"))

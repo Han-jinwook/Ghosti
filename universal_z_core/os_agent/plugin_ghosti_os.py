@@ -2295,7 +2295,15 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
     if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.18:
         return cached_ws
 
-    with _WATCH_SIG_BUILD_LOCK:
+    # [요청 스레드 적체 0 — Stale-While-Revalidate]: 다른 요청이 이미 재계산 중이면 줄 서서 기다리지 않고
+    # 직전 시그니처를 즉시 반환합니다 (4호기 실측: 동시 3건이 락 대기하며 5199 응답 스레드를 점유).
+    if cached_ws is not None:
+        if not _WATCH_SIG_BUILD_LOCK.acquire(blocking=False):
+            return cached_ws
+    elif not _WATCH_SIG_BUILD_LOCK.acquire(timeout=10.0):
+        return {"ok": False, "busy": True, "sig": "", "fsSig": "", "fileCount": 0, "folderCount": 0}
+
+    try:
         now_mono = time.monotonic()
         cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
         if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.18:
@@ -2350,6 +2358,8 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
         _WATCH_SIG_TTL_CACHE["ts"] = time.monotonic()
         _WATCH_SIG_TTL_CACHE["resp"] = resp_ws
         return resp_ws
+    finally:
+        _WATCH_SIG_BUILD_LOCK.release()
 
 
 def _guess_image_mime(p: Path, name: str) -> str:
@@ -6003,11 +6013,42 @@ def get_teleport_ocr_vanguard(params: Dict[str, Any] | None = None) -> Dict[str,
         return {"ok": True, "packet": _VANGUARD_PACKETS[target_id]}
 
 
+_VIDEO_OCR_SCAN_GATE = threading.Lock()
+_VIDEO_OCR_SCAN_LAST_TS: List[float] = [0.0]
+
+
 def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
-    """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다."""
-    global _VIDEO_OCR_BG_RUNNING
+    """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다.
+    [Single-Flight + 20초 스로틀]: 검색 요청마다 요청 스레드에서 전 드라이브 동영상 목록을 다시 훑던 구조(4호기 실측 동시 2건)를
+    단일 백그라운드 스캔으로 통합해 5199 응답 스레드·GIL 점유를 원천 제거합니다."""
     if os.name != "nt":
         return
+    if _VIDEO_OCR_BG_RUNNING:
+        return
+    now_gate = time.monotonic()
+    if (now_gate - _VIDEO_OCR_SCAN_LAST_TS[0]) < 20.0:
+        return
+    if not _VIDEO_OCR_SCAN_GATE.acquire(blocking=False):
+        return
+    _VIDEO_OCR_SCAN_LAST_TS[0] = now_gate
+    scan_done = threading.Event()
+
+    def _scan_and_dispatch_video_ocr() -> None:
+        try:
+            _ensure_local_videos_ocr_indexed_scan()
+        except Exception:
+            pass
+        finally:
+            _VIDEO_OCR_SCAN_GATE.release()
+            scan_done.set()
+
+    threading.Thread(target=_scan_and_dispatch_video_ocr, daemon=True, name="GhostiVideoOcrScan").start()
+    if sync_wait_sec > 0:
+        scan_done.wait(timeout=sync_wait_sec)
+
+
+def _ensure_local_videos_ocr_indexed_scan() -> None:
+    global _VIDEO_OCR_BG_RUNNING
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     cache = _load_video_ocr_cache()
     missing: List[tuple[str, Path, float]] = []
@@ -6042,8 +6083,6 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
             _VIDEO_OCR_BG_RUNNING = True
             worker = threading.Thread(target=_run_batch_video_ocr, args=(missing,), daemon=True)
             worker.start()
-    if worker is not None and sync_wait_sec > 0:
-        worker.join(timeout=sync_wait_sec)
 
 
 _VIDEO_THUMB_PREWARM_RUNNING = False

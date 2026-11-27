@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.12.19"
+CORE_VERSION = "2.12.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2479,6 +2479,14 @@ def main() -> None:
                     _ct_inh.windll.kernel32.SetHandleInformation(int(self.socket.fileno()), 1, 0)
                 except Exception:
                     pass
+
+    # [5199 CLOSE_WAIT 적체·/health 먹통 근본 처방 — 4호기 py-spy 실측]:
+    # 디스크 스캔 스레드 여러 개가 GIL을 5ms씩 번갈아 점유하면(GIL Convoy) accept 스레드가 연결 1건 수락에 수백 ms를 기다려
+    # 백로그(128)가 가득 차고 크롬이 포기한 연결이 CLOSE_WAIT로 쌓입니다. 스위치 간격을 1ms로 낮춰 I/O 응답 스레드 대기를 1/5로 단축합니다.
+    try:
+        sys.setswitchinterval(0.001)
+    except Exception:
+        pass
 
     # 1) 포트 5199 HTTP 서버를 가장 먼저 즉시 바인딩하여 웹앱의 '실행했어요 (즉시 확인)' 헬스체크가 0.1초 만에 성공하게 보장
     srv = ReusableThreadingHTTPServer(("127.0.0.1", args.port), MerlinUnifiedHTTPHandler)

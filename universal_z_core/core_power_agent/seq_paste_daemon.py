@@ -6390,7 +6390,7 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                             ui_lag = now_p - _UI_LOOP_HEARTBEAT_TS
                             ui_ping_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 35.0
                             healthy = _MODAL_PROMPT_ACTIVE or (
-                                main_lag < 35.0 and ui_lag < ui_ping_limit
+                                main_lag < 12.0 and ui_lag < ui_ping_limit
                             )
                             if healthy:
                                 try:
@@ -6531,7 +6531,58 @@ def _ensure_single_instance_socket_alive(curr_sock: socket.socket | None) -> soc
     return acquire_single_instance()
 
 
-def get_clipboard_text() -> str:
+_CLIP_IO_BUSY_SINCE: list[float] = [0.0]
+_CLIP_IO_LAST_TIMEOUT_LOG_TS: list[float] = [0.0]
+
+
+def _run_clipboard_read_bounded(fn, default, timeout_sec: float):
+    """
+    [클립보드 지연 렌더링(Delayed Rendering) 무한 블로킹 원천 격리 — Ctrl+0 귀신검색창 먹통 근본 처방]:
+    캡처 도구·엑셀·크롬 등 클립보드 소유 앱이 바쁘면 GetClipboardData가 WM_RENDERFORMAT 응답을
+    수십 초간 기다리며 호출 스레드를 통째로 멈춥니다(4호기 실측: 메인 루프 45~71초 정지).
+    실제 읽기는 전용 워커 스레드에서만 수행하고 호출자는 최대 timeout_sec만 기다리며,
+    직전 읽기가 아직 OS에 묶여 있으면 새 스레드를 만들지 않고 즉시 기본값을 반환합니다.
+    """
+    if _CLIP_IO_BUSY_SINCE[0] > 0.0:
+        return default, False
+    box: dict = {"v": default}
+    done = threading.Event()
+    _CLIP_IO_BUSY_SINCE[0] = time.time()
+
+    def _clip_io_worker() -> None:
+        try:
+            box["v"] = fn()
+        except Exception:
+            box["v"] = default
+        finally:
+            started_at = _CLIP_IO_BUSY_SINCE[0]
+            _CLIP_IO_BUSY_SINCE[0] = 0.0
+            done.set()
+            if started_at > 0.0 and (time.time() - started_at) > 1.0:
+                _log_seq_diag("CLIP_READ_RECOVERED", f"blocked={time.time() - started_at:.1f}s")
+
+    try:
+        threading.Thread(target=_clip_io_worker, daemon=True, name="GhostiClipRead").start()
+    except Exception:
+        _CLIP_IO_BUSY_SINCE[0] = 0.0
+        return default, False
+    if done.wait(max(0.01, float(timeout_sec))):
+        return box["v"], True
+    now_t = time.time()
+    if (now_t - _CLIP_IO_LAST_TIMEOUT_LOG_TS[0]) > 10.0:
+        _CLIP_IO_LAST_TIMEOUT_LOG_TS[0] = now_t
+        owner_proc = ""
+        try:
+            u32.GetClipboardOwner.restype = wintypes.HWND
+            owner_h = u32.GetClipboardOwner()
+            owner_proc = _get_process_name_from_hwnd(owner_h) if owner_h else ""
+        except Exception:
+            owner_proc = ""
+        _log_seq_diag("CLIP_READ_TIMEOUT", f"timeout={float(timeout_sec):.2f}s owner={owner_proc}")
+    return default, False
+
+
+def _get_clipboard_text_raw() -> str:
     res = ""
     for _ in range(5):
         if u32.OpenClipboard(None):
@@ -6551,6 +6602,17 @@ def get_clipboard_text() -> str:
             break
         time.sleep(0.01)
     return res
+
+
+def get_clipboard_text(timeout_sec: float = 0.8) -> str:
+    val, _ok = _run_clipboard_read_bounded(_get_clipboard_text_raw, "", timeout_sec)
+    return val or ""
+
+
+def get_clipboard_text_ex(timeout_sec: float = 0.8) -> tuple[str, bool]:
+    """(텍스트, 읽기 성공 여부) — 소유 앱 지연 렌더링으로 시간 초과 시 (\"\", False)를 반환합니다."""
+    val, ok = _run_clipboard_read_bounded(_get_clipboard_text_raw, "", timeout_sec)
+    return (val or ""), ok
 
 
 def set_clipboard_text(text: str) -> bool:
@@ -6582,7 +6644,7 @@ def set_clipboard_text(text: str) -> bool:
     return False
 
 
-def get_clipboard_hdrop_files() -> list[str]:
+def _get_clipboard_hdrop_files_raw() -> list[str]:
     """클립보드에 복사(Ctrl+C)되어 있는 탐색기 파일 경로(CF_HDROP) 목록 추출"""
     files: list[str] = []
     shell32 = ctypes.windll.shell32
@@ -6607,6 +6669,11 @@ def get_clipboard_hdrop_files() -> list[str]:
             break
         time.sleep(0.01)
     return files
+
+
+def get_clipboard_hdrop_files(timeout_sec: float = 0.8) -> list[str]:
+    val, _ok = _run_clipboard_read_bounded(_get_clipboard_hdrop_files_raw, [], timeout_sec)
+    return list(val or [])
 
 
 _SELF_HDROP_UNTIL: float = 0.0
@@ -10470,7 +10537,7 @@ def main(in_process: bool = False) -> None:
             return
         if _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4"):
             play_baby_ghost_sound(mode="summon")
-            live_c = get_clipboard_text()
+            live_c = get_clipboard_text(timeout_sec=0.15)
             _show_default_ui1_bar(live_c)
             return
 
@@ -10507,7 +10574,8 @@ def main(in_process: bool = False) -> None:
         already_armed_seq = bool(seq_mode and len(seq_queue) >= 2 and not pasting_started)
         _cancel_unstarted_seq_mode_and_restore_clip()
 
-        live_clip = get_clipboard_text()
+        _MAIN_LOOP_STAGE = f"summon_clip:{source}"
+        live_clip = get_clipboard_text(timeout_sec=0.15)
         if already_armed_seq and recent_unpasted:
             last_summon_raw_clip = recent_unpasted[-1]
         elif live_clip:
@@ -10555,7 +10623,7 @@ def main(in_process: bool = False) -> None:
                 and last_hdrop_copy_ts > last_lbtn_click_ts
                 and (now_s - last_hdrop_copy_ts) <= 20.0
             ):
-                hdrop_now = get_clipboard_hdrop_files()
+                hdrop_now = get_clipboard_hdrop_files(timeout_sec=0.15)
                 if hdrop_now:
                     last_hdrop_copy_ts = 0.0
                     if any(str(hp).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")) for hp in hdrop_now):
@@ -10619,8 +10687,8 @@ def main(in_process: bool = False) -> None:
         elif summon_had_recent_drag and fg_before and u32.IsWindow(fg_before) and proc_before not in _SECURITY_SENSITIVE_PROCS:
             try:
                 sentinel_dr = "__GHOSTI_DRAG_AUTO__"
-                prev_cb_dr = get_clipboard_text() or live_clip
-                prev_hdrop_dr = get_clipboard_hdrop_files()
+                prev_cb_dr = get_clipboard_text(timeout_sec=0.15) or live_clip
+                prev_hdrop_dr = get_clipboard_hdrop_files(timeout_sec=0.15)
                 release_all_modifiers()
                 daemon_set_clipboard(sentinel_dr)
                 time.sleep(0.015)
@@ -10628,7 +10696,7 @@ def main(in_process: bool = False) -> None:
                 probed_sel = sentinel_dr
                 for _ in range(8):
                     time.sleep(0.015)
-                    c_now = get_clipboard_text()
+                    c_now = get_clipboard_text(timeout_sec=0.25)
                     if c_now and c_now != sentinel_dr:
                         probed_sel = c_now
                         break
@@ -10920,17 +10988,40 @@ def main(in_process: bool = False) -> None:
     _MAIN_LOOP_STAGE = "loop_ready"
     _log_seq_diag("MAIN_LOOP_READY", f"boot_ms={(time.perf_counter()-t_boot_start)*1000:.1f}")
 
+    _main_loop_thread_ident = threading.get_ident()
+
     def _self_hang_watchdog() -> None:
+        # [1초 정밀 감시 + 4초 정지 시 메인 스레드 콜스택 블랙박스 기록 + 10초 내 자가복구]
+        # (구버전 35초 대기 → 귀신검색창 먹통 체감 45~71초를 10초 이내로 단축하고, 재발 시 원인 라인을 추측 없이 특정)
+        stack_logged_hb = [0.0]
         while not _IN_PROCESS_STOP_EVENT.is_set():
-            time.sleep(6.0)
+            time.sleep(1.0)
             try:
                 now_w = time.time()
                 main_lag_w = now_w - _MAIN_LOOP_HEARTBEAT_TS
                 ui_lag_w = now_w - _UI_LOOP_HEARTBEAT_TS
+                if main_lag_w >= 4.0 and stack_logged_hb[0] != _MAIN_LOOP_HEARTBEAT_TS:
+                    stack_logged_hb[0] = _MAIN_LOOP_HEARTBEAT_TS
+                    stk_txt = ""
+                    try:
+                        import traceback as _tb_w
+
+                        fr_w = sys._current_frames().get(_main_loop_thread_ident)
+                        if fr_w is not None:
+                            stk_txt = " <- ".join(
+                                f"{os.path.basename(fs.filename)}:{fs.lineno}:{fs.name}"
+                                for fs in reversed(_tb_w.extract_stack(fr_w)[-8:])
+                            )
+                    except Exception:
+                        stk_txt = ""
+                    _log_seq_diag(
+                        "HANG_STACK",
+                        f"main_lag={main_lag_w:.1f}s main_stage={_MAIN_LOOP_STAGE} stack={stk_txt[:1600]}",
+                    )
                 # 초기 부팅(tk_init/init) 중 Windows Defender 스캔 지연은 45초 유예로 오판 자폭 원천 차단
                 ui_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 35.0
                 ui_hung = _TOAST_WORKER_STARTED and ui_lag_w > ui_limit
-                if not _MODAL_PROMPT_ACTIVE and (main_lag_w > 35.0 or ui_hung):
+                if not _MODAL_PROMPT_ACTIVE and (main_lag_w > 10.0 or ui_hung):
                     _log_seq_diag(
                         "HANG_WATCHDOG_EXIT",
                         f"main_lag={main_lag_w:.1f}s ui_lag={ui_lag_w:.1f}s main_stage={_MAIN_LOOP_STAGE} ui_stage={_UI_LOOP_STAGE} open_mode={_CURRENT_OPEN_UI_MODE}",
@@ -11080,6 +11171,7 @@ def main(in_process: bool = False) -> None:
                             u32.PostThreadMessageW(wintypes.DWORD(int(_ll_mouse_hook_tid[0])), WM_APP_REHOOK, 0, 0)
                     except Exception:
                         pass
+                _MAIN_LOOP_STAGE = "queue_cmds"
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
                     try:
                         q_cmd = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
@@ -11156,6 +11248,7 @@ def main(in_process: bool = False) -> None:
                     except Exception:
                         pass
                 # [WH_MOUSE_LL 훅 연동 + 폴백 Ctrl+우클릭 감지 — 윈도우 우클릭 메뉴 및 시작메뉴(Ctrl+Esc) 간섭 0%]
+                _MAIN_LOOP_STAGE = "rclick_poll"
                 _CACHED_RCLICK_BYPASS[0] = _should_bypass_rclick_hook(u32.GetForegroundWindow())
                 if _RBTN_HOLD_STATE.get("summon_requested"):
                     _RBTN_HOLD_STATE["summon_requested"] = False
@@ -11204,6 +11297,7 @@ def main(in_process: bool = False) -> None:
                 if _PINNED_HWNDS:
                     enforce_pinned_windows()
                 global _CLEAR_ALL_REQUESTED
+                _MAIN_LOOP_STAGE = "fs_signals"
                 poll_fs_signals_now = (now - last_fs_signal_poll_ts) >= 0.12
                 if poll_fs_signals_now:
                     last_fs_signal_poll_ts = now
@@ -11340,10 +11434,15 @@ def main(in_process: bool = False) -> None:
                         pass
 
                 # 2) 클립보드 변경(새로운 복사 또는 스샷 캡처) 감지 — 원문·서식 100% 그대로 보존 (서식·줄바꿈 다림질은 귀신창 [1]번 수동 실행 전용!)
+                # [지연 렌더링 블로킹 격리]: 소유 앱이 바쁘면 0.12초만 기다리고 다음 루프에서 재시도 (메인 루프 정지 0초)
+                _MAIN_LOOP_STAGE = "clip_poll"
                 curr_seq = u32.GetClipboardSequenceNumber()
+                copied = ""
+                copied_read_ok = True
                 if curr_seq != last_seq_num:
+                    copied, copied_read_ok = get_clipboard_text_ex(timeout_sec=0.12)
+                if curr_seq != last_seq_num and copied_read_ok:
                     last_seq_num = curr_seq
-                    copied = get_clipboard_text()
                     if copied:
                         if (
                             (copied == last_self_text and now < self_set_until)
@@ -11384,7 +11483,7 @@ def main(in_process: bool = False) -> None:
                             last_copy_ts = now
                     else:
                         # 유저의 직접 파일 복사(CF_HDROP) 시각 기록 (데몬 자체 라벨러 CF_HDROP 재주입은 _SELF_HDROP_UNTIL로 제외)
-                        if now >= _SELF_HDROP_UNTIL and get_clipboard_hdrop_files():
+                        if now >= _SELF_HDROP_UNTIL and get_clipboard_hdrop_files(timeout_sec=0.12):
                             last_hdrop_copy_ts = now
                         # 텍스트가 아닌 경우 스샷 이미지(Bitmap)는 메인 루프 블로킹 방지를 위해 백그라운드 스레드에서 PNG 인코딩·저장
                         def _capture_clip_img_bg(ts_cap: float) -> None:
@@ -11410,6 +11509,7 @@ def main(in_process: bool = False) -> None:
 
                 # 3) Ctrl + V 및 마스터 트리거(Ctrl + 0) 물리 키 입력 감지
                 # - Windows 입력기와 타 앱이 RegisterHotKey(Ctrl+0)를 가로채더라도 GetAsyncKeyState 하드웨어 폴링으로 100% 작동 보장!
+                _MAIN_LOOP_STAGE = "key_poll"
                 ctrl_down = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
                 alt_down = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                 shift_down = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
