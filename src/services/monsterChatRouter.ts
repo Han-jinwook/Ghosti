@@ -2857,43 +2857,84 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     });
   }
 
-  // 3-1) 대화형 1초 스마트 압축·해제 ("압축", "압축하기", "압축 풀기", "이 폴더 압축해줘", "사진 압축해줘", "암호 압축해줘" 등 전면 실행)
+  // 3-1) 대화형 1초 스마트 압축·해제 ("압축", "파일 압축", "폴더 압축", "압축하기", "압축 풀기", "이 폴더 압축해줘", "암호 압축해줘" 등 전면 처리)
   const isSmartArchiveCommand =
     !/압축\s*파일.*?(?:정리|삭제|지워|치워)|설치.*?압축\s*파일|기본\s*압축\s*앱/i.test(clean) &&
-    (/^(?:압축|압축하기|압축\s*풀기|압축\s*해제|1초\s*스마트\s*압축|스마트\s*압축|암호\s*압축)$/i.test(clean) ||
-      /(?:다운로드.*?zip.*?풀|압축\s*(?:풀어|풀기|해제)|(?:이\s*폴더|폴더|사진|파일|문서)\s*(?:zip\s*)?압축\s*(?:해\s*줘|해\s*주세요|하기|할래| 묶어)|암호.*?(?:zip\s*)?압축|비밀번호.*?(?:zip\s*)?압축|zip\s*압축\s*(?:해\s*줘|해\s*주세요|만들|묶어))/i.test(
-        clean
-      ));
+    (/압축/i.test(clean) ||
+      /\b(?:zip|7z)\b.*?(?:묶|만들|생성|풀|해제)/i.test(clean) ||
+      /(?:묶|만들|생성|풀|해제).*?\b(?:zip|7z)\b/i.test(clean));
 
   if (isSmartArchiveCommand) {
-    const wantsUnzip = /풀어|풀기|해제/i.test(clean) && !/압축하기|압축\s*해\s*줘|압축할래/i.test(clean);
-    const wantsCreateZip =
-      !wantsUnzip &&
-      (/(?:이\s*폴더|폴더|사진|파일|문서)\s*(?:zip\s*)?압축|압축\s*(?:해\s*줘|해\s*주세요|하기|할래|묶어|만들)|암호.*?압축|비밀번호.*?압축/i.test(
+    const wantsUnzip =
+      /풀어|풀기|해제/i.test(clean) &&
+      !/압축하기|압축\s*묶|새\s*압축/i.test(clean);
+    const hasEncryptionCue = /암호|비밀번호|비번/i.test(clean);
+    const hasExplicitTargetCue =
+      /(?:이\s*폴더|이\s*파일|현재\s*탐색기|선택한\s*(?:파일|폴더|항목)|바탕\s*화면|다운로드|내\s*문서|사진)/i.test(
         clean
-      ));
+      );
+    const residualSpecificTarget = clean
+      .replace(
+        /1초|스마트|새|일반|zip|7z|파일|폴더|문서|항목|압축|하기|해\s*줘|해\s*주세요|해\s*줄래|할래|하고\s*싶어|묶어\s*줘|묶어|묶기|만들어\s*줘|만들어|만들기|생성|어떻게|방법|하는\s*법|해|좀|을|를|로|으로|[.?~!,\s]/gi,
+        ''
+      )
+      .trim();
+    const isHowToOrGeneralZipRequest =
+      !wantsUnzip &&
+      (/어떻게|방법|하는\s*법|어떤|뭐|무슨/i.test(clean) ||
+        (!hasEncryptionCue && !hasExplicitTargetCue && residualSpecificTarget.length < 2));
+    const wantsCreateZip = !wantsUnzip && !isHowToOrGeneralZipRequest;
 
-    // 3-1A) 단순히 "압축"이라고만 입력했을 때: 압축 풀기 vs 폴더 압축 vs 암호 압축 3대 실행 선택지를 친절히 안내
+    // 3-1A) "압축", "파일 압축", "폴더 압축", "압축해줘", "파일 압축해줘" 등 대상을 아직 특정하지 않은 일반 압축 요청:
+    //       정리 카드로 빠지지 않고 어떤 파일·폴더를 압축할지 물어보며 3가지 압축 방법과 1클릭 실행 버튼을 친절히 안내!
     if (!wantsUnzip && !wantsCreateZip) {
-      const defRes = await fetch(getZCoreUrl('/api/care/defender/history'))
-        .then((r) => r.json())
-        .catch(() => null);
+      const [defRes, selRes] = await Promise.all([
+        fetch(getZCoreUrl('/api/care/defender/history'))
+          .then((r) => r.json())
+          .catch(() => null),
+        fetch(getZCoreUrl('/api/care/explorer-selected'))
+          .then((r) => r.json())
+          .catch(() => null),
+      ]);
       const zipCnt = Math.max(0, Number(defRes?.downloadsArchiveCount ?? 0));
       const zipSamples: string[] = Array.isArray(defRes?.downloadsArchiveSamples)
         ? defRes.downloadsArchiveSamples
         : [];
-      const sampleTxt = zipSamples.length > 0 ? ` (최근 파일: \`${zipSamples[0]}\`)` : '';
+      const selectedPaths: string[] = Array.isArray(selRes?.selectedPaths)
+        ? selRes.selectedPaths.filter((p: unknown) => typeof p === 'string' && p.trim().length > 0)
+        : [];
+      const selectedNames = selectedPaths
+        .map((p) => p.split(/[\\/]/).pop() || p)
+        .filter(Boolean);
+      const selectedHint =
+        selectedNames.length > 0
+          ? `\n  *(현재 탐색기에서 선택 감지됨: **\`${selectedNames.slice(0, 3).join(', ')}\`${selectedNames.length > 3 ? ` 외 ${selectedNames.length - 3}건` : ''}**)*`
+          : '';
+      const sampleTxt =
+        zipCnt > 0
+          ? ` (현재 다운로드 폴더 ZIP **${zipCnt}건**${zipSamples.length > 0 ? ` · 최근: \`${zipSamples[0]}\`` : ''})`
+          : '';
       const guideKo =
-        `📦 **[귀신비서 무광고 1초 스마트 압축 · 해제]**\n` +
-        `• **압축 풀기**: 다운로드 폴더에 있는 ZIP 압축파일(**현재 ${zipCnt}건**${sampleTxt})을 맥북 한글 자소 깨짐이나 바탕화면 압축폭탄 없이 깔끔하게 한 폴더로 풀어드립니다.\n` +
-        `• **새 압축 / 암호 압축 만들기**: 현재 탐색기에서 선택한 파일·폴더(또는 바탕화면·다운로드 최근 폴더)를 1초 만에 **일반 ZIP** 또는 **AES-256 암호 ZIP**으로 묶어드립니다.\n\n` +
-        `아래 버튼 중 원하시는 작업을 눌러 바로 실행해 보세요!`;
-      speak('무광고 일 초 스마트 압축 및 해제 기능입니다. 아래 버튼에서 다운로드 압축 풀기나 폴더 압축, 암호 압축을 선택해 주세요.');
+        `📦 **[1초 스마트 ZIP 압축 · 해제 — 어떤 파일이나 폴더를 압축해 드릴까요?]**\n\n` +
+        `원하시는 압축 대상과 방법을 아래에서 고르시거나, 채팅창에 바로 말씀해 주세요!\n\n` +
+        `1️⃣ **파일 탐색기에서 직접 골라 압축**: 윈도우 파일 탐색기에서 압축할 파일·폴더를 클릭(선택)한 뒤 아래 **` +
+        `[현재 탐색기에서 선택한 파일·폴더 바로 ZIP 압축]` +
+        `** 버튼을 누르시면 선택하신 항목만 즉시 ZIP으로 묶어드립니다.${selectedHint}\n` +
+        `2️⃣ **바탕화면·다운로드 최근 폴더 압축 / 암호 압축**: 아래 **` +
+        `[이 폴더 압축해줘]` +
+        `** 또는 **` +
+        `[암호 걸어서 ZIP 압축해줘 (비밀번호 1234)]` +
+        `** 버튼을 누르시면 바로 압축 파일을 만들고 저장된 폴더를 열어드립니다.\n` +
+        `3️⃣ **탐색기 마우스 우클릭 & 압축 풀기**: 아무 파일·폴더에서 마우스 우클릭 ➔ **` +
+        `[👻 귀신같이로 ZIP 압축 묶기]` +
+        `**를 누르시거나, 아래 버튼으로 다운로드 폴더의 압축파일을 한글 깨짐 없이 1초 만에 풀 수 있습니다.${sampleTxt}`;
+      speak('어떤 파일이나 폴더를 압축할지 아래 버튼에서 선택하시거나 탐색기에서 파일을 선택한 뒤 압축 버튼을 눌러 주세요.');
       return reply(sourceTab, guideKo, {
         followUpSuggestions: [
-          '다운로드 최근 ZIP 바로 풀기',
+          '현재 탐색기에서 선택한 파일·폴더 바로 ZIP 압축',
           '이 폴더 압축해줘',
           '암호 걸어서 ZIP 압축해줘 (비밀번호 1234)',
+          '다운로드 최근 ZIP 바로 풀기',
         ],
       });
     }
@@ -2946,7 +2987,6 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
     // 3-1C) 폴더/파일/사진 새 ZIP 압축 (일반 압축 & AES-256 암호 압축) 실행
     const pwMatch = clean.match(/(?:비밀번호|암호|비번)\s*(?:걸어서|설정해서|넣어서|는|은|:|=)?\s*([0-9A-Za-z!@#$%^&*_-]{2,32})/i);
-    const hasEncryptionCue = /암호|비밀번호|비번/i.test(clean);
     const zipPassword =
       pwMatch && !/^(?:압축|걸어|걸어서|설정|해줘|해주세요)$/i.test(pwMatch[1])
         ? pwMatch[1]
@@ -3431,7 +3471,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   const recentTwoAssistantIds = new Set(
     sharedChatState.messages
       .filter((m) => m.role === 'assistant')
-      .slice(-2)
+      .slice(-4)
       .map((m) => m.id)
   );
   const pendingApprovalMsg = [...sharedChatState.messages]
@@ -3466,7 +3506,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     Boolean(pendingApprovalMsg?.missingFilePayload && !pendingApprovalMsg.missingFilePayload.restored) &&
     !/복원\s*기록|복원\s*지점|히스토리|바로가기|찾아\s*줘|찾아\s*주세요/i.test(clean) &&
     clean.length <= 50 &&
-    /^(응|네|예|그래|좋아|바로|당장)?\s*(원위치로\s*|원래\s*자리로\s*|바탕화면으로\s*)?(복구|복원|되돌려|살려)\s*(해\s*)?(줘|주세요|라|할래)?[.!~]*$/i.test(
+    /^(응|네|예|그래|좋아|바로|당장)?\s*(그\s*파일\s*|방금\s*(?:찾은\s*|지운\s*)?(?:거|파일)\s*|이\s*(?:거|파일)\s*|그거\s*)?(원위치(?:로)?\s*|원래\s*(?:자리|위치)(?:로)?\s*|바탕화면(?:으로)?\s*)?(?:다시\s*)?(복구|복원|되돌려|되살려|살려|꺼내)\s*(해\s*|시켜\s*)?(줘|주세요|라|할래|줄래|하자)?[.!~]*$/i.test(
       clean
     );
 
@@ -5812,14 +5852,21 @@ export async function processUnifiedMonsterChatQuery(params: {
         fiveLinePreview: (Array.isArray(top.preview5Lines) ? top.preview5Lines : [String(top.preview5Lines || '')]).slice(0, 5),
         briefingKo: `${llmIntro} **[3초 문서 구출 실측 — ${top.vaultLabel}]**\n내 PC 자동복구·문서 금고에서 가장 최근에 작업된 **${top.fileName}** (${top.modifiedAt})을 찾았습니다${
           effectiveCandidates.length > 1 ? ` (후보 ${effectiveCandidates.length}건 중 가장 최근 문서)` : ''
-        }. 아래 **5줄 미리보기 카드**에서 내용을 확인하시고 **[폴더 열기]** 또는 **[↩️ 원위치/바탕화면 복원]** 버튼을 누르시거나 **"응 복구해줘"**라고 입력해 주세요!`,
+        }. 아래 **5줄 미리보기 카드**에서 내용을 확인하시고 **[폴더 열기]** 또는 **[원위치로 복원]** 버튼을 누르시거나 채팅창에 **"응 복구해줘"**라고 입력해 주세요!`,
       };
       speak('자동복구 및 문서 금고에서 최근 작업 파일을 찾았습니다. 미리보기 카드에서 복원 버튼을 눌러 주세요.');
+      const filteredOfficeFollowUps = (defaultFollowUps || ['최근 복원 기록 보여줘']).filter(
+        (s) =>
+          !/^(?:응\s*|네\s*)?(?:원위치(?:로)?\s*|원래\s*(?:자리|위치)(?:로)?\s*|바탕화면(?:으로)?\s*)?(?:복구|복원|되살려|살려)(?:해\s*)?(?:줘|주세요|할래)?[.!~]*$/i.test(
+            String(s || '').trim()
+          )
+      );
       return reply(sourceTab, payload.briefingKo, {
         cardKind: 'MISSING_FILE_EXONERATION',
         missingFilePayload: payload,
         llmActionJson: actionJson,
-        followUpSuggestions: defaultFollowUps || ['응 복구해줘', '최근 복원 기록 보여줘'],
+        followUpSuggestions:
+          filteredOfficeFollowUps.length > 0 ? filteredOfficeFollowUps : ['최근 복원 기록 보여줘'],
       });
     }
 
@@ -5983,13 +6030,18 @@ export async function processUnifiedMonsterChatQuery(params: {
         briefingKo: `${llmIntro}${d.briefingKo || ''}`,
       };
       speak('방금 지운 파일이 있는 위치를 찾았어요. 미리보기 카드에서 폴더 열기나 원위치 복원 버튼을 눌러 주세요.');
+      const filteredRecycleFollowUps = (defaultFollowUps || ['최근 복원 기록 보여줘']).filter(
+        (s) =>
+          !/^(?:응\s*|네\s*)?(?:원위치(?:로)?\s*|원래\s*(?:자리|위치)(?:로)?\s*|바탕화면(?:으로)?\s*)?(?:복구|복원|되살려|살려)(?:해\s*)?(?:줘|주세요|할래)?[.!~]*$/i.test(
+            String(s || '').trim()
+          )
+      );
       return reply(sourceTab, payload.briefingKo, {
         cardKind: 'MISSING_FILE_EXONERATION',
         missingFilePayload: payload,
         llmActionJson: actionJson,
-        followUpSuggestions: defaultFollowUps || [          '응 복구해줘',
-          '최근 복원 기록 보여줘',
-        ],
+        followUpSuggestions:
+          filteredRecycleFollowUps.length > 0 ? filteredRecycleFollowUps : ['최근 복원 기록 보여줘'],
       });
     }
 
@@ -6036,16 +6088,21 @@ export async function processUnifiedMonsterChatQuery(params: {
           deletedAtOrSavedAt: `마지막 저장 ${top.modifiedAt} · ${top.sizeFormatted}`,
           recoverFullPath: top.fullPath,
           fiveLinePreview: (top.preview5Lines || []).slice(0, 5),
-          briefingKo: `${llmIntro} **[3초 포렌식 실측 — ${top.vaultLabel}]**\n내 PC 문서·은닉 금고에서 **${top.fileName}** (${top.modifiedAt})을 찾았습니다. 아래 **지운 파일 5줄 미리보기 카드**를 확인하시고 **[폴더 열기]** 또는 **[↩️ 원위치/바탕화면 복원]** 버튼을 누르시거나 **"응 복구해줘"**라고 입력해 주세요.`,
+          briefingKo: `${llmIntro} **[3초 포렌식 실측 — ${top.vaultLabel}]**\n내 PC 문서·은닉 금고에서 **${top.fileName}** (${top.modifiedAt})을 찾았습니다. 아래 **지운 파일 5줄 미리보기 카드**를 확인하시고 **[폴더 열기]** 또는 **[원위치로 복원]** 버튼을 누르시거나 채팅창에 **"응 복구해줘"**라고 입력해 주세요.`,
         };
         speak('문서 금고에서 파일을 찾았습니다. 미리보기 카드를 확인하시고 폴더 열기나 원위치 복원을 눌러 주세요.');
+        const filteredForensicFollowUps = (defaultFollowUps || ['최근 복원 기록 보여줘']).filter(
+          (s) =>
+            !/^(?:응\s*|네\s*)?(?:원위치(?:로)?\s*|원래\s*(?:자리|위치)(?:로)?\s*|바탕화면(?:으로)?\s*)?(?:복구|복원|되살려|살려)(?:해\s*)?(?:줘|주세요|할래)?[.!~]*$/i.test(
+              String(s || '').trim()
+            )
+        );
         return reply(sourceTab, payload.briefingKo, {
           cardKind: 'MISSING_FILE_EXONERATION',
           missingFilePayload: payload,
           llmActionJson: actionJson,
-          followUpSuggestions: defaultFollowUps || [            '응 복구해줘',
-            '최근 복원 기록 보여줘',
-          ],
+          followUpSuggestions:
+            filteredForensicFollowUps.length > 0 ? filteredForensicFollowUps : ['최근 복원 기록 보여줘'],
         });
       }
     }
@@ -6130,10 +6187,13 @@ export async function processUnifiedMonsterChatQuery(params: {
     /(업무\s*(?:공유|폴더)|공유\s*폴더|구글\s*드라이브|g\s*:\s*드라이브|마이박스|mybox|원드라이브|onedrive|시놀로지|\bnas\b|나스|s\s*:\s*드라이브|\.gsheet|\.gdoc|구글\s*(?:스프레드)?시트)/i.test(
       clean
     ) && !/(치워|삭제|청소)/i.test(clean);
+  const isSmartArchiveQueryNotFolderCleanup =
+    /압축/i.test(clean) && !/압축\s*파일.*?(?:정리|삭제|지워|치워)|설치.*?압축\s*파일/i.test(clean);
 
   if (
     !isSpeedOrStatusQuestionNotFolderCleanup &&
     !isCloudOrWorkShareFaqNotFolderCleanup &&
+    !isSmartArchiveQueryNotFolderCleanup &&
     (llmDecision?.intent === 'CLEANUP_FOLDER_REORG' ||
       llmDecision?.intent === 'CLEANUP_DOWNLOAD_INSTALLERS' ||
       llmDecision?.intent === 'STARTUP_INSPECT' ||

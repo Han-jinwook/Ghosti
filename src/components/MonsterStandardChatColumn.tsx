@@ -1471,7 +1471,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       !isFaqOrWhyExplanationQuery &&
       (isDirectCareOrStatusCommand ||
         (hasPendingCareApproval &&
-          /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*(?:줘|주세요)|알려\s*(?:줘|주세요)|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw)));
+          /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*(?:줘|주세요)|알려\s*(?:줘|주세요)|뭔데|진행|실행|승인|동의|콜|고고|원위치|원래\s*(?:자리|위치)|바탕화면으로\s*복|복구|복원|되살려|살려|#?\d+\s*번?)/i.test(raw)));
 
     // [v1.3 필수 통과의례 게이트]: PC에서 첫 진입 또는 연결 유도 단계일 때,
     // 별명 등록 전후를 불문하고 '싫어 / 구경만 할래' 거절 발화와 '[🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘]' 동의 발화를 정직하게 처리!
@@ -2374,8 +2374,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                       break;
                     }
                   }
+                  const rawSuggestions =
+                    msg.cardKind === 'MISSING_FILE_EXONERATION'
+                      ? msg.followUpSuggestions.filter(
+                          (s) =>
+                            !/^(?:응\s*|네\s*)?(?:원위치(?:로)?\s*|원래\s*(?:자리|위치)(?:로)?\s*|바탕화면(?:으로)?\s*)?(?:복구|복원|되살려|살려)(?:해\s*)?(?:줘|주세요|할래)?[.!~]*$/i.test(
+                              String(s || '').trim()
+                            )
+                        )
+                      : msg.followUpSuggestions;
                   const visibleSuggestions =
-                    normalizeSuggestionChips(msg.followUpSuggestions, {
+                    normalizeSuggestionChips(rawSuggestions, {
                       recentUserQuery: precedingUserText,
                       assistantReplyText: msg.text,
                     }) || [];
