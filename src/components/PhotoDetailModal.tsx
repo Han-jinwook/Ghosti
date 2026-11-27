@@ -4,9 +4,11 @@ import { resolveLoungePhotoCorpus } from '../store/slices/storeSharedRefs';
 import { cosineSimilarity } from '../services/aiEngine';
 import { dispatchGhostCastLiveCommand } from './GhostCastAndLiveSystem';
 import {
+  pushCrossDeviceClipboardText,
   pushTeleportPhotoToPcVanguard,
   tryMakeCompactThumbDataUrl,
 } from '../services/deviceIntegrationService';
+import { recognizeDataUrlWithPaddleOcr } from '../services/ai/aiPaddleOcrEngine';
 import { copyTextSafeToClipboard } from '../services/proFeatureGate';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import type { PhotoItem } from '../types/saysee';
@@ -617,6 +619,19 @@ export const PhotoDetailModal: React.FC = () => {
                     } catch {
                       /* fallback to metadata below */
                     }
+                  } else if (!hasExistingOcr) {
+                    const mobileImgUrl = selectedPhoto.fullUrl || selectedPhoto.thumbUrl || '';
+                    if (mobileImgUrl) {
+                      try {
+                        setActionNotice('사진 속 글자를 읽고 내 PC로 보내는 중입니다...');
+                        const webOcr = await recognizeDataUrlWithPaddleOcr(mobileImgUrl);
+                        if (webOcr?.text && webOcr.text.trim()) {
+                          liveOcrText = webOcr.text.trim();
+                        }
+                      } catch {
+                        /* fallback to metadata below */
+                      }
+                    }
                   }
                   if (liveOcrText) {
                     pieces.push(liveOcrText);
@@ -666,7 +681,7 @@ export const PhotoDetailModal: React.FC = () => {
                     }
                   }
 
-                  // 3) 모바일 ➔ PC 교차 기기 실시간 릴레이 전송 유지
+                  // 3) 모바일 ➔ PC 교차 기기 실시간 릴레이 + 7일 E2EE 통합 클립보드 보관함 동시 전송 (PC 크롬 미실행 시에도 Z-코어가 Ctrl+V 즉시 장전)
                   pushTeleportPhotoToPcVanguard({
                     fileName: selectedPhoto.name,
                     ocrText: extracted,
@@ -674,11 +689,19 @@ export const PhotoDetailModal: React.FC = () => {
                     thumbWebpBase64: thumbB64,
                     chips,
                   });
+                  if (merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest') {
+                    void pushCrossDeviceClipboardText({
+                      text: extracted,
+                      email: merlinAuth.email,
+                      userId: merlinAuth.userId,
+                      allowBypassEchoGuard: true,
+                    });
+                  }
 
                   setActionNotice(
                     copiedLocally
-                      ? `'${selectedPhoto.name}' 텍스트 정보를 내 PC 클립보드에 복사했습니다. Ctrl + V로 바로 붙여넣을 수 있습니다.`
-                      : `'${selectedPhoto.name}' 텍스트 정보를 내 PC로 전송했습니다. PC에서 Ctrl + V로 붙여넣을 수 있습니다.`
+                      ? `'${selectedPhoto.name}' 글자를 내 PC 클립보드(Ctrl+V)와 [내 기기 통합] 7일 보관함에 담았습니다.`
+                      : `'${selectedPhoto.name}' 글자를 내 PC 클립보드(Ctrl+V)와 [내 기기 통합] 7일 보관함으로 전송했습니다.`
                   );
                 })();
               }}
