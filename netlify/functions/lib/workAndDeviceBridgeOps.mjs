@@ -4380,5 +4380,283 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  // [사진 공유방 메타데이터 · 방장 권한 · 고화질 원본 직통 터널 · EXIF/해상도 고화질 자동 교체]
+  const loadPhotoRoomMetaJson = async (roomId) => {
+    try {
+      const p = `photo_room_meta/${encodeURIComponent(String(roomId))}.json`;
+      const got = await storageDownloadJson(supabaseUrl, serviceKey, p);
+      return got && typeof got === 'object' ? got : {};
+    } catch {
+      return {};
+    }
+  };
+  const savePhotoRoomMetaJson = async (roomId, obj) => {
+    try {
+      const p = `photo_room_meta/${encodeURIComponent(String(roomId))}.json`;
+      await storageUploadJson(supabaseUrl, serviceKey, p, obj);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const verifyPhotoRoomAccess = async (roomId) => {
+    const cleanRoomId = String(roomId || '').trim();
+    if (!cleanRoomId) return { ok: false, isMaster: false };
+    const rRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
+        cleanRoomId
+      )}&select=room_id,master_email,master_outbound_tunnel_url,master_pc_online&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const rRows = rRes.ok ? await rRes.json().catch(() => []) : [];
+    const room = Array.isArray(rRows) ? rRows[0] : null;
+    if (!room?.room_id) return { ok: false, isMaster: false };
+    const isMaster = String(room.master_email || '').trim().toLowerCase() === email;
+    if (isMaster) return { ok: true, isMaster: true, room };
+    const mRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(
+        cleanRoomId
+      )}&member_email=eq.${encodeURIComponent(email)}&select=id&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const mRows = mRes.ok ? await mRes.json().catch(() => []) : [];
+    if (Array.isArray(mRows) && mRows.length > 0) {
+      return { ok: true, isMaster: false, room };
+    }
+    return { ok: false, isMaster: false, room };
+  };
+
+  if (action === 'photo_get_room_settings') {
+    const targetRoomId = String(body.roomId || '').trim();
+    const access = await verifyPhotoRoomAccess(targetRoomId);
+    if (!access.ok) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    let hostRetainsHidePermission = true;
+    try {
+      const colRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
+          targetRoomId
+        )}&select=host_retains_hide_permission&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      if (colRes.ok) {
+        const rows = await colRes.json().catch(() => []);
+        if (Array.isArray(rows) && rows[0] && typeof rows[0].host_retains_hide_permission === 'boolean') {
+          hostRetainsHidePermission = rows[0].host_retains_hide_permission;
+          return {
+            status: 200,
+            body: { ok: true, roomId: targetRoomId, hostRetainsHidePermission, isMaster: access.isMaster },
+          };
+        }
+      }
+    } catch {
+      /* fallback to meta */
+    }
+    const meta = await loadPhotoRoomMetaJson(targetRoomId);
+    if (typeof meta.hostRetainsHidePermission === 'boolean') {
+      hostRetainsHidePermission = meta.hostRetainsHidePermission;
+    }
+    return {
+      status: 200,
+      body: { ok: true, roomId: targetRoomId, hostRetainsHidePermission, isMaster: access.isMaster },
+    };
+  }
+
+  if (action === 'photo_set_room_settings') {
+    const targetRoomId = String(body.roomId || '').trim();
+    const hostRetainsHidePermission = Boolean(body.hostRetainsHidePermission);
+    const access = await verifyPhotoRoomAccess(targetRoomId);
+    if (!access.ok || !access.isMaster) {
+      return { status: 403, body: { ok: false, reason: 'HOST_ONLY' } };
+    }
+    try {
+      await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(targetRoomId)}`,
+        {
+          method: 'PATCH',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({
+            host_retains_hide_permission: hostRetainsHidePermission,
+            updated_at: new Date().toISOString(),
+          }),
+        }
+      );
+    } catch {
+      /* column optional fallback */
+    }
+    const prevMeta = await loadPhotoRoomMetaJson(targetRoomId);
+    await savePhotoRoomMetaJson(targetRoomId, {
+      ...prevMeta,
+      hostRetainsHidePermission,
+      updatedAt: new Date().toISOString(),
+    });
+    return {
+      status: 200,
+      body: { ok: true, roomId: targetRoomId, hostRetainsHidePermission },
+    };
+  }
+
+  if (action === 'photo_register_room_tunnel') {
+    const targetRoomId = String(body.roomId || '').trim();
+    const tunnelUrl = String(body.tunnelUrl || '').trim().replace(/\/+$/, '');
+    const photoTunnelKey = String(body.photoTunnelKey || '').trim();
+    const access = await verifyPhotoRoomAccess(targetRoomId);
+    if (!access.ok) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    if (!tunnelUrl || !/^https:\/\/[a-z0-9.-]+\.(trycloudflare\.com|lhr\.life|lhr\.domains)$/i.test(tunnelUrl)) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_TUNNEL_URL' } };
+    }
+    if (!photoTunnelKey || photoTunnelKey.length < 16) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_TUNNEL_KEY' } };
+    }
+    if (access.isMaster) {
+      try {
+        await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(targetRoomId)}`,
+          {
+            method: 'PATCH',
+            headers: srvHeaders(serviceKey, {
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            }),
+            body: JSON.stringify({
+              master_outbound_tunnel_url: tunnelUrl,
+              master_pc_online: true,
+              updated_at: new Date().toISOString(),
+            }),
+          }
+        );
+      } catch {
+        /* ignore */
+      }
+    }
+    const prevMeta = await loadPhotoRoomMetaJson(targetRoomId);
+    const peerTunnels =
+      prevMeta.peerTunnels && typeof prevMeta.peerTunnels === 'object' ? { ...prevMeta.peerTunnels } : {};
+    peerTunnels[email] = {
+      tunnelUrl,
+      photoTunnelKey,
+      updatedAt: new Date().toISOString(),
+      isMaster: access.isMaster,
+    };
+    await savePhotoRoomMetaJson(targetRoomId, {
+      ...prevMeta,
+      ...(access.isMaster
+        ? {
+            masterTunnelUrl: tunnelUrl,
+            masterPhotoTunnelKey: photoTunnelKey,
+            masterTunnelUpdatedAt: new Date().toISOString(),
+          }
+        : {}),
+      peerTunnels,
+    });
+    return { status: 200, body: { ok: true, roomId: targetRoomId, tunnelUrl } };
+  }
+
+  if (action === 'photo_get_room_tunnel') {
+    const targetRoomId = String(body.roomId || '').trim();
+    const access = await verifyPhotoRoomAccess(targetRoomId);
+    if (!access.ok) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    const meta = await loadPhotoRoomMetaJson(targetRoomId);
+    const masterUrl = String(
+      meta.masterTunnelUrl || access.room?.master_outbound_tunnel_url || ''
+    ).trim();
+    const masterKey = String(meta.masterPhotoTunnelKey || '').trim();
+    const peerTunnels =
+      meta.peerTunnels && typeof meta.peerTunnels === 'object' ? meta.peerTunnels : {};
+    const activePeers = Object.entries(peerTunnels)
+      .filter(([, v]) => v && typeof v === 'object' && v.tunnelUrl && v.photoTunnelKey)
+      .map(([peerEmail, v]) => ({
+        email: peerEmail,
+        tunnelUrl: String(v.tunnelUrl),
+        photoTunnelKey: String(v.photoTunnelKey),
+        updatedAt: String(v.updatedAt || ''),
+        isMaster: Boolean(v.isMaster),
+      }));
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId: targetRoomId,
+        tunnelUrl: masterUrl || activePeers[0]?.tunnelUrl || '',
+        photoTunnelKey: masterKey || activePeers[0]?.photoTunnelKey || '',
+        peers: activePeers,
+        hostOnline: Boolean(masterUrl && masterKey) || activePeers.length > 0,
+      },
+    };
+  }
+
+  if (action === 'photo_upgrade_higher_quality') {
+    const targetRoomId = String(body.roomId || '').trim();
+    const existingPhotoId = String(body.existingPhotoId || '').trim().replace(/^shared_sb_/, '');
+    const access = await verifyPhotoRoomAccess(targetRoomId);
+    if (!access.ok || !existingPhotoId) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    const curRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?id=eq.${encodeURIComponent(
+        existingPhotoId
+      )}&room_id=eq.${encodeURIComponent(
+        targetRoomId
+      )}&select=id,dhash_64,width_px,height_px,original_byte_size,has_original_exif&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const curRows = curRes.ok ? await curRes.json().catch(() => []) : [];
+    const existing = Array.isArray(curRows) ? curRows[0] : null;
+    if (!existing?.id) {
+      return { status: 404, body: { ok: false, reason: 'PHOTO_NOT_FOUND' } };
+    }
+    const newW = Math.max(0, Number(body.widthPx || 0));
+    const newH = Math.max(0, Number(body.heightPx || 0));
+    const oldW = Math.max(0, Number(existing.width_px || 0));
+    const oldH = Math.max(0, Number(existing.height_px || 0));
+    const newPixels = newW * newH;
+    const oldPixels = oldW * oldH;
+    const newHasExif = Boolean(body.hasOriginalExif);
+    const oldHasExif = Boolean(existing.has_original_exif);
+    const newBytes = Math.max(0, Number(body.originalByteSize || 0));
+    const oldBytes = Math.max(0, Number(existing.original_byte_size || 0));
+    const isHigherQuality =
+      (newPixels > oldPixels && (newHasExif || !oldHasExif)) ||
+      (newHasExif && !oldHasExif && newPixels >= oldPixels) ||
+      (oldPixels === 0 && newPixels > 0) ||
+      (newPixels === oldPixels && newHasExif && newBytes > oldBytes);
+    if (!isHigherQuality) {
+      return { status: 200, body: { ok: true, upgraded: false, reason: 'EXISTING_ALREADY_HIGHER_OR_EQUAL' } };
+    }
+    const patchBody = {
+      thumb_webp_url: String(body.thumbWebpUrl || ''),
+      width_px: newW,
+      height_px: newH,
+      original_byte_size: newBytes,
+      has_original_exif: newHasExif,
+      ...(body.shotDateDisplay ? { shot_date_display: String(body.shotDateDisplay) } : {}),
+      ...(body.shotPlaceDisplay ? { shot_place_display: String(body.shotPlaceDisplay) } : {}),
+      ...(body.captionKo ? { caption_ko: String(body.captionKo) } : {}),
+    };
+    const upRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?id=eq.${encodeURIComponent(existingPhotoId)}`,
+      {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify(patchBody),
+      }
+    );
+    return {
+      status: upRes.ok ? 200 : 500,
+      body: { ok: upRes.ok, upgraded: upRes.ok, photoId: existingPhotoId, widthPx: newW, heightPx: newH },
+    };
+  }
+
   return null;
 }

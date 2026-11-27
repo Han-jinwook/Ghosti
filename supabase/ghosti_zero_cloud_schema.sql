@@ -277,6 +277,7 @@ create table if not exists public.ghosti_lounge_rooms (
   -- [호환 유지] v1 필드: 마스터 PC 아웃바운드 터널 주소 직접 기록 (master_pc_device_id 미사용 시)
   master_outbound_tunnel_url text,
   master_pc_online boolean not null default true,
+  host_retains_hide_permission boolean not null default true,
   gpu_cloud_helper_until timestamptz,
   custom_watermark_text text,
   created_at timestamptz not null default now(),

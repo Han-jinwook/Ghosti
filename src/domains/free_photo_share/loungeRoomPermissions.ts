@@ -20,19 +20,30 @@ import { loadPassportFlowState } from '../../services/passportRegistrationFlow';
 export const HOST_HIDE_PERMISSION_STORAGE_KEY = 'ghosti_room_host_hide_perm_v1';
 export const KICKED_ROOM_MEMBERS_STORAGE_KEY = 'ghosti_kicked_room_members_v1';
 
-export function readHostRetainsHidePermission(): boolean {
+export function readHostRetainsHidePermission(roomId?: string | null): boolean {
   if (typeof window === 'undefined') return true;
   try {
+    const cleanRoomId = (roomId || '').trim();
+    if (cleanRoomId) {
+      const scoped = localStorage.getItem(`${HOST_HIDE_PERMISSION_STORAGE_KEY}::${cleanRoomId}`);
+      if (scoped === 'true') return true;
+      if (scoped === 'false') return false;
+    }
     return localStorage.getItem(HOST_HIDE_PERMISSION_STORAGE_KEY) !== 'false';
   } catch {
     return true;
   }
 }
 
-export function writeHostRetainsHidePermission(enabled: boolean): void {
+export function writeHostRetainsHidePermission(enabled: boolean, roomId?: string | null): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(HOST_HIDE_PERMISSION_STORAGE_KEY, enabled ? 'true' : 'false');
+    const val = enabled ? 'true' : 'false';
+    const cleanRoomId = (roomId || '').trim();
+    if (cleanRoomId) {
+      localStorage.setItem(`${HOST_HIDE_PERMISSION_STORAGE_KEY}::${cleanRoomId}`, val);
+    }
+    localStorage.setItem(HOST_HIDE_PERMISSION_STORAGE_KEY, val);
   } catch {
     /* ignore */
   }

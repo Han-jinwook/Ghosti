@@ -391,6 +391,11 @@ export interface PhotoItem {
   name: string;
   fullPath?: string;
   size: number;
+  /** 실제 원본 픽셀 너비·높이 (중복 사진 EXIF+해상도 고화질 비교용) */
+  widthPx?: number;
+  heightPx?: number;
+  /** 원본 EXIF 촬영 메타데이터 보유 여부 */
+  hasOriginalExif?: boolean;
   date: string;
   mtimeMs: number;
   thumbUrl: string;
