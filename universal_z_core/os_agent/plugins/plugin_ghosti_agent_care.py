@@ -1106,7 +1106,7 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
     # 2-B) 레지스트리 설치 목록에 잡히지 않거나 실행 중인 AhnLab / nProtect 상주 프로세스 폴백 감지
     existing_del_low = " ".join(str(x.get("name") or "").lower() for x in delete_recommend)
     if "ahnlab" not in existing_del_low and "v3" not in existing_del_low:
-        for p_exe, p_info in running_map.items():
+        for p_exe, p_info in running_procs.items():
             if p_exe in ("asdsvc.exe", "v3l4sp.exe", "v3lite4exp.exe", "v3lite.exe", "astx.exe"):
                 lbl = "AhnLab Safe Transaction" if p_exe == "astx.exe" else "AhnLab V3 Lite (안랩 상주 보안모듈)"
                 delete_recommend.insert(0, {
@@ -1121,7 +1121,7 @@ def scan_security_and_pup_2tier() -> Dict[str, Any]:
                 })
                 break
     if "nprotect" not in existing_del_low:
-        for p_exe, p_info in running_map.items():
+        for p_exe, p_info in running_procs.items():
             if p_exe in ("nossvc.exe", "nosstarter.npe", "npkcrypt.exe"):
                 delete_recommend.insert(0, {
                     "id": "sec_nprotect_live",
