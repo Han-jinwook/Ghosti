@@ -3,6 +3,7 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, hasActiveGhostiLoginSession } from '../services/zCoreBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { GhostSearchDojoStampBoard } from './ghostDojo/ghostSearchDojoShared';
+import { QrCodeSvg } from '../utils/qrCodeSvg';
 
 export type OnboardingTabId = 'tab1_find_care' | 'tab3_share_pro';
 
@@ -172,11 +173,9 @@ export async function startSuperpowerTrialAction(
 }
 
 const PairingQrCodeSvg: React.FC = () => (
-  <img
-    src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=6&data=https%3A%2F%2Fghosti.sundreamer.app"
-    alt="모바일 앱 설치 QR 코드"
-    className="w-20 h-20 rounded-lg bg-white p-1.5 border border-slate-200 shrink-0"
-  />
+  <div className="w-20 h-20 rounded-lg bg-white p-1.5 border border-slate-200 shrink-0">
+    <QrCodeSvg value="https://ghosti.sundreamer.app" className="w-full h-full" />
+  </div>
 );
 
 export const OnboardingModal: React.FC = () => {
@@ -445,14 +444,16 @@ export const OnboardingModal: React.FC = () => {
                         window.dispatchEvent(new CustomEvent('openLoginModal'));
                         return;
                       }
-                      setPcAgentPairedMobile(!pcAgentPairedMobile);
+                      cancelOnboardingIndexing();
+                      setShowOnboarding(false);
+                      setDesktopTab('sync');
                     }}
-                    className="text-left text-[11px] text-slate-700 font-medium underline cursor-pointer"
+                    className="text-left text-[11px] text-teal-700 hover:text-teal-800 font-semibold underline cursor-pointer"
                   >
                     {merlinAuth?.email && merlinAuth.userId !== 'guest' && pcAgentPairedMobile
-                      ? '모바일 연결됨'
+                      ? '모바일 연결됨 (기기 관리 보기)'
                       : merlinAuth?.email && merlinAuth.userId !== 'guest'
-                      ? '연결 상태 전환'
+                      ? '내 기기 통합에서 연결하기'
                       : '로그인하기'}
                   </button>
                 </div>
