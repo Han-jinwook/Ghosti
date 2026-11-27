@@ -169,6 +169,8 @@ export function classifyCareItemBucket(item: AgentCareScanItem): CareNormalizedB
   }
   if (
     cat === 'PUP_ADWARE' ||
+    cat === 'STALE_OR_SELFDEF_SECURITY' ||
+    cat === 'GRID_OR_ADWARE_APP' ||
     cat === 'ACTIVE_BANK_SECURITY' ||
     item.actionType === 'SECURITY_SLEEP' ||
     item.actionType === 'PUP_ERADICATE'
@@ -812,17 +814,21 @@ export async function runAgentCareReadTools(
   }
 
   // 2) 보안모듈·애드웨어 2분류 스캔 결과 반영
+  const securityItemNameSet = new Set<string>();
   if (secRes?.ok && secRes.data) {
     const s = secRes.data;
     summaryLines.push(
       `🛡️ 보안·애드웨어 2분류: 완전 삭제·적출 권장 ${s.deleteRecommendCount ?? 0}건 · 무삭제 수면(자동기상) 권장 ${s.sleepRecommendCount ?? 0}건`
     );
     for (const del of s.deleteRecommend || []) {
+      const delName = String(del.name || '').trim();
+      if (delName) securityItemNameSet.add(delName.toLowerCase());
       items.push({
         no: idx++,
         id: String(del.id),
-        name: String(del.name),
+        name: delName,
         cat: String(del.cat || 'PUP_ADWARE'),
+        bucketId: 'SECURITY',
         sizeMb: Number(del.sizeMb || del.estimatedRamMb || 0),
         detailKo: `🔴 삭제·적출 권장 — ${del.reason || ''}`,
         actionType: String(del.actionType || 'PUP_ERADICATE'),
@@ -830,11 +836,14 @@ export async function runAgentCareReadTools(
       });
     }
     for (const slp of s.sleepRecommend || []) {
+      const slpName = String(slp.name || '').trim();
+      if (slpName) securityItemNameSet.add(slpName.toLowerCase());
       items.push({
         no: idx++,
         id: String(slp.id),
-        name: String(slp.name),
+        name: slpName,
         cat: String(slp.cat || 'ACTIVE_BANK_SECURITY'),
+        bucketId: 'SECURITY',
         sizeMb: 0,
         detailKo: `🟢 무삭제 수면·자동기상 권장 — ${slp.reason || ''}`,
         actionType: 'SECURITY_SLEEP',
@@ -894,8 +903,20 @@ export async function runAgentCareReadTools(
       const roleKo = String(a.plainRoleKo || '').trim();
       const lastUsedKo = String(a.lastUsedLabelKo || '').trim();
       const lastSt = String(a.lastUsedStatus || '').trim();
-      // 멀티 종합 점검에서는 보호된 시스템 부품은 제외하고 실제 유저가 판단할 앱(특히 오래 안 쓴 앱·대용량 앱) 위주로 노출
-      if (uniqueTools.length > 1 && a.isProtected) continue;
+      // 멀티 종합 점검에서는 보호된 시스템 부품 및 이미 [② 광고·보안앱]에 분류된 보안모듈·애드웨어는 [③ 용량·묵은 앱]에 중복 노출하지 않음
+      const appNameClean = String(a.name || '').trim();
+      const appProbeLow = `${appNameClean} ${String(a.publisher || '')}`.toLowerCase();
+      if (uniqueTools.length > 1) {
+        if (a.isProtected) continue;
+        if (
+          securityItemNameSet.has(appNameClean.toLowerCase()) ||
+          /(?:ahnlab|안랩|v3\s*lite|v3lite|astx|alyac|알약|nprotect|엔프로텍트|anysign|touchen|delfino|veraport|wizvera|iniline|crossex|inisafe|crosscert|ipinside|keysharp|magicline|markany|e-pagesafer|miplatform|ozweblauncher|ozx\s*webagent|iformscan|inziiform|aps\s*engine|yettiesoft|secukit)/i.test(
+            appProbeLow
+          )
+        ) {
+          continue;
+        }
+      }
       items.push({
         no: idx++,
         id: `inst_${idx}_${String(a.name || '').slice(0, 20)}`,
@@ -1022,7 +1043,17 @@ export async function runAgentCareReadTools(
     }
   }
 
-  // 유저가 '안 쓴 프로그램 / 설치된 앱'을 물어봤을 때는 ③ 용량·묵은 앱 칸에서 오래 안 쓴 설치 앱이 맨 위에 바로 보이도록 정렬!
+    // 정렬: 보안앱 점검 시 자가보호 상주 보안모듈(AhnLab·nProtect 등)과 위험 애드웨어가 [② 광고·보안앱] 맨 위에 바로 보이도록 정렬
+    items.sort((a, b) => {
+      if (a.bucketId === 'SECURITY' && b.bucketId === 'SECURITY') {
+        const isTopSec = (x: AgentCareScanItem) =>
+          /ahnlab|안랩|v3|nprotect|엔프로텍트|alyac|알약|astx|nossvc/i.test(`${x.id} ${x.name}`);
+        const rankA = isTopSec(a) ? 0 : a.actionType !== 'SECURITY_SLEEP' ? 1 : 2;
+        const rankB = isTopSec(b) ? 0 : b.actionType !== 'SECURITY_SLEEP' ? 1 : 2;
+        if (rankA !== rankB) return rankA - rankB;
+      }
+      return 0;
+    });
   if (options?.subFocus === 'UNUSED_APPS') {
     const isStaleApp = (x: AgentCareScanItem) =>
       x.cat === 'INSTALLED_APP' &&
