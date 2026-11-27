@@ -3092,7 +3092,7 @@ public class GhostiMobileCarePlugin extends Plugin {
             );
             ctrlCardLp.bottomMargin = dpToPx(activity, 10);
             ctrlCard.setLayoutParams(ctrlCardLp);
-            ctrlCard.setPadding(dpToPx(activity, 12), dpToPx(activity, 8), dpToPx(activity, 12), dpToPx(activity, 10));
+            ctrlCard.setPadding(dpToPx(activity, 10), dpToPx(activity, 8), dpToPx(activity, 10), dpToPx(activity, 10));
             GradientDrawable ctrlBg = new GradientDrawable();
             ctrlBg.setColor(Color.parseColor("#0F172A"));
             ctrlBg.setCornerRadius(dpToPx(activity, 14));
@@ -3137,56 +3137,75 @@ public class GhostiMobileCarePlugin extends Plugin {
 
             LinearLayout btnRow = new LinearLayout(activity);
             btnRow.setOrientation(LinearLayout.HORIZONTAL);
-            btnRow.setGravity(Gravity.CENTER);
+            btnRow.setGravity(Gravity.CENTER_VERTICAL);
             btnRow.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ));
 
+            final int ctrlBtnHeightPx = dpToPx(activity, 38);
+
             final TextView back10Btn = new TextView(activity);
             back10Btn.setText("↺ -10초");
             back10Btn.setTextColor(Color.parseColor("#E2E8F0"));
-            back10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+            back10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
             back10Btn.setTypeface(Typeface.DEFAULT_BOLD);
             back10Btn.setGravity(Gravity.CENTER);
-            back10Btn.setPadding(dpToPx(activity, 14), dpToPx(activity, 8), dpToPx(activity, 14), dpToPx(activity, 8));
+            back10Btn.setSingleLine(true);
+            back10Btn.setMaxLines(1);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                back10Btn.setAutoSizeTextTypeUniformWithConfiguration(9, 12, 1, TypedValue.COMPLEX_UNIT_SP);
+            }
+            back10Btn.setPadding(dpToPx(activity, 6), 0, dpToPx(activity, 6), 0);
             GradientDrawable jumpBtnBg = new GradientDrawable();
             jumpBtnBg.setColor(Color.parseColor("#1E293B"));
             jumpBtnBg.setCornerRadius(dpToPx(activity, 18));
             jumpBtnBg.setStroke(dpToPx(activity, 1), Color.parseColor("#475569"));
             back10Btn.setBackground(jumpBtnBg);
+            LinearLayout.LayoutParams b10Lp = new LinearLayout.LayoutParams(0, ctrlBtnHeightPx, 1.0f);
+            back10Btn.setLayoutParams(b10Lp);
             btnRow.addView(back10Btn);
 
             final TextView playPauseBtn = new TextView(activity);
             playPauseBtn.setText("⏸ 일시정지");
             playPauseBtn.setTextColor(Color.parseColor("#0F172A"));
-            playPauseBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            playPauseBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
             playPauseBtn.setTypeface(Typeface.DEFAULT_BOLD);
             playPauseBtn.setGravity(Gravity.CENTER);
-            playPauseBtn.setPadding(dpToPx(activity, 20), dpToPx(activity, 8), dpToPx(activity, 20), dpToPx(activity, 8));
+            playPauseBtn.setSingleLine(true);
+            playPauseBtn.setMaxLines(1);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                playPauseBtn.setAutoSizeTextTypeUniformWithConfiguration(9, 13, 1, TypedValue.COMPLEX_UNIT_SP);
+            }
+            playPauseBtn.setPadding(dpToPx(activity, 8), 0, dpToPx(activity, 8), 0);
             GradientDrawable playBtnBg = new GradientDrawable();
             playBtnBg.setColor(Color.parseColor("#2DD4BF"));
             playBtnBg.setCornerRadius(dpToPx(activity, 18));
             playPauseBtn.setBackground(playBtnBg);
-            LinearLayout.LayoutParams ppLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            );
-            ppLp.leftMargin = dpToPx(activity, 12);
-            ppLp.rightMargin = dpToPx(activity, 12);
+            LinearLayout.LayoutParams ppLp = new LinearLayout.LayoutParams(0, ctrlBtnHeightPx, 1.35f);
+            ppLp.leftMargin = dpToPx(activity, 6);
+            ppLp.rightMargin = dpToPx(activity, 6);
             playPauseBtn.setLayoutParams(ppLp);
             btnRow.addView(playPauseBtn);
 
             final TextView fwd10Btn = new TextView(activity);
             fwd10Btn.setText("+10초 ↻");
             fwd10Btn.setTextColor(Color.parseColor("#E2E8F0"));
-            fwd10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+            fwd10Btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
             fwd10Btn.setTypeface(Typeface.DEFAULT_BOLD);
             fwd10Btn.setGravity(Gravity.CENTER);
-            fwd10Btn.setPadding(dpToPx(activity, 12), dpToPx(activity, 8), dpToPx(activity, 12), dpToPx(activity, 8));
+            fwd10Btn.setSingleLine(true);
+            fwd10Btn.setMaxLines(1);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                fwd10Btn.setAutoSizeTextTypeUniformWithConfiguration(9, 12, 1, TypedValue.COMPLEX_UNIT_SP);
+            }
+            fwd10Btn.setPadding(dpToPx(activity, 6), 0, dpToPx(activity, 6), 0);
             GradientDrawable fwdBtnBg = new GradientDrawable();
             fwdBtnBg.setColor(Color.parseColor("#1E293B"));
             fwdBtnBg.setCornerRadius(dpToPx(activity, 18));
             fwdBtnBg.setStroke(dpToPx(activity, 1), Color.parseColor("#475569"));
             fwd10Btn.setBackground(fwdBtnBg);
+            LinearLayout.LayoutParams f10Lp = new LinearLayout.LayoutParams(0, ctrlBtnHeightPx, 1.0f);
+            fwd10Btn.setLayoutParams(f10Lp);
             btnRow.addView(fwd10Btn);
 
             final float[] speedSteps = new float[] { 1.0f, 1.25f, 1.5f, 2.0f, 0.5f };
@@ -3196,19 +3215,22 @@ public class GhostiMobileCarePlugin extends Plugin {
             final TextView speedBtn = new TextView(activity);
             speedBtn.setText("1.0x");
             speedBtn.setTextColor(Color.parseColor("#5EEAD4"));
-            speedBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f);
+            speedBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
             speedBtn.setTypeface(Typeface.DEFAULT_BOLD);
             speedBtn.setGravity(Gravity.CENTER);
-            speedBtn.setPadding(dpToPx(activity, 11), dpToPx(activity, 8), dpToPx(activity, 11), dpToPx(activity, 8));
+            speedBtn.setSingleLine(true);
+            speedBtn.setMaxLines(1);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                speedBtn.setAutoSizeTextTypeUniformWithConfiguration(9, 12, 1, TypedValue.COMPLEX_UNIT_SP);
+            }
+            speedBtn.setPadding(dpToPx(activity, 6), 0, dpToPx(activity, 6), 0);
             final GradientDrawable speedBtnBg = new GradientDrawable();
             speedBtnBg.setColor(Color.parseColor("#1E293B"));
             speedBtnBg.setCornerRadius(dpToPx(activity, 18));
             speedBtnBg.setStroke(dpToPx(activity, 1), Color.parseColor("#2DD4BF"));
             speedBtn.setBackground(speedBtnBg);
-            LinearLayout.LayoutParams spdLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            );
-            spdLp.leftMargin = dpToPx(activity, 8);
+            LinearLayout.LayoutParams spdLp = new LinearLayout.LayoutParams(0, ctrlBtnHeightPx, 0.85f);
+            spdLp.leftMargin = dpToPx(activity, 6);
             speedBtn.setLayoutParams(spdLp);
             btnRow.addView(speedBtn);
 
