@@ -24,6 +24,7 @@ import {
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { Stage1MinimalCarePreview } from './Stage1MinimalPreview';
 import { MobileCleanerRescueBanner } from './MobileCleanerRescueBanner';
+import { MobileUnusedAppsCleanerCard } from './MobileUnusedAppsCleanerCard';
 import {
   isCapacitorNativeMobileRuntime,
   isIosMobileBrowserOrApp,
@@ -1038,6 +1039,8 @@ export const MobileAppView: React.FC = () => {
           {activeLoungeType === 'personal' && <MobileCleanerRescueBanner />}
 
           {activeLoungeType === 'personal' && <Stage1MinimalCarePreview />}
+
+          {activeLoungeType === 'personal' && <MobileUnusedAppsCleanerCard />}
 
           {activeLoungeType !== 'work' && <VoiceHeroStage />}
 

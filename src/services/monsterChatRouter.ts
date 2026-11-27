@@ -4855,10 +4855,36 @@ export async function processUnifiedMonsterChatQuery(params: {
     if (infoDeskReplyEarly) return infoDeskReplyEarly;
   }
 
-  // 0-0C-MOBILE) [모바일 정식 앱 전용 손보기 · 4대 사진 정리 · 용량/속도/광고 점검 SSOT 핸들러]
+  // 0-0C-MOBILE) [모바일 정식 앱 전용 손보기 · 4대 사진 정리 · Android 안 쓰는 앱 솎아내기 · 용량/속도/광고 점검 SSOT 핸들러]
   // - 모바일에서는 PC Z-코어(127.0.0.1:5199)나 가짜 Windows 10/11 사양 카드를 절대 호출하지 않고,
-  //   실측 갤러리 4대 사진 정리 탭 자동 펼침·스크롤 + (Android) 악성 클리너 스캔 / (iOS) 저장공간·구독 정식 안내로 직결합니다.
+  //   실측 갤러리 4대 사진 정리 탭 자동 펼침·스크롤 + (Android) 안 쓰는 앱 솎아내기·악성 클리너 스캔 / (iOS) 저장공간·구독 정식 안내로 직결합니다.
   if (isMobileRuntimeForChat() && !isSelectingRestoreNumberNow) {
+    const isMobileUnusedAppsQuery =
+      /(안\s*쓰는\s*앱|미사용\s*앱|오래\s*안\s*쓴\s*앱|1년\s*(?:이상\s*)?안\s*쓴\s*앱|3개월\s*(?:이상\s*)?안\s*쓴\s*앱|바탕화면\s*아이콘|홈\s*화면\s*(?:아이콘|정리)|앱\s*솎아|앱\s*정리)/i.test(
+        clean
+      );
+    if (isMobileUnusedAppsQuery) {
+      if (isAndroidMobileBrowserOrApp()) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('ghosti_open_unused_apps_cleaner'));
+        }
+        const aosUnusedMsg =
+          `아래 **[안 쓰는 앱 솎아내기]** 카드를 바로 열어드렸어요!\n` +
+          `• **1년 이상 안 쓴 앱 / 3개월 이상 안 쓴 앱**을 자동으로 모아 용도와 안전도를 함께 보여드리며, 지울 앱만 체크해서 확인 버튼을 톡톡 누르면 바탕화면 아이콘과 용량이 한 번에 정리됩니다.`;
+        speak('아래 안 쓰는 앱 솎아내기 카드를 열어드렸어요. 1년 이상, 3개월 이상 안 쓴 앱을 골라 한 번에 정리해 보세요.');
+        return reply(sourceTab, aosUnusedMsg, {
+          followUpSuggestions: ['중복·연사 사진 정리해줘', '내 폰 사진 자동 점검 결과 볼래'],
+        });
+      }
+      const iosUnusedMsg =
+        `아이폰(iOS)은 애플 보안 정책상 외부 앱이 설치된 타사 앱 목록이나 홈 화면 아이콘을 직접 조회·삭제할 수 없어요.\n` +
+        `• 대신 아이폰 기본 **[설정 > 일반 > iPhone 저장 공간 > 사용하지 않는 앱 정리하기]**에서 오래 안 쓴 앱을 안전하게 비우실 수 있으며, 귀신같이에서는 아래 **4대 사진 정리 탭**으로 용량을 바로 확보해 드려요!`;
+      speak('아이폰은 보안 정책상 외부 앱이 다른 앱을 직접 정리할 수 없어요. 아이폰 설정의 저장 공간에서 사용하지 않는 앱 정리하기를 이용해 보세요.');
+      return reply(sourceTab, iosUnusedMsg, {
+        followUpSuggestions: ['내 폰 사진 자동 점검 결과 볼래', '중복·연사 사진 정리해줘'],
+      });
+    }
+
     const isMobilePhotoTabQuery =
       /(내\s*폰\s*사진\s*(?:자동\s*)?(?:점검|스캔)\s*결과|사진\s*(?:정리|점검)\s*(?:탭|결과|해\s*줘|볼래|봐\s*줘)|중복\s*[·.\s]*연사|연사\s*사진|중복\s*사진|영수증\s*[·.\s]*메모|메모\s*사진|스크린샷\s*(?:캡처\s*)?(?:모아|정리|지워|치워)|흔들린?\s*사진|오촬영|방금\s*정리한\s*사진\s*(?:복원|되돌)|사진\s*휴지통\s*(?:복원|되돌|열어))/i.test(
         clean

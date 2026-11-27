@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -142,6 +143,8 @@
     <!-- [Ghosti] 패밀리 공용 푸시 알림 (Android 13+) 및 스토어 업데이트/재부팅 자동 복구 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- [Ghosti 귀신비서] Android 전용 '안 쓰는 앱 솎아내기 (1년/3개월 미사용 분류)' 사용자 명시 동의 기반 사용 기록 조회 -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
 
     <!-- [Ghosti 귀신비서] 유료결제 유도(Fleeceware)·광고폭탄 클리너/부스터 합법 타겟 스캔 (<queries>) -->
     <queries>
@@ -339,6 +342,11 @@
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="image/*" />
+        </intent>
+        <!-- 4순위: [Wave 1 Android 전용 '안 쓰는 앱 솎아내기'] QUERY_ALL_PACKAGES 없이 런처 아이콘 앱만 합법 조회 -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 </manifest>

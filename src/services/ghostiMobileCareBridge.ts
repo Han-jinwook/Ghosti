@@ -95,6 +95,29 @@ export interface GhostiMobileCarePluginInterface {
   openGoogleAccountPermissions(): Promise<{ ok: boolean; url: string }>;
   openAllInstalledAppsSettings(): Promise<{ ok: boolean }>;
   openAppPermissionSettings(): Promise<{ ok: boolean }>;
+  checkUsageStatsPermission(): Promise<{ ok: boolean; granted: boolean }>;
+  openUsageStatsSettings(): Promise<{ ok: boolean }>;
+  scanUnusedUserApps(): Promise<{
+    ok: boolean;
+    permissionGranted: boolean;
+    totalCount?: number;
+    error?: string;
+    apps: Array<{
+      packageName: string;
+      appName: string;
+      lastUsedAtMs: number;
+      installedAtMs: number;
+      daysUnused: number;
+      bucket: 'over_1y' | 'over_3m' | 'recent';
+      apkSizeBytes: number;
+      iconDataUrl?: string;
+    }>;
+  }>;
+  uninstallAppWithResult(options: { packageName: string }): Promise<{
+    ok: boolean;
+    removed: boolean;
+    packageName: string;
+  }>;
   scanDeviceGalleryMedia(options?: {
     offset?: number;
     limit?: number;
@@ -1002,5 +1025,209 @@ export async function extractNativeIosPdfText(buffer: ArrayBuffer): Promise<stri
     return res?.ok && typeof res.text === 'string' ? res.text.trim() : '';
   } catch {
     return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Android 전용 Wave 1: 안 쓰는 앱 솎아내기 (1년/3개월 미사용 분류 + 3대 안심 힌트 + 순차 연타 삭제)
+// ---------------------------------------------------------------------------
+
+export type UnusedAppBucket = 'over_1y' | 'over_3m' | 'recent';
+export type UnusedAppSafetyTier = 'danger' | 'safe_remove' | 'protected';
+
+export interface UnusedMobileAppItem {
+  packageName: string;
+  appName: string;
+  lastUsedAtMs: number;
+  installedAtMs: number;
+  daysUnused: number;
+  bucket: UnusedAppBucket;
+  apkSizeBytes: number;
+  iconDataUrl: string;
+  /** AI 3대 안심 힌트 ①: 무슨 용도의 앱인지 쉬운 한글 설명 */
+  plainRoleKo: string;
+  /** AI 3대 안심 힌트 ②: 마지막 실행 시점 한글 표기 */
+  lastUsedLabelKo: string;
+  /** AI 3대 안심 힌트 ③: 안전도 등급 및 배지 */
+  safetyTier: UnusedAppSafetyTier;
+  safetyBadgeKo: string;
+}
+
+export interface UnusedMobileAppsScanResult {
+  ok: boolean;
+  permissionGranted: boolean;
+  totalCount: number;
+  apps: UnusedMobileAppItem[];
+  error?: string;
+}
+
+function formatUnusedDaysLabelKo(daysUnused: number, lastUsedAtMs: number): string {
+  const hasRealUsage = lastUsedAtMs > 1_420_070_400_000;
+  if (daysUnused >= 365) {
+    const years = Math.floor(daysUnused / 365);
+    return hasRealUsage ? `${years}년 이상 미사용` : `1년 이상 실행 기록 없음`;
+  }
+  if (daysUnused >= 90) {
+    const months = Math.floor(daysUnused / 30);
+    return hasRealUsage ? `약 ${months}개월 전 마지막 실행` : `설치 후 ${months}개월 미실행`;
+  }
+  if (daysUnused <= 1) return '오늘~어제 사용';
+  if (daysUnused < 30) return `${daysUnused}일 전 사용`;
+  const months = Math.floor(daysUnused / 30);
+  return `약 ${months}개월 전 사용`;
+}
+
+function classifyMobileAppThreeHints(
+  packageName: string,
+  appName: string,
+  daysUnused: number,
+  lastUsedAtMs: number
+): Pick<UnusedMobileAppItem, 'plainRoleKo' | 'lastUsedLabelKo' | 'safetyTier' | 'safetyBadgeKo'> {
+  const combined = `${packageName} ${appName}`.toLowerCase();
+  const lastUsedLabelKo = formatUnusedDaysLabelKo(daysUnused, lastUsedAtMs);
+
+  // 1) 악성/유료결제 유도 클리너·부스터 패턴
+  if (
+    /cleanx|클린엑스|cleaner|booster|junk|ramboost|battery\.saver|antivirus|viruscleaner|phonecleaner|storage\.clean/i.test(
+      combined
+    ) &&
+    !/samsung|google|android|ahnlab|v3/i.test(combined)
+  ) {
+    return {
+      plainRoleKo: '광고·유료결제 유도 위험이 있는 외부 청소·부스터 앱',
+      lastUsedLabelKo,
+      safetyTier: 'danger',
+      safetyBadgeKo: '삭제 권장 (광고·구독 주의)',
+    };
+  }
+
+  // 2) 은행·금융·결제·인증·메신저·통신·필수 보호 앱
+  if (
+    /kakaotalk|카카오톡|naver\.line|telegram|whatsapp|bank|은행|금융|카드|pay|페이|toss|토스|pass|패스|인증|kbstar|shinhan|wooribank|hanabank|nhbank|ibk|kbank|samsungpay|gov24|정부24|hometax|손택스|tmap|티맵|kakaonavi|kakaomap|nmap|네이버지도|korail|srt|kt\.|skt\.|lguplus/i.test(
+      combined
+    )
+  ) {
+    const role = /kakaotalk|카카오톡|line|telegram|whatsapp/i.test(combined)
+      ? '메신저 · 연락 필수 앱'
+      : /bank|은행|금융|카드|pay|페이|toss|토스|kbstar|shinhan|woori|hana|nhbank|ibk/i.test(combined)
+      ? '은행 · 결제 · 금융 앱'
+      : /pass|패스|인증|gov24|정부24|hometax|손택스/i.test(combined)
+      ? '본인인증 · 관공서 필수 앱'
+      : '지도 · 교통 · 통신 필수 앱';
+    return {
+      plainRoleKo: role,
+      lastUsedLabelKo,
+      safetyTier: 'protected',
+      safetyBadgeKo: '필수 보호 (신중 확인)',
+    };
+  }
+
+  // 3) 일반 앱 용도 자동 추론
+  let plainRoleKo = '일반 설치 앱 (삭제 후 언제든 Play 스토어 재설치 가능)';
+  if (/shop|mall|coupang|쿠팡|gmarket|11st|옥션|auction|musinsa|oliveyoung|ably|zigzag|temu|ali|당근|번개장터|중고/i.test(combined)) {
+    plainRoleKo = '쇼핑 · 마켓 앱 (안 쓰시면 정리해도 계정 정보 보존)';
+  } else if (/baemin|배달|yogiyo|요기요|coupangeats|starbucks|스타벅스|coffee|mega|compose|order/i.test(combined)) {
+    plainRoleKo = '배달 · 카페 주문 앱';
+  } else if (/game|게임|nexon|netmarble|ncsoft|supercell|roblox|minecraft|puzzle|card|맞고|고스톱|포커|바둑/i.test(combined)) {
+    plainRoleKo = '모바일 게임 앱 (용량 차지 큰 편)';
+  } else if (/camera|카메라|photo|사진|snow|soda|b612|ulike|vllo|capcut|edit|편집|filter/i.test(combined)) {
+    plainRoleKo = '사진 · 동영상 촬영·편집 앱';
+  } else if (/youtube|netflix|tving|wavve|coupangplay|disney|watcha|melon|genie|flo|spotify|music|음악|라디오|웹툰|webtoon|book|밀리/i.test(combined)) {
+    plainRoleKo = '영상 · 음악 · 웹툰 엔터테인먼트 앱';
+  } else if (/travel|여행|yanolja|야놀자|yeogi|여기어때|airbnb|agoda|skyscanner|airline|대한항공|아시아나|진에어|제주항공/i.test(combined)) {
+    plainRoleKo = '여행 · 숙소 · 항공 예약 앱';
+  } else if (/fitness|health|헬스|만보기|캐시워크|cashwalk|토스만보기|운동|다이어트|병원|약국|굿닥/i.test(combined)) {
+    plainRoleKo = '건강 · 만보기 · 리워드 앱';
+  }
+
+  return {
+    plainRoleKo,
+    lastUsedLabelKo,
+    safetyTier: 'safe_remove',
+    safetyBadgeKo: daysUnused >= 365 ? '장기 미사용 · 삭제 무방' : '안 쓰면 삭제 무방',
+  };
+}
+
+export async function checkMobileUsageStatsPermission(): Promise<boolean> {
+  if (!isCapacitorAndroidRuntime()) return false;
+  try {
+    const res = await GhostiMobileCareNative.checkUsageStatsPermission();
+    return Boolean(res?.granted);
+  } catch {
+    return false;
+  }
+}
+
+export async function openMobileUsageStatsSettings(): Promise<boolean> {
+  if (!isCapacitorAndroidRuntime()) return false;
+  try {
+    const res = await GhostiMobileCareNative.openUsageStatsSettings();
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function scanMobileUnusedApps(): Promise<UnusedMobileAppsScanResult> {
+  if (!isCapacitorAndroidRuntime()) {
+    return { ok: false, permissionGranted: false, totalCount: 0, apps: [] };
+  }
+  try {
+    const res = await GhostiMobileCareNative.scanUnusedUserApps();
+    if (!res?.permissionGranted) {
+      return { ok: true, permissionGranted: false, totalCount: 0, apps: [] };
+    }
+    const enriched: UnusedMobileAppItem[] = (res.apps || []).map((raw) => {
+      const hints = classifyMobileAppThreeHints(
+        raw.packageName,
+        raw.appName,
+        raw.daysUnused,
+        raw.lastUsedAtMs
+      );
+      return {
+        packageName: raw.packageName,
+        appName: raw.appName || raw.packageName,
+        lastUsedAtMs: raw.lastUsedAtMs || 0,
+        installedAtMs: raw.installedAtMs || 0,
+        daysUnused: raw.daysUnused || 0,
+        bucket: raw.bucket || 'recent',
+        apkSizeBytes: raw.apkSizeBytes || 0,
+        iconDataUrl: raw.iconDataUrl || '',
+        ...hints,
+      };
+    });
+    return {
+      ok: Boolean(res.ok),
+      permissionGranted: true,
+      totalCount: enriched.length,
+      apps: enriched,
+      error: res.error,
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      permissionGranted: false,
+      totalCount: 0,
+      apps: [],
+      error: e?.message || 'SCAN_ERROR',
+    };
+  }
+}
+
+export async function uninstallMobileAppAndWait(
+  packageName: string
+): Promise<{ ok: boolean; removed: boolean; packageName: string }> {
+  if (!isCapacitorAndroidRuntime() || !packageName) {
+    return { ok: false, removed: false, packageName };
+  }
+  try {
+    const res = await GhostiMobileCareNative.uninstallAppWithResult({ packageName });
+    return {
+      ok: Boolean(res?.ok),
+      removed: Boolean(res?.removed),
+      packageName: res?.packageName || packageName,
+    };
+  } catch {
+    return { ok: false, removed: false, packageName };
   }
 }

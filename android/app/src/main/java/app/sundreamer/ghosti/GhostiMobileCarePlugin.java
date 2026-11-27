@@ -2,8 +2,11 @@ package app.sundreamer.ghosti;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AppOpsManager;
 import android.app.Dialog;
 import android.app.PendingIntent;
+import android.app.usage.UsageStats;
+import android.app.usage.UsageStatsManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
@@ -18,11 +21,14 @@ import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ImageDecoder;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.graphics.Typeface;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.ExifInterface;
 import android.media.Image;
@@ -46,6 +52,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.os.Process;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.provider.Settings;
@@ -89,12 +96,14 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions;
+import androidx.activity.result.ActivityResult;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
@@ -104,6 +113,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -572,6 +582,270 @@ public class GhostiMobileCarePlugin extends Plugin {
         ret.put("packageName", cleanPkg);
         ret.put("mode", "app_details");
         launchExternalIntentSafely(detailsIntent, delIntent, call, ret, "UNINSTALL_SCREEN_FAILED");
+    }
+
+    private boolean isUsageStatsGrantedInternal(Context context) {
+        if (context == null) return false;
+        try {
+            AppOpsManager appOps = (AppOpsManager) context.getSystemService(Context.APP_OPS_SERVICE);
+            if (appOps == null) return false;
+            int mode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                ? appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName())
+                : appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.getPackageName());
+            if (mode == AppOpsManager.MODE_ALLOWED) return true;
+            if (mode == AppOpsManager.MODE_DEFAULT) {
+                return context.checkCallingOrSelfPermission(Manifest.permission.PACKAGE_USAGE_STATS)
+                    == PackageManager.PERMISSION_GRANTED;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    @PluginMethod
+    public void checkUsageStatsPermission(PluginCall call) {
+        Context context = getContext();
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("granted", isUsageStatsGrantedInternal(context));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openUsageStatsSettings(PluginCall call) {
+        Context context = getContext();
+        String ownPkg = context != null ? context.getPackageName() : "";
+        Intent pkgIntent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        if (!ownPkg.isEmpty()) {
+            pkgIntent.setData(Uri.parse("package:" + ownPkg));
+        }
+        Intent fallbackIntent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        launchExternalIntentSafely(pkgIntent, fallbackIntent, call, ret, "USAGE_STATS_SETTINGS_FAILED");
+    }
+
+    private String encodeAppIconToDataUrl(Drawable drawable) {
+        if (drawable == null) return "";
+        try {
+            final int size = 48;
+            Bitmap bmp;
+            if (drawable instanceof BitmapDrawable && ((BitmapDrawable) drawable).getBitmap() != null) {
+                Bitmap raw = ((BitmapDrawable) drawable).getBitmap();
+                bmp = Bitmap.createScaledBitmap(raw, size, size, true);
+            } else {
+                bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bmp);
+                drawable.setBounds(0, 0, size, size);
+                drawable.draw(canvas);
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            bmp.compress(Bitmap.CompressFormat.PNG, 85, baos);
+            return "data:image/png;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    @PluginMethod
+    public void scanUnusedUserApps(PluginCall call) {
+        Context context = getContext();
+        if (context == null) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("permissionGranted", false);
+            ret.put("apps", new JSArray());
+            call.resolve(ret);
+            return;
+        }
+        if (!isUsageStatsGrantedInternal(context)) {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("permissionGranted", false);
+            ret.put("apps", new JSArray());
+            call.resolve(ret);
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                PackageManager pm = context.getPackageManager();
+                String ownPkg = context.getPackageName();
+                long nowMs = System.currentTimeMillis();
+
+                // 1) UsageStatsManager 최근 약 14개월(420일) 사용 이력 조회
+                Map<String, Long> lastUsedByPkg = new HashMap<>();
+                try {
+                    UsageStatsManager usm = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
+                    if (usm != null) {
+                        long startMs = nowMs - 420L * 86_400_000L;
+                        List<UsageStats> stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_YEARLY, startMs, nowMs);
+                        if (stats != null) {
+                            for (UsageStats us : stats) {
+                                if (us == null || us.getPackageName() == null) continue;
+                                long ts = us.getLastTimeUsed();
+                                Long prev = lastUsedByPkg.get(us.getPackageName());
+                                if (prev == null || ts > prev) {
+                                    lastUsedByPkg.put(us.getPackageName(), ts);
+                                }
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                // 2) QUERY_ALL_PACKAGES 없이 합법적 ACTION_MAIN + CATEGORY_LAUNCHER 유저 설치 앱만 조회
+                Intent launcherIntent = new Intent(Intent.ACTION_MAIN, null);
+                launcherIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+                List<ResolveInfo> resolved = pm.queryIntentActivities(launcherIntent, 0);
+                Set<String> seenPkgs = new HashSet<>();
+                List<JSObject> itemList = new ArrayList<>();
+
+                if (resolved != null) {
+                    for (ResolveInfo ri : resolved) {
+                        if (ri == null || ri.activityInfo == null) continue;
+                        String pkg = ri.activityInfo.packageName;
+                        if (pkg == null || pkg.isEmpty() || pkg.equals(ownPkg) || seenPkgs.contains(pkg)) continue;
+                        seenPkgs.add(pkg);
+
+                        ApplicationInfo ai = ri.activityInfo.applicationInfo;
+                        if (ai == null) continue;
+                        boolean isSystemApp = (ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+                            || (ai.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0;
+                        if (isSystemApp) continue;
+
+                        long installedAtMs = 0L;
+                        try {
+                            PackageInfo pi = pm.getPackageInfo(pkg, 0);
+                            if (pi != null) {
+                                installedAtMs = pi.firstInstallTime;
+                            }
+                        } catch (Throwable ignored) {
+                        }
+
+                        long apkBytes = 0L;
+                        try {
+                            if (ai.publicSourceDir != null) {
+                                File apkFile = new File(ai.publicSourceDir);
+                                if (apkFile.exists()) apkBytes = apkFile.length();
+                            }
+                        } catch (Throwable ignored) {
+                        }
+
+                        long lastUsedMs = lastUsedByPkg.containsKey(pkg) ? lastUsedByPkg.get(pkg) : 0L;
+                        // 사용 기록이 유효(2015년 이후)하면 마지막 실행 기준, 전혀 없으면 설치일 기준으로 경과 일수 산출
+                        long refMs = (lastUsedMs > 1_420_070_400_000L) ? lastUsedMs : installedAtMs;
+                        int daysUnused = refMs > 0 ? (int) Math.max(0L, (nowMs - refMs) / 86_400_000L) : 365;
+                        String bucket = daysUnused >= 365
+                            ? "over_1y"
+                            : (daysUnused >= 90 ? "over_3m" : "recent");
+
+                        String appName = pkg;
+                        try {
+                            CharSequence lbl = pm.getApplicationLabel(ai);
+                            if (lbl != null && lbl.length() > 0) appName = lbl.toString().trim();
+                        } catch (Throwable ignored) {
+                        }
+
+                        String iconDataUrl = "";
+                        try {
+                            iconDataUrl = encodeAppIconToDataUrl(pm.getApplicationIcon(ai));
+                        } catch (Throwable ignored) {
+                        }
+
+                        JSObject obj = new JSObject();
+                        obj.put("packageName", pkg);
+                        obj.put("appName", appName);
+                        obj.put("lastUsedAtMs", lastUsedMs);
+                        obj.put("installedAtMs", installedAtMs);
+                        obj.put("daysUnused", daysUnused);
+                        obj.put("bucket", bucket);
+                        obj.put("apkSizeBytes", apkBytes);
+                        obj.put("iconDataUrl", iconDataUrl);
+                        itemList.add(obj);
+                    }
+                }
+
+                Collections.sort(itemList, (a, b) -> {
+                    int da = a.optInt("daysUnused", 0);
+                    int db = b.optInt("daysUnused", 0);
+                    if (da != db) return Integer.compare(db, da);
+                    return Long.compare(b.optLong("apkSizeBytes", 0L), a.optLong("apkSizeBytes", 0L));
+                });
+
+                JSArray outArr = new JSArray();
+                for (JSObject item : itemList) {
+                    outArr.put(item);
+                }
+
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                ret.put("permissionGranted", true);
+                ret.put("totalCount", itemList.size());
+                ret.put("apps", outArr);
+                call.resolve(ret);
+            } catch (Throwable e) {
+                JSObject ret = new JSObject();
+                ret.put("ok", false);
+                ret.put("permissionGranted", true);
+                ret.put("error", e.getMessage() != null ? e.getMessage() : "SCAN_FAILED");
+                ret.put("apps", new JSArray());
+                call.resolve(ret);
+            }
+        }, "GhostiUnusedAppsScanner").start();
+    }
+
+    @PluginMethod
+    public void uninstallAppWithResult(PluginCall call) {
+        String pkg = call.getString("packageName", "");
+        Context context = getContext();
+        if (context == null || pkg == null || pkg.trim().isEmpty()) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("removed", false);
+            ret.put("packageName", pkg != null ? pkg : "");
+            call.resolve(ret);
+            return;
+        }
+        String cleanPkg = pkg.trim();
+        boolean installed = false;
+        try {
+            installed = (context.getPackageManager().getPackageInfo(cleanPkg, 0) != null);
+        } catch (Throwable ignored) {
+            installed = false;
+        }
+        if (!installed) {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("removed", true);
+            ret.put("packageName", cleanPkg);
+            call.resolve(ret);
+            return;
+        }
+
+        Intent delIntent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + cleanPkg));
+        delIntent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+        startActivityForResult(call, delIntent, "handleUninstallAppActivityResult");
+    }
+
+    @ActivityCallback
+    private void handleUninstallAppActivityResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        String cleanPkg = call.getString("packageName", "").trim();
+        boolean stillInstalled = false;
+        Context context = getContext();
+        if (context != null && !cleanPkg.isEmpty()) {
+            try {
+                stillInstalled = (context.getPackageManager().getPackageInfo(cleanPkg, 0) != null);
+            } catch (Throwable ignored) {
+                stillInstalled = false;
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("removed", !stillInstalled);
+        ret.put("packageName", cleanPkg);
+        call.resolve(ret);
     }
 
     @PluginMethod
