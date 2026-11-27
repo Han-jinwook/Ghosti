@@ -233,7 +233,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl bg-[#FDFBF7] border border-amber-200/90 p-5 space-y-2.5">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-5 space-y-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[14px] font-semibold text-slate-900">
                     4. 내 기기 통합
@@ -260,10 +260,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
 
               <div
                 id="work-share"
-                className={`rounded-xl bg-[#FDFBF7] p-5 space-y-2.5 ${
+                className={`rounded-xl bg-slate-50 p-5 space-y-2.5 ${
                   b2bFocused
-                    ? 'border-2 border-amber-500 ring-2 ring-amber-200/60'
-                    : 'border border-amber-200/90'
+                    ? 'border-2 border-slate-900'
+                    : 'border border-slate-200'
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -300,7 +300,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               </div>
             </div>
 
-            <div className="rounded-xl bg-[#FDFBF7] border border-amber-200/80 p-4 flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-slate-700">
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-slate-600">
               <span>기본 기능은 기기 내 로컬 방식으로 동작하여 별도 서버 유지비 없이 제공됩니다.</span>
               <div className="flex flex-wrap gap-1.5 text-[11.5px] font-semibold text-amber-900">
                 {['암호화 전송', '휴지통 복원 지원', '법인 세금계산서 발행', '(주)썬드림 고객지원'].map((badge) => (
