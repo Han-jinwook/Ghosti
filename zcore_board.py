@@ -379,7 +379,9 @@ def cmd_claim(role: str, conv_id: str, task: str, files: str) -> int:
                 f"🛑 [문패 사용중 — 진입 보류 & 대기열 {existing_pos}순위 등록 완료!]\n"
                 f"   • 현재 작업 주체: [{owner_badge}] (경과 {elapsed}초, 작업: '{active.get('task')}')\n"
                 f"   • 내 대기 순번  : {existing_pos}순위 ([{_role_badge(norm_r)}], conv={conv_id or '미기재'})\n"
-                f"👉 지금 공용 엔진/브릿지 파일을 수정하지 말고 감시병(`python z_core_watcher.py --watch --role {norm_r}`)을 켠 채 턴을 마치고 대기하세요!\n"
+                f"👉 지금 공용 엔진/브릿지 파일을 수정하지 마세요! (문패 대기 중 병행 룰):\n"
+                f"   1) '발견된 버그'에 내 역할 카드 중 **엔진/브릿지 수정이 필요 없는 순수 웹·모바일·문서 카드**가 있으면 1건만 추가로 '버그 수정중'으로 가져와 먼저 수정·배포·완료하세요 (대기 중 최대 2건 허용).\n"
+                f"   2) 추가로 처리할 비-엔진 내 카드가 없으면 감시병(`python z_core_watcher.py --watch --role {norm_r}`)을 켠 채 턴을 마치고 대기하세요.\n"
                 f"   [{owner_badge}]이 문패를 내리는 즉시 send_message 및 감시병 자동 기상으로 바로 깨워드립니다."
             )
             print("⏳" * 24)

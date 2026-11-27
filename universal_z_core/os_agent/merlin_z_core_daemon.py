@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.12.69"
+CORE_VERSION = "2.12.79"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2450,11 +2450,36 @@ def main() -> None:
     if os.name == "nt":
         try:
             import ctypes as _ct
-            _k32 = _ct.windll.kernel32
+            from ctypes import wintypes as _wt
+
+            # [64비트 ctypes 핸들 절단 버그 근본 수정 — Task Scheduler prio=7(BelowNormal+LowMem+LowIO) 완전 탈출]:
+            # argtypes/restype 미지정 시 GetCurrentProcess()(-1)가 32비트 int로 잘려 SetPriorityClass가 ERROR_INVALID_HANDLE(6)로
+            # 100% 실패하고 BelowNormal + Low Memory(WorkingSet 0~6MB 스왑아웃) + Low I/O 상태로 기아되던 원인을 근본 제거합니다.
+            _k32 = _ct.WinDLL("kernel32", use_last_error=True)
+            _k32.GetCurrentProcess.restype = _wt.HANDLE
+            _k32.SetPriorityClass.argtypes = [_wt.HANDLE, _wt.DWORD]
+            _k32.SetPriorityClass.restype = _wt.BOOL
+            _k32.SetProcessAffinityMask.argtypes = [_wt.HANDLE, _ct.c_size_t]
+            _k32.SetProcessAffinityMask.restype = _wt.BOOL
             _hproc = _k32.GetCurrentProcess()
-            _k32.SetPriorityClass(_hproc, 0x00008000)  # ABOVE_NORMAL_PRIORITY_CLASS (CPU 100% 과부하에서도 응답 보장)
+            _k32.SetPriorityClass(_hproc, 0x00008000)  # ABOVE_NORMAL_PRIORITY_CLASS
             _all_mask = (1 << max(1, os.cpu_count() or 4)) - 1
             _k32.SetProcessAffinityMask(_hproc, _ct.c_size_t(_all_mask))
+            try:
+                _k32.SetProcessInformation.argtypes = [_wt.HANDLE, _ct.c_int, _ct.c_void_p, _wt.DWORD]
+                _k32.SetProcessInformation.restype = _wt.BOOL
+                _mem_prio = _wt.ULONG(5)  # MEMORY_PRIORITY_NORMAL
+                _k32.SetProcessInformation(_hproc, 0, _ct.byref(_mem_prio), _ct.sizeof(_mem_prio))
+            except Exception:
+                pass
+            try:
+                _nt = _ct.WinDLL("ntdll")
+                _nt.NtSetInformationProcess.argtypes = [_wt.HANDLE, _ct.c_int, _ct.c_void_p, _wt.ULONG]
+                _nt.NtSetInformationProcess.restype = _ct.c_long
+                _io_prio = _wt.ULONG(2)  # IoPriorityNormal
+                _nt.NtSetInformationProcess(_hproc, 33, _ct.byref(_io_prio), _ct.sizeof(_io_prio))
+            except Exception:
+                pass
         except Exception:
             pass
 

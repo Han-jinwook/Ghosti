@@ -50,11 +50,67 @@ k32 = ctypes.windll.kernel32
 imm32 = ctypes.windll.imm32
 
 
-def _set_current_thread_priority(level: int) -> None:
-    """인터랙티브 스레드(핫키·UI: +1/+2)와 백그라운드 스캔/사전 워커(-1)의 OS 스케줄링 우선순위를 엄격 분리합니다."""
-    if sys.platform == "win32":
+_K32_TYPED = None
+_NTDLL_TYPED = None
+if sys.platform == "win32":
+    try:
+        _K32_TYPED = ctypes.WinDLL("kernel32", use_last_error=True)
+        _K32_TYPED.GetCurrentProcess.restype = wintypes.HANDLE
+        _K32_TYPED.GetCurrentThread.restype = wintypes.HANDLE
+        _K32_TYPED.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+        _K32_TYPED.SetPriorityClass.restype = wintypes.BOOL
+        _K32_TYPED.GetPriorityClass.argtypes = [wintypes.HANDLE]
+        _K32_TYPED.GetPriorityClass.restype = wintypes.DWORD
+        _K32_TYPED.SetThreadPriority.argtypes = [wintypes.HANDLE, ctypes.c_int]
+        _K32_TYPED.SetThreadPriority.restype = wintypes.BOOL
         try:
-            k32.SetThreadPriority(k32.GetCurrentThread(), int(level))
+            _K32_TYPED.SetProcessInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+            _K32_TYPED.SetProcessInformation.restype = wintypes.BOOL
+        except Exception:
+            pass
+    except Exception:
+        _K32_TYPED = None
+    try:
+        _NTDLL_TYPED = ctypes.WinDLL("ntdll")
+        _NTDLL_TYPED.NtSetInformationProcess.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.ULONG]
+        _NTDLL_TYPED.NtSetInformationProcess.restype = ctypes.c_long
+    except Exception:
+        _NTDLL_TYPED = None
+
+
+def _boost_interactive_process_priority() -> int:
+    """
+    [64비트 ctypes 핸들 절단 버그 근본 수정 — Task Scheduler prio=7(BelowNormal+LowMem+LowIO) 완전 탈출]:
+    argtypes/restype 미지정 시 GetCurrentProcess()(-1)가 32비트 int로 잘려 SetPriorityClass가 ERROR_INVALID_HANDLE(6)로
+    100% 실패하고 BelowNormal + Low Memory(WorkingSet 0~6MB 스왑아웃) + Low I/O 상태로 기아되며
+    귀신검색창이 10~60초 얼어붙던 근본 원인을 제거합니다.
+    """
+    if sys.platform != "win32" or _K32_TYPED is None:
+        return 0
+    try:
+        h_proc = _K32_TYPED.GetCurrentProcess()
+        _K32_TYPED.SetPriorityClass(h_proc, 0x00008000)  # ABOVE_NORMAL_PRIORITY_CLASS
+        try:
+            mem_prio = wintypes.ULONG(5)  # MEMORY_PRIORITY_NORMAL (스왑 아웃 방지)
+            _K32_TYPED.SetProcessInformation(h_proc, 0, ctypes.byref(mem_prio), ctypes.sizeof(mem_prio))
+        except Exception:
+            pass
+        if _NTDLL_TYPED is not None:
+            try:
+                io_prio = wintypes.ULONG(2)  # IoPriorityNormal (디스크/JSON I/O 기아 방지)
+                _NTDLL_TYPED.NtSetInformationProcess(h_proc, 33, ctypes.byref(io_prio), ctypes.sizeof(io_prio))
+            except Exception:
+                pass
+        return int(_K32_TYPED.GetPriorityClass(h_proc) or 0)
+    except Exception:
+        return 0
+
+
+def _set_current_thread_priority(level: int) -> None:
+    """인터랙티브 스레드(핫키·UI: +1/+2)와 백그라운드 스캔/사전 워커(-1)의 OS 스케줄링 우선순위를 64비트 안전 핸들로 엄격 분리합니다."""
+    if sys.platform == "win32" and _K32_TYPED is not None:
+        try:
+            _K32_TYPED.SetThreadPriority(_K32_TYPED.GetCurrentThread(), int(level))
         except Exception:
             pass
 
@@ -10039,8 +10095,12 @@ def main(in_process: bool = False) -> None:
 
     if sys.platform == "win32":
         try:
-            # 프로세스 전체가 아닌 핫키·UI 스레드만 우선순위를 높여 백그라운드 파일스캔 워커가 UI 스레드를 기아시키지 못하게 분리!
-            k32.SetPriorityClass(k32.GetCurrentProcess(), 0x00000020)  # NORMAL_PRIORITY_CLASS
+            sys.setswitchinterval(0.001)
+        except Exception:
+            pass
+        try:
+            # Task Scheduler prio=7(BelowNormal+LowMem+LowIO) 상속을 64비트 안전 핸들로 즉시 탈출!
+            _boost_interactive_process_priority()
             _set_current_thread_priority(1)  # THREAD_PRIORITY_ABOVE_NORMAL (main hotkey thread)
         except Exception:
             pass
@@ -11055,10 +11115,7 @@ def main(in_process: bool = False) -> None:
 
     def _dedicated_mouse_hook_worker() -> None:
         try:
-            try:
-                k32.SetThreadPriority(k32.GetCurrentThread(), 2)  # THREAD_PRIORITY_HIGHEST
-            except Exception:
-                pass
+            _set_current_thread_priority(2)  # THREAD_PRIORITY_HIGHEST (64-bit safe HANDLE)
             try:
                 _ll_mouse_hook_tid[0] = int(k32.GetCurrentThreadId())
             except Exception:
@@ -11142,20 +11199,38 @@ def main(in_process: bool = False) -> None:
                 if main_lag_w >= 4.0 and stack_logged_hb[0] != _MAIN_LOOP_HEARTBEAT_TS:
                     stack_logged_hb[0] = _MAIN_LOOP_HEARTBEAT_TS
                     stk_txt = ""
+                    prio_hex = ""
                     try:
                         import traceback as _tb_w
 
-                        fr_w = sys._current_frames().get(_main_loop_thread_ident)
+                        if _K32_TYPED is not None:
+                            prio_hex = hex(int(_K32_TYPED.GetPriorityClass(_K32_TYPED.GetCurrentProcess()) or 0))
+                        all_fr = sys._current_frames()
+                        fr_w = all_fr.get(_main_loop_thread_ident)
                         if fr_w is not None:
                             stk_txt = " <- ".join(
                                 f"{os.path.basename(fs.filename)}:{fs.lineno}:{fs.name}"
                                 for fs in reversed(_tb_w.extract_stack(fr_w)[-8:])
                             )
+                        other_parts: list[str] = []
+                        self_tid = threading.get_ident()
+                        for tid_k, fr_k in list(all_fr.items()):
+                            if tid_k in (_main_loop_thread_ident, self_tid):
+                                continue
+                            top_s = _tb_w.extract_stack(fr_k)[-3:]
+                            sig_s = "<-".join(f"{os.path.basename(fs.filename)}:{fs.lineno}:{fs.name}" for fs in reversed(top_s))
+                            if "socket.py" in sig_s or "Misc.mainloop" in sig_s or "_dedicated_mouse_hook_worker" in sig_s:
+                                continue
+                            other_parts.append(f"[{tid_k}:{sig_s}]")
+                            if len(other_parts) >= 4:
+                                break
+                        if other_parts:
+                            stk_txt = f"{stk_txt} | others={' '.join(other_parts)}"
                     except Exception:
                         stk_txt = ""
                     _log_seq_diag(
                         "HANG_STACK",
-                        f"main_lag={main_lag_w:.1f}s main_stage={_MAIN_LOOP_STAGE} stack={stk_txt[:1600]}",
+                        f"main_lag={main_lag_w:.1f}s ui_lag={ui_lag_w:.1f}s prio={prio_hex} main_stage={_MAIN_LOOP_STAGE} ui_stage={_UI_LOOP_STAGE} stack={stk_txt[:1600]}",
                     )
                 # 초기 부팅(tk_init/init) 중 Windows Defender 스캔 지연은 45초 유예로 오판 자폭 원천 차단
                 ui_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 35.0
