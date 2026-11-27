@@ -595,41 +595,27 @@ def build_ui2_search_window(
 
     def _resolve_google_workspace_web_url(fpath: str, text_hint: str = "") -> tuple[str, bool]:
         """
-        .gsheet / .gdoc / .gslides 바로가기 파일에서 정식 Google Docs/Sheets 웹 URL을 추출합니다.
-        반환값: (url, is_direct_doc_url)
+        .gsheet / .gdoc / .gslides 바로가기 파일(구형 JSON 및 Google DriveFS 가상 스텁 공통)에서
+        정식 Google Docs/Sheets 웹 URL을 추출합니다. 반환값: (url, is_direct_doc_url)
         """
         if not fpath:
             return ("", False)
         ext_l = Path(fpath).suffix.lower()
         if ext_l not in (".gsheet", ".gdoc", ".gslides"):
             return ("", False)
-        raw_txt = ""
         try:
-            if os.path.isfile(fpath):
-                with open(fpath, "rb") as gf:
-                    raw_txt = gf.read(32768).decode("utf-8-sig", errors="ignore")
+            import ghosti_safe_ops as _gso
+
+            meta_g = _gso.resolve_google_workspace_shortcut_meta(fpath, text_hint=text_hint or "")
+            u_g = str(meta_g.get("url") or "").strip()
+            if u_g:
+                return (u_g, bool(meta_g.get("is_direct_url")))
         except Exception:
-            raw_txt = ""
-        if raw_txt.strip():
-            try:
-                meta = json.loads(raw_txt)
-                if isinstance(meta, dict):
-                    g_url = str(meta.get("url") or "").strip()
-                    doc_id = str(meta.get("doc_id") or meta.get("resource_id") or "").strip()
-                    if g_url.startswith(("https://", "http://")):
-                        return (g_url, True)
-                    if doc_id:
-                        if ext_l == ".gsheet":
-                            return (f"https://docs.google.com/spreadsheets/d/{doc_id}/edit", True)
-                        if ext_l == ".gslides":
-                            return (f"https://docs.google.com/presentation/d/{doc_id}/edit", True)
-                        return (f"https://docs.google.com/document/d/{doc_id}/edit", True)
-            except Exception:
-                pass
-        for cand_src in (raw_txt, text_hint or ""):
+            pass
+        for cand_src in (text_hint or "",):
             m_u = re.search(r"https://(?:docs|drive)\.google\.com/[^\s\"'<>]+", cand_src)
             if m_u:
-                return (m_u.group(0), True)
+                return (m_u.group(0), "/drive/search?" not in m_u.group(0))
         import urllib.parse as _up_g
         stem_q = _up_g.quote(Path(fpath).stem or Path(fpath).name)
         return (f"https://drive.google.com/drive/search?q={stem_q}", False)

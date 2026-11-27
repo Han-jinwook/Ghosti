@@ -65,8 +65,11 @@ def sanitize_account_backup_folder(account_email: Optional[str] = None) -> str:
 
 
 GHOSTWIN_LOCAL_PORT = 51988
+CF_DIB = 8
 CF_UNICODETEXT = 13
+CF_HDROP = 15
 GMEM_MOVEABLE = 0x0002
+GMEM_ZEROINIT = 0x0040
 DEFAULT_BRIDGE_URL = "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge"
 
 SYNC_GHOSTWIN_ACTIONS = {
@@ -78,6 +81,8 @@ SYNC_GHOSTWIN_ACTIONS = {
     "paid-sync-set-clipboard",
     "paid-sync-auth-context",
     "paid-sync-mirror-pull",
+    "paid-sync-send-to-phone",
+    "paid-sync-direct-photo-drop",
 }
 
 _LAST_INJECTED_CLIP_HASH: str = ""
@@ -122,6 +127,8 @@ _LAST_NATIVE_PUSHED_HASH: str = ""
 _LAST_NATIVE_PUSHED_TS: float = 0.0
 _RECENT_REMOTE_INJECTED_HASHES: Dict[str, float] = {}
 _DELIVERED_NATIVE_ENV_KEYS: set[str] = set()
+_DELIVERED_PHOTO_DROP_IDS: set[str] = set()
+_LAST_PHOTO_DROP_SINCE_MS: int = 0
 _RECENT_NATIVE_PUSHED_CLIPS: List[Dict[str, Any]] = []
 _RECENT_NATIVE_PULLED_CLIPS: List[Dict[str, Any]] = []
 
@@ -742,10 +749,11 @@ def start_native_clipboard_e2ee_daemon() -> None:
                         _enqueue_native_clip_push(txt, c_hash, created_iso)
 
             now_pull = time.time()
-            if (now_pull - last_pull_ts) >= 1.5:
+            if (now_pull - last_pull_ts) >= 1.2:
                 last_pull_ts = now_pull
                 if _is_native_e2ee_ready():
                     _pull_remote_clips_to_pc_os()
+                    _pull_remote_photo_drops_to_pc_os()
 
     threading.Thread(target=_push_worker_loop, name="zcore-native-clip-push", daemon=True).start()
     threading.Thread(target=_daemon_loop, name="zcore-native-clip-e2ee", daemon=True).start()
@@ -927,6 +935,394 @@ def resolve_phone_backup_dir(account_email: Optional[str] = None) -> Path:
     return (base_dir / sub) if sub else base_dir
 
 
+def send_clip_to_phone_push(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """[PC ➔ 폰 명시적 선택 전송] Ctrl+0 귀신창 또는 PC 웹 [📱 폰으로 보내기] 클릭 시 딱 1회 모바일 푸시 알림 발송."""
+    payload = data or {}
+    ctx = _load_auth_context()
+    email = str(payload.get("email") or payload.get("accountEmail") or ctx.get("email") or "").strip().lower()
+    uid = str(payload.get("canonicalUserId") or ctx.get("canonicalUserId") or "").strip()
+    hub_tok = str(payload.get("hubToken") or ctx.get("hubToken") or "").strip()
+    dev_id = str(ctx.get("deviceId") or "pc-zcore-direct").strip()
+    dev_name = str(ctx.get("deviceName") or "내 Windows PC").strip()
+    bridge_url = str(ctx.get("bridgeUrl") or DEFAULT_BRIDGE_URL).strip()
+
+    if not email or not uid or not hub_tok:
+        return {"ok": False, "error": "AUTH_CONTEXT_MISSING"}
+    if ctx.get("syncUnlocked", True) is False:
+        return {"ok": False, "error": "SYNC_LOCKED"}
+    blocked = check_pc_account_owner_allowed(email)
+    if blocked is not None:
+        return blocked
+
+    raw_text = str(payload.get("text") or "").strip()
+    if not raw_text:
+        snap = get_os_clipboard_text({"email": email})
+        raw_text = str(snap.get("text") or "").strip()
+    if not raw_text:
+        return {"ok": False, "error": "EMPTY_CLIPBOARD_TEXT"}
+    clean_text = raw_text[:32000]
+    clip_hash = str(payload.get("clipHash") or "").strip() or _sha256_text(clean_text)
+
+    try:
+        key32 = _derive_e2ee_key32(email, uid)
+        iv12 = os.urandom(12)
+        cipher_bytes = win32_aes256_gcm_encrypt(key32, iv12, clean_text.encode("utf-8"))
+        req_body: Dict[str, Any] = {
+            "action": "device_send_clip_to_phone_push",
+            "clipHash": clip_hash,
+            "cipherB64": base64.b64encode(cipher_bytes).decode("ascii"),
+            "ivB64": base64.b64encode(iv12).decode("ascii"),
+            "senderDeviceId": dev_id,
+            "senderName": dev_name,
+            "createdAt": _format_iso_utc_now(),
+        }
+        resp = _post_bridge_json(bridge_url, hub_tok, req_body, timeout_sec=7.0)
+        if isinstance(resp, dict) and resp.get("ok"):
+            srv_uid = str(resp.get("canonicalUserId") or "").strip()
+            if srv_uid and srv_uid != uid:
+                ctx["canonicalUserId"] = srv_uid
+                _save_auth_context(ctx)
+            return {
+                "ok": True,
+                "sent": True,
+                "pushId": resp.get("pushId"),
+                "clipHash": clip_hash,
+            }
+        return {"ok": False, "error": "BRIDGE_PUSH_FAILED", "detail": resp}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+class _GdiplusStartupInput(ctypes.Structure):
+    _fields_ = [
+        ("GdiplusVersion", ctypes.c_uint32),
+        ("DebugEventCallback", ctypes.c_void_p),
+        ("SuppressBackgroundThread", ctypes.c_int),
+        ("SuppressExternalCodecs", ctypes.c_int),
+    ]
+
+
+class _GpRect(ctypes.Structure):
+    _fields_ = [
+        ("X", ctypes.c_int),
+        ("Y", ctypes.c_int),
+        ("Width", ctypes.c_int),
+        ("Height", ctypes.c_int),
+    ]
+
+
+class _BitmapData(ctypes.Structure):
+    _fields_ = [
+        ("Width", ctypes.c_uint),
+        ("Height", ctypes.c_uint),
+        ("Stride", ctypes.c_int),
+        ("PixelFormat", ctypes.c_int),
+        ("Scan0", ctypes.c_void_p),
+        ("Reserved", ctypes.c_void_p),
+    ]
+
+
+def _decode_image_file_to_dib_bytes(img_path: str) -> Optional[bytes]:
+    """외부 패키지 없이 Windows 내장 gdiplus.dll로 JPG/PNG 파일을 표준 24bpp Bottom-Up CF_DIB 바이트로 변환합니다."""
+    if os.name != "nt" or not os.path.isfile(img_path):
+        return None
+    import struct
+
+    gdip = ctypes.windll.gdiplus
+    gdip.GdiplusStartup.argtypes = [
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(_GdiplusStartupInput),
+        ctypes.c_void_p,
+    ]
+    gdip.GdiplusStartup.restype = ctypes.c_int
+    gdip.GdiplusShutdown.argtypes = [ctypes.c_size_t]
+    gdip.GdiplusShutdown.restype = None
+    gdip.GdipCreateBitmapFromFile.argtypes = [ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_void_p)]
+    gdip.GdipCreateBitmapFromFile.restype = ctypes.c_int
+    gdip.GdipDisposeImage.argtypes = [ctypes.c_void_p]
+    gdip.GdipDisposeImage.restype = ctypes.c_int
+    gdip.GdipGetImageWidth.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint)]
+    gdip.GdipGetImageWidth.restype = ctypes.c_int
+    gdip.GdipGetImageHeight.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint)]
+    gdip.GdipGetImageHeight.restype = ctypes.c_int
+    gdip.GdipBitmapLockBits.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_GpRect),
+        ctypes.c_uint,
+        ctypes.c_int,
+        ctypes.POINTER(_BitmapData),
+    ]
+    gdip.GdipBitmapLockBits.restype = ctypes.c_int
+    gdip.GdipBitmapUnlockBits.argtypes = [ctypes.c_void_p, ctypes.POINTER(_BitmapData)]
+    gdip.GdipBitmapUnlockBits.restype = ctypes.c_int
+
+    token = ctypes.c_size_t(0)
+    si = _GdiplusStartupInput(1, None, 0, 0)
+    if gdip.GdiplusStartup(ctypes.byref(token), ctypes.byref(si), None) != 0:
+        return None
+    p_bmp = ctypes.c_void_p()
+    try:
+        if gdip.GdipCreateBitmapFromFile(img_path, ctypes.byref(p_bmp)) != 0 or not p_bmp.value:
+            return None
+        w_u = ctypes.c_uint(0)
+        h_u = ctypes.c_uint(0)
+        gdip.GdipGetImageWidth(p_bmp, ctypes.byref(w_u))
+        gdip.GdipGetImageHeight(p_bmp, ctypes.byref(h_u))
+        w = int(w_u.value)
+        h = int(h_u.value)
+        if w <= 0 or h <= 0 or w > 8192 or h > 8192:
+            return None
+        rect = _GpRect(0, 0, w, h)
+        bd = _BitmapData()
+        # PixelFormat24bppRGB = 0x21808, ImageLockModeRead = 1
+        if gdip.GdipBitmapLockBits(p_bmp, ctypes.byref(rect), 1, 0x21808, ctypes.byref(bd)) != 0:
+            return None
+        try:
+            dib_stride = (w * 3 + 3) & ~3
+            pixel_buf = bytearray(dib_stride * h)
+            row_bytes = w * 3
+            src_stride = int(bd.Stride)
+            base_addr = int(bd.Scan0 or 0)
+            if not base_addr:
+                return None
+            for y in range(h):
+                src_ptr = base_addr + (y * src_stride)
+                row_raw = ctypes.string_at(src_ptr, row_bytes)
+                dst_off = (h - 1 - y) * dib_stride
+                pixel_buf[dst_off : dst_off + row_bytes] = row_raw
+            bih = struct.pack(
+                "<IiiHHIIiiII",
+                40,
+                w,
+                h,
+                1,
+                24,
+                0,
+                len(pixel_buf),
+                3780,
+                3780,
+                0,
+                0,
+            )
+            return bih + bytes(pixel_buf)
+        finally:
+            gdip.GdipBitmapUnlockBits(p_bmp, ctypes.byref(bd))
+    except Exception:
+        return None
+    finally:
+        if p_bmp.value:
+            try:
+                gdip.GdipDisposeImage(p_bmp)
+            except Exception:
+                pass
+        try:
+            gdip.GdiplusShutdown(token)
+        except Exception:
+            pass
+
+
+def set_os_clipboard_image_and_file(file_path_str: str, account_email: str = "") -> Dict[str, Any]:
+    """Windows 클립보드에 CF_DIB(카톡·엑셀·워드·그림판 이미지 붙여넣기)와 CF_HDROP(탐색기 파일 붙여넣기)을 동시에 장전합니다."""
+    global _LAST_INJECTED_CLIP_SEQ
+    if account_email:
+        blocked = check_pc_account_owner_allowed(account_email)
+        if blocked is not None:
+            return blocked
+    abs_path = os.path.abspath(str(file_path_str or "").strip())
+    if not os.path.isfile(abs_path):
+        return {"ok": False, "error": "IMAGE_FILE_NOT_FOUND"}
+    if os.name != "nt":
+        return {"ok": True, "savedPath": abs_path}
+
+    import struct
+
+    dib_bytes = _decode_image_file_to_dib_bytes(abs_path)
+    drop_hdr = struct.pack("<IiiII", 20, 0, 0, 0, 1)
+    drop_bytes = drop_hdr + abs_path.encode("utf-16-le") + b"\x00\x00\x00\x00"
+
+    u32, k32 = _configure_win32_clip_funcs()
+    opened = False
+    try:
+        for attempt in range(8):
+            if u32.OpenClipboard(None):
+                opened = True
+                break
+            if attempt < 7:
+                time.sleep(0.015)
+        if not opened:
+            return {"ok": False, "error": "OPEN_CLIPBOARD_BUSY"}
+        u32.EmptyClipboard()
+
+        if dib_bytes:
+            h_dib = k32.GlobalAlloc(GMEM_MOVEABLE, len(dib_bytes))
+            if h_dib:
+                p_dib = k32.GlobalLock(h_dib)
+                if p_dib:
+                    ctypes.memmove(p_dib, dib_bytes, len(dib_bytes))
+                    k32.GlobalUnlock(h_dib)
+                    u32.SetClipboardData(CF_DIB, h_dib)
+
+        h_drop = k32.GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, len(drop_bytes))
+        if h_drop:
+            p_drop = k32.GlobalLock(h_drop)
+            if p_drop:
+                ctypes.memmove(p_drop, drop_bytes, len(drop_bytes))
+                k32.GlobalUnlock(h_drop)
+                u32.SetClipboardData(CF_HDROP, h_drop)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    finally:
+        if opened:
+            try:
+                u32.CloseClipboard()
+            except Exception:
+                pass
+
+    after_seq = int(u32.GetClipboardSequenceNumber())
+    _LAST_INJECTED_CLIP_SEQ = after_seq
+    return {"ok": True, "savedPath": abs_path, "hasDib": bool(dib_bytes), "seqNum": after_seq}
+
+
+def receive_direct_photo_drop(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """[폰 ➔ PC 사진·스크린샷 2탭 무화면 직송] 수신 즉시 로컬 저장 + CF_DIB/CF_HDROP 클립보드 장전 + 귀신창(Ctrl+0) 신호 기록."""
+    payload = data or {}
+    drop_id = str(payload.get("dropId") or "").strip()
+    if drop_id and drop_id in _DELIVERED_PHOTO_DROP_IDS:
+        return {"ok": True, "alreadyDelivered": True, "dropId": drop_id}
+
+    req_email = str(payload.get("accountEmail") or payload.get("email") or "").strip().lower()
+    if not req_email:
+        req_email = str(_load_auth_context().get("email") or "").strip().lower()
+    if req_email:
+        blocked = check_pc_account_owner_allowed(req_email)
+        if blocked is not None:
+            return blocked
+
+    raw_name = os.path.basename(str(payload.get("fileName") or "phone_photo.jpg").strip())
+    if not raw_name or Path(raw_name).suffix.lower() in _BLOCKED_EXEC_EXTS:
+        raw_name = f"phone_photo_{int(time.time())}.jpg"
+    if Path(raw_name).suffix.lower() not in (".jpg", ".jpeg", ".png"):
+        raw_name = f"{raw_name}.jpg"
+
+    signed_url = str(payload.get("signedDownloadUrl") or "").strip()
+    b64_raw = str(payload.get("base64Data") or payload.get("imageBase64") or "").strip()
+
+    try:
+        if signed_url.startswith("https://"):
+            req = urllib.request.Request(signed_url, method="GET")
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                file_bytes = resp.read()
+        elif b64_raw:
+            if "," in b64_raw and b64_raw.startswith("data:"):
+                b64_raw = b64_raw.split(",", 1)[1]
+            file_bytes = base64.b64decode(b64_raw)
+        else:
+            return {"ok": False, "error": "NO_PHOTO_PAYLOAD"}
+
+        if not file_bytes:
+            return {"ok": False, "error": "EMPTY_PHOTO_BYTES"}
+
+        local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        drop_dir = Path(local_app) / "Merlin_Z_Core" / "phone_drops"
+        drop_dir.mkdir(parents=True, exist_ok=True)
+        stamped_name = f"{int(time.time())}_{raw_name}"
+        drop_file = drop_dir / stamped_name
+        drop_file.write_bytes(file_bytes)
+
+        # 계정별 사진 백업 폴더에도 함께 보존
+        try:
+            backup_dir = resolve_phone_backup_dir(req_email)
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            (backup_dir / stamped_name).write_bytes(file_bytes)
+        except Exception:
+            pass
+
+        clip_res = set_os_clipboard_image_and_file(str(drop_file), req_email)
+
+        # Ctrl+0 귀신창 / 사진·표 OCR 창 직행 신호 파일 기록
+        try:
+            sender_name = str(payload.get("senderName") or "내 스마트폰").strip()[:48]
+            sig_path = Path(local_app) / "Merlin_Z_Core" / "latest_teleport_vanguard.json"
+            sig_tmp = sig_path.with_suffix(".tmp")
+            sig_tmp.write_text(
+                json.dumps(
+                    {
+                        "packetId": drop_id or f"pdrop_{int(time.time() * 1000)}",
+                        "fileName": raw_name,
+                        "filePath": str(drop_file),
+                        "imgPath": str(drop_file),
+                        "sourceDevice": sender_name,
+                        "summary": f"[폰 사진 직송] {raw_name}",
+                        "fullText": "",
+                        "capturedAt": time.time(),
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            os.replace(sig_tmp, sig_path)
+        except Exception:
+            pass
+
+        if drop_id:
+            _DELIVERED_PHOTO_DROP_IDS.add(drop_id)
+            if len(_DELIVERED_PHOTO_DROP_IDS) > 80:
+                keep_ids = list(_DELIVERED_PHOTO_DROP_IDS)[-40:]
+                _DELIVERED_PHOTO_DROP_IDS.clear()
+                _DELIVERED_PHOTO_DROP_IDS.update(keep_ids)
+
+        return {
+            "ok": bool(clip_res.get("ok")),
+            "dropId": drop_id,
+            "savedPath": str(drop_file),
+            "clipboard": clip_res,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def _pull_remote_photo_drops_to_pc_os() -> None:
+    """크롬이 닫혀 있어도 스마트폰 [공유 ➔ 귀신같이] 사진 직송 패킷을 수신해 Windows Ctrl+V에 자동 장전합니다."""
+    global _LAST_PHOTO_DROP_SINCE_MS
+    try:
+        ctx = _load_auth_context()
+        email = str(ctx.get("email") or "").strip().lower()
+        hub_tok = str(ctx.get("hubToken") or "").strip()
+        pc_dev_id = str(ctx.get("deviceId") or "").strip()
+        bridge_url = str(ctx.get("bridgeUrl") or DEFAULT_BRIDGE_URL).strip()
+        if not email or not hub_tok or ctx.get("syncUnlocked", True) is False:
+            return
+        if check_pc_account_owner_allowed(email) is not None:
+            return
+
+        if _LAST_PHOTO_DROP_SINCE_MS <= 0:
+            # 부팅 직후에는 최근 45초 이내에 방금 공유된 사진만 수신 (과거 사진 재주입 방지)
+            _LAST_PHOTO_DROP_SINCE_MS = int(time.time() * 1000) - 45_000
+
+        resp = _post_bridge_json(
+            bridge_url,
+            hub_tok,
+            {
+                "action": "device_pull_photo_to_pc",
+                "sinceMs": _LAST_PHOTO_DROP_SINCE_MS,
+                "callerDeviceId": pc_dev_id,
+            },
+            timeout_sec=6.0,
+        )
+        if not isinstance(resp, dict) or not resp.get("ok"):
+            return
+        item = resp.get("item")
+        if isinstance(item, dict) and item.get("dropId") and item.get("signedDownloadUrl"):
+            created_ms = int(item.get("createdAtMs") or 0)
+            if created_ms > _LAST_PHOTO_DROP_SINCE_MS:
+                _LAST_PHOTO_DROP_SINCE_MS = created_ms
+            drop_id = str(item.get("dropId") or "").strip()
+            if drop_id and drop_id not in _DELIVERED_PHOTO_DROP_IDS:
+                receive_direct_photo_drop({**item, "accountEmail": email})
+    except Exception:
+        pass
+
+
 def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """폰·서브PC에서 미러링된 원본 사진·문서를 내 PC [사진\\Ghosti_Phone_Backup\\<계정폴더>]에 안전하게 보관합니다."""
     payload = data or {}
@@ -1018,6 +1414,12 @@ def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
 
     if act == "paid-sync-mirror-pull":
         return save_mirrored_device_file(data)
+
+    if act == "paid-sync-send-to-phone":
+        return send_clip_to_phone_push(data)
+
+    if act == "paid-sync-direct-photo-drop":
+        return receive_direct_photo_drop(data)
 
     if act == "paid-sync-summon-file":
         target_name = os.path.basename(str(data.get("fileName") or data.get("fileId") or "").strip())

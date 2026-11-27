@@ -648,8 +648,8 @@ function invalidateDeviceSyncUnlockCache(emailHash) {
   deviceSyncUnlockCache.delete(emailHash);
 }
 
-async function broadcastSupabaseRealtimeClipPush(supabaseUrl, serviceKey, email, payload) {
-  if (!supabaseUrl || !serviceKey || !email || !payload) return;
+async function broadcastSupabaseRealtimePairEvent(supabaseUrl, serviceKey, email, eventName, payload) {
+  if (!supabaseUrl || !serviceKey || !email || !eventName || !payload) return;
   const topic = `ghosti:pair:${sha256Hex(String(email).trim().toLowerCase()).slice(0, 24)}`;
   const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const tid = ctrl ? setTimeout(() => ctrl.abort(), 650) : null;
@@ -661,7 +661,7 @@ async function broadcastSupabaseRealtimeClipPush(supabaseUrl, serviceKey, email,
         messages: [
           {
             topic,
-            event: 'E2EE_CLIPBOARD_PUSH',
+            event: eventName,
             payload,
             private: false,
           },
@@ -674,6 +674,16 @@ async function broadcastSupabaseRealtimeClipPush(supabaseUrl, serviceKey, email,
   } finally {
     if (tid) clearTimeout(tid);
   }
+}
+
+async function broadcastSupabaseRealtimeClipPush(supabaseUrl, serviceKey, email, payload) {
+  return broadcastSupabaseRealtimePairEvent(
+    supabaseUrl,
+    serviceKey,
+    email,
+    'E2EE_CLIPBOARD_PUSH',
+    payload
+  );
 }
 
 async function assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash) {
@@ -3003,6 +3013,319 @@ export async function handleAuthedWorkAndDeviceAction({
         maxItems: CLIPBOARD_MAX_ITEMS,
         canonicalUserId: userId,
         canonicalEmail: email,
+      },
+    };
+  }
+
+  // [PC ➔ 폰 명시적 선택 전송 (`[📱 폰으로 보내기]` 1클릭 ➔ 모바일 푸시 알림 1건 + `[📋 복사]` 1탭)]
+  if (action === 'device_send_clip_to_phone_push') {
+    const cipherB64 = String(body.cipherB64 || '').trim();
+    const ivB64 = String(body.ivB64 || '').trim();
+    const clipHash = String(body.clipHash || '').trim().slice(0, 64);
+    const senderDeviceId = String(body.senderDeviceId || '').trim().slice(0, 80);
+    const senderName = String(body.senderName || actorNick || '내 PC').trim().slice(0, 48);
+    if (!cipherB64 || !ivB64 || !clipHash || cipherB64.length > 128000) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_E2EE_PHONE_PUSH_PAYLOAD' } };
+    }
+    const [gate, inbox, mailbox] = await Promise.all([
+      assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/phone_push_inbox_v1.json`,
+        { items: [] }
+      ),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/clipboard_mailbox_v1.json`,
+        { items: [] }
+      ),
+    ]);
+    if (!gate.ok) return gate.response;
+
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const pushId = `pp_${nowMs}_${crypto.randomBytes(4).toString('hex')}`;
+    const pushItem = {
+      pushId,
+      clipHash,
+      cipherB64,
+      ivB64,
+      senderDeviceId,
+      senderName,
+      createdAt: nowIso,
+      createdAtMs: nowMs,
+    };
+
+    const cutoff24h = nowMs - 24 * 3600 * 1000;
+    const prevInbox = (Array.isArray(inbox?.items) ? inbox.items : []).filter(
+      (it) => it && Number(it.createdAtMs || Date.parse(it.createdAt || '') || 0) >= cutoff24h
+    );
+    const nextInbox = [pushItem, ...prevInbox].slice(0, 30);
+
+    // 7일 클립보드 보관함 최상단에도 함께 유지
+    const cutoff7d = nowMs - 7 * 24 * 3600 * 1000;
+    const prevMail = (Array.isArray(mailbox?.items) ? mailbox.items : []).filter(
+      (it) => it && it.clipHash !== clipHash && (Date.parse(it.createdAt || '') || 0) >= cutoff7d
+    );
+    const nextMail = [
+      {
+        clipHash,
+        cipherB64,
+        ivB64,
+        senderDeviceId,
+        senderName,
+        createdAt: nowIso,
+      },
+      ...prevMail,
+    ].slice(0, 500);
+
+    const [savedInbox] = await Promise.all([
+      writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/phone_push_inbox_v1.json`,
+        { updatedAt: nowIso, items: nextInbox }
+      ),
+      writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/clipboard_mailbox_v1.json`,
+        { updatedAt: nowIso, items: nextMail }
+      ),
+      broadcastSupabaseRealtimePairEvent(
+        supabaseUrl,
+        serviceKey,
+        email,
+        'PC_TO_PHONE_CLIP_PUSH',
+        pushItem
+      ),
+    ]);
+    if (!savedInbox) {
+      return { status: 502, body: { ok: false, reason: 'PHONE_PUSH_INBOX_WRITE_FAILED' } };
+    }
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        pushId,
+        createdAt: nowIso,
+        canonicalUserId: userId,
+        canonicalEmail: email,
+      },
+    };
+  }
+
+  if (action === 'device_pull_phone_push_inbox') {
+    const [gate, inbox] = await Promise.all([
+      assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/phone_push_inbox_v1.json`,
+        { items: [] }
+      ),
+    ]);
+    if (!gate.ok) return gate.response;
+    const nowMs = Date.now();
+    const sinceMs = Math.max(0, Number(body.sinceMs || 0));
+    const callerDeviceId = String(body.callerDeviceId || '').trim();
+    const freshCutoff = Math.max(sinceMs, nowMs - 15 * 60 * 1000);
+    const items = (Array.isArray(inbox?.items) ? inbox.items : [])
+      .filter((it) => {
+        if (!it || !it.pushId || !it.cipherB64 || !it.ivB64) return false;
+        if (callerDeviceId && it.senderDeviceId && it.senderDeviceId === callerDeviceId) return false;
+        const ts = Number(it.createdAtMs || Date.parse(it.createdAt || '') || 0);
+        return ts > freshCutoff;
+      })
+      .sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0))
+      .slice(0, 10);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        items,
+        serverNowMs: nowMs,
+        canonicalUserId: userId,
+        canonicalEmail: email,
+      },
+    };
+  }
+
+  // [폰 ➔ PC 사진·스크린샷 2탭 무화면 직송 (`[공유] ➔ [귀신같이]` ➔ PC `Ctrl+V` 이미지·파일 즉시 도착)]
+  if (action === 'device_push_photo_to_pc') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
+
+    const rawFileName = String(body.fileName || 'phone_share.jpg')
+      .replace(/[\\/:*?"<>|]+/g, '_')
+      .trim()
+      .slice(0, 96);
+    const mimeType = String(body.mimeType || 'image/jpeg').toLowerCase().startsWith('image/png')
+      ? 'image/png'
+      : 'image/jpeg';
+    const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+    const safeFileName = /\.(jpg|jpeg|png)$/i.test(rawFileName) ? rawFileName : `${rawFileName}.${ext}`;
+    const senderDeviceId = String(body.senderDeviceId || '').trim().slice(0, 80);
+    const senderName = String(body.senderName || actorNick || '내 스마트폰').trim().slice(0, 48);
+    const width = Math.max(0, Number(body.width || 0));
+    const height = Math.max(0, Number(body.height || 0));
+    let imageB64 = String(body.imageBase64 || '').trim();
+    if (imageB64.startsWith('data:')) {
+      const comma = imageB64.indexOf(',');
+      if (comma >= 0) imageB64 = imageB64.slice(comma + 1).trim();
+    }
+
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const dropId = `pdrop_${nowMs}_${crypto.randomBytes(4).toString('hex')}`;
+    let objectPath = String(body.objectPath || '').trim();
+
+    if (imageB64) {
+      const imgBuf = Buffer.from(imageB64, 'base64');
+      if (!imgBuf.length || imgBuf.length > 5 * 1024 * 1024) {
+        return { status: 400, body: { ok: false, reason: 'INVALID_DIRECT_PHOTO_SIZE' } };
+      }
+      await ensureVaultBuckets(supabaseUrl, serviceKey, false);
+      objectPath = `${emailHash}/direct_photo_blobs/${dropId}.${ext}`;
+      const upRes = await fetch(`${supabaseUrl}/storage/v1/object/${DEVICE_BUCKET}/${objectPath}`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': mimeType,
+          'x-upsert': 'true',
+          'cache-control': '0',
+        }),
+        body: imgBuf,
+      });
+      if (!upRes.ok) {
+        await ensureVaultBuckets(supabaseUrl, serviceKey, true);
+        const retryUp = await fetch(`${supabaseUrl}/storage/v1/object/${DEVICE_BUCKET}/${objectPath}`, {
+          method: 'PUT',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': mimeType,
+            'x-upsert': 'true',
+            'cache-control': '0',
+          }),
+          body: imgBuf,
+        });
+        if (!retryUp.ok) {
+          return { status: 502, body: { ok: false, reason: 'DIRECT_PHOTO_UPLOAD_FAILED' } };
+        }
+      }
+    } else if (!objectPath || !objectPath.startsWith(`${emailHash}/`)) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_DIRECT_PHOTO_PAYLOAD' } };
+    }
+
+    const [signedDl, dropsDoc] = await Promise.all([
+      createSignedDownloadUrl(supabaseUrl, serviceKey, DEVICE_BUCKET, objectPath, 900),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/direct_photo_drops_v1.json`,
+        { items: [] }
+      ),
+    ]);
+    const signedDownloadUrl = signedDl?.ok ? signedDl.signedDownloadUrl : '';
+    const dropItem = {
+      dropId,
+      fileName: safeFileName,
+      mimeType,
+      objectPath,
+      width,
+      height,
+      senderDeviceId,
+      senderName,
+      createdAt: nowIso,
+      createdAtMs: nowMs,
+    };
+    const cutoff24h = nowMs - 24 * 3600 * 1000;
+    const prevDrops = (Array.isArray(dropsDoc?.items) ? dropsDoc.items : []).filter(
+      (it) => it && Number(it.createdAtMs || Date.parse(it.createdAt || '') || 0) >= cutoff24h
+    );
+    const nextDrops = [dropItem, ...prevDrops].slice(0, 15);
+
+    await Promise.all([
+      writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/direct_photo_drops_v1.json`,
+        { updatedAt: nowIso, items: nextDrops }
+      ),
+      broadcastSupabaseRealtimePairEvent(supabaseUrl, serviceKey, email, 'DIRECT_PHOTO_TO_PC', {
+        ...dropItem,
+        signedDownloadUrl,
+      }),
+    ]);
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        dropId,
+        fileName: safeFileName,
+        signedDownloadUrl,
+        createdAt: nowIso,
+        canonicalUserId: userId,
+      },
+    };
+  }
+
+  if (action === 'device_pull_photo_to_pc') {
+    const [gate, dropsDoc] = await Promise.all([
+      assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/direct_photo_drops_v1.json`,
+        { items: [] }
+      ),
+    ]);
+    if (!gate.ok) return gate.response;
+    const nowMs = Date.now();
+    const sinceMs = Math.max(0, Number(body.sinceMs || 0));
+    const callerDeviceId = String(body.callerDeviceId || '').trim();
+    const freshCutoff = Math.max(sinceMs, nowMs - 10 * 60 * 1000);
+    const candidates = (Array.isArray(dropsDoc?.items) ? dropsDoc.items : [])
+      .filter((it) => {
+        if (!it || !it.dropId || !it.objectPath) return false;
+        if (callerDeviceId && it.senderDeviceId && it.senderDeviceId === callerDeviceId) return false;
+        const ts = Number(it.createdAtMs || Date.parse(it.createdAt || '') || 0);
+        return ts > freshCutoff;
+      })
+      .sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
+
+    const newest = candidates[0] || null;
+    if (!newest) {
+      return {
+        status: 200,
+        body: { ok: true, item: null, serverNowMs: nowMs, canonicalUserId: userId },
+      };
+    }
+    const signedDl = await createSignedDownloadUrl(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      newest.objectPath,
+      900
+    );
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        item: signedDl?.ok
+          ? { ...newest, signedDownloadUrl: signedDl.signedDownloadUrl }
+          : null,
+        serverNowMs: nowMs,
+        canonicalUserId: userId,
       },
     };
   }

@@ -81,6 +81,7 @@ public class MainActivity extends BridgeActivity {
         });
         registerPlugin(GhostiMobileCarePlugin.class);
         super.onCreate(savedInstanceState);
+        GhostiNativeClipboardSync.startPhonePushInboxWatcher(getApplicationContext());
         captureIncomingDeepLinkIntent(getIntent());
 
         // [2귀신] 안드로이드 하드웨어/제스처 뒤로가기 시 앱 즉시 종료 방지:

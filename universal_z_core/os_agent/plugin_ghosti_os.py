@@ -599,7 +599,10 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
     g_drive_candidates = [
         Path("G:\\내 드라이브"),
         Path("G:\\My Drive"),
+        Path("H:\\내 드라이브"),
+        Path("H:\\My Drive"),
         Path("G:\\"),
+        Path("H:\\"),
         LOCAL_APPDATA / "Google" / "DriveFS",
     ]
     detected_roots = [str(p) for p in g_drive_candidates if p.exists()]
@@ -609,7 +612,7 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
     _ensure_merlin_dir()
 
     discovered_shortcuts: List[Dict[str, Any]] = []
-    for root_str in detected_roots[:2]:
+    for root_str in detected_roots[:3]:
         rp = Path(root_str)
         if not rp.exists() or "DriveFS" in root_str:
             continue
@@ -617,17 +620,10 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
             for ext in ("*.gsheet", "*.gdoc", "*/*.gsheet", "*/*.gdoc"):
                 for fp in list(rp.glob(ext))[:25]:
                     try:
-                        meta = json.loads(fp.read_text(encoding="utf-8", errors="ignore"))
-                        doc_id = str(meta.get("doc_id") or meta.get("resource_id") or "")
+                        g_meta = safe.resolve_google_workspace_shortcut_meta(fp)
+                        doc_id = str(g_meta.get("doc_id") or "")
                         kind = "gsheet" if fp.suffix.lower() == ".gsheet" else "gdoc"
-                        url = str(
-                            meta.get("url")
-                            or (
-                                f"https://docs.google.com/spreadsheets/d/{doc_id}/edit"
-                                if kind == "gsheet"
-                                else f"https://docs.google.com/document/d/{doc_id}/edit"
-                            )
-                        )
+                        url = str(g_meta.get("url") or "")
                         discovered_shortcuts.append(
                             {
                                 "fileName": fp.name,
@@ -3524,9 +3520,9 @@ def _extract_doc_text(
     allow_pdf_winrt_ocr: bool = True,
     flush_disk: bool = True,
 ) -> str:
-    if _is_cloud_virtual_or_unpinned_file(entry):
-        return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 클라우드 연동 문서입니다. 파일명 및 키워드로 즉시 검색됩니다."
     ext = entry.suffix.lower()
+    if ext not in (".gsheet", ".gdoc", ".gslides") and _is_cloud_virtual_or_unpinned_file(entry):
+        return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 클라우드 연동 문서입니다. 파일명 및 키워드로 즉시 검색됩니다."
     cache_sig = ""
     try:
         st_e = entry.stat()
@@ -3539,6 +3535,34 @@ def _extract_doc_text(
 
     fallback_generic = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
     try:
+        if ext in (".gsheet", ".gdoc", ".gslides"):
+            g_meta = safe.resolve_google_workspace_shortcut_meta(entry)
+            doc_id = str(g_meta.get("doc_id") or "").strip()
+            g_url = str(g_meta.get("url") or "").strip()
+            kind_ko = str(g_meta.get("kind_ko") or "Google 문서")
+            exp_body = ""
+            if doc_id:
+                exp_res = safe.export_public_google_workspace_body(
+                    doc_id,
+                    ext,
+                    max_rows=200,
+                    max_chars=DOC_INDEX_MAX_CHARS,
+                    timeout_sec=4.5,
+                )
+                if exp_res.get("exported"):
+                    exp_body = str(exp_res.get("body_text") or "").strip()
+            txt_g = (
+                f"[{kind_ko} 바로가기 — {entry.stem}]\n"
+                + (f"원본 열기: {g_url}\n" if g_url else "")
+                + (
+                    exp_body
+                    if exp_body
+                    else "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며 원본 열기로 웹에서 바로 편집할 수 있습니다."
+                )
+            ).strip()[:DOC_INDEX_MAX_CHARS]
+            if exp_body and cache_sig:
+                _save_doc_text_cache_entry(cache_sig, txt_g, flush_disk=flush_disk)
+            return txt_g
         if ext in (".txt", ".md", ".csv"):
             raw = entry.read_bytes()[: 512 * 1024]
             if raw.startswith(b"\xff\xfe"):
@@ -3736,7 +3760,7 @@ def _bg_prewarm_doc_texts_worker(targets: List[Path]) -> None:
                 if not p.exists():
                     continue
                 st_p = p.stat()
-                if st_p.st_size <= 0 or st_p.st_size > 384 * 1024:
+                if (st_p.st_size <= 0 and ext_l not in (".gsheet", ".gdoc", ".gslides")) or st_p.st_size > 384 * 1024:
                     continue
                 txt = _extract_doc_text(p, allow_pdf_winrt_ocr=False, flush_disk=False)
                 if txt:
@@ -3937,11 +3961,11 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
             disk_full = str(doc_cache_ref.get(sig_all) or "") if not mem_full else ""
             known_text = mem_full or disk_full
             has_known_text = bool(known_text)
-            entry_mem_key = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{1 if has_known_text else 0}"
+            entry_mem_key = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{len(known_text)}"
             cached_doc_item = _DOCS_ENTRY_MEM_CACHE.get(entry_mem_key)
             if cached_doc_item is not None:
                 docs.append(cached_doc_item)
-                if not has_known_text and not _is_virtual_cloud_drive_path(resolved_doc_str):
+                if not has_known_text and (ext_low in (".gsheet", ".gdoc", ".gslides") or not _is_virtual_cloud_drive_path(resolved_doc_str)):
                     if len(deferred_doc_texts) < 1500:
                         deferred_doc_texts.append(entry)
                 continue
@@ -3951,7 +3975,7 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
             is_virt_e = _is_virtual_cloud_drive_path(resolved_doc_str)
             if has_known_text:
                 extracted = known_text
-            elif is_virt_e:
+            elif is_virt_e and ext_low not in (".gsheet", ".gdoc", ".gslides"):
                 extracted = ""
             elif ext_low in (".txt", ".md", ".csv") and st.st_size <= 65536 and (time.monotonic() - t_extract_budget0) < 0.06:
                 extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=False, flush_disk=False)
@@ -3991,7 +4015,7 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                 "size": int(st.st_size),
                 "deviceSource": _detect_folder_label(d),
             }
-            cache_key_final = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{1 if extracted else 0}"
+            cache_key_final = f"{resolved_low}|{int(st.st_size)}|{int(getattr(st, 'st_mtime_ns', int(st.st_mtime * 1e9)))}|{len(extracted)}"
             _DOCS_ENTRY_MEM_CACHE[cache_key_final] = doc_obj
             docs.append(doc_obj)
         except Exception:

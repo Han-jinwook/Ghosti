@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.11.69"
+CORE_VERSION = "2.11.89"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1519,6 +1519,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__sync/mirror-pull", "/api/sync/mirror-pull"):
             self._send_json(plugin_paid_sync_ghostwin.save_mirrored_device_file(body))
+            return
+
+        if path in ("/__sync/send-to-phone", "/api/sync/send-to-phone"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_paid_sync_ghostwin.send_clip_to_phone_push(body))
+            return
+
+        if path in ("/__sync/direct-photo-drop", "/api/sync/direct-photo-drop"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_paid_sync_ghostwin.receive_direct_photo_drop(body))
             return
 
         if path in ("/__videos/search", "/api/ghosti/videos/search"):

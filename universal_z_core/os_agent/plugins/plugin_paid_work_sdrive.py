@@ -32,6 +32,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import urllib.request
@@ -1634,13 +1635,17 @@ def _make_lightweight_image_data_url(file_path: Path, size_bytes: int) -> str:
 
 
 def _preview_sig_key(file_path: Path, st: os.stat_result) -> str:
-    return f"{os.path.normcase(os.path.abspath(str(file_path)))}|{st.st_size}|{st.st_mtime_ns}"
+    return f"{os.path.normcase(os.path.abspath(str(file_path)))}|{st.st_size}|{st.st_mtime_ns}|v2_gdfs"
 
 
 def _get_cached_preview(sig_key: str) -> Optional[Dict[str, Any]]:
     with _PREVIEW_LOCK:
         hit = _PREVIEW_CACHE.get(sig_key)
         if hit is not None:
+            retry_after = float(hit.get("_gdoc_retry_after_mono") or 0.0)
+            if retry_after > 0.0 and time.monotonic() >= retry_after:
+                _PREVIEW_CACHE.pop(sig_key, None)
+                return None
             _PREVIEW_CACHE.move_to_end(sig_key)
         return hit
 
@@ -1679,6 +1684,10 @@ def _sync_doc_body_to_ghost_search_cache(
             if pk:
                 sig = f"{pk}|{sz_int}|{mt_int}|v3_sota50k"
                 plugin_ghosti_os._save_doc_text_cache_entry(sig, clean_body, flush_disk=False)
+                prev_mem = plugin_ghosti_os._DOCS_FULL_TEXT_MEM_MAP.get(pk.lower())
+                if prev_mem != clean_body:
+                    plugin_ghosti_os._DOCS_FULL_TEXT_MEM_MAP[pk.lower()] = clean_body
+                    plugin_ghosti_os._DOCS_RESP_MEM_CACHE["sig"] = ""
     except Exception:
         pass
 
@@ -1700,6 +1709,8 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
     table_headers: List[str] = []
     table_rows: List[List[str]] = []
     image_base64 = ""
+    gdoc_retry_after = 0.0
+    gdoc_doc_id = ""
 
     try:
         if is_image:
@@ -1721,73 +1732,43 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
         elif ext_low == ".xlsx":
             table_headers, table_rows, preview_text = _parse_xlsx_preview_stdlib(file_path)
         elif ext_low in (".gdoc", ".gsheet", ".gslides"):
-            raw_bytes = file_path.read_bytes()[:32768]
-            raw_str = raw_bytes.decode("utf-8-sig", errors="ignore")
-            meta: Dict[str, Any] = {}
-            try:
-                parsed_m = json.loads(raw_str or "{}")
-                if isinstance(parsed_m, dict):
-                    meta = parsed_m
-            except Exception:
-                meta = {}
-            doc_id = str(meta.get("doc_id") or meta.get("resource_id") or "").strip()
-            g_url = str(meta.get("url") or "").strip()
-            if not g_url and doc_id:
-                if ext_low == ".gsheet":
-                    g_url = f"https://docs.google.com/spreadsheets/d/{doc_id}/edit"
-                elif ext_low == ".gslides":
-                    g_url = f"https://docs.google.com/presentation/d/{doc_id}/edit"
-                else:
-                    g_url = f"https://docs.google.com/document/d/{doc_id}/edit"
-            if not g_url:
-                m_gu = re.search(r"https://(?:docs|drive)\.google\.com/[^\s\"'<>]+", raw_str)
-                if m_gu:
-                    g_url = m_gu.group(0)
-                else:
-                    import urllib.parse as _up_gd
-                    g_url = f"https://drive.google.com/drive/search?q={_up_gd.quote(file_path.stem or file_path.name)}"
-            kind_ko = (
-                "Google 스프레드시트"
-                if ext_low == ".gsheet"
-                else "Google 프레젠테이션"
-                if ext_low == ".gslides"
-                else "Google 문서"
-            )
+            import ghosti_safe_ops
+
+            g_meta = ghosti_safe_ops.resolve_google_workspace_shortcut_meta(file_path)
+            doc_id = str(g_meta.get("doc_id") or "").strip()
+            gdoc_doc_id = doc_id
+            g_url = str(g_meta.get("url") or "").strip()
+            kind_ko = str(g_meta.get("kind_ko") or "Google 문서")
             exported_body = ""
+            is_private_gdoc = False
             # 링크 공유('링크가 있는 모든 사용자 보기') 설정된 사내 구글시트/구글문서는 백신 오진(브라우저 쿠키 접근) 없이
-            # 공식 export 엔드포인트(CSV/TXT)로 표(행·열)와 본문 텍스트를 엑셀·워드와 동일하게 자동 인덱싱
-            if doc_id and ext_low in (".gsheet", ".gdoc"):
-                try:
-                    import urllib.request
-                    exp_fmt = "csv" if ext_low == ".gsheet" else "txt"
-                    exp_kind = "spreadsheets" if ext_low == ".gsheet" else "document"
-                    exp_url = f"https://docs.google.com/{exp_kind}/d/{doc_id}/export?format={exp_fmt}"
-                    req = urllib.request.Request(exp_url, headers={"User-Agent": "Mozilla/5.0"})
-                    with urllib.request.urlopen(req, timeout=2.5) as resp:
-                        ctype = (resp.headers.get("Content-Type") or "").lower()
-                        if "text/csv" in ctype or "text/plain" in ctype:
-                            data_txt = resp.read(262144).decode("utf-8-sig", errors="ignore").strip()
-                            if data_txt and not data_txt.lstrip().lower().startswith(("<!doctype", "<html")):
-                                if ext_low == ".gsheet":
-                                    reader = list(csv.reader(io.StringIO(data_txt)))
-                                    non_empty = [r for r in reader if any(c.strip() for c in r)]
-                                    if non_empty:
-                                        table_headers = [c.strip() or f"열 {i + 1}" for i, c in enumerate(non_empty[0][:6])]
-                                        col_n = len(table_headers)
-                                        for r in non_empty[1:8]:
-                                            table_rows.append([(c.strip() if i < len(r) else "") for i, c in enumerate((r + [""] * col_n)[:col_n])])
-                                        exported_body = "\n".join(" | ".join(r[:6]) for r in non_empty[:20])[:2400]
-                                else:
-                                    exported_body = data_txt[:2400]
-                except Exception:
-                    pass
+            # 공식 export 엔드포인트(CSV/TXT, 임시 메모리 CookieJar 307 리다이렉트 지원)로 표(행·열)와 본문 텍스트 전체(최대 12,000자)를 자동 인덱싱
+            if doc_id and ext_low in (".gsheet", ".gdoc", ".gslides"):
+                exp_res = ghosti_safe_ops.export_public_google_workspace_body(
+                    doc_id,
+                    ext_low,
+                    max_rows=200,
+                    max_chars=12000,
+                    timeout_sec=4.5,
+                )
+                is_private_gdoc = bool(exp_res.get("is_private"))
+                if exp_res.get("exported"):
+                    table_headers = list(exp_res.get("table_headers") or [])
+                    table_rows = list(exp_res.get("table_rows") or [])
+                    exported_body = str(exp_res.get("body_text") or "")
+            gdoc_retry_after = 0.0 if exported_body else (time.monotonic() + 20.0)
             preview_text = (
                 f"[{kind_ko} 바로가기 — {file_path.stem}]\n"
                 + (f"원본 열기: {g_url}\n" if g_url else "")
                 + (
                     f"{exported_body}"
                     if exported_body
-                    else "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며(링크 공유 시트·문서는 본문·표까지 자동 인덱싱) 원본 열기로 웹에서 바로 편집할 수 있습니다."
+                    else (
+                        "현재 구글 문서·시트 공유 상태가 '제한됨(비공개)'이므로 파일명으로 즉시 검색되며, 우측 [Google 문서·시트 웹에서 열기 ↗] 버튼으로 바로 열 수 있습니다. "
+                        "(구글 시트 우측 상단 [공유] → 일반 액세스를 '링크가 있는 모든 사용자'로 설정하면 시트 셀 본문과 표 단어까지 자동 검색됩니다.)"
+                        if is_private_gdoc
+                        else "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며(링크 공유 시트·문서는 본문·표까지 자동 인덱싱) 원본 열기로 웹에서 바로 편집할 수 있습니다."
+                    )
                 )
             )
         elif ext_low in (".txt", ".md", ".json", ".log"):
@@ -1818,7 +1799,9 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
         pass
 
     sha256_hex = ""
-    if st.st_size <= 25 * 1024 * 1024:
+    if ext_low in (".gdoc", ".gsheet", ".gslides"):
+        sha256_hex = f"gdoc_{gdoc_doc_id or 'local'}_{int(st.st_mtime)}"
+    elif st.st_size <= 25 * 1024 * 1024:
         try:
             h = hashlib.sha256()
             with open(file_path, "rb") as fp:
@@ -1833,7 +1816,7 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
     else:
         sha256_hex = f"stat_{st.st_size}_{int(st.st_mtime)}"
 
-    return {
+    res_out: Dict[str, Any] = {
         "ext": ext_upper,
         "isImage": is_image,
         "previewText": preview_text.strip(),
@@ -1842,6 +1825,9 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result, *, allow_pdf_ocr:
         "imageBase64": image_base64,
         "sha256": sha256_hex,
     }
+    if gdoc_retry_after > 0.0:
+        res_out["_gdoc_retry_after_mono"] = gdoc_retry_after
+    return res_out
 
 
 def _extract_rich_preview_cached(file_path: Path, st: os.stat_result) -> Dict[str, Any]:
@@ -2158,7 +2144,7 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         )
         is_hidden = rel_p in hidden_rel_set
         sig_h.update(
-            f"{rel_p}|{st.st_size}|{st.st_mtime_ns}|{locked_by or ''}|{0 if pending else 1}|{1 if is_hidden else 0}\n".encode(
+            f"{rel_p}|{st.st_size}|{st.st_mtime_ns}|{locked_by or ''}|{0 if pending else 1}|{1 if is_hidden else 0}|{len(meta.get('previewText') or '')}|{len(meta.get('tableRows') or [])}\n".encode(
                 "utf-8", "ignore"
             )
         )

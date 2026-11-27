@@ -41,39 +41,57 @@
 
         </activity>
 
-        <!-- [Ghosti 3귀신] Android 앱 미진입 입력창 직결 정공법: 공식 IME 7일 클립보드 키보드 -->
-        <service
-            android:name=".GhostiClipboardImeService"
-            android:label="귀신 7일 클립보드"
-            android:permission="android.permission.BIND_INPUT_METHOD"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.view.InputMethod" />
-            </intent-filter>
-            <meta-data
-                android:name="android.view.im"
-                android:resource="@xml/ghosti_clipboard_ime" />
-        </service>
-
-        <!-- [Ghosti 3귀신] Android 앱 미진입 텍스트 선택 툴바(PROCESS_TEXT) & 공유 시트(SEND) 투명 무화면 직결 -->
+        <!-- [Ghosti 3귀신] Android 무화면 OS 직송:
+             1) 글자 드래그 시 검은 선택 말풍선의 [PC로 보내기] (ACTION_PROCESS_TEXT) 1탭 ➔ 앱 화면 안 열리고 0.3초 만에 PC Ctrl+V 직송
+             2) 갤러리·카톡 사진/스크린샷/링크 [공유] ➔ [귀신같이] (ACTION_SEND) 2탭 ➔ 앱 화면 안 열리고 PC Ctrl+V 즉시 도착
+             3) PC [📱 폰으로 보내기] 푸시 알림의 [📋 복사] 버튼 1탭 ➔ 투명 0ms 액티비티가 앱 오픈 없이 즉시 폰 클립보드 복사 -->
         <activity
             android:name=".GhostiQuickClipActivity"
-            android:label="귀신 클립보드 저장"
+            android:label="PC로 보내기"
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:noHistory="true"
             android:excludeFromRecents="true"
+            android:taskAffinity=""
             android:exported="true">
-            <intent-filter>
+            <intent-filter android:label="PC로 보내기">
                 <action android:name="android.intent.action.PROCESS_TEXT" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-            <intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".GhostiShareToPcActivity"
+            android:targetActivity=".GhostiQuickClipActivity"
+            android:label="귀신같이"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:exported="true">
+            <intent-filter android:label="귀신같이">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-        </activity>
+            <intent-filter android:label="귀신같이">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter android:label="귀신같이">
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity
+            android:name=".GhostiNotificationCopyActivity"
+            android:label="클립보드 복사"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

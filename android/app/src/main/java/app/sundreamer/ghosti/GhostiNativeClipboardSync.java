@@ -1,9 +1,16 @@
 package app.sundreamer.ghosti;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.util.Base64;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -15,6 +22,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -26,15 +35,15 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * [Ghosti 3귀신] Android 앱 미진입 직결 E2EE 클립보드 동기화 엔진
- * - 본체 앱(WebView)을 열지 않은 상태에서 [귀신 7일 클립보드] 키보드(IME) 또는
- *   텍스트 선택/공유([귀신 클립보드 저장])로 복사한 내용을 Java 백그라운드 스레드에서
- *   즉시 AES-256-GCM 암호화(JS와 100% 동일 PBKDF2 키 파생)하여 PC로 직통 전송합니다.
- * - 반대로 [귀신 7일 클립보드] 키보드가 열릴 때 PC의 최신 복사본을 직접 수신·복호화해
- *   앱 전환이나 새로고침 없이 카톡·크롬·메모장 입력창에서 바로 커서에 꽂습니다.
+ * [Ghosti 3귀신] Android 무화면 OS 직송(텍스트·사진) & PC➔폰 선택 전송 푸시([📋 복사] 1탭) 엔진
+ * 1) 폰 ➔ PC: [PC로 보내기] 텍스트 및 [공유 ➔ 귀신같이] 사진을 앱 오픈 없이 백그라운드 스레드에서 PC Ctrl+V로 직송
+ * 2) PC ➔ 폰: PC에서 평소 Ctrl+C 시에는 알림 0건, 명시적으로 [📱 폰으로 보내기] 클릭 시에만 상단 알림바에
+ *    [📋 복사] 액션 버튼이 달린 푸시 알림 1건을 띄워 앱을 열지 않고 그 자리에서 즉시 복사!
  */
 public final class GhostiNativeClipboardSync {
     private static final String AUTH_PREFS = "ghosti_native_clip_auth_v1";
+    private static final String PUSH_STATE_PREFS = "ghosti_phone_push_inbox_state_v1";
+    private static final String CHANNEL_PC_CLIP_PUSH = "ghosti_pc_clip_push_v1";
     private static final String DEFAULT_BRIDGE_URL =
         "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge";
 
@@ -42,6 +51,7 @@ public final class GhostiNativeClipboardSync {
     private static final ConcurrentHashMap<String, SecretKey> KEY_CACHE = new ConcurrentHashMap<>();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static volatile long sLastPullAtMs = 0L;
+    private static volatile boolean sPushWatcherStarted = false;
 
     private GhostiNativeClipboardSync() {}
 
@@ -78,7 +88,6 @@ public final class GhostiNativeClipboardSync {
             .putString("bridgeUrl", normUrl)
             .apply();
 
-        // 키보드/선택 툴바 호출 시 0.01초 즉시 암호화되도록 백그라운드에서 PBKDF2 키 선행 예열
         if (!normUid.isEmpty()) {
             IO_EXECUTOR.execute(() -> {
                 try {
@@ -87,6 +96,7 @@ public final class GhostiNativeClipboardSync {
                 }
             });
         }
+        startPhonePushInboxWatcher(ctx.getApplicationContext());
     }
 
     private static SecretKey deriveAesKey(String normEmail, String normUid) throws Exception {
@@ -105,14 +115,14 @@ public final class GhostiNativeClipboardSync {
         return key;
     }
 
-    private static JSONObject postBridgeJson(String endpoint, String hubToken, JSONObject body) {
+    private static JSONObject postBridgeJson(String endpoint, String hubToken, JSONObject body, int readTimeoutMs) {
         HttpURLConnection conn = null;
         try {
             URL url = new URL(endpoint);
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(6000);
-            conn.setReadTimeout(8000);
+            conn.setReadTimeout(readTimeoutMs);
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
             conn.setRequestProperty("Authorization", "Bearer " + hubToken);
@@ -141,7 +151,7 @@ public final class GhostiNativeClipboardSync {
     }
 
     /**
-     * 외부 앱(키보드 IME·텍스트 선택·공유 시트)에서 캡처한 텍스트를 본체 앱 실행 없이 PC로 직통 E2EE 전송합니다.
+     * 외부 앱([PC로 보내기] 텍스트 선택 / 공유 시트)에서 캡처한 텍스트를 본체 앱 실행 없이 PC로 직통 E2EE 전송합니다.
      */
     public static void pushEntryAsync(Context ctx, GhostiSharedClipboardStore.ClipEntry entry) {
         if (ctx == null || entry == null || entry.text == null || entry.text.trim().isEmpty()) return;
@@ -173,7 +183,7 @@ public final class GhostiNativeClipboardSync {
                 req.put("senderName", entry.senderName != null && !entry.senderName.isEmpty() ? entry.senderName : devName);
                 req.put("createdAt", entry.createdAt);
 
-                JSONObject resp = postBridgeJson(endpoint, hubToken, req);
+                JSONObject resp = postBridgeJson(endpoint, hubToken, req, 8000);
                 if (resp != null && resp.optBoolean("ok", false)) {
                     String serverUid = resp.optString("canonicalUserId", "").trim();
                     if (!serverUid.isEmpty() && !serverUid.equals(uid)) {
@@ -187,8 +197,216 @@ public final class GhostiNativeClipboardSync {
     }
 
     /**
-     * [귀신 7일 클립보드] 키보드 오픈 시 본체 앱을 열지 않고도 PC에서 복사한 최신 E2EE 클립보드를 직통 수신·복호화합니다.
+     * 갤러리·카톡에서 [공유 ➔ 귀신같이] 선택 시 본체 앱을 열지 않고 사진을 PC Ctrl+V로 직송합니다.
      */
+    public static boolean pushPhotoToPcSync(
+        Context ctx,
+        byte[] imageBytes,
+        String fileName,
+        String mimeType,
+        int width,
+        int height
+    ) {
+        if (ctx == null || imageBytes == null || imageBytes.length == 0) return false;
+        try {
+            Context appCtx = ctx.getApplicationContext();
+            SharedPreferences prefs = appCtx.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
+            String email = prefs.getString("email", "");
+            String hubToken = prefs.getString("hubToken", "");
+            String devId = prefs.getString("deviceId", "");
+            String devName = prefs.getString("deviceName", GhostiSharedClipboardStore.defaultDeviceLabel());
+            String endpoint = prefs.getString("bridgeUrl", DEFAULT_BRIDGE_URL);
+            if (email.isEmpty() || hubToken.isEmpty()) return false;
+
+            JSONObject req = new JSONObject();
+            req.put("action", "device_push_photo_to_pc");
+            req.put("fileName", fileName != null && !fileName.isEmpty() ? fileName : "phone_share.jpg");
+            req.put("mimeType", mimeType != null && !mimeType.isEmpty() ? mimeType : "image/jpeg");
+            req.put("imageBase64", Base64.encodeToString(imageBytes, Base64.NO_WRAP));
+            req.put("width", width);
+            req.put("height", height);
+            req.put("senderDeviceId", devId.isEmpty() ? "android-native-direct" : devId);
+            req.put("senderName", devName);
+
+            JSONObject resp = postBridgeJson(endpoint, hubToken, req, 18000);
+            return resp != null && resp.optBoolean("ok", false);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * PC에서 [📱 폰으로 보내기] 클릭 시 도착한 선택 전송 패킷을 감지하여 상단 알림바에 [📋 복사] 버튼 알림 1건을 띄웁니다.
+     * - 화면이 꺼져 있을 때는 0% 대기하여 배터리를 전혀 소모하지 않고, 화면이 켜져 있을 때만 경량 수신합니다.
+     */
+    public static synchronized void startPhonePushInboxWatcher(Context ctx) {
+        if (ctx == null || sPushWatcherStarted) return;
+        sPushWatcherStarted = true;
+        final Context appCtx = ctx.getApplicationContext();
+        ensurePcClipPushChannel(appCtx);
+
+        Thread watcher = new Thread(() -> {
+            long sinceMs = System.currentTimeMillis() - 30_000L;
+            while (true) {
+                try {
+                    PowerManager pm = (PowerManager) appCtx.getSystemService(Context.POWER_SERVICE);
+                    boolean screenOn = (pm == null) || pm.isInteractive();
+                    if (!screenOn) {
+                        Thread.sleep(4500L);
+                        continue;
+                    }
+                    SharedPreferences authPrefs = appCtx.getSharedPreferences(AUTH_PREFS, Context.MODE_PRIVATE);
+                    String email = authPrefs.getString("email", "");
+                    String uid = authPrefs.getString("canonicalUserId", "");
+                    String hubToken = authPrefs.getString("hubToken", "");
+                    String devId = authPrefs.getString("deviceId", "");
+                    String endpoint = authPrefs.getString("bridgeUrl", DEFAULT_BRIDGE_URL);
+                    if (email.isEmpty() || hubToken.isEmpty()) {
+                        Thread.sleep(3500L);
+                        continue;
+                    }
+
+                    JSONObject req = new JSONObject();
+                    req.put("action", "device_pull_phone_push_inbox");
+                    req.put("sinceMs", sinceMs);
+                    req.put("callerDeviceId", devId);
+                    JSONObject resp = postBridgeJson(endpoint, hubToken, req, 6500);
+                    if (resp != null && resp.optBoolean("ok", false)) {
+                        String srvUid = resp.optString("canonicalUserId", "").trim();
+                        if (!srvUid.isEmpty() && !srvUid.equals(uid)) {
+                            authPrefs.edit().putString("canonicalUserId", srvUid).apply();
+                            uid = srvUid;
+                        }
+                        JSONArray items = resp.optJSONArray("items");
+                        if (items != null && items.length() > 0 && !uid.isEmpty()) {
+                            SecretKey primaryKey = deriveAesKey(email, uid);
+                            SharedPreferences stPrefs = appCtx.getSharedPreferences(PUSH_STATE_PREFS, Context.MODE_PRIVATE);
+                            Set<String> seenSet = new HashSet<>(stPrefs.getStringSet("seen_ids", new HashSet<>()));
+                            boolean updatedSeen = false;
+
+                            for (int i = items.length() - 1; i >= 0; i--) {
+                                JSONObject it = items.optJSONObject(i);
+                                if (it == null) continue;
+                                String pushId = it.optString("pushId", "").trim();
+                                long createdAtMs = it.optLong("createdAtMs", 0L);
+                                if (createdAtMs > sinceMs) sinceMs = createdAtMs;
+                                if (pushId.isEmpty() || seenSet.contains(pushId)) continue;
+
+                                String plain = tryDecrypt(
+                                    primaryKey,
+                                    it.optString("cipherB64", ""),
+                                    it.optString("ivB64", "")
+                                );
+                                if (plain != null && !plain.trim().isEmpty()) {
+                                    seenSet.add(pushId);
+                                    updatedSeen = true;
+                                    postOneTapCopyNotification(
+                                        appCtx,
+                                        pushId,
+                                        plain.trim(),
+                                        it.optString("senderName", "내 PC")
+                                    );
+                                }
+                            }
+                            if (updatedSeen) {
+                                if (seenSet.size() > 80) {
+                                    Set<String> trimmed = new HashSet<>();
+                                    int k = 0;
+                                    for (String id : seenSet) {
+                                        trimmed.add(id);
+                                        if (++k >= 50) break;
+                                    }
+                                    seenSet = trimmed;
+                                }
+                                stPrefs.edit().putStringSet("seen_ids", seenSet).apply();
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+                try {
+                    Thread.sleep(1500L);
+                } catch (InterruptedException ie) {
+                    break;
+                }
+            }
+        }, "ghosti-phone-push-watcher");
+        watcher.setDaemon(true);
+        watcher.start();
+    }
+
+    private static void ensurePcClipPushChannel(Context appCtx) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        try {
+            NotificationManager nm = (NotificationManager) appCtx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            NotificationChannel ch = new NotificationChannel(
+                CHANNEL_PC_CLIP_PUSH,
+                "PC에서 보낸 클립보드",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            ch.setDescription("PC에서 [폰으로 보내기]를 눌렀을 때 상단 알림의 [복사] 버튼 1탭으로 앱을 열지 않고 복사합니다.");
+            nm.createNotificationChannel(ch);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static void postOneTapCopyNotification(Context appCtx, String pushId, String plainText, String senderName) {
+        if (appCtx == null || plainText == null || plainText.trim().isEmpty()) return;
+        try {
+            ensurePcClipPushChannel(appCtx);
+            NotificationManager nm = (NotificationManager) appCtx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+
+            int notifId = Math.abs((pushId != null ? pushId : plainText).hashCode() & 0x0FFFFFFF) + 51000;
+            Intent copyIntent = new Intent(appCtx, GhostiNotificationCopyActivity.class);
+            copyIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+            copyIntent.putExtra(GhostiNotificationCopyActivity.EXTRA_CLIP_TEXT, plainText);
+            copyIntent.putExtra(GhostiNotificationCopyActivity.EXTRA_NOTIFICATION_ID, notifId);
+
+            int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                piFlags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+            PendingIntent copyPendingIntent = PendingIntent.getActivity(appCtx, notifId, copyIntent, piFlags);
+
+            String oneLinePreview = plainText.replace('\n', ' ').trim();
+            if (oneLinePreview.length() > 90) {
+                oneLinePreview = oneLinePreview.substring(0, 90) + "…";
+            }
+            String cleanSender = (senderName != null && !senderName.trim().isEmpty()) ? senderName.trim() : "내 PC";
+
+            Notification.Builder builder = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ? new Notification.Builder(appCtx, CHANNEL_PC_CLIP_PUSH)
+                : new Notification.Builder(appCtx);
+
+            int smallIcon = appCtx.getApplicationInfo().icon;
+            if (smallIcon == 0) smallIcon = android.R.drawable.stat_notify_chat;
+
+            Notification.Action copyAction = new Notification.Action.Builder(
+                0,
+                "📋 복사",
+                copyPendingIntent
+            ).build();
+
+            builder
+                .setSmallIcon(smallIcon)
+                .setContentTitle("📱 " + cleanSender + "에서 보낸 클립보드")
+                .setContentText(oneLinePreview)
+                .setStyle(new Notification.BigTextStyle().bigText(oneLinePreview))
+                .setContentIntent(copyPendingIntent)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .addAction(copyAction);
+
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                builder.setPriority(Notification.PRIORITY_HIGH);
+            }
+            nm.notify(notifId, builder.build());
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static void pullRemoteAsync(Context ctx, Runnable onUiUpdated) {
         if (ctx == null) return;
         long now = System.currentTimeMillis();
@@ -207,7 +425,7 @@ public final class GhostiNativeClipboardSync {
 
                 JSONObject req = new JSONObject();
                 req.put("action", "device_pull_e2ee_clips");
-                JSONObject resp = postBridgeJson(endpoint, hubToken, req);
+                JSONObject resp = postBridgeJson(endpoint, hubToken, req, 8000);
                 if (resp == null || !resp.optBoolean("ok", false)) return;
 
                 String serverUid = resp.optString("canonicalUserId", "").trim();

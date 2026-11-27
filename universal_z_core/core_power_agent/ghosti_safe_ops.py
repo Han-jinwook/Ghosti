@@ -29,7 +29,7 @@ import time
 import uuid
 from ctypes import wintypes
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 APPDATA = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
@@ -1949,3 +1949,354 @@ def measure_pc_spec() -> Dict[str, Any]:
     spec["gpuModel"] = gpus[0] if gpus else None
     spec["displayHz"] = _display_hz()
     return spec
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [Google Drive for Desktop(DriveFS) 가상 .gsheet/.gdoc/.gslides SSOT 해석기]
+# - 최신 Google Drive 데스크톱 가상 드라이브(G:\, H:\ 등) 및 subst S:\ 마운트 경로에서
+#   .gsheet/.gdoc/.gslides 스텁 파일은 커널 ReadFile 시 항상 WinError 1(Incorrect function)이 발생합니다.
+# - 브라우저 쿠키 접근(백신 오진 유발)을 0%로 배제하고, 로컬 %LOCALAPPDATA%\Google\DriveFS\*\metadata_sqlite_db
+#   (및 shortcut_details 바로가기 타겟 테이블)에서 정확한 44자리 Google cloud_id(doc_id)를 5ms 내 추출합니다.
+# ─────────────────────────────────────────────────────────────────────────────
+_DRIVEFS_INDEX_LOCK = threading.Lock()
+_DRIVEFS_INDEX_CACHE: Dict[str, Any] = {
+    "checked_mono": 0.0,
+    "db_sig": "",
+    "by_parent_and_title": {},
+    "by_title": {},
+}
+
+
+def unwrap_subst_drive_path(path_in: Path | str) -> Path:
+    """Windows subst 가상 드라이브(예: S:\\ -> H:\\내 드라이브\\폴더) 경로를 실제 원본 경로로 역해석합니다."""
+    p = Path(path_in)
+    if os.name != "nt":
+        return p
+    try:
+        abs_s = os.path.abspath(str(p))
+        if len(abs_s) >= 2 and abs_s[1] == ":":
+            drv = abs_s[:2]
+            buf = ctypes.create_unicode_buffer(1024)
+            n = ctypes.windll.kernel32.QueryDosDeviceW(drv, buf, 1024)
+            if n > 0 and buf.value.startswith("\\??\\"):
+                real_root = buf.value[4:].rstrip("\\/")
+                tail = abs_s[2:].lstrip("\\/")
+                return Path(f"{real_root}\\{tail}" if tail else f"{real_root}\\")
+    except Exception:
+        pass
+    return p
+
+
+def _canonical_google_workspace_url(doc_id: str, ext_low: str) -> str:
+    clean_id = (doc_id or "").strip()
+    if not clean_id:
+        return ""
+    if ext_low == ".gsheet":
+        return f"https://docs.google.com/spreadsheets/d/{clean_id}/edit"
+    if ext_low == ".gslides":
+        return f"https://docs.google.com/presentation/d/{clean_id}/edit"
+    return f"https://docs.google.com/document/d/{clean_id}/edit"
+
+
+def _load_drivefs_cloud_id_index() -> Tuple[Dict[Tuple[str, str], str], Dict[str, str]]:
+    now_m = time.monotonic()
+    with _DRIVEFS_INDEX_LOCK:
+        if (now_m - float(_DRIVEFS_INDEX_CACHE["checked_mono"])) < 15.0 and _DRIVEFS_INDEX_CACHE["db_sig"]:
+            return _DRIVEFS_INDEX_CACHE["by_parent_and_title"], _DRIVEFS_INDEX_CACHE["by_title"]
+
+        local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        dfs_root = Path(local_app) / "Google" / "DriveFS"
+        if not dfs_root.is_dir():
+            _DRIVEFS_INDEX_CACHE["checked_mono"] = now_m
+            return _DRIVEFS_INDEX_CACHE["by_parent_and_title"], _DRIVEFS_INDEX_CACHE["by_title"]
+
+        db_candidates: List[Path] = []
+        sig_parts: List[str] = []
+        try:
+            for acc in sorted(dfs_root.iterdir()):
+                if not acc.is_dir():
+                    continue
+                mdb = acc / "metadata_sqlite_db"
+                if not mdb.is_file():
+                    mdb = acc / "mirror_metadata_sqlite.db"
+                if mdb.is_file():
+                    db_candidates.append(mdb)
+                    for suf in ("", "-wal"):
+                        sp = Path(str(mdb) + suf)
+                        if sp.exists():
+                            try:
+                                st_s = sp.stat()
+                                sig_parts.append(f"{sp}:{st_s.st_size}:{st_s.st_mtime_ns}")
+                            except OSError:
+                                pass
+        except OSError:
+            pass
+
+        cur_sig = "|".join(sig_parts)
+        if cur_sig and cur_sig == _DRIVEFS_INDEX_CACHE["db_sig"]:
+            _DRIVEFS_INDEX_CACHE["checked_mono"] = now_m
+            return _DRIVEFS_INDEX_CACHE["by_parent_and_title"], _DRIVEFS_INDEX_CACHE["by_title"]
+
+        by_parent: Dict[Tuple[str, str], str] = {}
+        by_title: Dict[str, str] = {}
+        try:
+            import sqlite3
+            import tempfile
+            import unicodedata
+
+            for mdb in db_candidates:
+                td = Path(tempfile.mkdtemp(prefix="ghosti_gdfs_ro_"))
+                try:
+                    for suf in ("", "-wal", "-shm"):
+                        src_f = Path(str(mdb) + suf)
+                        if src_f.exists():
+                            shutil.copy2(src_f, td / src_f.name)
+                    con = sqlite3.connect(str(td / mdb.name), timeout=2.0)
+                    try:
+                        cur = con.cursor()
+                        tables = {
+                            str(r[0])
+                            for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+                        }
+                        if "items" not in tables or "stable_ids" not in tables:
+                            continue
+                        if "shortcut_details" in tables:
+                            sql = (
+                                "SELECT COALESCE(ts.cloud_id, s.cloud_id), i.local_title, pi.local_title, "
+                                "COALESCE(sd.target_mime_type, i.mime_type) "
+                                "FROM items i "
+                                "LEFT JOIN stable_ids s ON s.stable_id = i.stable_id "
+                                "LEFT JOIN shortcut_details sd ON sd.shortcut_stable_id = i.stable_id "
+                                "LEFT JOIN stable_ids ts ON ts.stable_id = sd.target_stable_id "
+                                "LEFT JOIN stable_parents p ON p.item_stable_id = i.stable_id "
+                                "LEFT JOIN items pi ON pi.stable_id = p.parent_stable_id "
+                                "WHERE i.trashed = 0 AND i.is_tombstone = 0 "
+                                "AND (i.mime_type LIKE 'application/vnd.google-apps.%' "
+                                "OR i.local_title LIKE '%.gsheet' OR i.local_title LIKE '%.gdoc' OR i.local_title LIKE '%.gslides')"
+                            )
+                        else:
+                            sql = (
+                                "SELECT s.cloud_id, i.local_title, pi.local_title, i.mime_type "
+                                "FROM items i "
+                                "LEFT JOIN stable_ids s ON s.stable_id = i.stable_id "
+                                "LEFT JOIN stable_parents p ON p.item_stable_id = i.stable_id "
+                                "LEFT JOIN items pi ON pi.stable_id = p.parent_stable_id "
+                                "WHERE i.trashed = 0 AND i.is_tombstone = 0 "
+                                "AND (i.mime_type LIKE 'application/vnd.google-apps.%' "
+                                "OR i.local_title LIKE '%.gsheet' OR i.local_title LIKE '%.gdoc' OR i.local_title LIKE '%.gslides')"
+                            )
+                        for cid_raw, ltitle_raw, ptitle_raw, mime_raw in cur.execute(sql).fetchall():
+                            cid = str(cid_raw or "").strip()
+                            ltitle = unicodedata.normalize("NFC", str(ltitle_raw or "").strip())
+                            ptitle = unicodedata.normalize("NFC", str(ptitle_raw or "").strip())
+                            mime_s = str(mime_raw or "").lower()
+                            if not cid or not ltitle or "folder" in mime_s:
+                                continue
+                            lt_low = ltitle.lower()
+                            stem_low = Path(ltitle).stem.lower()
+                            key_variants = {lt_low, stem_low}
+                            if "spreadsheet" in mime_s:
+                                key_variants.add(f"{stem_low}.gsheet")
+                            elif "presentation" in mime_s:
+                                key_variants.add(f"{stem_low}.gslides")
+                            elif "document" in mime_s:
+                                key_variants.add(f"{stem_low}.gdoc")
+                            pt_low = ptitle.lower()
+                            for kv in key_variants:
+                                if not kv:
+                                    continue
+                                if pt_low:
+                                    by_parent[(pt_low, kv)] = cid
+                                by_title.setdefault(kv, cid)
+                    finally:
+                        con.close()
+                except Exception:
+                    pass
+                finally:
+                    shutil.rmtree(td, ignore_errors=True)
+        except Exception:
+            pass
+
+        _DRIVEFS_INDEX_CACHE["checked_mono"] = now_m
+        _DRIVEFS_INDEX_CACHE["db_sig"] = cur_sig or "loaded"
+        _DRIVEFS_INDEX_CACHE["by_parent_and_title"] = by_parent
+        _DRIVEFS_INDEX_CACHE["by_title"] = by_title
+        return by_parent, by_title
+
+
+def resolve_google_workspace_shortcut_meta(file_path: Path | str, text_hint: str = "") -> Dict[str, Any]:
+    """
+    .gsheet / .gdoc / .gslides 파일에서 (doc_id, 정식 Google Docs/Sheets 편집 URL, 직접 URL 여부, 한글 종류명)을 반환합니다.
+    1순위: 로컬 JSON 바로가기 본문 파싱 (구글 백업 및 동기화 / 복제본)
+    2순위: Google DriveFS 가상 스텁(WinError 1) 대응 로컬 metadata_sqlite_db(+shortcut_details) cloud_id 매칭
+    3순위: 텍스트 힌트 내 URL 정규식 추출 -> 드라이브 파일명 검색 URL 안전 폴백
+    """
+    import unicodedata
+    import urllib.parse
+
+    orig_p = Path(file_path)
+    ext_low = orig_p.suffix.lower()
+    kind_ko = (
+        "Google 스프레드시트"
+        if ext_low == ".gsheet"
+        else "Google 프레젠테이션"
+        if ext_low == ".gslides"
+        else "Google 문서"
+    )
+    if ext_low not in (".gsheet", ".gdoc", ".gslides"):
+        return {"doc_id": "", "url": "", "is_direct_url": False, "ext": ext_low, "kind_ko": kind_ko}
+
+    doc_id = ""
+    g_url = ""
+    raw_str = ""
+    try:
+        raw_bytes = orig_p.read_bytes()[:32768]
+        raw_str = raw_bytes.decode("utf-8-sig", errors="ignore")
+    except OSError:
+        raw_str = ""
+    except Exception:
+        raw_str = ""
+
+    if raw_str.strip():
+        try:
+            parsed = json.loads(raw_str)
+            if isinstance(parsed, dict):
+                doc_id = str(parsed.get("doc_id") or parsed.get("resource_id") or "").strip()
+                raw_u = str(parsed.get("url") or "").strip()
+                if raw_u.startswith(("https://", "http://")):
+                    g_url = raw_u
+        except Exception:
+            pass
+        if not doc_id and g_url:
+            m_id = re.search(r"/(?:spreadsheets|document|presentation)/d/([A-Za-z0-9_-]{15,})", g_url)
+            if m_id:
+                doc_id = m_id.group(1)
+
+    if not doc_id:
+        real_p = unwrap_subst_drive_path(orig_p)
+        parent_low = unicodedata.normalize("NFC", real_p.parent.name).strip().lower()
+        name_low = unicodedata.normalize("NFC", real_p.name).strip().lower()
+        stem_low = unicodedata.normalize("NFC", real_p.stem).strip().lower()
+        by_parent, by_title = _load_drivefs_cloud_id_index()
+        if parent_low:
+            doc_id = by_parent.get((parent_low, name_low)) or by_parent.get((parent_low, stem_low)) or ""
+        if not doc_id:
+            doc_id = by_title.get(name_low) or by_title.get(stem_low) or ""
+
+    if doc_id and not g_url:
+        g_url = _canonical_google_workspace_url(doc_id, ext_low)
+
+    if not g_url:
+        for cand_src in (raw_str, text_hint or ""):
+            if not cand_src:
+                continue
+            m_u = re.search(r"https://(?:docs|drive)\.google\.com/[^\s\"'<>]+", cand_src)
+            if m_u and "/drive/search?" not in m_u.group(0):
+                g_url = m_u.group(0)
+                m_id2 = re.search(r"/(?:spreadsheets|document|presentation)/d/([A-Za-z0-9_-]{15,})", g_url)
+                if m_id2 and not doc_id:
+                    doc_id = m_id2.group(1)
+                break
+
+    if g_url:
+        return {"doc_id": doc_id, "url": g_url, "is_direct_url": True, "ext": ext_low, "kind_ko": kind_ko}
+
+    stem_q = urllib.parse.quote(orig_p.stem or orig_p.name)
+    return {
+        "doc_id": "",
+        "url": f"https://drive.google.com/drive/search?q={stem_q}",
+        "is_direct_url": False,
+        "ext": ext_low,
+        "kind_ko": kind_ko,
+    }
+
+
+def export_public_google_workspace_body(
+    doc_id: str,
+    ext_low: str,
+    *,
+    max_rows: int = 200,
+    max_chars: int = 12000,
+    timeout_sec: float = 4.5,
+) -> Dict[str, Any]:
+    """
+    링크 공유('링크가 있는 모든 사용자 보기') 설정된 Google 시트·문서·프레젠테이션의 본문·표를
+    브라우저 쿠키 접근 없이(임시 메모리 CookieJar로 307 리다이렉트만 처리) 안전하게 추출합니다.
+    """
+    clean_id = (doc_id or "").strip()
+    out: Dict[str, Any] = {
+        "exported": False,
+        "is_private": False,
+        "table_headers": [],
+        "table_rows": [],
+        "body_text": "",
+    }
+    if not clean_id or ext_low not in (".gsheet", ".gdoc", ".gslides"):
+        return out
+
+    import csv
+    import http.cookiejar
+    import io
+    import urllib.error
+    import urllib.request
+
+    if ext_low == ".gsheet":
+        urls = [
+            f"https://docs.google.com/spreadsheets/d/{clean_id}/export?format=csv",
+            f"https://docs.google.com/spreadsheets/d/{clean_id}/gviz/tq?tqx=out:csv",
+        ]
+    elif ext_low == ".gslides":
+        urls = [f"https://docs.google.com/presentation/d/{clean_id}/export/txt"]
+    else:
+        urls = [f"https://docs.google.com/document/d/{clean_id}/export?format=txt"]
+
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+    for exp_url in urls:
+        try:
+            req = urllib.request.Request(exp_url, headers={"User-Agent": "Mozilla/5.0"})
+            with opener.open(req, timeout=timeout_sec) as resp:
+                final_url = str(resp.geturl() or "").lower()
+                if "accounts.google.com" in final_url or "/servicelogin" in final_url or "/v3/signin" in final_url:
+                    out["is_private"] = True
+                    return out
+                ctype = str(resp.headers.get("Content-Type") or "").lower()
+                if "text/csv" not in ctype and "text/plain" not in ctype:
+                    continue
+                data_txt = resp.read(524288).decode("utf-8-sig", errors="ignore").strip()
+                if not data_txt or data_txt.lstrip().lower().startswith(("<!doctype", "<html")):
+                    continue
+                if ext_low == ".gsheet":
+                    reader = list(csv.reader(io.StringIO(data_txt)))
+                    non_empty = [r for r in reader if any(c.strip() for c in r)]
+                    if non_empty:
+                        headers = [c.strip() or f"열 {i + 1}" for i, c in enumerate(non_empty[0][:8])]
+                        col_n = len(headers)
+                        rows_out: List[List[str]] = []
+                        for r in non_empty[1:11]:
+                            rows_out.append(
+                                [(c.strip() if i < len(r) else "") for i, c in enumerate((r + [""] * col_n)[:col_n])]
+                            )
+                        body_lines = [
+                            " | ".join(c.strip() for c in r[:16] if c.strip() or len(r) <= 8)
+                            for r in non_empty[:max_rows]
+                        ]
+                        out["table_headers"] = headers
+                        out["table_rows"] = rows_out
+                        out["body_text"] = "\n".join(line for line in body_lines if line)[:max_chars]
+                        out["exported"] = bool(out["body_text"])
+                        if out["exported"]:
+                            return out
+                else:
+                    out["body_text"] = data_txt[:max_chars]
+                    out["exported"] = True
+                    return out
+        except urllib.error.HTTPError as he:
+            if he.code in (401, 403):
+                out["is_private"] = True
+                return out
+        except Exception:
+            continue
+    return out
+
