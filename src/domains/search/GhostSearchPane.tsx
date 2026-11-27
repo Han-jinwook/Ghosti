@@ -29,6 +29,11 @@ import {
   resolveCurrentUserIdentityTokens,
 } from '../free_photo_share/FreePhotoShareLounge';
 
+/** 클라우드 전용 사진(G: 구글 드라이브 등) 썸네일을 받을 수 없을 때 표시하는 구름 자리표시 (원본 다운로드 폴백 금지) */
+const CLOUD_ONLY_PHOTO_PLACEHOLDER = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90"><rect width="120" height="90" fill="#18181b"/><path d="M42 60h38a12 12 0 0 0 1-24 17 17 0 0 0-32-4 13 13 0 0 0-7 28z" fill="none" stroke="#a1a1aa" stroke-width="3" stroke-linejoin="round"/></svg>'
+)}`;
+
 export const GhostSearchPane: React.FC<{
   ghostSearchWindowStage: 'small' | 'medium' | 'large' | null;
 }> = ({ ghostSearchWindowStage }) => {
@@ -771,6 +776,14 @@ export const GhostSearchPane: React.FC<{
                                           decoding="async"
                                           onError={(e) => {
                                             const imgEl = e.currentTarget;
+                                            if (item.photo.cloudOnly) {
+                                              // 클라우드 전용 사진은 썸네일 실패 시 원본 전체 다운로드로 폴백하지 않고 구름 자리표시만 표시
+                                              if (imgEl.dataset.retried !== 'cloud') {
+                                                imgEl.dataset.retried = 'cloud';
+                                                imgEl.src = CLOUD_ONLY_PHOTO_PLACEHOLDER;
+                                              }
+                                              return;
+                                            }
                                             if (!imgEl.dataset.retried && item.photo.fullUrl && imgEl.src !== item.photo.fullUrl) {
                                               imgEl.dataset.retried = '1';
                                               imgEl.src = item.photo.fullUrl;

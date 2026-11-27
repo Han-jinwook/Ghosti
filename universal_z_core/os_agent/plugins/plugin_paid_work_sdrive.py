@@ -488,7 +488,11 @@ def get_work_vault_dir(custom_target: Optional[str] = None, ensure_dirs: bool = 
     if ensure_dirs:
         try:
             vault_dir.mkdir(parents=True, exist_ok=True)
-            if not is_custom:
+            is_invited_mirror_mode = (
+                cfg.get("isWorkHost") is False
+                or str(cfg.get("workPlanId") or "").strip() == "work_invited_member"
+            )
+            if not is_custom and not is_invited_mirror_mode:
                 for _, folder_name in SUBFOLDER_SPECS:
                     (vault_dir / folder_name).mkdir(parents=True, exist_ok=True)
                 _purge_legacy_vite_mock_files_once(vault_dir)
@@ -2246,7 +2250,9 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         for item, (full_p, _rel, st) in zip(files_out, entries):
             if st.st_size <= 512 * 1024 and full_p.suffix.lower() not in _BLOCKED_EXEC_EXTS:
                 try:
-                    item["syncBase64"] = base64.b64encode(full_p.read_bytes()).decode("ascii")
+                    raw_sync = read_work_file_bytes_safe(full_p)
+                    if raw_sync:
+                        item["syncBase64"] = base64.b64encode(raw_sync).decode("ascii")
                 except Exception:
                     pass
     resp["files"] = files_out
@@ -2287,6 +2293,27 @@ def get_work_locks_fast(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     }
 
 
+def read_work_file_bytes_safe(target: Path) -> bytes:
+    """일반 파일은 원본 바이트를 그대로 읽고, Google DriveFS 가상 스텁(.gsheet/.gdoc/.gslides, WinError 1)은
+    팀원 PC 탐색기 S:\\에서도 더블클릭·웹 열기가 100% 작동하도록 정식 JSON 바로가기 바이트로 합성 반환합니다."""
+    ext_l = target.suffix.lower()
+    try:
+        raw_b = target.read_bytes()
+        if raw_b or ext_l not in (".gsheet", ".gdoc", ".gslides"):
+            return raw_b
+    except OSError:
+        if ext_l not in (".gsheet", ".gdoc", ".gslides"):
+            raise
+    import ghosti_safe_ops
+
+    g_meta = ghosti_safe_ops.resolve_google_workspace_shortcut_meta(target)
+    payload_obj = {
+        "url": str(g_meta.get("url") or ""),
+        "doc_id": str(g_meta.get("doc_id") or ""),
+    }
+    return json.dumps(payload_obj, ensure_ascii=False).encode("utf-8")
+
+
 def get_single_work_file_sync_payload(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     qp = params or {}
     rel_p = str(qp.get("relPath") or "").strip()
@@ -2299,12 +2326,13 @@ def get_single_work_file_sync_payload(params: Dict[str, Any] | None = None) -> D
     st = target.stat()
     if st.st_size > 15 * 1024 * 1024:
         return {"ok": False, "error": "FILE_TOO_LARGE_FOR_INLINE_RELAY", "size": st.st_size}
-    b64 = base64.b64encode(target.read_bytes()).decode("ascii")
+    raw_bytes = read_work_file_bytes_safe(target)
+    b64 = base64.b64encode(raw_bytes).decode("ascii")
     return {
         "ok": True,
         "relPath": rel_p.replace("\\", "/"),
         "fileName": target.name,
-        "size": st.st_size,
+        "size": len(raw_bytes),
         "mtime": _iso_utc(st.st_mtime),
         "base64Data": b64,
     }
@@ -2440,6 +2468,8 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     payload = data or {}
     incoming = payload.get("files")
     tombstones = payload.get("deletedTombstones") or {}
+    mirror_authoritative = bool(payload.get("mirrorAuthoritative", False))
+    raw_auth_rels = payload.get("authoritativeRelPaths")
     if not isinstance(incoming, list):
         incoming = []
 
@@ -2467,6 +2497,32 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 if _move_to_recycle_bin_safe(target_t):
                     removed_rel_set.add(clean_t)
                     removed_by_tombstone += 1
+
+    # [초대 팀원 PC 탐색기 S:\ 정본 미러링 정합화]:
+    # 방장이 [업무 폴더 변경]으로 공유 폴더를 바꿨을 때, 초대 팀원 PC의 기본 미러 폴더(%LOCALAPPDATA%\Merlin\업무공유폴더_S)에
+    # 남아 있던 변경 전 구 파일(휴지통 안전 이동)과 빈 기본 서브폴더(01_~04_ 등)를 자동 정리해 방장 S:\와 100% 일치시킵니다.
+    is_managed_default_vault = _same_path(vault_dir, _default_work_vault_dir())
+    if mirror_authoritative and is_managed_default_vault and isinstance(raw_auth_rels, list):
+        auth_low_set = {
+            str(r or "").strip().replace("\\", "/").lstrip("/").lower()
+            for r in raw_auth_rels
+            if str(r or "").strip()
+        }
+        for item_in in incoming:
+            if isinstance(item_in, dict) and item_in.get("relPath"):
+                auth_low_set.add(str(item_in["relPath"]).strip().replace("\\", "/").lstrip("/").lower())
+        now_sec = time.time()
+        cur_entries, _, _ = _scan_work_vault(vault_dir, set(), include_hidden=True)
+        for cur_full_p, cur_rel_p, cur_st in cur_entries:
+            if cur_rel_p.lower() in auth_low_set:
+                continue
+            if (now_sec - float(cur_st.st_mtime)) < 12.0:
+                continue
+            if detect_file_lock_owner(cur_full_p):
+                continue
+            if _move_to_recycle_bin_safe(cur_full_p):
+                removed_rel_set.add(cur_rel_p)
+                removed_by_tombstone += 1
 
     synced = 0
     skipped = 0
@@ -2572,6 +2628,21 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
             cur_up = dict(cur.get("uploaderByRelPath") or {})
             cur_up.update(up_map)
             cur["uploaderByRelPath"] = cur_up
+
+    if mirror_authoritative and is_managed_default_vault:
+        try:
+            vault_norm = os.path.normcase(os.path.abspath(str(vault_dir)))
+            for root_d, subdirs, files_d in os.walk(str(vault_dir), topdown=False):
+                if os.path.normcase(os.path.abspath(root_d)) == vault_norm:
+                    continue
+                if not files_d and not subdirs:
+                    try:
+                        os.rmdir(root_d)
+                        removed_by_tombstone += 1
+                    except OSError:
+                        pass
+        except Exception:
+            pass
 
     _mutate_sdrive_config(_apply_pull)
     mounted_letter = _mounted_letter_for_vault(vault_dir)

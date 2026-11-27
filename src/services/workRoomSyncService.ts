@@ -1731,6 +1731,7 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
     roomId?: string;
     inviteToken?: string;
     deletedTombstones?: WorkDeletedTombstoneMap;
+    mirrorAuthoritative?: boolean;
   }
 ): Promise<{ ok: boolean; syncedCount: number; removedCount: number }> {
   if (!zCoreBridge.isConnected) {
@@ -1748,17 +1749,17 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
       base64Data: d.inlineSyncBase64,
     }));
 
-  // 인라인 Base64가 없는 파일은 대장 PC의 상시 HTTPS 직통 터널(/__work/file-sync-payload)에서 직접 가져와 동기화 (서버 저장 0 Byte)
+  // 인라인 Base64가 없는 파일(.gsheet 가상 스텁 포함)은 대장 PC의 상시 HTTPS 직통 터널(/__work/file-sync-payload)에서 직접 가져와 동기화 (서버 저장 0 Byte)
   const tunnel = activeHostTunnelSession;
   if (tunnel?.tunnelUrl) {
     const needFetchDocs = remoteDocs.filter(
       (d) =>
         !d.inlineSyncBase64 &&
         !lookupWorkTombstone(tombstones, d.relPath) &&
-        d.byteSize > 0 &&
+        d.byteSize >= 0 &&
         d.byteSize <= 15 * 1024 * 1024
     );
-    for (const d of needFetchDocs.slice(0, 15)) {
+    for (const d of needFetchDocs.slice(0, 25)) {
       try {
         const pRes = await fetchWithTimeout(
           `${tunnel.tunnelUrl}/__work/file-sync-payload?relPath=${encodeURIComponent(d.relPath)}`,
@@ -1779,7 +1780,7 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
             inlineItems.push({
               relPath: d.relPath,
               sha256: d.sha256,
-              byteSize: Number(pj.size || d.byteSize || 0),
+              byteSize: Number(pj.size ?? d.byteSize ?? 0),
               fileMtimeIso: pj.mtime || d.fileMtimeIso,
               uploaderNickname: d.author,
               base64Data: pj.base64Data,
@@ -1795,7 +1796,11 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
   let syncedTotal = 0;
   let removedTotal = 0;
 
-  if (inlineItems.length > 0 || Object.keys(tombstones).length > 0) {
+  if (
+    inlineItems.length > 0 ||
+    Object.keys(tombstones).length > 0 ||
+    Boolean(opts?.mirrorAuthoritative)
+  ) {
     try {
       const res = await fetchWithTimeout(
         getZCoreUrl('/__work/pull-sync'),
@@ -1805,6 +1810,10 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
           body: JSON.stringify({
             files: inlineItems,
             deletedTombstones: tombstones,
+            mirrorAuthoritative: Boolean(opts?.mirrorAuthoritative),
+            authoritativeRelPaths: remoteDocs
+              .filter((d) => !lookupWorkTombstone(tombstones, d.relPath))
+              .map((d) => d.relPath),
           }),
         },
         15000

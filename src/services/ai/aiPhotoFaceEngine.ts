@@ -462,6 +462,8 @@ export async function loadInitialPhotoDataset(): Promise<{
     size: number;
     date: string;
     mtimeMs: number;
+    /** 구글 드라이브(G: DriveFS)·온라인 전용(OneDrive 등) 클라우드 사진 — 파일명·폴더명으로만 검색, 원본 대량 다운로드 금지 */
+    cloudOnly?: boolean;
   };
   let fileList: LocalPhotoEntry[] = [];
   let quarantinedList: LocalPhotoEntry[] = [];
@@ -979,6 +981,7 @@ export async function loadInitialPhotoDataset(): Promise<{
       dhash: audit?.dhash,
       quarantined: isQuarantined,
       presetScores: scoresByPhoto.get(f.path) ?? {},
+      cloudOnly: Boolean(f.cloudOnly),
     };
   };
 
@@ -2253,7 +2256,10 @@ export async function runOnboardingIndexingPipeline(params: {
 }): Promise<void> {
   const { targetPhotos: rawTargetPhotos, useRealWebGpuVision, onUpdate, shouldCancel } = params;
   // 1단계: 수정일(mtimeMs) 기준 최근 90일(3개월) 이내 파일부터 최우선 정렬
-  const targetPhotos = silentIndexingBrake.sortPhotosRecent90DaysFirst(rawTargetPhotos);
+  // (클라우드 전용 사진은 원본 대량 다운로드 방지를 위해 AI 내용 분석에서 제외하고 파일명·폴더명으로만 검색)
+  const targetPhotos = silentIndexingBrake.sortPhotosRecent90DaysFirst(
+    rawTargetPhotos.filter((p) => !p.cloudOnly)
+  );
   const total = targetPhotos.length;
   if (total === 0) return;
 
@@ -2693,7 +2699,8 @@ export async function startSilentRealMediaVisionIndexing(params: {
           ontologyPrimaryTags: item.ontologyPrimaryTags,
           ...(item.captionKo ? { captionKo: item.captionKo } : {}),
         });
-      } else {
+      } else if (!item.cloudOnly) {
+        // 클라우드 전용 사진(G: 구글 드라이브 등)은 파일명·폴더명으로만 검색하고 AI 내용 분석(원본·썸네일 대량 다운로드)은 생략
         unindexedCandidates.push(item);
       }
     }

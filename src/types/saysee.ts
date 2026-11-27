@@ -395,6 +395,8 @@ export interface PhotoItem {
   mtimeMs: number;
   thumbUrl: string;
   fullUrl: string;
+  /** 구글 드라이브(G: DriveFS)·온라인 전용 클라우드 사진 여부 (파일명·폴더명으로만 검색 · AI 내용 분석 대량 다운로드 제외) */
+  cloudOnly?: boolean;
   /** 768차원 정규화 벡터 (실시간 WebGPU 색인 시 저장) */
   vec?: Float32Array;
   /** 시맨틱 태그 (예: #해변·물놀이, #나무다리·공원, #스크린샷) */

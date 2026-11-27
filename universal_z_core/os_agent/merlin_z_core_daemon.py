@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.12.49"
+CORE_VERSION = "2.12.59"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1066,7 +1066,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if path in ("/__work/download", "/api/work/download"):
             f_path, mime, status = plugin_paid_work_sdrive.resolve_work_download_file(qp)
             if f_path is not None and status == 200:
-                data_bytes = f_path.read_bytes()
+                data_bytes = plugin_paid_work_sdrive.read_work_file_bytes_safe(f_path)
                 encoded_name = urllib.parse.quote(f_path.name)
                 disp = "inline" if str(qp.get("inline") or "") in ("1", "true") else "attachment"
                 self.send_response(200)
