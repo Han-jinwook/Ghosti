@@ -462,13 +462,13 @@ def _audit_cluster_zcore_version_parity() -> None:
     ]
 
     ps_probe = (
-        "$h = curl.exe -s --max-time 2 http://127.0.0.1:5199/__merlin/health; "
-        "$v = if ($h -match '\"version\":\\s*\"([^\"]+)\"') { $Matches[1] } else { 'DOWN' }; "
+        "$h = curl.exe -s --max-time 2 http://127.0.0.1:5199/__merlin/health\n"
+        "$v = if ($h -match '\"version\":\\s*\"([^\"]+)\"') { $Matches[1] } else { 'DOWN' }\n"
         "$rogue = @(Get-CimInstance Win32_Process | Where-Object { "
-        "($_.Name -notmatch 'Merlin_Z_Core_Setup|SenseTalk_Engine') -and ($_.CommandLine -match 'seq_paste_daemon\\.py') "
-        " -or (($_.Name -match 'Merlin_Z_Core') -and ($_.ExecutablePath -and $_.ExecutablePath -notmatch 'Programs\\\\MerlinFamily')) "
-        "}).Count; "
-        "Write-Output \"$v|$rogue\""
+        "(($_.Name -notmatch 'Merlin_Z_Core_Setup|SenseTalk_Engine') -and ($_.CommandLine -match 'seq_paste_daemon\\.py')) "
+        "-or (($_.Name -match 'Merlin_Z_Core') -and ($_.ExecutablePath -and $_.ExecutablePath -notmatch 'Programs\\\\MerlinFamily')) "
+        "}).Count\n"
+        "Write-Output \"$v|$rogue\"\n"
     )
 
     def _check_node(item: tuple[str, str | None]) -> tuple[str, str, int]:
@@ -489,16 +489,17 @@ def _audit_cluster_zcore_version_parity() -> None:
             "-o", "StrictHostKeyChecking=no",
             "-o", "ConnectTimeout=2",
             ssh_target,
-            f'powershell -NoProfile -NonInteractive -Command "{ps_probe}"',
+            "powershell -NoProfile -NonInteractive -Command -",
         ]
         try:
             r = subprocess.run(
                 cmd,
+                input=ps_probe,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="ignore",
-                timeout=4.5,
+                timeout=6.0,
                 creationflags=0x08000000 if os.name == "nt" else 0,
             )
             out = (r.stdout or "").strip().splitlines()
