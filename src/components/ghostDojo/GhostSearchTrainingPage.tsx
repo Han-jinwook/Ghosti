@@ -767,7 +767,7 @@ const VirtualMonitorSimulator: React.FC<{
                                 {topDoc.fileName}
                               </div>
                             </div>
-                            <div className="text-[11.5px] text-slate-700 leading-relaxed line-clamp-8 whitespace-pre-line bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
+                            <div className="text-[11.5px] text-slate-700 leading-relaxed whitespace-pre-line bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
                               {renderHighlightedDocText(
                                 maskSensitiveDocText(topDoc.extractedText) || '문서 미리보기',
                                 sampleQueryText,
@@ -800,7 +800,7 @@ const VirtualMonitorSimulator: React.FC<{
                             <div className="text-[12px] font-bold text-slate-900 truncate">
                               {topVideo.title}
                             </div>
-                            <div className="text-[11.5px] text-slate-700 bg-amber-50/70 border border-amber-200 rounded-lg p-2 line-clamp-3">
+                            <div className="text-[11.5px] text-slate-700 leading-relaxed whitespace-pre-line bg-amber-50/70 border border-amber-200 rounded-lg p-2.5">
                               {renderHighlightedDocText(
                                 topVideo.ocrFullText || topVideo.matchedFrameCaption || topVideo.sceneDescription,
                                 sampleQueryText,
@@ -826,8 +826,11 @@ const VirtualMonitorSimulator: React.FC<{
                             <div className="text-[12px] font-bold text-slate-900 truncate">
                               {topPhoto.name}
                             </div>
-                            <div className="text-[11.5px] text-slate-600 line-clamp-3">
-                              {topPhoto.captionKo || topPhoto.tags.join(' · ')}
+                            <div className="text-[11.5px] text-slate-700 leading-relaxed whitespace-pre-line bg-amber-50/70 border border-amber-200 rounded-lg p-2.5">
+                              {renderHighlightedDocText(
+                                topPhoto.captionKo || topPhoto.tags.join(' · '),
+                                sampleQueryText,
+                              )}
                             </div>
                             <button
                               type="button"

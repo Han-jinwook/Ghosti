@@ -11,7 +11,8 @@ export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
     fullUrl: '/sample_photos_301/IMG_20250510_1001.jpg',
     tags: ['#가족·인물', '#해변', '#노을산책'],
     ontologyPrimaryTags: ['가족', '해변', '일몰'],
-    captionKo: '노을 지는 해변에서 가족이 함께 손을 잡고 산책하는 사진입니다.',
+    captionKo:
+      '촬영일시: 2025-05-10 18:42 (서해 을왕리 해변)\n인물·장면: 노을 지는 해변 백사장에서 가족 6명이 손을 잡고 산책하는 여행 사진',
     captionEn: 'Family walking on the beach at sunset.',
     keywordsKo: ['노을', '지는', '해변', '가족', '인물', '산책', '바다', '여행'],
   },
@@ -25,7 +26,8 @@ export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
     fullUrl: '/sample_photos_301/Screenshot_20250802_1002_배달주문내역.jpg',
     tags: ['#영수증·주문내역', '#수제버거', '#38,500원'],
     ontologyPrimaryTags: ['배달주문내역', '수제버거', '38500원'],
-    captionKo: '청라 수제버거 & 치킨 하우스 배달 주문 결제내역(38,500원, 더블 치즈버거 세트) 캡처 이미지입니다.',
+    captionKo:
+      '상호명: 청라 수제버거 & 치킨 하우스 (배달 주문내역)\n주문메뉴: 더블 치즈 수제버거 세트 + 크리스피 순살치킨\n결제내역: 배달비 포함 총 38,500원 (신한카드 일시불 · 승인완료)',
     captionEn: 'Delivery order receipt screenshot for burger and chicken.',
     keywordsKo: ['영수증', '주문', '배달', '결제', '버거', '수제버거', '치킨', '결제금액', '38,500원', '38500', '신한카드'],
   },
@@ -136,7 +138,11 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
     keywords: ['패러세일링', '바다', '보트', '여행', '하늘'],
     hasScreenOcrText: true,
     ocrLineCount: 2,
-    ocrFullText: 'KOTA KINABALU PARASAILING TOUR / 2인 탑승 완료',
+    ocrLines: [
+      { timeSec: 4, timestamp: '00:04', text: '코타키나발루 마누칸섬 해양 액티비티 출발' },
+      { timeSec: 12, timestamp: '00:12', text: 'KOTA KINABALU PARASAILING TOUR · 2인 탑승 완료' },
+    ],
+    ocrFullText: '[00:04] 코타키나발루 마누칸섬 해양 액티비티 출발\n[00:12] KOTA KINABALU PARASAILING TOUR · 2인 탑승 완료',
     timelineFrames: [
       {
         frameId: 'demo_v1_f1',
@@ -170,7 +176,13 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
     keywords: ['회의', '회의실', '화이트보드', '매출', '목표', '발표', '35억'],
     hasScreenOcrText: true,
     ocrLineCount: 3,
-    ocrFullText: '주간 회의 화이트보드 — 2026 목표 매출 35억 달성 로드맵 / Q4 핵심 과제',
+    ocrLines: [
+      { timeSec: 3, timestamp: '00:03', text: '2026 하반기 본사 영업본부 주간 전략회의' },
+      { timeSec: 8, timestamp: '00:08', text: '화이트보드 판서: 2026 목표 매출 35억 달성 로드맵 (전년 대비 +42%)' },
+      { timeSec: 16, timestamp: '00:16', text: 'Q4 핵심 실행과제: 수도권 법인 거래처 120곳 신규 확보' },
+    ],
+    ocrFullText:
+      '[00:03] 2026 하반기 본사 영업본부 주간 전략회의\n[00:08] 화이트보드 판서: 2026 목표 매출 35억 달성 로드맵 (전년 대비 +42%)\n[00:16] Q4 핵심 실행과제: 수도권 법인 거래처 120곳 신규 확보',
     timelineFrames: [
       {
         frameId: 'demo_v2_f1',
@@ -190,15 +202,15 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
   {
     id: 'demo_sample_doc_2',
     fileName: '2026_하반기_한일건재_납품견적서_샘플.xlsx',
-    title: '2026 하반기 거래처별 자재 납품견적서 (한일건재)',
+    title: '2026 하반기 거래처별 자재 납품견적서 (주식회사 한일건재)',
     ext: 'XLSX',
     categoryBadge: '견적·단가',
     date: '2025-09-03',
     sizeKB: 185,
     deviceSource: '샘플 문서',
     extractedText:
-      '거래처: 한일건재(담당 김대리) | 품목: 고효율 LED 모듈 A형 | 공급단가: 145,000원(VAT 별도) | 최소 발주수량: 50EA',
-    keywords: ['한일건재', 'LED', '모듈', '공급단가', '견적서', '문서', '납품', '김대리', '엑셀'],
+      '거래처: 주식회사 한일건재 (영업1팀 김민수 대리 · 02-555-1420)\n품명/규격: 고효율 산업용 LED 모듈 A형 (50W · 주백색 5700K · 방수 IP65)\n공급단가: 145,000원 (VAT 별도 / 최소 발주수량 50EA 기준)\n총 견적금액: 7,250,000원 (부가세 별도) | 납기조건: 발주 후 5영업일 이내 현장 직납 | 결제조건: 월말 마감 익월 10일 현금결제',
+    keywords: ['한일건재', 'LED', '모듈', '공급단가', '견적서', '문서', '납품', '김민수', '엑셀'],
   },
   {
     id: 'demo_sample_doc_3',
@@ -210,8 +222,8 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     sizeKB: 162,
     deviceSource: '샘플 문서',
     extractedText:
-      '거래처: 대성물산(담당 박과장) | 품목: 친환경 완충 포장박스 중형 | 공급단가: 1,850원(VAT 별도) | 최소 발주수량: 1,000EA',
-    keywords: ['대성물산', '포장박스', '공급단가', '견적서', '문서', '물류', '박과장', '엑셀'],
+      '거래처: 대성물산 주식회사 (물류구매팀 박정훈 과장 · 031-482-9910)\n품명/규격: 친환경 이중골 완충 포장박스 중형 (450×350×300mm)\n공급단가: 1,850원 (VAT 별도 / 최소 발주수량 1,000EA 기준)\n총 견적금액: 1,850,000원 | 납기조건: 파주 물류센터 입고 완료 기준',
+    keywords: ['대성물산', '포장박스', '공급단가', '견적서', '문서', '물류', '박정훈', '엑셀'],
   },
   {
     id: 'demo_sample_doc_1',
@@ -223,7 +235,7 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     sizeKB: 420,
     deviceSource: '샘플 문서',
     extractedText:
-      '제3조(보증금 및 월세) 강남 본사 사무실 보증금 금 오천만원정(50,000,000원), 월 차임 금 삼백이십만원정(3,200,000원, 매월 25일 지급)으로 한다.',
+      '소재지: 서울특별시 강남구 테헤란로 218, 7층 702호 (전용면적 165㎡)\n제3조(보증금 및 월세) 임대차 보증금 금 오천만원정(50,000,000원), 월 차임 금 삼백이십만원정(3,200,000원, 매월 25일 후불 지급)으로 한다.\n특약사항: 주차 3대 무료 제공 및 퇴실 시 원상복구 범위는 최초 입주 현황 사진 기준으로 한다.',
     keywords: ['계약서', '임대차', '사무실', '강남', '보증금', '월세', '특약'],
   },
   {
@@ -236,7 +248,7 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     sizeKB: 310,
     deviceSource: '샘플 문서',
     extractedText:
-      '제4조(공사기간 및 하자보수) 착공일로부터 45일 이내 준공하며, 전기·조명 설비 무상 하자보수 보증기간은 준공 후 2년으로 한다.',
+      '공사명: 청라 직영 2호점 내부 인테리어 및 전기·조명 설비 공사\n제4조(공사기간 및 하자보수) 착공일로부터 45일 이내 준공하며, 전기·간접조명 설비 무상 하자보수 보증기간은 준공 검사 완료일로부터 2년으로 한다.',
     keywords: ['계약서', '인테리어', '시공', '매장', '하자보수', '조명', '한글'],
   },
 ];
