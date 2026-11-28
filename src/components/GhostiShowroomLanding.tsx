@@ -293,7 +293,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       label: '귀신비서',
       title: '1. 귀신비서',
       priceNote: '평생 0원',
-      headline: '느려진 내 PC·폰, 클릭 한 번에 새것처럼',
+      headline: '느려진 내 PC·폰, 귀신비서 고스티와 대화하며 안전 쾌적하게',
       subline: '은행 보안프로그램은 안 지우고 재우고, 중복·연사 사진과 흩어진 문서까지 1초 정리하는데, 광고 1도 없습니다.',
     },
     search: {
