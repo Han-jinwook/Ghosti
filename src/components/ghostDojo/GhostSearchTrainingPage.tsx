@@ -20,7 +20,7 @@ import {
   DEMO_SEARCH_SAMPLE_VIDEOS_2,
   Stage1MinimalSearchPreview,
 } from '../Stage1MinimalPreview';
-import { maskSensitiveDocText } from '../PricingModal';
+import { maskSensitiveDocText, renderHighlightedDocText } from '../PricingModal';
 import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../../services/aiEngine';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import {
@@ -550,48 +550,48 @@ const VirtualMonitorSimulator: React.FC<{
     return computeGhostSearchWindowRect('large', anchor.x, anchor.y, SIMULATOR_WORK_AREA, 18);
   })();
 
-  const qLower = sampleQueryText.trim().toLowerCase();
-  const qTokens = qLower.split(/\s+/).filter(Boolean);
+  const qTokens = sampleQueryText
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.,"'“”‘’()[\]{}]/g, ' ')
+    .split(/\s+/)
+    .map((w) => w.replace(/(에서|으로|부터|까지|이랑|하고|에게|께서|이라|란|은|는|이|가|을|를|의|에|로|도|만|와|과)$/u, '').trim())
+    .filter((w) => w.length >= 1 && !['찾아줘', '보여줘', '알려줘', '얼마야', '얼마', '어디', '있는', '나온', '적힌', '파일', '문서', '사진', '영상', '동영상'].includes(w));
+
+  const pickBestSampleMatch = <T,>(items: T[], getHay: (it: T) => string): T | undefined => {
+    if (qTokens.length === 0) return items[0];
+    const scored = items
+      .map((it) => {
+        const hay = getHay(it).toLowerCase();
+        const hits = qTokens.filter((t) => hay.includes(t)).length;
+        return { it, hits };
+      })
+      .filter((x) => x.hits > 0)
+      .sort((a, b) => b.hits - a.hits);
+    return scored[0]?.it;
+  };
 
   const resolveTopPhoto = () => {
     if (searchSpace !== 'gallery') return undefined;
-    if (qTokens.length === 0) return DEMO_SEARCH_SAMPLE_PHOTOS_2[0];
-    const matched = DEMO_SEARCH_SAMPLE_PHOTOS_2.filter((p) => {
-      const hay = [p.name, p.captionKo || '', ...(p.tags || []), ...(p.keywordsKo || [])]
-        .join(' ')
-        .toLowerCase();
-      return qTokens.some((t) => hay.includes(t));
-    }).sort((a, b) => {
-      const hayA = [a.name, a.captionKo || '', ...(a.tags || []), ...(a.keywordsKo || [])].join(' ').toLowerCase();
-      const hayB = [b.name, b.captionKo || '', ...(b.tags || []), ...(b.keywordsKo || [])].join(' ').toLowerCase();
-      return qTokens.filter((t) => hayB.includes(t)).length - qTokens.filter((t) => hayA.includes(t)).length;
-    });
-    return matched[0] || DEMO_SEARCH_SAMPLE_PHOTOS_2[0];
+    return pickBestSampleMatch(
+      DEMO_SEARCH_SAMPLE_PHOTOS_2,
+      (p) => [p.name, p.captionKo || '', ...(p.tags || []), ...(p.keywordsKo || [])].join(' '),
+    );
   };
 
   const resolveTopVideo = () => {
     if (searchSpace !== 'video') return undefined;
-    if (qTokens.length === 0) return DEMO_SEARCH_SAMPLE_VIDEOS_2[0];
-    return (
-      DEMO_SEARCH_SAMPLE_VIDEOS_2.find((v) => {
-        const hay = [v.title, v.sceneDescription || '', v.ocrFullText || '', ...(v.keywords || [])]
-          .join(' ')
-          .toLowerCase();
-        return qTokens.some((t) => hay.includes(t));
-      }) || DEMO_SEARCH_SAMPLE_VIDEOS_2[0]
+    return pickBestSampleMatch(
+      DEMO_SEARCH_SAMPLE_VIDEOS_2,
+      (v) => [v.title, v.sceneDescription || '', v.ocrFullText || '', ...(v.keywords || [])].join(' '),
     );
   };
 
   const resolveTopDoc = () => {
     if (searchSpace !== 'vault') return undefined;
-    if (qTokens.length === 0) return DEMO_SEARCH_SAMPLE_DOCS_2[0];
-    return (
-      DEMO_SEARCH_SAMPLE_DOCS_2.find((d) => {
-        const hay = [d.title, d.fileName, d.extractedText, ...(d.keywords || [])]
-          .join(' ')
-          .toLowerCase();
-        return qTokens.some((t) => hay.includes(t));
-      }) || DEMO_SEARCH_SAMPLE_DOCS_2[0]
+    return pickBestSampleMatch(
+      DEMO_SEARCH_SAMPLE_DOCS_2,
+      (d) => [d.title, d.fileName, d.extractedText, ...(d.keywords || [])].join(' '),
     );
   };
 
@@ -764,7 +764,10 @@ const VirtualMonitorSimulator: React.FC<{
                               </div>
                             </div>
                             <div className="text-[11.5px] text-slate-700 leading-relaxed line-clamp-8 whitespace-pre-line bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
-                              {maskSensitiveDocText(topDoc.extractedText) || '문서 미리보기'}
+                              {renderHighlightedDocText(
+                                maskSensitiveDocText(topDoc.extractedText) || '문서 미리보기',
+                                sampleQueryText,
+                              )}
                             </div>
                             <button
                               type="button"
@@ -794,7 +797,10 @@ const VirtualMonitorSimulator: React.FC<{
                               {topVideo.title}
                             </div>
                             <div className="text-[11.5px] text-slate-700 bg-amber-50/70 border border-amber-200 rounded-lg p-2 line-clamp-3">
-                              {topVideo.ocrFullText || topVideo.matchedFrameCaption || topVideo.sceneDescription}
+                              {renderHighlightedDocText(
+                                topVideo.ocrFullText || topVideo.matchedFrameCaption || topVideo.sceneDescription,
+                                sampleQueryText,
+                              )}
                             </div>
                             <button
                               type="button"

@@ -332,72 +332,86 @@ export const Stage1MinimalSearchPreview: React.FC<{
     () => (forceSampleOnly ? [] : store.matchedVaultPhotos),
     [forceSampleOnly, store.matchedVaultPhotos]
   );
+  const parseSampleTokens = React.useCallback((rawQuery: string): string[] => {
+    const conversationalStop = new Set([
+      '찾아줘',
+      '보여줘',
+      '알려줘',
+      '얼마야',
+      '얼마',
+      '어디',
+      '어디야',
+      '있는',
+      '나온',
+      '적힌',
+      '파일',
+      '문서',
+      '사진',
+      '영상',
+      '동영상',
+    ]);
+    return rawQuery
+      .trim()
+      .toLowerCase()
+      .replace(/[?!.,"'“”‘’()[\]{}]/g, ' ')
+      .split(/\s+/)
+      .map((w) => w.replace(/(에서|으로|부터|까지|이랑|하고|에게|께서|이라|란|은|는|이|가|을|를|의|에|로|도|만|와|과)$/u, '').trim())
+      .filter((w) => w.length >= 1 && !conversationalStop.has(w));
+  }, []);
+
+  const rankAndNarrowSampleItems = React.useCallback(
+    <T,>(items: T[], getHaystack: (item: T) => string, rawQuery: string): T[] => {
+      const tokens = parseSampleTokens(rawQuery);
+      if (tokens.length === 0) return items;
+      const scored = items
+        .map((item) => {
+          const hay = getHaystack(item).toLowerCase();
+          const hitCount = tokens.filter((tok) => hay.includes(tok)).length;
+          return { item, hitCount };
+        })
+        .filter((x) => x.hitCount > 0)
+        .sort((a, b) => b.hitCount - a.hitCount);
+      if (scored.length === 0) return [];
+      const allMatched = scored.filter((x) => x.hitCount === tokens.length);
+      if (allMatched.length > 0) {
+        return allMatched.map((x) => x.item);
+      }
+      const maxHits = scored[0].hitCount;
+      return scored.filter((x) => x.hitCount === maxHits).map((x) => x.item);
+    },
+    [parseSampleTokens],
+  );
+
   const searchResults = useMemo(() => {
     if (!forceSampleOnly) return store.searchResults;
-    const q = demoQuery.trim().toLowerCase();
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const list =
-      tokens.length === 0
-        ? DEMO_SEARCH_SAMPLE_PHOTOS_2
-        : DEMO_SEARCH_SAMPLE_PHOTOS_2.filter((p) => {
-            const hay = [
-              p.name,
-              p.captionKo || '',
-              ...(p.tags || []),
-              ...(p.keywordsKo || []),
-            ]
-              .join(' ')
-              .toLowerCase();
-            return tokens.every((tok) => hay.includes(tok)) || tokens.some((tok) => hay.includes(tok));
-          }).sort((a, b) => {
-            const hayA = [a.name, a.captionKo || '', ...(a.tags || []), ...(a.keywordsKo || [])]
-              .join(' ')
-              .toLowerCase();
-            const hayB = [b.name, b.captionKo || '', ...(b.tags || []), ...(b.keywordsKo || [])]
-              .join(' ')
-              .toLowerCase();
-            const scoreA = tokens.filter((tok) => hayA.includes(tok)).length;
-            const scoreB = tokens.filter((tok) => hayB.includes(tok)).length;
-            return scoreB - scoreA;
-          });
-    return (list.length > 0 ? list : DEMO_SEARCH_SAMPLE_PHOTOS_2).map((photo) => ({
+    const narrowed = rankAndNarrowSampleItems(
+      DEMO_SEARCH_SAMPLE_PHOTOS_2,
+      (p) => [p.name, p.captionKo || '', ...(p.tags || []), ...(p.keywordsKo || [])].join(' '),
+      demoQuery,
+    );
+    return narrowed.map((photo) => ({
       photo,
       score: 0.98,
       matchPercentage: 98,
       matchedBy: 'text-direct' as const,
     }));
-  }, [forceSampleOnly, store.searchResults, demoQuery]);
+  }, [forceSampleOnly, store.searchResults, demoQuery, rankAndNarrowSampleItems]);
   const matchedVideoScenes = useMemo(() => {
     if (!forceSampleOnly) return store.matchedVideoScenes;
-    const q = demoQuery.trim().toLowerCase();
-    const tokens = q.split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return DEMO_SEARCH_SAMPLE_VIDEOS_2;
-    const filtered = DEMO_SEARCH_SAMPLE_VIDEOS_2.filter((v) => {
-      const hay = [
-        v.title,
-        v.sceneDescription || '',
-        v.ocrFullText || '',
-        ...(v.keywords || []),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return tokens.some((tok) => hay.includes(tok));
-    });
-    return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_VIDEOS_2;
-  }, [forceSampleOnly, store.matchedVideoScenes, demoQuery]);
+    return rankAndNarrowSampleItems(
+      DEMO_SEARCH_SAMPLE_VIDEOS_2,
+      (v) => [v.title, v.sceneDescription || '', v.ocrFullText || '', ...(v.keywords || [])].join(' '),
+      demoQuery,
+    );
+  }, [forceSampleOnly, store.matchedVideoScenes, demoQuery, rankAndNarrowSampleItems]);
   const matchedLocalDocs = useMemo(() => {
     if (!forceSampleOnly) return store.matchedLocalDocs;
-    const q = demoQuery.trim().toLowerCase();
-    const tokens = q.split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) return DEMO_SEARCH_SAMPLE_DOCS_2;
-    const filtered = DEMO_SEARCH_SAMPLE_DOCS_2.filter((d) => {
-      const hay = [d.title, d.fileName, d.extractedText, ...(d.keywords || [])]
-        .join(' ')
-        .toLowerCase();
-      return tokens.some((tok) => hay.includes(tok));
-    });
-    return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_DOCS_2;
-  }, [forceSampleOnly, store.matchedLocalDocs, demoQuery]);
+    return rankAndNarrowSampleItems(
+      DEMO_SEARCH_SAMPLE_DOCS_2,
+      (d) => [d.title, d.fileName, d.extractedText, ...(d.keywords || [])].join(' '),
+      demoQuery,
+    );
+  }, [forceSampleOnly, store.matchedLocalDocs, demoQuery, rankAndNarrowSampleItems]);
 
   const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
   const [clearInputSignal, setClearInputSignal] = useState<number>(0);
@@ -1048,7 +1062,9 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11.5px] text-slate-500 gap-2">
                         <span>{doc.date}</span>
                         <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                          <GhostLabelerActionButton variant="doc" doc={doc} forceSampleOnly={forceSampleOnly} />
+                          {!forceSampleOnly && (
+                            <GhostLabelerActionButton variant="doc" doc={doc} forceSampleOnly={forceSampleOnly} />
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1132,7 +1148,9 @@ export const Stage1MinimalSearchPreview: React.FC<{
                             {String(vp.date || '').split(' ')[0]}
                           </span>
                           <div className="flex items-center gap-1.5">
-                            <GhostLabelerActionButton variant="vault_photo" photo={vp} forceSampleOnly={forceSampleOnly} />
+                            {!forceSampleOnly && (
+                              <GhostLabelerActionButton variant="vault_photo" photo={vp} forceSampleOnly={forceSampleOnly} />
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {

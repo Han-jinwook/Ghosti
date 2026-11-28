@@ -11,9 +11,9 @@ export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
     fullUrl: '/sample_photos_301/IMG_20250510_1001.jpg',
     tags: ['#가족·인물', '#해변', '#노을산책'],
     ontologyPrimaryTags: ['가족', '해변', '일몰'],
-    captionKo: '해변 노을 아래 가족이 함께 산책하는 사진입니다.',
+    captionKo: '노을 지는 해변에서 가족이 함께 손을 잡고 산책하는 사진입니다.',
     captionEn: 'Family walking on the beach at sunset.',
-    keywordsKo: ['가족', '인물', '해변', '바다', '노을', '산책', '여행'],
+    keywordsKo: ['노을', '지는', '해변', '가족', '인물', '산책', '바다', '여행'],
   },
   {
     id: 'demo_sample_photo_1',
@@ -27,7 +27,7 @@ export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
     ontologyPrimaryTags: ['배달주문내역', '수제버거', '38500원'],
     captionKo: '청라 수제버거 & 치킨 하우스 배달 주문 결제내역(38,500원, 더블 치즈버거 세트) 캡처 이미지입니다.',
     captionEn: 'Delivery order receipt screenshot for burger and chicken.',
-    keywordsKo: ['영수증', '주문', '배달', '버거', '수제버거', '치킨', '결제금액', '38,500원', '38500', '신한카드'],
+    keywordsKo: ['영수증', '주문', '배달', '결제', '버거', '수제버거', '치킨', '결제금액', '38,500원', '38500', '신한카드'],
   },
   {
     id: 'demo_sample_photo_2',
@@ -167,10 +167,10 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
     sceneDescription: '회의실 화이트보드 브리핑 영상 (샘플)',
     thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
     videoUrl: '',
-    keywords: ['회의실', '화이트보드', '매출', '목표', '발표'],
+    keywords: ['회의', '회의실', '화이트보드', '매출', '목표', '발표', '35억'],
     hasScreenOcrText: true,
     ocrLineCount: 3,
-    ocrFullText: '2026 목표 매출 35억 달성 로드맵 / Q4 핵심 과제',
+    ocrFullText: '주간 회의 화이트보드 — 2026 목표 매출 35억 달성 로드맵 / Q4 핵심 과제',
     timelineFrames: [
       {
         frameId: 'demo_v2_f1',
@@ -188,6 +188,32 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
 
 export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
   {
+    id: 'demo_sample_doc_2',
+    fileName: '2026_하반기_한일건재_납품견적서_샘플.xlsx',
+    title: '2026 하반기 거래처별 자재 납품견적서 (한일건재)',
+    ext: 'XLSX',
+    categoryBadge: '견적·단가',
+    date: '2025-09-03',
+    sizeKB: 185,
+    deviceSource: '샘플 문서',
+    extractedText:
+      '거래처: 한일건재(담당 김대리) | 품목: 고효율 LED 모듈 A형 | 공급단가: 145,000원(VAT 별도) | 최소 발주수량: 50EA',
+    keywords: ['한일건재', 'LED', '모듈', '공급단가', '견적서', '문서', '납품', '김대리', '엑셀'],
+  },
+  {
+    id: 'demo_sample_doc_3',
+    fileName: '2026_3분기_대성물산_포장박스_견적서_샘플.xlsx',
+    title: '2026 3분기 물류 포장박스 납품견적서 (대성물산)',
+    ext: 'XLSX',
+    categoryBadge: '견적·단가',
+    date: '2025-08-21',
+    sizeKB: 162,
+    deviceSource: '샘플 문서',
+    extractedText:
+      '거래처: 대성물산(담당 박과장) | 품목: 친환경 완충 포장박스 중형 | 공급단가: 1,850원(VAT 별도) | 최소 발주수량: 1,000EA',
+    keywords: ['대성물산', '포장박스', '공급단가', '견적서', '문서', '물류', '박과장', '엑셀'],
+  },
+  {
     id: 'demo_sample_doc_1',
     fileName: '2026_표준_사무실임대차계약서_샘플.pdf',
     title: '2026 표준 사무실 임대차계약서 (보증금·월세 특약)',
@@ -197,20 +223,20 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     sizeKB: 420,
     deviceSource: '샘플 문서',
     extractedText:
-      '제3조(보증금 및 월세) 보증금 금 오천만원정(50,000,000원), 월 차임 금 삼백이십만원정(3,200,000원, 매월 25일 지급)으로 한다.',
-    keywords: ['계약서', '임대차', '보증금', '월세', '특약'],
+      '제3조(보증금 및 월세) 강남 본사 사무실 보증금 금 오천만원정(50,000,000원), 월 차임 금 삼백이십만원정(3,200,000원, 매월 25일 지급)으로 한다.',
+    keywords: ['계약서', '임대차', '사무실', '강남', '보증금', '월세', '특약'],
   },
   {
-    id: 'demo_sample_doc_2',
-    fileName: '2026_하반기_거래처_납품견적서_샘플.xlsx',
-    title: '2026 하반기 거래처별 자재 납품견적서',
-    ext: 'XLSX',
-    categoryBadge: '견적·단가',
-    date: '2025-09-03',
-    sizeKB: 185,
+    id: 'demo_sample_doc_4',
+    fileName: '2026_신규매장_인테리어_시공계약서_샘플.hwp',
+    title: '2026 신규 매장 인테리어 표준 시공계약서',
+    ext: 'HWP',
+    categoryBadge: '계약·공사',
+    date: '2025-07-29',
+    sizeKB: 310,
     deviceSource: '샘플 문서',
     extractedText:
-      '품목: 고효율 LED 모듈 A형 | 공급단가: 145,000원(VAT 별도) | 최소 발주수량: 50EA | 담당: 한일건재 김대리',
-    keywords: ['견적서', '문서', '납품', '한일건재', '엑셀'],
+      '제4조(공사기간 및 하자보수) 착공일로부터 45일 이내 준공하며, 전기·조명 설비 무상 하자보수 보증기간은 준공 후 2년으로 한다.',
+    keywords: ['계약서', '인테리어', '시공', '매장', '하자보수', '조명', '한글'],
   },
 ];

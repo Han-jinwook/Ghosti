@@ -27,30 +27,30 @@ export const GHOST_DOJO_STEPS: GhostDojoStepDef[] = [
   {
     id: 'doc_search',
     shortTitle: '문서 속 문장 검색',
-    sampleQuery: '공급단가',
+    sampleQuery: '한일건재 LED 모듈 공급단가',
     targetSpace: 'vault',
-    description: '엑셀·PDF 파일을 열지 않고 "공급단가", "보증금" 같은 안쪽 문장을 바로 찾습니다.',
+    description: '수많은 견적서 중에서도 "한일건재 LED 모듈 공급단가"처럼 단어 조합·문장으로 딱 1건을 콕 집어냅니다.',
   },
   {
     id: 'photo_natural',
     shortTitle: '사진 자연어·인물 검색',
-    sampleQuery: '해변 가족 산책',
+    sampleQuery: '노을 지는 해변 가족 산책',
     targetSpace: 'gallery',
-    description: '파일명을 몰라도 "해변 가족 산책"처럼 상황과 인물을 말하듯 쳐서 찾습니다.',
+    description: '파일명을 몰라도 "노을 지는 해변 가족 산책"처럼 기억나는 상황을 문장으로 쳐서 바로 찾습니다.',
   },
   {
     id: 'photo_text',
     shortTitle: '사진 속 글자 검색',
-    sampleQuery: '38,500원',
+    sampleQuery: '수제버거 배달 결제 38,500원',
     targetSpace: 'gallery',
-    description: '사진첩에 묻힌 영수증·메모 캡처도 사진 안의 글자("38,500원")로 1초 만에 찾습니다.',
+    description: '수많은 캡처 속에서도 "수제버거 배달 결제 38,500원"처럼 사진 안 글자 조합으로 영수증을 바로 찾습니다.',
   },
   {
     id: 'video_text',
     shortTitle: '동영상 속 텍스트 검색',
-    sampleQuery: '매출 35억',
+    sampleQuery: '회의 화이트보드 목표 매출 35억',
     targetSpace: 'video',
-    description: '긴 영상을 다 돌려보지 않아도 화면 속 글자("매출 35억")가 나온 장면(00:08)을 바로 찾습니다.',
+    description: '긴 영상을 다 돌려보지 않아도 "회의 화이트보드 목표 매출 35억"이 적힌 장면(00:08)을 바로 찾습니다.',
   },
 ];
 
@@ -204,13 +204,13 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
         })
       );
       if (step.id === 'doc_search') {
-        setDemoNotice('아래 모니터 속 귀신검색창에서 엑셀 파일을 열지 않고 "공급단가(145,000원)" 문장을 즉시 찾아냈습니다.');
+        setDemoNotice('여러 견적서 중 "한일건재 + LED 모듈 + 공급단가" 조합이 모두 일치하는 납품견적서 1건(145,000원)만 정확히 좁혀 찾았습니다.');
       } else if (step.id === 'photo_natural') {
-        setDemoNotice('아래 모니터 속 귀신검색창에서 파일명 없이 "해변 가족 산책" 설명만으로 사진을 찾아냈습니다.');
+        setDemoNotice('파일명 없이 "노을 지는 해변 가족 산책" 문장만으로 여러 사진 중 딱 원하는 사진 1장을 찾아냈습니다.');
       } else if (step.id === 'photo_text') {
-        setDemoNotice('아래 모니터 속 귀신검색창에서 영수증 캡처 속 "38,500원" 글자를 읽어 해당 사진을 찾아냈습니다.');
+        setDemoNotice('여러 캡처 중 "수제버거 + 배달 결제 + 38,500원" 글자 조합이 들어있는 영수증 1장만 정확히 찾아냈습니다.');
       } else if (step.id === 'video_text') {
-        setDemoNotice('아래 모니터 속 귀신검색창에서 회의 영상 화면 속 "매출 35억" 글자가 나오는 00:08 장면을 찾아냈습니다.');
+        setDemoNotice('영상 화면 속 "회의 화이트보드 목표 매출 35억" 문장을 읽어 해당 00:08 장면을 바로 찾아냈습니다.');
       }
       return;
     }
