@@ -754,12 +754,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <div className="space-y-2.5">
                 <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight leading-[1.3] text-slate-900 break-keep">
                   {isCompactH1Slot
-                    ? '느린 PC·폰 정리와 1초 내용 검색'
-                    : '부르면 1초, 귀신같이 해결합니다'}
+                    ? '귀신같이 정리하고, 찾고, 원본 공유까지'
+                    : '귀신같이 정리하고, 찾고, 원본 그대로 모읍니다'}
                 </h1>
 
                 <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
-                  느려진 PC는 새것처럼 깨우고, 숨은 파일·사진·영상은 열지 않고 1초 만에 찾아냅니다.
+                  느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 만료 없이 얼굴별로 원본 그대로 나눕니다.
                 </p>
               </div>
 
