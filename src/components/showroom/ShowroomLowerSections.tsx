@@ -122,10 +122,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#FDE6B8] border border-[#EAB866] text-[#78350F] text-[11.5px] font-bold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
                     실전 활용 사례 · Before vs After
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[11.5px] font-semibold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FFF3E6] border border-[#FDBA74] text-[#9A3412] text-[11.5px] font-semibold">
                     {matchedMenuCase.menuTag}
                   </span>
                 </div>
@@ -371,11 +371,11 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               {launchAlertSlot}
             </div>
 
-            {/* 우측: 개인 · 기업 · 공공기관 무료 사용 확인서 (은은한 크림·버터 틴트 카드) */}
-            <div className="lg:col-span-6 rounded-2xl bg-gradient-to-br from-[#FFFBF2] to-[#FEF3DC] border border-[#E8C684] shadow-sm p-6 sm:p-7 flex flex-col justify-between gap-4">
+            {/* 우측: 개인 · 기업 · 공공기관 무료 사용 확인서 (C: 맑은 시트러스 오렌지·피치 틴트 카드) */}
+            <div className="lg:col-span-6 rounded-2xl bg-gradient-to-br from-[#FFF7ED] to-[#FFEDD5] border border-[#FDBA74] shadow-sm p-6 sm:p-7 flex flex-col justify-between gap-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2 min-w-0 flex-1">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/90 border border-[#E8C684] text-[#92400E] text-[12px] font-bold">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/90 border border-[#FDBA74] text-[#9A3412] text-[12px] font-bold">
                     무료 사용 확인서
                   </span>
                   <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
@@ -387,7 +387,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 </div>
                 <div
                   onClick={() => setCertModalOpen(true)}
-                  className="hidden sm:block w-24 md:w-28 rounded-xl overflow-hidden border-2 border-[#E2C285] shadow-xs cursor-pointer hover:border-[#C99B45] transition-all bg-white shrink-0"
+                  className="hidden sm:block w-24 md:w-28 rounded-xl overflow-hidden border-2 border-[#FDBA74] shadow-xs cursor-pointer hover:border-[#FB923C] transition-all bg-white shrink-0"
                 >
                   <img
                     src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261128"
@@ -401,7 +401,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 <button
                   type="button"
                   onClick={() => setCertModalOpen(true)}
-                  className="px-4 py-2.5 rounded-lg bg-[#FFE4E6] hover:bg-[#FECDD3] border border-[#FDA4AF] text-[#9F1239] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
+                  className="px-4 py-2.5 rounded-lg bg-[#FED7AA] hover:bg-[#FDBA74] border border-[#FB923C] text-[#9A3412] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
                 >
                   무료 사용 확인서 크게 보기
                 </button>
@@ -409,7 +409,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                   href="/showroom/certificates/ghosti_b2b_free_certificate.html"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 rounded-lg bg-white/95 hover:bg-white border border-[#E2C285] text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
+                  className="px-4 py-2.5 rounded-lg bg-white/95 hover:bg-white border border-[#FDBA74] text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
                 >
                   인쇄 · PDF 저장 ↗
                 </a>

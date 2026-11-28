@@ -614,7 +614,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1.5 text-[13.5px] font-semibold whitespace-nowrap shrink-0">
+          <nav className="hidden md:flex items-center gap-5 whitespace-nowrap shrink-0">
             {(
               [
                 { id: 'secretary', label: '귀신비서' },
@@ -629,10 +629,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => handleSelectMainTab(item.id, true)}
-                  className={`px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                  className={`relative py-2 transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-[#FEF08A] text-slate-900 border border-[#FACC15] shadow-2xs'
-                      : 'text-slate-700 hover:bg-[#FEF9C3] hover:text-slate-900 border border-transparent'
+                      ? 'text-[16px] font-extrabold text-[#EA580C] after:content-[""] after:absolute after:left-0 after:right-0 after:-bottom-0.5 after:h-[2.5px] after:rounded-full after:bg-[#FB923C]'
+                      : 'text-[13.5px] font-semibold text-slate-600 hover:text-[#EA580C]'
                   }`}
                 >
                   {item.label}
@@ -706,8 +706,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           </div>
         </div>
 
-        {/* 모바일 3대 기능 탭 바 */}
-        <nav className="md:hidden max-w-6xl mx-auto px-4 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[12.5px] font-semibold whitespace-nowrap">
+        {/* 모바일 3대 기능 탭 바 (박스 없이 깔끔한 텍스트+언더라인) */}
+        <nav className="md:hidden max-w-6xl mx-auto px-4 pb-2.5 flex items-center gap-4 overflow-x-auto no-scrollbar whitespace-nowrap">
           {(
             [
               { id: 'secretary', label: '귀신비서' },
@@ -722,10 +722,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => handleSelectMainTab(item.id, true)}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                className={`relative py-1 transition-all cursor-pointer shrink-0 ${
                   isActive
-                    ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs'
-                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                    ? 'text-[14.5px] font-extrabold text-[#EA580C] after:content-[""] after:absolute after:left-0 after:right-0 after:bottom-0 after:h-[2px] after:rounded-full after:bg-[#FB923C]'
+                    : 'text-[12.5px] font-semibold text-slate-600'
                 }`}
               >
                 {item.label}
@@ -742,7 +742,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="rounded-2xl bg-white border border-slate-300 p-6 sm:p-9 shadow-md">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
               <div className="lg:col-span-7 space-y-5">
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFF3E6] border border-[#FDBA74] text-[#9A3412] text-[12px] font-semibold">
                   내 기기 안에서만 작동 · 원본 외부 전송 0%
                 </span>
 
@@ -805,13 +805,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         key={card.key}
                         type="button"
                         onClick={() => handleSelectMainTab(card.key, true)}
-                        className="p-3.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-[#FEF3D6] hover:border-[#EAB866] text-slate-900 text-left transition-all cursor-pointer group shadow-2xs"
+                        className="p-3.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-[#FFF3E6] hover:border-[#FB923C] text-slate-900 text-left transition-all cursor-pointer group shadow-2xs"
                       >
-                        <div className="text-[11.5px] font-semibold mb-0.5 text-[#B45309]">
+                        <div className="text-[11.5px] font-semibold mb-0.5 text-[#EA580C]">
                           {card.stat}
                         </div>
-                        <div className="text-[14.5px] font-bold group-hover:text-[#78350F]">{card.title}</div>
-                        <div className="text-[12px] break-keep leading-snug mt-0.5 text-slate-600 group-hover:text-[#92400E]">
+                        <div className="text-[14.5px] font-bold group-hover:text-[#9A3412]">{card.title}</div>
+                        <div className="text-[12px] break-keep leading-snug mt-0.5 text-slate-600 group-hover:text-[#9A3412]">
                           {card.sub}
                         </div>
                       </button>
@@ -855,12 +855,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </p>
               </div>
               {activeMainTab === 'search' && (
-                <div className="flex items-center gap-1.5 shrink-0 bg-white/80 p-1 rounded-xl border border-[#ECC88A]">
+                <div className="flex items-center gap-1.5 shrink-0 bg-white/85 p-1 rounded-xl border border-[#FDBA74]">
                   <button
                     type="button"
                     onClick={() => handleSelectWeaponChip('video')}
                     className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                      demoTab === 'video' ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF7ED]'
+                      demoTab === 'video' ? 'bg-[#FED7AA] text-[#9A3412] border border-[#FB923C] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF3E6]'
                     }`}
                   >
                     동영상 장면 · 글자
@@ -869,7 +869,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     type="button"
                     onClick={() => handleSelectWeaponChip('doc')}
                     className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                      demoTab === 'doc' ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF7ED]'
+                      demoTab === 'doc' ? 'bg-[#FED7AA] text-[#9A3412] border border-[#FB923C] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF3E6]'
                     }`}
                   >
                     문서 본문 · 영수증
@@ -965,13 +965,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       onClick={() => handleSelectWeaponChip(tabKey)}
                       className={`h-full min-h-[76px] p-2.5 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
-                          ? 'bg-[#FEF3D6] border-[#EAB866] text-[#78350F] shadow-2xs'
-                          : 'bg-white hover:bg-[#FFFBF0] border-slate-300 text-slate-900'
+                          ? 'bg-[#FFF3E6] border-[#FB923C] text-[#9A3412] shadow-2xs'
+                          : 'bg-white hover:bg-[#FFF7ED] border-slate-300 text-slate-900'
                       }`}
                     >
                       <span
                         className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          isActive ? 'bg-[#FDE2AD] text-[#78350F]' : 'bg-[#FFFBEB] text-[#B45309]'
+                          isActive ? 'bg-[#FED7AA] text-[#9A3412]' : 'bg-[#FFF3E6] text-[#EA580C]'
                         }`}
                       >
                         {item.keywordBadge}
@@ -979,7 +979,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       <div className="text-[11.5px] font-semibold whitespace-nowrap truncate leading-snug mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className={`text-[10.5px] whitespace-nowrap truncate leading-snug ${isActive ? 'text-[#92400E]' : 'text-slate-500'}`}>
+                      <div className={`text-[10.5px] whitespace-nowrap truncate leading-snug ${isActive ? 'text-[#9A3412]/80' : 'text-slate-500'}`}>
                         {item.chipSub}
                       </div>
                     </button>
@@ -1001,7 +1001,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 rounded-lg bg-[#FDE6B8] hover:bg-[#FCD894] border border-[#EAB866] text-[#78350F] font-semibold text-[12px] shrink-0 cursor-pointer transition-colors"
+                className="px-3.5 py-2 rounded-lg bg-[#FED7AA] hover:bg-[#FDBA74] border border-[#FB923C] text-[#9A3412] font-semibold text-[12px] shrink-0 cursor-pointer transition-colors"
               >
                 전송
               </button>
@@ -1013,7 +1013,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#CFFAFE] border border-[#22D3EE] text-[#155E75] text-[12px] font-semibold">
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#FFF3E6] border border-[#FDBA74] text-[#9A3412] text-[12px] font-semibold">
                     샘플 화면 체험
                   </span>
                   <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
@@ -1097,8 +1097,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-[#FDE6B8] text-[#78350F] border-[#EAB866] font-semibold'
-                                : 'bg-white hover:bg-[#FFFBF0] text-slate-700 border-slate-300'
+                                ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold'
+                                : 'bg-white hover:bg-[#FFF3E6] text-slate-700 border-slate-300'
                             }`}
                           >
                             “{item.query}”
@@ -1214,8 +1214,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-[#FDE6B8] text-[#78350F] border-[#EAB866] font-semibold'
-                                : 'bg-white hover:bg-[#FFFBF0] text-slate-700 border-slate-300'
+                                ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold'
+                                : 'bg-white hover:bg-[#FFF3E6] text-slate-700 border-slate-300'
                             }`}
                           >
                             “{item.query}”
@@ -1293,8 +1293,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               on
-                                ? 'bg-[#CFFAFE] text-[#155E75] border-[#22D3EE] font-semibold'
-                                : 'bg-white hover:bg-[#ECFEFF] text-slate-700 border-slate-300'
+                                ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold'
+                                : 'bg-white hover:bg-[#FFF3E6] text-slate-700 border-slate-300'
                             }`}
                           >
                             {st.label}
@@ -1402,7 +1402,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   !b.enabled
                                     ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                                     : b.active
-                                    ? 'bg-[#FDE6B8] text-[#78350F] border-[#EAB866] font-semibold cursor-pointer shadow-2xs'
+                                    ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold cursor-pointer shadow-2xs'
                                     : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 cursor-pointer'
                                 }`}
                               >
