@@ -741,7 +741,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   </h1>
 
                   <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
-                    느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료 없이 중복 없는 원본 하나씩만 제대로 공유합니다.
+                    느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료와 중복 없는 원본 하나씩만 제대로 공유합니다.
                   </p>
                 </div>
 
@@ -845,9 +845,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
                     {MAIN_TAB_META[activeMainTab].badge}
                   </span>
-                  <span className="text-[12px] text-[#9A3412] hidden sm:inline">
-                    체험 · 활용 사례 · 짧은 영상을 한 화면에서 확인
-                  </span>
                 </div>
                 <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
                   {MAIN_TAB_META[activeMainTab].headline}
@@ -882,7 +879,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             {activeMainTab !== 'paid' && (
               <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-              {/* 좌측 대화 안내 */}
+              {/* 좌측 귀신비서 대화 안내창: 오직 1번 [귀신비서] 탭에서만 노출 (2·3번 탭에서는 풀 와이드로 시원하게 표시) */}
+              {activeMainTab === 'secretary' && (
               <aside className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-300 bg-white shadow-md overflow-hidden">
             <div className="px-4 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -1009,9 +1007,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               </button>
             </form>
           </aside>
+              )}
 
-          {/* 우측 체험 스테이지 */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-white border border-slate-300 p-5 sm:p-7 shadow-md space-y-6">
+          {/* 우측 체험 스테이지 (2·3번 메뉴에서는 풀 와이드 col-span-12) */}
+          <div className={`${activeMainTab === 'secretary' ? 'lg:col-span-7' : 'lg:col-span-12'} flex flex-col justify-between rounded-2xl bg-white border border-slate-300 p-5 sm:p-7 shadow-md space-y-6`}>
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
