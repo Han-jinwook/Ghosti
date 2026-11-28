@@ -601,7 +601,7 @@ const VirtualMonitorSimulator: React.FC<{
           {rect && (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute rounded-xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] border border-slate-300 bg-white transition-all duration-300 ease-out z-20"
+              className="absolute rounded-xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] border border-slate-300 bg-slate-900 z-20"
               style={{
                 left: rect.x * scale,
                 top: rect.y * scale,
