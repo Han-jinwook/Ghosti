@@ -253,91 +253,106 @@ function consumePendingGhostSearchQuery(): string {
   }
 }
 
-const SIMULATOR_WORK_AREA = { left: 0, top: 0, right: 1120, bottom: 660 };
+const SIMULATOR_LCD_SIZE = { width: 1360, height: 800 };
+const SIMULATOR_TASKBAR_H = 38;
+const SIMULATOR_WORK_AREA = {
+  left: 0,
+  top: 0,
+  right: SIMULATOR_LCD_SIZE.width,
+  bottom: SIMULATOR_LCD_SIZE.height - SIMULATOR_TASKBAR_H,
+};
 type GameStepId = GhostDojoStepId;
 
 interface DesktopIconItem {
   id: string;
   label: string;
-  kind: 'folder' | 'pdf' | 'xlsx' | 'photo' | 'video';
-  thumbSrc?: string;
+  kind: 'this_pc' | 'recycle_bin' | 'chrome' | 'documents';
 }
 
 const VIRTUAL_DESKTOP_ICONS: DesktopIconItem[] = [
   {
-    id: 'desk_folder',
+    id: 'desk_this_pc',
+    label: '내 PC',
+    kind: 'this_pc',
+  },
+  {
+    id: 'desk_recycle',
+    label: '휴지통',
+    kind: 'recycle_bin',
+  },
+  {
+    id: 'desk_chrome',
+    label: 'Chrome',
+    kind: 'chrome',
+  },
+  {
+    id: 'desk_docs',
     label: '내 문서',
-    kind: 'folder',
-  },
-  {
-    id: 'desk_pdf',
-    label: '계약서.pdf',
-    kind: 'pdf',
-  },
-  {
-    id: 'desk_xlsx',
-    label: '견적서.xlsx',
-    kind: 'xlsx',
-  },
-  {
-    id: 'desk_photo_family',
-    label: '가족여행.jpg',
-    kind: 'photo',
-    thumbSrc: '/sample_photos_301/IMG_20250510_1001.jpg',
+    kind: 'documents',
   },
 ];
 
+const ShortcutArrowBadge: React.FC = () => (
+  <span className="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-[2px] bg-white border border-slate-400 shadow-2xs flex items-center justify-center">
+    <svg viewBox="0 0 10 10" className="w-2 h-2 text-sky-700" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M2 8C2 5 4 3.5 8 3.5M5.5 1.5L8 3.5L5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </span>
+);
+
 const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
-  if (item.kind === 'folder') {
+  if (item.kind === 'this_pc') {
     return (
       <svg viewBox="0 0 48 48" className="w-7 h-7 drop-shadow-sm">
-        <path
-          d="M6 11a4 4 0 0 1 4-4h10l4 4h14a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V11z"
-          fill="#F59E0B"
-        />
-        <path
-          d="M6 16h36v21a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V16z"
-          fill="#FBBF24"
-        />
+        <rect x="6" y="8" width="36" height="25" rx="3" fill="#0EA5E9" stroke="#E0F2FE" strokeWidth="2" />
+        <rect x="9" y="11" width="30" height="19" rx="1.5" fill="#38BDF8" />
+        <path d="M9 25l9-7 7 5 6-4 8 6v5H9z" fill="#0284C7" opacity="0.65" />
+        <rect x="20" y="33" width="8" height="4" fill="#94A3B8" />
+        <rect x="14" y="37" width="20" height="3" rx="1.5" fill="#CBD5E1" />
       </svg>
     );
   }
-  if (item.kind === 'pdf') {
+  if (item.kind === 'recycle_bin') {
     return (
-      <div className="w-6 h-7 rounded-xs bg-white border border-slate-300 shadow-sm flex flex-col justify-between overflow-hidden">
-        <div className="px-1 pt-1 flex flex-col gap-0.5">
-          <span className="h-0.5 w-3 bg-slate-300 rounded-full" />
-          <span className="h-0.5 w-4 bg-slate-300 rounded-full" />
-        </div>
-        <div className="bg-rose-600 text-white text-[7px] font-extrabold text-center py-px tracking-tighter">
-          PDF
-        </div>
+      <svg viewBox="0 0 48 48" className="w-7 h-7 drop-shadow-sm">
+        <path d="M16 11h16l2 3H14l2-3z" fill="#CBD5E1" />
+        <rect x="19" y="8" width="10" height="3" rx="1" fill="#94A3B8" />
+        <path d="M13 15h22l-2.2 24a3 3 0 0 1-3 2.7H18.2a3 3 0 0 1-3-2.7L13 15z" fill="#E2E8F0" fillOpacity="0.88" stroke="#94A3B8" strokeWidth="1.5" />
+        <line x1="19" y1="20" x2="19.8" y2="36" stroke="#64748B" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="24" y1="20" x2="24" y2="36" stroke="#64748B" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="29" y1="20" x2="28.2" y2="36" stroke="#64748B" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (item.kind === 'chrome') {
+    return (
+      <div className="relative w-7 h-7 flex items-center justify-center drop-shadow-sm">
+        <svg viewBox="0 0 48 48" className="w-6.5 h-6.5">
+          <circle cx="24" cy="24" r="20" fill="#FFFFFF" />
+          <path d="M24 4A20 20 0 0 1 41.3 14H24V4z" fill="#EA4335" />
+          <path d="M6.7 14A20 20 0 0 1 24 4v10H6.7z" fill="#EA4335" />
+          <path d="M41.3 14A20 20 0 0 1 24 44l7.8-13.5A9 9 0 0 0 24 15h17.3z" fill="#FBBC05" />
+          <path d="M24 44A20 20 0 0 1 6.7 14l8.6 15A9 9 0 0 0 24 33v11z" fill="#34A853" />
+          <path d="M6.7 14h10.2A9 9 0 0 0 15.3 29L6.7 14z" fill="#34A853" />
+          <circle cx="24" cy="24" r="9" fill="#FFFFFF" />
+          <circle cx="24" cy="24" r="7" fill="#4285F4" />
+        </svg>
+        <ShortcutArrowBadge />
       </div>
     );
   }
-  if (item.kind === 'xlsx') {
-    return (
-      <div className="w-6 h-7 rounded-xs bg-white border border-slate-300 shadow-sm flex flex-col justify-between overflow-hidden">
-        <div className="px-0.5 pt-1 grid grid-cols-2 gap-0.5">
-          <span className="h-0.5 bg-emerald-200" />
-          <span className="h-0.5 bg-slate-200" />
-          <span className="h-0.5 bg-emerald-200" />
-          <span className="h-0.5 bg-slate-200" />
-        </div>
-        <div className="bg-emerald-600 text-white text-[6.5px] font-extrabold text-center py-px tracking-tighter">
-          XLSX
-        </div>
-      </div>
-    );
-  }
-  if (item.kind === 'photo' && item.thumbSrc) {
-    return (
-      <div className="w-7 h-6 rounded-xs bg-zinc-900 border border-white/75 shadow-sm overflow-hidden">
-        <img src={item.thumbSrc} alt="" className="w-full h-full object-cover" />
-      </div>
-    );
-  }
-  return null;
+  return (
+    <svg viewBox="0 0 48 48" className="w-7 h-7 drop-shadow-sm">
+      <path
+        d="M6 11a4 4 0 0 1 4-4h10l4 4h14a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V11z"
+        fill="#F59E0B"
+      />
+      <path
+        d="M6 16h36v21a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V16z"
+        fill="#FBBF24"
+      />
+    </svg>
+  );
 };
 
 const VirtualMonitorSimulator: React.FC<{
@@ -356,8 +371,8 @@ const VirtualMonitorSimulator: React.FC<{
   } = useSaySeeStore();
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
-  const [stage, setStage] = useState<GhostSearchStage | null>('medium');
-  const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
+  const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : 'small');
+  const [anchor, setAnchor] = useState({ x: 360, y: 110 });
   const [sampleQueryText, setSampleQueryText] = useState<string>(initialQuery);
 
   useEffect(() => {
@@ -372,7 +387,8 @@ const VirtualMonitorSimulator: React.FC<{
   useEffect(() => {
     const onFocusMonitorWin = (e: Event) => {
       const detail = (e as CustomEvent<{ stage?: GhostSearchStage }>).detail;
-      const nextStage: GhostSearchStage = detail?.stage === 'large' ? 'large' : 'medium';
+      const nextStage: GhostSearchStage =
+        detail?.stage === 'large' ? 'large' : detail?.stage === 'small' ? 'small' : 'medium';
       setStage(nextStage);
     };
     const onDojoPreviewSearch = (e: Event) => {
@@ -384,12 +400,22 @@ const VirtualMonitorSimulator: React.FC<{
         }>
       ).detail;
       if (!detail) return;
-      if (!stage) setStage('medium');
-      setSampleQueryText(detail.reset ? '' : detail.query || '');
+      const nextQ = detail.reset ? '' : (detail.query || '').trim();
+      setSampleQueryText(nextQ);
+      setStage((prev) => {
+        if (detail.reset) return 'small';
+        if (prev === 'large') return 'large';
+        return nextQ ? 'medium' : 'small';
+      });
     };
     const onSampleActiveQuery = (e: Event) => {
       const detail = (e as CustomEvent<{ query?: string }>).detail;
-      setSampleQueryText(detail?.query ?? '');
+      const nextQ = (detail?.query ?? '').trim();
+      setSampleQueryText(nextQ);
+      setStage((prev) => {
+        if (!prev || prev === 'large') return prev;
+        return nextQ ? 'medium' : 'small';
+      });
     };
 
     window.addEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
@@ -400,25 +426,40 @@ const VirtualMonitorSimulator: React.FC<{
       window.removeEventListener('ghosti_dojo_preview_search', onDojoPreviewSearch as EventListener);
       window.removeEventListener('ghosti_dojo_sample_active_query', onSampleActiveQuery as EventListener);
     };
-  }, [stage]);
+  }, []);
 
   const summon = (x?: number, y?: number) => {
     if (typeof x === 'number' && typeof y === 'number') {
       setAnchor({ x, y });
     }
     playBabyGhostChime('summon');
-    setStage((prev) => prev ?? 'medium');
+    setStage((prev) => prev ?? (sampleQueryText.trim() ? 'medium' : 'small'));
   };
 
   const toggleWindowMaximize = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setStage((prev) => (prev === 'large' ? 'medium' : 'large'));
+    setStage((prev) => (prev === 'large' ? 'small' : 'large'));
   };
 
-  const scale = monitorW / SIMULATOR_WORK_AREA.right;
-  const rect = stage
-    ? computeGhostSearchWindowRect(stage, anchor.x, anchor.y, SIMULATOR_WORK_AREA)
-    : null;
+  const scale = monitorW / SIMULATOR_LCD_SIZE.width;
+  const rect = (() => {
+    if (!stage) return null;
+    if (stage === 'small') {
+      const w = 640;
+      const h = 420;
+      const x = Math.max(18, Math.min(anchor.x, SIMULATOR_WORK_AREA.right - 18 - w));
+      const y = Math.max(18, Math.min(anchor.y, SIMULATOR_WORK_AREA.bottom - 18 - h));
+      return { stage: 'small' as const, x, y, width: w, height: h, framelessAppMode: false };
+    }
+    if (stage === 'medium') {
+      const w = 980;
+      const h = 580;
+      const centeredX = Math.round((SIMULATOR_WORK_AREA.right - w) / 2);
+      const centeredY = Math.round((SIMULATOR_WORK_AREA.bottom - h) / 2);
+      return { stage: 'medium' as const, x: centeredX, y: centeredY, width: w, height: h, framelessAppMode: false };
+    }
+    return computeGhostSearchWindowRect('large', anchor.x, anchor.y, SIMULATOR_WORK_AREA, 18);
+  })();
 
   const toVirtual = (e: React.MouseEvent) => {
     const box = monitorRef.current?.getBoundingClientRect();
@@ -509,7 +550,7 @@ const VirtualMonitorSimulator: React.FC<{
           }}
           className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
           style={{
-            aspectRatio: `${SIMULATOR_WORK_AREA.right} / ${SIMULATOR_WORK_AREA.bottom}`,
+            aspectRatio: `${SIMULATOR_LCD_SIZE.width} / ${SIMULATOR_LCD_SIZE.height}`,
             background: 'linear-gradient(135deg, #0c192c 0%, #172554 45%, #1e1b4b 78%, #09090b 100%)',
           }}
         >
@@ -548,7 +589,7 @@ const VirtualMonitorSimulator: React.FC<{
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  summon(1300, 600);
+                  summon(360, 110);
                 }}
                 className="pointer-events-auto px-4 py-2.5 rounded-xl bg-white text-slate-900 text-[13px] font-bold shadow-xl cursor-pointer hover:bg-teal-50 hover:-translate-y-0.5 transition-all"
               >
@@ -611,9 +652,13 @@ const VirtualMonitorSimulator: React.FC<{
 
                 <div className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-white">
                   <div className="flex-1 min-w-0 h-full overflow-y-auto">
-                    <Stage1MinimalSearchPreview initialQuery={initialQuery} forceSampleOnly={true} />
+                    <Stage1MinimalSearchPreview
+                      initialQuery={initialQuery}
+                      forceSampleOnly={true}
+                      compactWindow={stage === 'small'}
+                    />
                   </div>
-                  {stage === 'medium' && (() => {
+                  {(stage === 'medium' || stage === 'large') && (() => {
                     const topPhoto = resolveTopPhoto();
                     const topVideo = resolveTopVideo();
                     const topDoc = resolveTopDoc();
@@ -733,7 +778,7 @@ const VirtualMonitorSimulator: React.FC<{
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  summon(1300, 600);
+                  summon(360, 110);
                 }}
                 className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/30 text-teal-300 font-semibold cursor-pointer transition-colors"
               >

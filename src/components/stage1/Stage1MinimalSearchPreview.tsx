@@ -293,9 +293,11 @@ const Stage1IsolatedSearchInputForm: React.FC<{
 export const Stage1MinimalSearchPreview: React.FC<{
   initialQuery?: string;
   forceSampleOnly?: boolean;
+  compactWindow?: boolean;
 }> = ({
   initialQuery = '',
   forceSampleOnly = false,
+  compactWindow = false,
 }) => {
   const store = useSaySeeStore();
   const {
@@ -610,7 +612,11 @@ export const Stage1MinimalSearchPreview: React.FC<{
   }, [toggleMicRecording]);
 
   return (
-    <main className="flex-1 w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-col gap-4 bg-white text-slate-900">
+    <main
+      className={`flex-1 w-full ${
+        compactWindow ? 'px-3.5 py-3 gap-2.5' : 'px-4 sm:px-6 py-4 sm:py-5 gap-4'
+      } flex flex-col bg-white text-slate-900`}
+    >
       <div className="w-full flex flex-col gap-2.5">
         {!forceSampleOnly && (
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-0.5">
@@ -746,9 +752,11 @@ export const Stage1MinimalSearchPreview: React.FC<{
           </div>
 
           {forceSampleOnly ? (
-            <div className="w-full px-3 py-2 rounded-lg bg-slate-100/80 text-[12px] text-slate-600 cursor-default">
-              체험용 샘플 파일이 들어 있습니다 (사진 2 · 동영상 2 · 문서 2) — 검색어를 입력하거나 사진·문서·동영상을 직접 눌러 체험해 보세요.
-            </div>
+            !compactWindow ? (
+              <div className="w-full px-3 py-1.5 rounded-lg bg-slate-100/80 text-[12px] text-slate-600 cursor-default">
+                체험용 샘플 파일이 들어 있습니다 (사진 {DEMO_SEARCH_SAMPLE_PHOTOS_2.length} · 동영상 {DEMO_SEARCH_SAMPLE_VIDEOS_2.length} · 문서 {DEMO_SEARCH_SAMPLE_DOCS_2.length}) — 검색어를 입력하거나 항목을 눌러 체험해 보세요.
+              </div>
+            ) : null
           ) : isZCoreConnected || isGhostSearchWindowMode || hasRealLocalFiles ? (
             <SilentIndexingStatusBar variant="search-bar" />
           ) : isMobile || isStoreAppMode ? (
@@ -1232,9 +1240,11 @@ export const Stage1MinimalSearchPreview: React.FC<{
                     );
                   })()}
               </div>
-              <span className="text-[11.5px] text-slate-500 font-medium">
-                <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 촬영일·사진 내용으로 정리된 한글 파일명을 바로 복사합니다
-              </span>
+              {!forceSampleOnly && (
+                <span className="text-[11.5px] text-slate-500 font-medium">
+                  <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 촬영일·사진 내용으로 정리된 한글 파일명을 바로 복사합니다
+                </span>
+              )}
             </div>
 
             {groupedResults.length > 0 ? (
