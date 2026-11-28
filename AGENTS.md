@@ -420,7 +420,7 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 ### 📱 [전사·노션 QA 3단 공식 호칭 엄격 분리 · 2·3·4호컴 직접 배포 의무 · 모바일 OS별 영구 규칙 · iOS TestFlight 무제한 무료 Public 전용 러너 (2026-11-26 최신화)]
 
 1. **🏷️ 전사·노션 QA 3단 공식 호칭 엄격 분리 (모바일을 ‘엔진’이라 부르는 것 영구 금지)**:
-   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.11.29`, Microsoft Artifact Signing `sundream-public-cert` `https://krc.codesigning.azure.net/` 공인 코드서명 적용) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신창, `G:`/`S:` 드라이브, PC 보안절전·청소·휴지통 구출) 수정 시 버전업하며, **`1·2·3·4귀신` 전원 버전업 때마다 테스터에게 직접 다운받으라고 안내하는 것을 영구 금지하고 `python universal_z_core/deploy_z_core_cluster.py`로 배포합니다. 이때 사내 6대 PC 배포는 2개 트랙으로 엄격히 이원화합니다: ① `Track A (3호컴·4호컴 해나라님 QA 전용)`은 SSH/SCP 무중단 원자적 스왑으로 0초 쾌속 직결 배포하고, ② `Track B (1호컴·2호컴·5호컴·6호컴 실유저 Auto-Update 상시 검증)`는 AI가 SSH로 파일을 덮어쓰지 않고 GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 정식 릴리즈를 통해 실제 고객과 100% 동일한 백그라운드 자가 업데이트(`/__merlin/self-update`)로만 교체·기동되도록 상시 검증**합니다.
+   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.13.59`, Microsoft Artifact Signing `sundream-public-cert` `https://krc.codesigning.azure.net/` 공인 코드서명 적용) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신검색창/귀신Key, `G:`/`S:` 드라이브, PC 보안절전·청소·휴지통 구출) 수정 시 버전업하며, **`1·2·3·4귀신` 전원 버전업 때마다 테스터에게 직접 다운받으라고 안내하는 것을 영구 금지하고 반드시 `python universal_z_core/deploy_z_core_cluster.py`로 서명 빌드·GitHub Releases 업로드·클러스터 배포를 한 세트로 완결하여 Track A와 Track B의 버전을 100% 동일하게 일치시킵니다. 이때 사내 6대 PC 배포는 2개 트랙으로 엄격히 이원화합니다: ① `Track A (2호컴 통합테스트 · 3호컴 달나라 · 4호컴 해나라 QA 전용)`은 평일(월~금)에는 SSH/SCP 무중단 원자적 스왑으로 0초 쾌속 직결 배포하되, 주말(토·일요일)에는 Track A 직결 설치를 전면 금지(Skip)하여 월요일 출근 시 주말 버전업이 자동 업데이트되었는지 실증 확인하고, ② `Track B (1호컴 · 5호컴 · 6호컴 실유저 Auto-Update 상시 검증)`는 AI가 SSH로 파일을 덮어쓰지 않고 GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 정식 릴리즈를 통해 실제 고객과 100% 동일한 백그라운드 자가 업데이트(`/__merlin/self-update`)로만 교체·기동되도록 상시 검증**합니다.
    - **② `웹 화면` (`웹 UI`)**: `https://ghosti.sundreamer.app` — 일반 UI 디자인, 문구, 채팅 라우터, 공유방 화면 수정 시 (`git push` 즉시 반영).
    - **③ `모바일 앱` (`안드로이드 앱` / `아이폰 앱`)**: 안드로이드 앱(`.aab`, Google Play) 및 아이폰 앱(`.ipa`, Apple TestFlight · Apple ID `6836307976` · `app.sundreamer.ghosti`) — 양대 스토어 1:1 동일 버전 라임 통일 (현행 `1.0.54 (54)`~`1.0.55 (55)`~, 사소한 UI/로직 수정은 모아서 배치 출시). 노션 카드에 GitHub `.apk` 수동 다운로드 링크 기재 영구 금지.
 2. **📱 안드로이드 앱 vs 🍎 아이폰 앱 영구 확정 스펙 (임시 심사 분기 없음 · QA = 정식 출시 100% 동일 고정, `ghosti-guide.html#sec-menus` 박제)**:
@@ -469,11 +469,14 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
 ---
 
-### 🚀 [사내 1~6호컴 배포 트랙 이원화(Track A QA 직결 vs Track B GitHub Releases 실유저 Auto-Update 검증) & MS 공인 코드서명(`krc`) 적용 철칙 (2026-11-27 멀린님 확정)]
+### 🚀 [사내 1~6호컴 배포 트랙 이원화(Track A `2·3·4호컴` 평일 직결/주말 직결 금지 vs Track B `1·5·6호컴` GitHub Releases Auto-Update) · 양 트랙 버전 100% 동일 유지 · Wave 1 `귀신Key` 하드락 철칙 (2026-11-28 멀린님 확정)]
 
-- **① Track A — 해나라님 QA 전용 0초 쾌속 직결 배포 (`3호컴` `100.102.43.42` · `4호컴` `100.114.100.24`)**: 코드 수정·빌드 즉시 SSH/SCP 무중단 `--onedir` 원자적 스왑으로 직결 반영하여 QA 테스터가 대기 없이 즉시 테스트할 수 있도록 합니다.
-- **② Track B — 실유저 GitHub Releases 기반 Auto-Update 상시 검증 (`1호컴` `100.86.161.8` · `2호컴` `100.88.230.16` · `5호컴` `100.122.235.63` · `6호컴` 로컬)**: AI가 SSH로 파일을 강제 덮어쓰지 않고, MS 공인 코드서명(`sundream-public-cert`, `https://krc.codesigning.azure.net/`, `CN=썬드림주식회사`)이 날인된 `Merlin_Z_Core.zip`을 **GitHub Releases (`z-core-latest`)**에 업로드한 뒤 실제 고객과 100% 동일하게 자체 백그라운드 자동 업데이트(`/__merlin/self-update`)로만 교체·기동되는지 상시 교차 검증합니다.
-- 이미 설치된 PC에서 업데이트 재시작 시 "엔진 다운받으세요" 팝업이 반복 뜨지 않도록, 최초 1회 설치 이후에는 100% 백그라운드 무소음 자동 업데이트(`Silent Self-Update`) 및 재시작 유예 보호를 유지합니다.
+- **🚨 양 트랙(Track A · Track B) 버전 100% 동일 유지 절대 철칙**: 어느 귀신이든 Z-코어(`CORE_VERSION`)를 수정·버전업할 때는 로컬 코드만 커밋하고 끝내는 것을 영구 금지하며, 반드시 `python universal_z_core/deploy_z_core_cluster.py`를 실행해 **MS 공인 서명 빌드 + GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 업로드 + `z_core_version.json` 동기화까지 한 세트로 완결**하여 Track A와 Track B가 항상 100% 동일한 버전을 유지하게 합니다.
+- **① Track A — QA 전용 0초 쾌속 직결 배포 (`2호컴` `100.88.230.16` · `3호컴` `100.102.43.42` · `4호컴` `100.114.100.24`) & 주말(토/일) 직결 금지**:
+  - **평일(월~금)**: 코드 수정·빌드 즉시 `2·3·4호컴` 3대에 SSH/SCP 무중단 `--onedir` 원자적 스왑으로 직결 반영하여 QA 테스터가 대기 없이 즉시 테스트할 수 있도록 합니다.
+  - **주말(토·일요일) 직결 절대 금지**: 토·일요일에는 `2·3·4호컴`에 SSH 직결 덮어쓰기를 전면 중단(Skip)하고 GitHub Releases에만 최신 버전을 올려둡니다. 주말 동안 집에서 버전업된 릴리즈를 사무실 `2·3·4호컴`이 스스로 감지해 자동 업데이트했는지 월요일 아침 사무실 출근 시 실증 확인합니다.
+- **② Track B — 실유저 GitHub Releases 기반 Auto-Update 상시 검증 (`1호컴` `100.86.161.8` · `5호컴` `100.122.235.63` · `6호컴` 로컬)**: AI가 SSH로 파일을 강제 덮어쓰지 않고, MS 공인 코드서명(`sundream-public-cert`, `https://krc.codesigning.azure.net/`, `CN=썬드림주식회사`)이 날인된 `Merlin_Z_Core.zip`을 **GitHub Releases (`z-core-latest`)**에 업로드한 뒤 실제 고객과 100% 동일하게 자체 백그라운드 자동 업데이트(`/__merlin/self-update`)로만 교체·기동되는지 상시 교차 검증합니다.
+- **③ Wave 1 `귀신Key` (구 귀신창) 하드락 & 자가업데이트 무소음 보장**: Wave 1 본체 출격 기간에는 Wave 2로 분리된 `귀신Key`(순차복붙·다림질·한영 자동변환·상용구·단축키 1~5번) 플러그를 하드락(`is_ghostkey_active_mode() -> False`)으로 완전 분리하여 복사(`Ctrl+C`)나 한영 타이핑 시 일절 개입·팝업·효과음이 나지 않게 하며, 자가업데이트·재기동 시에도 귀신소리가 절대 울리지 않도록 무소음 가드를 유지합니다.
 
 ---
 

@@ -2027,23 +2027,11 @@ def _read_unified_machine_trial_info() -> tuple[Path, dict, str, dict]:
 
 
 def is_ghostkey_active_mode() -> bool:
-    """귀신키(Door 2) 스위치가 켜져 있고, 유효한 귀신키 권한(귀신키 구독/체험 또는 본체 Pro 구독)이 있는지 판별합니다.
-    False일 때는 어떤 창에서 Ctrl+0을 눌러도 항상 본체 기본 기능인 '👻 귀신검색창(UI ②)'만 열립니다."""
-    cfg = get_superpower_settings()
-    if not bool(cfg.get("ghostkey_enabled", False)):
-        return False
-    try:
-        _, _, _, m_info = _read_unified_machine_trial_info()
-        if bool(m_info.get("isSubscribed")) or bool(m_info.get("isGhostkeyUnlocked")):
-            return True
-        gk_exp = str(m_info.get("ghostkeyExpiresAt") or "").strip()
-        if gk_exp:
-            exp_dt = datetime.datetime.fromisoformat(gk_exp.replace("Z", "+00:00"))
-            now_dt = datetime.datetime.now(exp_dt.tzinfo) if exp_dt.tzinfo else datetime.datetime.now()
-            if exp_dt > now_dt:
-                return True
-    except Exception:
-        pass
+    """[Wave 1 본체 출격 기간 — 귀신Key(Door 2) 전면 하드락 (플러그 100% 분리)]
+    - Wave 1(귀신같이 본체 출격)에서는 귀신Key(구 귀신창: 순차복붙·다림질·한영 자동변환·상용구·단축키 1~5번)를
+      설정 파일(superpower_settings.json)이나 체험 원장 값과 무관하게 100% 비활성(False)으로 하드락합니다.
+    - 따라서 평상시 복사(Ctrl+C) 시 팝업/토스트가 뜨거나, 한영 타이핑 시 자동 변환·효과음이 개입하는 일이 0%이며,
+      오직 Ctrl+0 / Ctrl+우클릭 입력 시 본체 기능인 '👻 귀신검색창(UI ②)'(또는 스샷 OCR UI ③ / 압축해제 UI ④)만 작동합니다."""
     return False
 
 

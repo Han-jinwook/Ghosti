@@ -299,26 +299,20 @@ def update_pc1():
             shutil.copy2(spd_src, spd_os_agent)
             if os.path.exists(ui2_src):
                 shutil.copy2(ui2_src, ui2_os_agent)
-            if os.path.exists(r"C:\MerlinTools"):
-                shutil.copy2(spd_src, r"C:\MerlinTools\seq_paste_daemon.py")
-                if os.path.exists(ui2_src):
-                    shutil.copy2(ui2_src, r"C:\MerlinTools\ghost_search_window_ui2.py")
-                os.makedirs(r"C:\MerlinTools\assets", exist_ok=True)
-                if os.path.exists(lex_src):
-                    shutil.copy2(lex_src, r"C:\MerlinTools\assets\ko_en_lexicon.zlib")
-                os_assets_dir = os.path.join(UZC_DIR, "os_agent", "assets")
-                if os.path.isdir(os_assets_dir):
-                    for fn in os.listdir(os_assets_dir):
-                        fp = os.path.join(os_assets_dir, fn)
-                        if os.path.isfile(fp):
-                            shutil.copy2(fp, os.path.join(r"C:\MerlinTools\assets", fn))
-                snd_dir = os.path.join(UZC_DIR, "baby_ghost_sounds")
-                if os.path.isdir(snd_dir):
-                    os.makedirs(r"C:\MerlinTools\baby_ghost_sounds", exist_ok=True)
-                    for fn in os.listdir(snd_dir):
-                        fp = os.path.join(snd_dir, fn)
-                        if os.path.isfile(fp):
-                            shutil.copy2(fp, os.path.join(r"C:\MerlinTools\baby_ghost_sounds", fn))
+            # C:\MerlinTools 내 구버전 seq_paste_daemon / ghost_search_window 잔존 시 혼선 방지를 위해 자동 제거
+            for _legacy_mt in (
+                r"C:\MerlinTools\seq_paste_daemon.py",
+                r"C:\MerlinTools\seq_paste_daemon.py.disabled",
+                r"C:\MerlinTools\ghost_search_window_ui2.py",
+                r"C:\MerlinTools\install_seq_paste.py",
+                r"C:\MerlinTools\start_seq_paste.vbs",
+                r"C:\MerlinTools\start_zcore_5199.vbs",
+            ):
+                if os.path.exists(_legacy_mt):
+                    try:
+                        os.remove(_legacy_mt)
+                    except Exception:
+                        pass
         except Exception as e:
             log(f"1호기 seq_paste_daemon 복사 경고: {e}")
 
@@ -877,19 +871,31 @@ def main():
             return
 
         # ══════════════════════════════════════════════════════════════════════════
-        # [2026-11-27 전사 배포 이원화 표준 확정]
-        # • Track A (해나라님 QA 전용 0초 쾌속 직결 배포): 3호컴(달나라) · 4호컴(해나라)
-        # • Track B (실유저 GitHub Releases 기반 Auto-Update 상시 검증): 1호컴 · 2호컴 · 5호컴 · 6호컴(로컬)
+        # [2026-11-28 전사 배포 이원화 표준 및 주말(토/일) 직결 금지 철칙 확정]
+        # • Track A (QA 전용 0초 쾌속 직결 배포): 2호컴(통합테스트) · 3호컴(달나라) · 4호컴(해나라)
+        #   - 단, 주말(토·일요일, weekday() in (5, 6))에는 Track A 직결 설치를 전면 중단(Skip)!
+        #   - 주말에 집에서 작업해 올린 최신 GitHub Releases 버전으로 2·3·4호컴이 스스로 무인 Auto-Update 되었는지
+        #     월요일 아침 사무실 출근 시 실증 확인할 수 있도록 주말에는 SSH 덮어쓰기를 절대 수행하지 않습니다.
+        # • Track B (실유저 GitHub Releases 기반 Auto-Update 상시 검증): 1호컴 · 5호컴 · 6호컴(로컬)
+        # • 양 트랙 버전 100% 동일 유지 의무: 어떤 귀신이든 Z-코어 수정 시 반드시 최신 서명 빌드 + GitHub Releases 업로드까지
+        #   동시 완결하여 Track A와 Track B가 항상 동일한 버전 넘버를 유지해야 합니다.
         # ══════════════════════════════════════════════════════════════════════════
-        log(f"🚀 [Track A — 해나라님 QA 전용 직결 배포] 3호컴(100.102.43.42) · 4호컴(100.114.100.24) 무중단 원자적 스왑(v{core_ver}) 시작")
-        update_pc3(core_ver)
-        update_pc4(core_ver)
+        import datetime as _dt_deploy
+        is_weekend = _dt_deploy.datetime.now().weekday() in (5, 6)
 
-        log(f"\n🌐 [Track B — 실유저 GitHub Releases Auto-Update 상시 검증] 6호컴(로컬) · 1호컴 · 2호컴 · 5호컴 자가 업데이트(v{core_ver}) 검증 시작")
+        if is_weekend:
+            log(f"🛑 [주말(토/일) Track A 직결 배포 금지 가드 작동] 주말에는 2·3·4호컴에 SSH 직결 덮어쓰기를 수행하지 않습니다!")
+            log(f"   ↳ GitHub Releases(z-core-latest, v{core_ver}) 정식 업로드만 유지하며, 사무실 2·3·4호컴의 자체 Auto-Update 결과를 월요일 출근 시 검증합니다.")
+        else:
+            log(f"🚀 [Track A — 평일 QA 전용 직결 배포] 2호컴(100.88.230.16) · 3호컴(100.102.43.42) · 4호컴(100.114.100.24) 무중단 원자적 스왑(v{core_ver}) 시작")
+            update_pc2(core_ver)
+            update_pc3(core_ver)
+            update_pc4(core_ver)
+
+        log(f"\n🌐 [Track B — 실유저 GitHub Releases Auto-Update 상시 검증] 6호컴(로컬) · 1호컴 · 5호컴 자가 업데이트(v{core_ver}) 검증 시작")
         _trigger_and_verify_auto_update_node("6호기 (로컬 개발/운영 PC)", None, None, core_ver)
         if os.environ.get("COMPUTERNAME", "").upper() != "DESKTOP-TRRSPRP":
             _trigger_and_verify_auto_update_node("1호기 (사무실 메인 100.86.161.8)", "100.86.161.8", "chichi", core_ver)
-        _trigger_and_verify_auto_update_node("2호기 (사무실 서버 100.88.230.16)", "100.88.230.16", "sun-multi", core_ver)
         try:
             import socket
             with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
@@ -897,7 +903,7 @@ def main():
         except Exception:
             log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — Track B Auto-Update 검증 스킵 (부팅 시 주기 감시병이 자동 업데이트)")
 
-        log(f"\n🎉 [Track A(3·4호컴 QA 직결) + Track B(1·2·5·6호컴 GitHub Releases 실유저 Auto-Update)] 이원화 배포 및 검증(v{core_ver}) 완료!")
+        log(f"\n🎉 [Track A(2·3·4호컴 평일 직결 / 주말 자율 Auto-Update) + Track B(1·5·6호컴 GitHub Releases 실유저 Auto-Update)] 배포 및 검증(v{core_ver}) 완료!")
 
 if __name__ == "__main__":
     main()

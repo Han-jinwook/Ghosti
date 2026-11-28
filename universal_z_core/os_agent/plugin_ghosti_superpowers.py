@@ -130,10 +130,57 @@ def shutdown_superpower_daemon_for_update() -> None:
         pass
 
 
+def _purge_hijacking_legacy_seq_paste() -> bool:
+    """[구버전 비서실/외부 seq_paste_daemon.py 포트 51988 찬탈 방어 & 자동실행 잔재 영구 청소]
+    - D:\\Secretary\\tools\\seq_paste_daemon.py 또는 C:\\MerlinTools\\seq_paste_daemon.py 등
+      정식 Z-코어(Merlin_Z_Core_Setup.exe / D:\\Ghosti\\universal_z_core) 외부의 구버전 스크립트가
+      기동되어 51988 포트를 찬탈하면 즉시 강제 사살하고 MerlinSeqPaste 자동실행 3종을 제거합니다."""
+    if os.name != "nt":
+        return False
+    killed_any = False
+    try:
+        import psutil
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                pname = str(proc.info.get("name") or "").lower()
+                if "merlin_z_core_setup" in pname or "sensetalk_engine" in pname:
+                    continue
+                cmdline_list = proc.info.get("cmdline") or []
+                cmdline = " ".join(str(x) for x in cmdline_list).lower()
+                if "seq_paste_daemon.py" not in cmdline:
+                    continue
+                is_rogue = False
+                if getattr(sys, "frozen", False):
+                    # 정식 exe 모드에서는 외부 python/pythonw로 띄운 모든 seq_paste_daemon.py가 구버전 찬탈 프로세스임
+                    is_rogue = True
+                else:
+                    if "secretary" in cmdline or "merlintools" in cmdline:
+                        is_rogue = True
+                if is_rogue:
+                    proc.kill()
+                    killed_any = True
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # 구버전 MerlinSeqPaste.vbs 시작프로그램 파일이 부활했으면 즉시 삭제
+    try:
+        appdata_dir = os.environ.get("APPDATA", "")
+        if appdata_dir:
+            legacy_vbs = Path(appdata_dir) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "MerlinSeqPaste.vbs"
+            if legacy_vbs.exists():
+                legacy_vbs.unlink(missing_ok=True)
+                killed_any = True
+    except Exception:
+        pass
+    return killed_any
+
+
 def ensure_superpower_daemon_running() -> bool:
     """
     [프로세스 완전 분리 모드 + 0순위 병렬 기동 + PING/PONG 활성 검증 (Z-Core v2.8.69)]:
-    - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 Tkinter/WH_MOUSE_LL/COM과 메인 5199 HTTP 서버 간
+    - 귀신검색/귀신Key 데몬(seq_paste_daemon, 포트 51988)은 Tkinter/WH_MOUSE_LL/COM과 메인 5199 HTTP 서버 간
       GIL·GUI 동반 데드락(Hang)을 물리적으로 0% 차단하기 위해 반드시 독립 프로세스로 완전 분리합니다.
     - 대신 merlin_z_core_daemon.py 기동 0순위(_self_purge_legacy_conflicts 이전)에 즉시 병렬 스폰하여
       10초 앞단 지연을 제거하고, 45초 유예로 중복 스폰(Fork-Stampede)을 원천 차단합니다.
@@ -141,6 +188,7 @@ def ensure_superpower_daemon_running() -> bool:
     global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
     if os.name != "nt":
         return True
+    _purge_hijacking_legacy_seq_paste()
     try:
         import socket
 
@@ -1069,6 +1117,7 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
     }
 
 
+_DAEMON_BOOT_MONO_TS = time.monotonic()
 _LAST_WEB_ENTER_GIGGLE_TS = 0.0
 _WEB_ENTER_GIGGLE_LOCK = threading.Lock()
 _SEEN_GHOSTI_BROWSER_HWNDS: set[int] = set()
@@ -1083,8 +1132,12 @@ def play_web_enter_giggle_api(params: Dict[str, Any] | None = None) -> Dict[str,
     - 크롬 게스트 모드 / 시크릿 모드 / 첫 새 탭 접속 시 브라우저 Autoplay Policy(MEI=0) 및
       Chrome Local Network Access(LNA) 권한 팝업 대기 중에도 무클릭 즉시 1회 재생합니다.
     - 1.2초 디바운스로 브라우저 워처·웹 fetch 동시 호출 및 StrictMode 중복 재생을 원천 차단합니다.
+    - [자가업데이트·데몬 재기동 무소음 보장]: 데몬이 기동/재기동된 직후 15초 이내에는 백그라운드 업데이트나
+      부팅 재기동으로 인한 효과음이 절대 울리지 않도록 원천 차단합니다.
     """
     global _LAST_WEB_ENTER_GIGGLE_TS
+    if (time.monotonic() - _DAEMON_BOOT_MONO_TS) < 15.0:
+        return {"ok": True, "played": False, "reason": "boot_or_self_update_silence_guard"}
     data = params or {}
     cfg = spd.get_superpower_settings()
     if not cfg.get("sound_enabled", True):

@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.50"
+CORE_VERSION = "2.13.59"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2104,11 +2104,19 @@ def _self_purge_legacy_conflicts() -> None:
     if legacy_pids:
         _kill_pids_tree_and_wait(legacy_pids, protected, timeout_sec=2.5)
 
-    # 자동실행은 HKCU\...\Run\MerlinZCoreDaemon 단 1개 SSOT로 통일하고 구형 중복 스케줄러 3종 자동 삭제
+    # 자동실행은 HKCU\...\Run\MerlinZCoreDaemon 단 1개 SSOT로 통일하고 구형 중복 스케줄러 자동 삭제
     legacy_tasks = (
         "MerlinSeqPaste",
+        "MerlinSeqPasteStart",
+        "MerlinTestWorker",
+        "MerlinToolWorker",
         "MerlinZCoreRestart",
         "MerlinZCoreOverlay",
+        "MerlinZCoreDirectExplorer",
+        "MerlinZCoreOpenFolder",
+        "MerlinOpenFolder",
+        "MerlinTestShell",
+        "TempGhostiWinProbe",
     )
     for task_name in legacy_tasks:
         try:
@@ -2118,6 +2126,28 @@ def _self_purge_legacy_conflicts() -> None:
                 timeout=3,
                 creationflags=0x08000000,
             )
+        except Exception:
+            pass
+    try:
+        subprocess.run(
+            ["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "MerlinSeqPaste", "/f"],
+            capture_output=True,
+            timeout=3,
+            creationflags=0x08000000,
+        )
+    except Exception:
+        pass
+    for _old_mt in (
+        r"C:\MerlinTools\seq_paste_daemon.py",
+        r"C:\MerlinTools\seq_paste_daemon.py.disabled",
+        r"C:\MerlinTools\ghost_search_window_ui2.py",
+        r"C:\MerlinTools\install_seq_paste.py",
+        r"C:\MerlinTools\start_seq_paste.vbs",
+        r"C:\MerlinTools\start_zcore_5199.vbs",
+    ):
+        try:
+            if os.path.exists(_old_mt):
+                os.remove(_old_mt)
         except Exception:
             pass
 
