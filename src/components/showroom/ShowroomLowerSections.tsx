@@ -375,13 +375,13 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2 min-w-0 flex-1">
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-bold">
-                  개인 · 기업 · 공공기관 무료 사용 확인서
+                  무료 사용 확인서
                 </span>
                 <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
-                  개인 · 기업 · 공공기관 PC 모두 기본 3대 기능 평생 무료
+                  개인 · 기업 · 공공기관 어디서나 평생 무료
                 </h3>
                 <p className="text-[12.5px] text-slate-600 break-keep leading-relaxed">
-                  기본 3대 기능은 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 거의 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
+                  귀신비서·귀신검색·사진 공유는 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 거의 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
                 </p>
               </div>
               <div
@@ -508,7 +508,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-900 font-semibold text-sm sm:text-base min-w-0 break-keep">
-                개인 · 기업 · 공공기관 PC 기본 기능 무료 사용 확인서
+                개인 · 기업 · 공공기관 무료 사용 확인서
               </span>
               <button
                 type="button"
