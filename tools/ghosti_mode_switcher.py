@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 👻 귀신같이 (Ghosti) — 사내 실무 도그푸딩 & 순수 QA 겸용 『3대 모드 원클릭 전환기』
-- 버전: v1.5.0
+- 버전: v1.6.0
 - 핵심 설계 원칙:
   1. 프로덕션 웹 코드(src/*, https://ghosti.sundreamer.app) 무간섭 0.00% 원칙:
      테스트용 URL 파라미터(?factoryReset 등)를 실서버 웹 코드에 일절 넣지 않고,
@@ -42,7 +42,7 @@ import urllib.request
 import webbrowser
 import zipfile
 
-SWITCHER_VERSION = "1.5.0"
+SWITCHER_VERSION = "1.6.0"
 WINDOW_TITLE = f"귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
 
 GHOSTI_ORIGIN = "https://ghosti.sundreamer.app"
@@ -2093,7 +2093,7 @@ def launch_gui() -> None:
 
     root = tk.Tk()
     root.title(WINDOW_TITLE)
-    root.configure(bg="#F1F5F9")
+    root.configure(bg="#E2E8F0")
     root.resizable(False, False)
 
     ico_cand = Path(__file__).with_name("ghosti_icon.ico")
@@ -2103,7 +2103,7 @@ def launch_gui() -> None:
         except Exception:
             pass
 
-    win_w, win_h = 520, 540
+    win_w, win_h = 540, 610
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
     pos_x = max(20, (sw - win_w) // 2)
@@ -2111,36 +2111,58 @@ def launch_gui() -> None:
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
     root.attributes("-topmost", True)
 
-    # 상단 헤더 (전체 창에서 이모지는 제목 맨 앞 👻 딱 1개만 사용)
-    hdr = tk.Frame(root, bg="#FFFFFF", padx=22, pady=15, highlightbackground="#E2E8F0", highlightthickness=1)
+    # -----------------------------------------------------------------
+    # 0) 최상단 타이틀 헤더 (인디고 블루 틴트 배경 + 하단 블루 보더로 영역 분리)
+    # -----------------------------------------------------------------
+    hdr_border = tk.Frame(root, bg="#93C5FD", height=2)
+    hdr = tk.Frame(root, bg="#EFF6FF", padx=22, pady=14)
     hdr.pack(fill="x")
+    hdr_border.pack(fill="x")
+
     tk.Label(
         hdr,
         text="👻 귀신같이 PC 상태 & 3대 모드 전환기",
         font=("Malgun Gothic", 13, "bold"),
-        fg="#0F172A",
-        bg="#FFFFFF",
+        fg="#1E3A8A",
+        bg="#EFF6FF",
     ).pack(anchor="w")
     tk.Label(
         hdr,
         text="실서버 웹 코드 무간섭  |  센스톡·노션·구글 로그인 보존  |  귀신같이만 핀셋 전환",
         font=("Malgun Gothic", 9),
-        fg="#64748B",
-        bg="#FFFFFF",
+        fg="#3B82F6",
+        bg="#EFF6FF",
     ).pack(anchor="w", pady=(3, 0))
 
-    # 상태 진단 카드 (이모지 0개 · 깔끔한 타이포그래피 계층)
-    card = tk.Frame(root, bg="#FFFFFF", padx=18, pady=13, highlightbackground="#CBD5E1", highlightthickness=1)
-    card.pack(fill="x", padx=18, pady=(14, 10))
+    # -----------------------------------------------------------------
+    # 1) 상단 구역: [PC 현재 현황] (블루 테두리 + 소프트 블루 헤더 바 + 화이트 본문)
+    # -----------------------------------------------------------------
+    top_sec_outer = tk.Frame(root, bg="#3B82F6", padx=2, pady=2)
+    top_sec_outer.pack(fill="x", padx=16, pady=(14, 10))
 
-    lbl_mode = tk.Label(card, text="현재 상태 진단 중...", font=("Malgun Gothic", 10, "bold"), fg="#1E40AF", bg="#FFFFFF")
-    lbl_mode.pack(anchor="w", pady=(0, 6))
+    top_sec_hdr = tk.Frame(top_sec_outer, bg="#DBEAFE", padx=14, pady=7)
+    top_sec_hdr.pack(fill="x")
+    tk.Label(
+        top_sec_hdr,
+        text="현재 PC 상태 현황",
+        font=("Malgun Gothic", 9, "bold"),
+        fg="#1E40AF",
+        bg="#DBEAFE",
+    ).pack(side="left")
+    lbl_mode = tk.Label(
+        top_sec_hdr,
+        text="진단 중...",
+        font=("Malgun Gothic", 10, "bold"),
+        fg="#1D4ED8",
+        bg="#DBEAFE",
+    )
+    lbl_mode.pack(side="right")
 
-    sep = tk.Frame(card, bg="#F1F5F9", height=1)
-    sep.pack(fill="x", pady=(0, 6))
+    card = tk.Frame(top_sec_outer, bg="#FFFFFF", padx=16, pady=11)
+    card.pack(fill="x")
 
     lbl_zcore = tk.Label(card, text="· PC 엔진 (Z코어)   : 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
-    lbl_zcore.pack(anchor="w", pady=(2, 0))
+    lbl_zcore.pack(anchor="w", pady=(1, 0))
     lbl_db = tk.Label(card, text="· 내 파일 빠른검색  : 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
     lbl_db.pack(anchor="w", pady=(2, 0))
     lbl_sdrive = tk.Label(card, text="· 업무 드라이브 (S:) : 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
@@ -2148,33 +2170,50 @@ def launch_gui() -> None:
     lbl_vault = tk.Label(card, text="· 업무방 복귀 금고  : 확인 중...", font=("Malgun Gothic", 9), fg="#64748B", bg="#FFFFFF")
     lbl_vault.pack(anchor="w", pady=(2, 0))
 
-    open_browser_var = tk.BooleanVar(value=True)
-    opt_frame = tk.Frame(root, bg="#F1F5F9", padx=18)
-    opt_frame.pack(fill="x", pady=(0, 6))
-    tk.Checkbutton(
-        opt_frame,
-        text="모드 전환 완료 후 귀신같이 웹 화면 자동으로 열기",
-        variable=open_browser_var,
-        font=("Malgun Gothic", 9),
-        fg="#334155",
-        bg="#F1F5F9",
-        selectcolor="#FFFFFF",
-        activebackground="#F1F5F9",
-        activeforeground="#0F172A",
-    ).pack(anchor="w")
+    # -----------------------------------------------------------------
+    # 2) 하단 구역: [모드 전환 선택] (상단 현황과 완전히 분리된 슬레이트 블루 패널 + 진한 테두리)
+    # -----------------------------------------------------------------
+    bot_sec_outer = tk.Frame(root, bg="#64748B", padx=2, pady=2)
+    bot_sec_outer.pack(fill="both", expand=True, padx=16, pady=(2, 14))
 
-    btn_frame = tk.Frame(root, bg="#F1F5F9", padx=18)
+    bot_sec_hdr = tk.Frame(bot_sec_outer, bg="#334155", padx=14, pady=7)
+    bot_sec_hdr.pack(fill="x")
+    tk.Label(
+        bot_sec_hdr,
+        text="모드 전환 선택  (클릭 시 해당 모드로 즉시 전환)",
+        font=("Malgun Gothic", 9, "bold"),
+        fg="#F8FAFC",
+        bg="#334155",
+    ).pack(side="left")
+
+    open_browser_var = tk.BooleanVar(value=True)
+    tk.Checkbutton(
+        bot_sec_hdr,
+        text="전환 후 웹 자동 열기",
+        variable=open_browser_var,
+        font=("Malgun Gothic", 8, "bold"),
+        fg="#E2E8F0",
+        bg="#334155",
+        selectcolor="#1E293B",
+        activebackground="#334155",
+        activeforeground="#FFFFFF",
+    ).pack(side="right")
+
+    bot_body = tk.Frame(bot_sec_outer, bg="#DCE6F2", padx=12, pady=10)
+    bot_body.pack(fill="both", expand=True)
+
+    btn_frame = tk.Frame(bot_body, bg="#DCE6F2")
     btn_frame.pack(fill="x")
 
     status_bar = tk.Label(
-        root,
-        text="전환할 모드를 클릭하세요. (현재 적용 중인 모드는 잠금 처리됨)",
+        bot_body,
+        text="전환할 모드 카드를 클릭하세요. (현재 적용 중인 모드는 잠금 처리됨)",
         font=("Malgun Gothic", 9, "bold"),
-        fg="#334155",
-        bg="#F1F5F9",
-        pady=10,
+        fg="#1E3A8A",
+        bg="#DCE6F2",
+        pady=6,
     )
-    status_bar.pack(side="bottom", fill="x", padx=18)
+    status_bar.pack(side="bottom", fill="x")
 
     is_busy = {"flag": False, "active_mode": 2}
     btn_specs = [
@@ -2195,30 +2234,30 @@ def launch_gui() -> None:
         ),
     ]
 
-    # 색상 통일 기준:
-    # - 클릭 가능한 활성 카드(2개): 선명한 화이트(#FFFFFF) 카드 + 블루 포인트 테두리(#93C5FD) + 굵은 네이비 제목(#0F172A) & 슬레이트 본문(#475569)
-    # - 마우스 오버(Hover) 시: 소프트 블루 배경(#EFF6FF) + 진한 블루 테두리(#2563EB) + 블루 제목(#1D4ED8)
-    # - 현재 적용 중인 비활성 카드(1개): 차분한 회색(#E2E8F0) 배경 + 연회색 테두리(#CBD5E1) + 흐린 회색 텍스트(#94A3B8) (클릭/호버 완전 잠금)
+    # 하단 모드 선택 카드 색상 & 테두리:
+    # - 클릭 가능한 활성 카드(2개): 선명한 블루 2px 테두리(#2563EB) + 화이트 카드(#FFFFFF) + 굵은 네이비 제목(#0F172A) & 슬레이트 본문(#334155)
+    # - 마우스 오버(Hover) 시: 진한 블루 2px 테두리(#1D4ED8) + 블루 틴트 배경(#DBEAFE) + 블루 제목(#1E3A8A)
+    # - 현재 적용 중인 비활성 카드(1개): 회색 테두리(#94A3B8) + 차분한 쿨그레이 배경(#CBD5E1) + 흐린 회색 텍스트(#64748B)
     COLOR_ACTIVE_BG = "#FFFFFF"
-    COLOR_ACTIVE_BORDER = "#93C5FD"
+    COLOR_ACTIVE_BORDER = "#2563EB"
     COLOR_ACTIVE_TITLE = "#0F172A"
-    COLOR_ACTIVE_DESC = "#475569"
-    COLOR_ACTIVE_BADGE_BG = "#EFF6FF"
+    COLOR_ACTIVE_DESC = "#334155"
+    COLOR_ACTIVE_BADGE_BG = "#DBEAFE"
     COLOR_ACTIVE_BADGE_FG = "#1D4ED8"
 
     COLOR_HOVER_BG = "#EFF6FF"
-    COLOR_HOVER_BORDER = "#2563EB"
+    COLOR_HOVER_BORDER = "#1D4ED8"
     COLOR_HOVER_TITLE = "#1D4ED8"
     COLOR_HOVER_DESC = "#1E3A8A"
-    COLOR_HOVER_BADGE_BG = "#2563EB"
+    COLOR_HOVER_BADGE_BG = "#1D4ED8"
     COLOR_HOVER_BADGE_FG = "#FFFFFF"
 
-    COLOR_DISABLED_BG = "#E2E8F0"
-    COLOR_DISABLED_BORDER = "#CBD5E1"
-    COLOR_DISABLED_TITLE = "#94A3B8"
-    COLOR_DISABLED_DESC = "#94A3B8"
-    COLOR_DISABLED_BADGE_BG = "#CBD5E1"
-    COLOR_DISABLED_BADGE_FG = "#64748B"
+    COLOR_DISABLED_BG = "#CBD5E1"
+    COLOR_DISABLED_BORDER = "#94A3B8"
+    COLOR_DISABLED_TITLE = "#64748B"
+    COLOR_DISABLED_DESC = "#64748B"
+    COLOR_DISABLED_BADGE_BG = "#94A3B8"
+    COLOR_DISABLED_BADGE_FG = "#F8FAFC"
 
     btn_cards: Dict[int, Dict[str, Any]] = {}
 
@@ -2232,21 +2271,21 @@ def launch_gui() -> None:
         lbl_d: tk.Label = item["lbl_desc"]
 
         if state_mode == "disabled":
-            wrap.config(bg=COLOR_DISABLED_BORDER, highlightbackground=COLOR_DISABLED_BORDER)
+            wrap.config(bg=COLOR_DISABLED_BORDER)
             inner.config(bg=COLOR_DISABLED_BG, cursor="arrow")
             top_row.config(bg=COLOR_DISABLED_BG, cursor="arrow")
             lbl_t.config(bg=COLOR_DISABLED_BG, fg=COLOR_DISABLED_TITLE, cursor="arrow")
             lbl_badge.config(text="현재 적용 중", bg=COLOR_DISABLED_BADGE_BG, fg=COLOR_DISABLED_BADGE_FG, cursor="arrow")
             lbl_d.config(bg=COLOR_DISABLED_BG, fg=COLOR_DISABLED_DESC, cursor="arrow")
         elif state_mode == "hover":
-            wrap.config(bg=COLOR_HOVER_BORDER, highlightbackground=COLOR_HOVER_BORDER)
+            wrap.config(bg=COLOR_HOVER_BORDER)
             inner.config(bg=COLOR_HOVER_BG, cursor="hand2")
             top_row.config(bg=COLOR_HOVER_BG, cursor="hand2")
             lbl_t.config(bg=COLOR_HOVER_BG, fg=COLOR_HOVER_TITLE, cursor="hand2")
             lbl_badge.config(text="전환하기", bg=COLOR_HOVER_BADGE_BG, fg=COLOR_HOVER_BADGE_FG, cursor="hand2")
             lbl_d.config(bg=COLOR_HOVER_BG, fg=COLOR_HOVER_DESC, cursor="hand2")
         else:
-            wrap.config(bg=COLOR_ACTIVE_BORDER, highlightbackground=COLOR_ACTIVE_BORDER)
+            wrap.config(bg=COLOR_ACTIVE_BORDER)
             inner.config(bg=COLOR_ACTIVE_BG, cursor="hand2")
             top_row.config(bg=COLOR_ACTIVE_BG, cursor="hand2")
             lbl_t.config(bg=COLOR_ACTIVE_BG, fg=COLOR_ACTIVE_TITLE, cursor="hand2")
@@ -2268,7 +2307,7 @@ def launch_gui() -> None:
         try:
             d = collect_live_diagnostics()
             cur_mode = int(d.get("currentMode") or 2)
-            lbl_mode.config(text=f"현재 상태 :  {d['modeLabel']}")
+            lbl_mode.config(text=f"적용 중 :  {d['modeLabel']}")
             if d["zcoreAlive"]:
                 ver_txt = f"v{d['zcoreVersion']}" if d["zcoreVersion"] else "정상"
                 lbl_zcore.config(text=f"· PC 엔진 (Z코어)   :  정상 작동 중 ({ver_txt})", fg="#0F172A")
@@ -2362,8 +2401,8 @@ def launch_gui() -> None:
         wrap = tk.Frame(
             btn_frame,
             bg=COLOR_ACTIVE_BORDER,
-            highlightbackground=COLOR_ACTIVE_BORDER,
-            highlightthickness=1,
+            padx=2,
+            pady=2,
             bd=0,
         )
         wrap.pack(fill="x", pady=5)
