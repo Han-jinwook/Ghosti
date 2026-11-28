@@ -362,8 +362,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </section>
       )}
 
-      {/* 3) 공통 하단 좌·우 2분할 고정 배너: 본문(순백 카드)과 명확히 구분되는 전용 파스텔 틴트 밴드 */}
-      <section id="security" className="mt-2 pt-7 pb-10 border-t border-slate-300/90 bg-[#CBD6E2]/65">
+      {/* 3) 공통 하단 좌·우 2분할 고정 배너: 본문(순백 카드)과 명확히 구분되는 전용 파스텔 틴트 카드 */}
+      <section id="security" className="mt-2 pt-7 pb-10 border-t border-slate-300/90">
         <div className="px-4 sm:px-6 max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             {/* 좌측: 출시 알림 신청 (은은한 소프트 민트 틴트 카드) */}
@@ -379,10 +379,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                     무료 사용 확인서
                   </span>
                   <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
-                    개인 · 기업 · 공공기관 어디서나 평생 무료
+                    개인 · 기업 · 공공기관 누구나 평생 무료
                   </h3>
                   <p className="text-[12.5px] text-slate-700 break-keep leading-relaxed">
-                    귀신비서·귀신검색·사진 공유는 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 거의 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
+                    귀신비서·귀신검색·사진 공유는 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 많이 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
                   </p>
                 </div>
                 <div
