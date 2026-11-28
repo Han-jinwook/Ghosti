@@ -1726,20 +1726,18 @@ def stop_and_uninstall_zcore_completely(
             timeout=6,
             creationflags=CREATE_NO_WINDOW,
         )
-        for reg_val in ("MerlinZCoreDaemon", "MerlinSeqPaste"):
-            subprocess.run(
-                ["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", reg_val, "/f"],
-                capture_output=True,
-                timeout=4,
-                creationflags=CREATE_NO_WINDOW,
-            )
-        for task_name in ("StartMerlinZCore5199", "MerlinSeqPasteStart"):
-            subprocess.run(
-                ["schtasks", "/delete", "/tn", task_name, "/f"],
-                capture_output=True,
-                timeout=4,
-                creationflags=CREATE_NO_WINDOW,
-            )
+        subprocess.run(
+            ["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "MerlinZCoreDaemon", "/f"],
+            capture_output=True,
+            timeout=4,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        subprocess.run(
+            ["schtasks", "/delete", "/tn", "StartMerlinZCore5199", "/f"],
+            capture_output=True,
+            timeout=4,
+            creationflags=CREATE_NO_WINDOW,
+        )
 
     time.sleep(0.6)
     if not keep_program_dir_for_move:

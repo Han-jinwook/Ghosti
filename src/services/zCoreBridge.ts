@@ -363,7 +363,7 @@ export const zCoreBridge = ZCoreBridgeManager.getInstance();
 
 /**
  * [귀신같이 기본 실행 게이트 (Fundamental Execution Gate)]
- * - 개인 라운지(찾기·치우기·고치기)의 모든 실제 실행 액션은
+ * - 개인 라운지(귀신비서·귀신검색)의 모든 실제 실행 액션은
  *   ① 이메일 로그인 완료(`merlin_session_token` 보유) +
  *   ② 로컬 Z-코어(`127.0.0.1:5199`) 또는 모바일 네이티브 환경 가동이 완료된 후에만 실행됩니다.
  * - `/?dev=true`로 접속한 개발자 PC/폰에서도 이 순차 온보딩(로그인 ➔ 코어 실행) 원칙을 동일하게 점검·안내합니다.

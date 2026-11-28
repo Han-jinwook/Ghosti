@@ -65,7 +65,7 @@ import {
 } from './ghostCareAgentEngine';
 
 /**
- * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
+ * 👻 귀신비서(손보기 · 사진정리 · 기기케어) 공용 대화형 AI & JSON Z-코어 위임 라우터
  *
  * [핵심 아키텍처 — 저가 LLM AI 두뇌(Gemini 2.5 Flash) + JSON 코어 위임(127.0.0.1:5199)]
  * 1. 유저는 명령어를 외울 필요 없이 우측 한 열의 '통상의 채팅창'에서 일상 언어로 편하게 대화합니다.
@@ -257,7 +257,7 @@ export interface MonsterPcSpecPayload {
 export interface DigitalHealthCheckRecord {
   recordId: string;
   issuedAt: string;
-  category: '귀신비서' | '고치기' | '바로가기' | '↩️ 복원 기록';
+  category: '귀신비서' | '기기케어' | '바로가기' | '↩️ 복원 기록';
   title: string;
   reclaimedSizeLabel: string;
   cleanedItemCount: number;
@@ -411,7 +411,7 @@ export interface MonsterChatMessage {
     approvedTypedText?: string;
     createdRestoreId?: string;
   };
-  /** 모바일에서 채팅(타자)으로 설정/고치기 가이드를 요청했을 때 다짜고짜 음성 출력하지 않고 사전 승낙을 구하는 스크립트 */
+  /** 모바일에서 채팅(타자)으로 설정/기기케어 가이드를 요청했을 때 다짜고짜 음성 출력하지 않고 사전 승낙을 구하는 스크립트 */
   voiceConsentPromptKo?: string;
   voiceConsentApproved?: boolean;
   /** [전환율 보강 ③] 모바일 온보딩 말미: 모바일 ➔ PC 회수 브릿지 (카톡 나에게 PC 실행 링크 보내기 / 주소 복사) 버튼 노출 */
@@ -426,7 +426,7 @@ export interface MonsterChatMessage {
 }
 
 // ---------------------------------------------------------------------------
-// 🧹 치우기 × ⚙️ 고치기 우측 1열 표준 채팅창 공유 멀티턴 스토어
+// 👻 귀신비서 우측 1열 표준 채팅창 공유 멀티턴 스토어
 // ---------------------------------------------------------------------------
 
 function createWelcomeMessage(): MonsterChatMessage {
@@ -441,7 +441,7 @@ function createWelcomeMessage(): MonsterChatMessage {
     timestamp: now,
     sourceTab: 'trash',
     text:
-      '안녕하세요! 컴퓨터·휴대폰 정리, 고치기, 복원, 요금·기능 문의를 편하게 말씀해 주세요.\n' +
+      '안녕하세요! 컴퓨터·휴대폰 손보기, 사진 정리, 복원, 요금·기능 문의를 편하게 말씀해 주세요.\n' +
       '아래 입력창에 글자로 입력하시거나  음성으로 편하게 말씀해 주세요.',
   };
 }
@@ -868,7 +868,7 @@ export async function callMonsterLowCostLlmJson(params: {
     '• [4귀신 업무공유 S:·클라우드·NAS]: ①구글 드라이브(G:)·네이버 마이박스(MYBOX)·원드라이브 폴더도 [업무 폴더 변경 (G: 연결)]로 선택 시 S:와 동시 반영, ②데스크톱 탐색기 설치 시 제목 0.1초·일반문서 본문/OCR 자동 다운로드 100% 검색(우클릭 [오프라인 사용 가능] 권장), ③.gsheet/.gdoc는 "링크가 있는 모든 사용자 보기 가능" 시 표·본문 100% 검색 / 비공개 시트는 제목 검색 후 웹 열기, ④사내 NAS 대비 외근·LTE 무설정 1초 직결·본문 1초 검색·실시간 [🔒 현재 OOO님이 사용 중] 잠금·기존 NAS 병행/대체 우위, ⑤S:는 대표 최상위 업무 폴더 1곳 연결(하위 폴더 개수 무제한), ⑥대표 1인 정액제(5인 9,900원/20인 19,000원/50인 29,000원, 30일 체험)로 초대 팀원 평생 0원이며 만료 시 S: 연결만 해제되고 원본 파일은 100% 보존, [🌙 야간·퇴근 초절전 모드](월 전기료 약 1,800원) 및 백업 PC 지원.',
     '',
     historyBlock ? `[최근 대화 맥락]\n${historyBlock}\n` : '',
-    `[현재 유저 입력 (${sourceTab === 'trash' ? '치우기 탭' : '고치기 탭'})]`,
+    `[현재 유저 입력 (${sourceTab === 'trash' ? '귀신비서 손보기' : '귀신비서 기기케어'})]`,
     `"${query}"`,
     '',
     '[절대 준수 4대 화법 및 아키텍처 원칙 — 다정한 애교 해요체 · 군더더기 0% · 범위 밖 질문 외부 바통터치 · JSON 기능 분리]',
@@ -7442,7 +7442,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  // 8) 프린터·네트워크·화면·소리·S드라이브 등 OS 수리 의도 (⚙️ 고치기 연동 — PC 전용)
+  // 8) 프린터·네트워크·화면·소리·S드라이브 등 OS 수리 의도 (귀신비서 기기케어 연동 — PC 전용)
   if (
     !isMobileRuntimeForChat() &&
     (llmDecision?.intent === 'OS_REPAIR_ACTION' ||

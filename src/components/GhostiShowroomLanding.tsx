@@ -811,7 +811,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     }
                     className="px-5 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[14px] transition-colors cursor-pointer"
                   >
-                    {isLaunched ? '바로 시작하기' : '가입 없이 샘플 체험하기'}
+                    {isLaunched ? '바로 시작하기' : '가입 없이 바로 체험해 보기'}
                   </button>
                   <button
                     type="button"

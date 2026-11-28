@@ -20,7 +20,7 @@ export interface SelfHealingEvaluationResult {
  * 화살표 길 안내 중 '뒤로 가기' 횟수를 등급으로 기록합니다.
  *
  * [정직 원칙 — AGENTS.md 수칙 3]
- * - 모든 [내 기기] 고치기는 0원이므로 '코인 환불·에스크로 정산'은 발생하지 않습니다. 그런 문구를 표시하지 않습니다.
+ * - 모든 [내 기기] 손보기 케어는 0원이므로 '코인 환불·에스크로 정산'은 발생하지 않습니다. 그런 문구를 표시하지 않습니다.
  * - 이 기록은 내 PC의 Z-코어 로컬 기록(setup_monster_blackbox.json)에만 남습니다.
  *   본사 전송·전 세계 배포·AI 자동 학습은 현재 구현되어 있지 않으므로 그렇게 말하지 않습니다.
  * - 필드 이름(otaEntry, escrowSettlementKo 등)은 기존 기록 형식 호환을 위해 유지합니다.
@@ -34,7 +34,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
   const { plan, auditId, backtrackCount, abortedAsFailure } = params;
   const nowIso = new Date().toISOString();
   const otaId = `ota_${Date.now()}`;
-  const FREE_NOTE = '0원 (내 기기 고치기는 항상 무료)';
+  const FREE_NOTE = '0원 (내 기기 손보기 케어는 항상 무료)';
   const LOCAL_LOG_NOTE = '내 PC 로컬 기록에만 저장 (외부 전송·자동 배포 없음)';
 
   if (abortedAsFailure) {
@@ -145,7 +145,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
     refundedCoins: 0,
   };
 
-  const empathyApologyToastKo = `죄송합니다. 화살표 안내가 ${backtrackCount}번이나 헤매게 해 드렸습니다. 헤맨 단계는 내 PC 기록에 남겨 안내 개선에 참고하겠습니다. (고치기는 항상 0원이라 별도 비용은 없습니다)`;
+  const empathyApologyToastKo = `죄송합니다. 화살표 안내가 ${backtrackCount}번이나 헤매게 해 드렸습니다. 헤맨 단계는 내 PC 기록에 남겨 안내 개선에 참고하겠습니다. (내 기기 손보기 케어는 항상 0원이라 별도 비용은 없습니다)`;
   const empathyBriefingChatKo = `[${plan.title}] 안내를 마쳤습니다.\n화면이 바뀌어 화살표 안내가 ${backtrackCount}번 헤매게 해 드려 죄송합니다. 헤맨 단계는 내 PC 로컬 기록에만 남겼습니다(외부 전송 없음).`;
 
   return {
