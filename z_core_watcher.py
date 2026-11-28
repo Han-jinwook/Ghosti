@@ -472,6 +472,7 @@ def _audit_cluster_zcore_version_parity() -> None:
     )
 
     def _check_node(item: tuple[str, str | None]) -> tuple[str, str, int]:
+        import os as _os_n
         label, ssh_target = item
         if ssh_target is None:
             ver = "DOWN"
@@ -487,7 +488,7 @@ def _audit_cluster_zcore_version_parity() -> None:
             cmd += ["-i", ssh_key]
         cmd += [
             "-o", "StrictHostKeyChecking=no",
-            "-o", "ConnectTimeout=2",
+            "-o", "ConnectTimeout=3",
             ssh_target,
             "powershell -NoProfile -NonInteractive -Command -",
         ]
@@ -499,8 +500,8 @@ def _audit_cluster_zcore_version_parity() -> None:
                 text=True,
                 encoding="utf-8",
                 errors="ignore",
-                timeout=6.0,
-                creationflags=0x08000000 if os.name == "nt" else 0,
+                timeout=8.0,
+                creationflags=0x08000000 if _os_n.name == "nt" else 0,
             )
             out = (r.stdout or "").strip().splitlines()
             last_line = out[-1].strip() if out else ""
