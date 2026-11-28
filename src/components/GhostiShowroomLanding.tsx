@@ -47,19 +47,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [isLaunched, setIsLaunched] = useState<boolean>(OFFICIAL_LAUNCH_LIVE);
   const [devFullView, setDevFullView] = useState<boolean>(false);
 
-  // 본 앱(👻 귀신비서 방)에서 구경하러 나온 유저인지 감지하여 왕복 복귀 버튼 제공
-  // ⚠️ [출시 전 잠금 철칙]: `?view=showroom`은 루트 접속 시 히스토리 라우터가 자동으로 붙이는 파라미터이므로
-  //    복귀 버튼 노출 근거로 쓰면 첫 방문자에게도 버튼이 보이고 forceAllow로 개발 워크스페이스 잠금이 뚫립니다.
-  //    오직 ① 본 앱에서 [온보딩 구경하기]로 나온 세션 플래그 또는 ② 개발자 권한(isDevAuthorized)일 때만 노출합니다.
-  const [canReturnToWorkspace] = useState<boolean>(() => {
-    try {
-      if (sessionStorage.getItem('ghosti_entered_showroom_from_app') === '1') return true;
-      return Boolean(isDevAuthorized);
-    } catch {
-      return Boolean(isDevAuthorized);
-    }
-  });
-
   const [shortsList, setShortsList] = useState<ShortsItem[]>(DEFAULT_SHORTS_DATA);
   const [activeShortsModal, setActiveShortsModal] = useState<ShortsItem | null>(null);
 
@@ -599,21 +586,50 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         html, body { overscroll-behavior-y: auto !important; }
       `}</style>
 
-      {/* 상단 GNB: 로고 + 평생 무료 슬로건 상시 고정 + 본진 3대 무료 기능 탭 (유료 링크 유입 시에만 확장 플랜 탭 추가) */}
+      {/* 상단 GNB: [좌: 로고 + 사용 가이드 + 앱 출시 알림 신청하기 버튼] | [중: 3대 무료 기능 탭] | [우: 평생 무료 라임 슬로건] */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-300 shadow-xs">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 shrink-0">
+          {/* 좌측: 로고 + 사용 가이드 + 확실한 CTA 버튼 */}
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
             <GhostiBrandLogo
               size="desktop"
               onClick={() => {
                 handleSelectMainTab('home', true);
               }}
             />
-            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-[#ECFCCB] border border-[#A3E635] text-[#365314] text-[12px] font-semibold whitespace-nowrap">
-              가입·카드 등록 없이 · 광고 0% 평생 무료
+            <span className="inline-flex items-center pl-2.5 border-l border-slate-300 text-[13.5px] font-bold text-slate-700 tracking-tight whitespace-nowrap">
+              사용 가이드
             </span>
+
+            {!isLaunched ? (
+              verifiedUserEmail ? (
+                <div className="px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-900 text-[12px] font-semibold flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                  <span className="max-w-[90px] sm:max-w-[130px] truncate">{verifiedUserEmail}</span>
+                  <span className="hidden sm:inline text-teal-700">예약됨</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={scrollToEmailBox}
+                  className="ml-1 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 active:translate-y-[1px] border-b-2 border-teal-800 text-white text-[12.5px] sm:text-[13px] font-bold transition-all cursor-pointer items-center whitespace-nowrap shadow-sm"
+                >
+                  <span className="sm:hidden">알림 신청</span>
+                  <span className="hidden sm:inline">앱 출시 알림 신청하기</span>
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => onEnterWorkspace(true)}
+                className="ml-1 px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 active:translate-y-[1px] border-b-2 border-teal-800 text-white text-[13px] font-bold transition-all cursor-pointer whitespace-nowrap shadow-sm"
+              >
+                앱 시작하기
+              </button>
+            )}
           </div>
 
+          {/* 중앙: 본진 3대 무료 기능 탭 */}
           <nav className="hidden md:flex items-center gap-5 whitespace-nowrap shrink-0">
             {(
               [
@@ -641,45 +657,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             })}
           </nav>
 
+          {/* 우측: 평생 무료 라임 슬로건 (+ 개발자 전용 스위치) */}
           <div className="flex items-center gap-2 shrink-0">
-            {canReturnToWorkspace && (
-              <button
-                type="button"
-                onClick={() => onEnterWorkspace(true)}
-                title="워크스페이스로 돌아가기"
-                className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-[12.5px] font-medium transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <span className="hidden sm:inline">귀신비서로 돌아가기 →</span>
-                <span className="sm:hidden">{isStoreAppMode ? '앱으로 →' : '돌아가기 →'}</span>
-              </button>
-            )}
-
-            {!isLaunched ? (
-              verifiedUserEmail ? (
-                <div className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="max-w-[90px] sm:max-w-[150px] truncate">{verifiedUserEmail}</span>
-                  <span className="hidden sm:inline text-slate-500">예약됨</span>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={scrollToEmailBox}
-                  className={`${canReturnToWorkspace ? 'hidden sm:flex' : 'flex'} px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] sm:text-[13px] font-semibold transition-colors cursor-pointer items-center whitespace-nowrap shadow-2xs`}
-                >
-                  <span className="sm:hidden">알림 신청</span>
-                  <span className="hidden sm:inline">출시 알림 신청</span>
-                </button>
-              )
-            ) : (
-              <button
-                type="button"
-                onClick={() => onEnterWorkspace(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
-              >
-                시작하기
-              </button>
-            )}
+            <span className="hidden lg:inline-flex items-center px-3 py-1 rounded-md bg-[#ECFCCB] border border-[#A3E635] text-[#365314] text-[12px] font-semibold whitespace-nowrap">
+              가입·카드 등록 없이 · 광고 0% 평생 무료
+            </span>
 
             {isDevAuthorized && (
               <div className="hidden xl:flex items-center gap-1.5 pl-2 border-l border-slate-200">
@@ -688,7 +670,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={() => setDevFullView((v) => !v)}
                   className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium border transition-colors cursor-pointer ${
                     devFullView
-                      ? 'bg-[#FDE6B8] text-[#78350F] border-[#EAB866]'
+                      ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C]'
                       : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
                   }`}
                 >
