@@ -456,7 +456,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           ? '클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로'
           : '카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로',
       subline:
-        '기본 3대 무료 초능력은 평생 0원으로 유지되며, 다중 기기 연동과 사내 공용 폴더만 카드 없는 30일 무료체험으로 선택합니다.',
+        '기본 3대 무료 기능은 평생 0원으로 유지되며, 다중 기기 연동과 사내 공용 폴더만 카드 없는 30일 무료체험으로 선택합니다.',
     },
   };
 
@@ -594,7 +594,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               }}
             />
             <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold whitespace-nowrap">
-              광고 0% · 클라우드 월세 0원 · 평생 무료
+              가입·카드 등록 없이 · 광고 0% 평생 무료
             </span>
           </div>
 
@@ -726,14 +726,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-5">
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold">
-                광고 0% · 클라우드 월세 0원 · PC·모바일 초능력
+                기기 내 로컬 처리 · 광고 0% · 평생 무료
               </span>
 
               <div className="space-y-2.5">
                 <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight leading-[1.3] text-slate-900 break-keep">
                   {isCompactH1Slot
-                    ? '느린 PC·폰 정리와 1초 내용 검색 초능력'
-                    : '내 PC와 모바일에 1초 초능력을'}
+                    ? '느린 PC·폰 정리와 1초 내용 검색'
+                    : '부르면 1초, 귀신같이 해결합니다'}
                 </h1>
 
                 <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
