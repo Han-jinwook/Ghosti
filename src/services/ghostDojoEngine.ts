@@ -16,7 +16,7 @@ export const BASIC_STEPS: Array<{ id: BasicStepId; title: string; mission: strin
   {
     id: 'b1',
     title: 'Ctrl+0 / Ctrl+우클릭 소환',
-    mission: '아래 체험 칸 위에서 키보드 Ctrl + 0 또는 마우스 Ctrl + 우클릭을 눌러 귀신검색창을 불러보세요!',
+    mission: '키보드(Ctrl + 0)와 마우스(Ctrl + 우클릭)를 각각 3번씩 눌러 게이지를 채워보세요!',
   },
   {
     id: 'b2',
@@ -48,11 +48,12 @@ export const DOJO_PROGRESS_STORAGE_KEY = 'ghosti_dojo_progress_v1';
 
 export interface DojoProgress {
   basics: Partial<Record<BasicStepId, boolean>>;
+  b1Counts?: { keyboard: number; mouse: number };
 }
 
-export const EMPTY_DOJO_PROGRESS: DojoProgress = { basics: {} };
+export const EMPTY_DOJO_PROGRESS: DojoProgress = { basics: {}, b1Counts: { keyboard: 0, mouse: 0 } };
 
-let sessionDojoProgress: DojoProgress = { basics: {} };
+let sessionDojoProgress: DojoProgress = { basics: {}, b1Counts: { keyboard: 0, mouse: 0 } };
 
 try {
   if (typeof localStorage !== 'undefined') {
@@ -65,12 +66,20 @@ try {
 export function loadDojoProgress(): DojoProgress {
   return {
     basics: { ...sessionDojoProgress.basics },
+    b1Counts: {
+      keyboard: sessionDojoProgress.b1Counts?.keyboard ?? 0,
+      mouse: sessionDojoProgress.b1Counts?.mouse ?? 0,
+    },
   };
 }
 
 export function saveDojoProgress(p: DojoProgress): void {
   sessionDojoProgress = {
     basics: { ...(p.basics || {}) },
+    b1Counts: {
+      keyboard: p.b1Counts?.keyboard ?? sessionDojoProgress.b1Counts?.keyboard ?? 0,
+      mouse: p.b1Counts?.mouse ?? sessionDojoProgress.b1Counts?.mouse ?? 0,
+    },
   };
   try {
     if (typeof window !== 'undefined') {

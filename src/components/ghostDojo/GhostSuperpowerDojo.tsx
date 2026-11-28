@@ -265,34 +265,52 @@ interface SamplePopupState {
   y?: number;
 }
 
+const TARGET_REPS = 3;
+
 const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
-  const [keyboardCount, setKeyboardCount] = useState(0);
-  const [mouseCount, setMouseCount] = useState(0);
+  const initialCounts = loadDojoProgress().b1Counts ?? { keyboard: 0, mouse: 0 };
+  const [keyboardCount, setKeyboardCount] = useState(initialCounts.keyboard);
+  const [mouseCount, setMouseCount] = useState(initialCounts.mouse);
+  const kbCountRef = useRef(initialCounts.keyboard);
+  const msCountRef = useRef(initialCounts.mouse);
+
   const [pressingSide, setPressingSide] = useState<'keyboard' | 'mouse' | null>(null);
-  const [selectedSide, setSelectedSide] = useState<'keyboard' | 'mouse' | null>(null);
   const [samplePopup, setSamplePopup] = useState<SamplePopupState | null>(null);
   const popupCardRef = useRef<HTMLDivElement | null>(null);
   const pressTimerRef = useRef<number | null>(null);
 
-  const { leftClickGuide, setLeftClickGuide, handlers } = useInstantSummonTrigger((meta) => {
+  const { handlers } = useInstantSummonTrigger((meta) => {
     playBabyGhostChime('summon');
-    setSelectedSide(meta.method);
     setPressingSide(meta.method);
     if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
-    pressTimerRef.current = window.setTimeout(() => setPressingSide(null), 260);
+    pressTimerRef.current = window.setTimeout(() => setPressingSide(null), 240);
 
     if (meta.method === 'keyboard') {
-      setKeyboardCount((c) => c + 1);
+      kbCountRef.current += 1;
+      setKeyboardCount(kbCountRef.current);
     } else {
-      setMouseCount((c) => c + 1);
+      msCountRef.current += 1;
+      setMouseCount(msCountRef.current);
     }
+
+    const curProg = loadDojoProgress();
+    const bothCompleted = kbCountRef.current >= TARGET_REPS && msCountRef.current >= TARGET_REPS;
+    saveDojoProgress({
+      ...curProg,
+      basics: bothCompleted ? { ...curProg.basics, b1: true } : curProg.basics,
+      b1Counts: { keyboard: kbCountRef.current, mouse: msCountRef.current },
+    });
+
     setSamplePopup((prev) => ({
       seq: (prev?.seq || 0) + 1,
       method: meta.method,
       x: meta.clientX,
       y: meta.clientY,
     }));
-    onDone();
+
+    if (bothCompleted) {
+      onDone();
+    }
   }, true);
 
   useEffect(() => {
@@ -301,15 +319,20 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     };
   }, []);
 
+  // 2초 후 자동 소멸 + ESC/외부 좌클릭 즉시 닫기
   useEffect(() => {
     if (!samplePopup) return;
+    const currentSeq = samplePopup.seq;
+    const autoCloseTimer = window.setTimeout(() => {
+      setSamplePopup((cur) => (cur && cur.seq === currentSeq ? null : cur));
+    }, 2000);
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setSamplePopup(null);
       }
     };
     const onPointerDown = (e: MouseEvent) => {
-      // Ctrl+우클릭 호출 시에는 닫지 않고 즉시 새 위치에 재호출되도록 통과
       if (e.ctrlKey && e.button === 2) return;
       if (popupCardRef.current && popupCardRef.current.contains(e.target as Node)) return;
       setSamplePopup(null);
@@ -317,6 +340,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('mousedown', onPointerDown);
     return () => {
+      window.clearTimeout(autoCloseTimer);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('mousedown', onPointerDown);
     };
@@ -329,8 +353,8 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       typeof samplePopup.y === 'number' &&
       typeof window !== 'undefined'
     ) {
-      const cardW = Math.min(460, window.innerWidth - 32);
-      const cardH = 250;
+      const cardW = Math.min(430, window.innerWidth - 32);
+      const cardH = 210;
       const clampedLeft = Math.max(16, Math.min(samplePopup.x - Math.round(cardW * 0.35), window.innerWidth - cardW - 16));
       const clampedTop = Math.max(16, Math.min(samplePopup.y + 14, window.innerHeight - cardH - 16));
       return {
@@ -345,12 +369,19 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       left: '50%',
       top: '38%',
       transform: 'translate(-50%, -50%)',
-      width: 'min(460px, calc(100vw - 32px))',
+      width: 'min(430px, calc(100vw - 32px))',
     };
   };
 
+  const kbClamped = Math.min(TARGET_REPS, keyboardCount);
+  const msClamped = Math.min(TARGET_REPS, mouseCount);
+  const kbFillPct = (kbClamped / TARGET_REPS) * 100;
+  const msFillPct = (msClamped / TARGET_REPS) * 100;
+  const kbDone = keyboardCount >= TARGET_REPS;
+  const msDone = mouseCount >= TARGET_REPS;
+
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="py-1">
       <style>{`
         @keyframes ghostSampleSummonPop {
           0% { opacity: 0; scale: 0.9; }
@@ -361,118 +392,124 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           0%, 49% { opacity: 1; }
           50%, 100% { opacity: 0; }
         }
+        @keyframes ghostPopupTimerShrink {
+          from { width: 100%; }
+          to { width: 0%; }
+        }
       `}</style>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
-        {/* 좌측: 키보드 Ctrl + 0 리얼 키캡 크기 체험 존 */}
+      {/* 여백 조절로 보기 좋게 좁힌 중앙 2열 배터리 충전 카드 */}
+      <div className="w-full max-w-[680px] mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 items-stretch">
+        {/* 좌측: 키보드 Ctrl + 0 (아래→위 3단 충전) */}
         <div
-          {...handlers}
-          onClick={(e) => {
-            setSelectedSide('keyboard');
-            setLeftClickGuide(true);
-            e.currentTarget.focus();
-          }}
-          className={`group relative select-none px-5 py-5 rounded-xl border-2 border-dashed flex flex-col items-center justify-between gap-3 text-[13px] text-slate-700 cursor-pointer transition-all duration-150 focus:outline-none ${
+          onMouseDown={handlers.onMouseDown}
+          onContextMenu={handlers.onContextMenu}
+          className={`relative overflow-hidden select-none px-5 py-4 rounded-2xl border-2 flex flex-col items-center justify-between gap-2 transition-all duration-300 cursor-default ${
             pressingSide === 'keyboard'
-              ? 'border-teal-500 bg-teal-50 ring-4 ring-teal-400/30 shadow-md'
-              : leftClickGuide && selectedSide === 'keyboard'
-                ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-500/20'
+              ? 'border-teal-500 ring-4 ring-teal-400/30 shadow-md bg-slate-50'
+              : kbDone
+                ? 'border-emerald-500 shadow-sm ring-2 ring-emerald-500/20 bg-white'
                 : keyboardCount > 0
-                  ? 'border-emerald-400 bg-emerald-50/25 hover:border-teal-500 hover:bg-teal-50/40'
-                  : 'border-slate-300 bg-slate-50/90 hover:border-teal-500 hover:bg-teal-50/40'
+                  ? 'border-teal-400 shadow-2xs bg-slate-50/70'
+                  : 'border-dashed border-slate-300 bg-slate-50/85'
           }`}
         >
-          <div className="w-full flex items-center justify-between gap-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-200/80 text-slate-700 text-[12px] font-bold tracking-tight">
-              방법 1 · 키보드 호출
+          {/* 아래에서 위로 차오르는 충전 배경 레이어 */}
+          <div
+            style={{ height: `${kbFillPct}%` }}
+            className={`absolute inset-x-0 bottom-0 z-0 pointer-events-none transition-all duration-500 ease-out ${
+              kbDone
+                ? 'bg-gradient-to-t from-emerald-300/75 via-teal-200/60 to-emerald-100/65'
+                : keyboardCount > 0
+                  ? 'bg-gradient-to-t from-teal-300/80 via-teal-200/65 to-teal-100/60 border-t-2 border-teal-500/75'
+                  : ''
+            }`}
+          />
+
+          <div className="relative z-10 w-full flex items-center justify-between gap-2">
+            <span className="text-[12.5px] font-extrabold text-slate-800 tracking-tight">
+              키보드 호출
             </span>
-            {keyboardCount > 0 ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold shadow-2xs">
-                ✓ {keyboardCount}회 성공
-              </span>
-            ) : (
-              <span className="text-[11.5px] font-medium text-slate-400">여러 번 가능</span>
-            )}
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold tabular-nums transition-colors ${
+                kbDone
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : keyboardCount > 0
+                    ? 'bg-teal-600 text-white shadow-2xs'
+                    : 'bg-white/90 border border-slate-200 text-slate-500'
+              }`}
+            >
+              {kbDone ? '✓ 3 / 3 완료' : `${kbClamped} / ${TARGET_REPS}`}
+            </span>
           </div>
-          <div className="py-1 flex items-center justify-center">
+
+          <div className="relative z-10 py-2 flex items-center justify-center">
             <img
               src="/ghostkey_ctrl_zero.png"
               alt="Ctrl + 0"
-              className={`h-[108px] sm:h-[124px] w-auto object-contain select-none pointer-events-none transition-transform duration-150 ${
-                pressingSide === 'keyboard'
-                  ? 'scale-[0.93] translate-y-1.5'
-                  : 'group-hover:scale-[1.03]'
+              className={`h-[108px] sm:h-[120px] w-auto object-contain select-none pointer-events-none transition-transform duration-150 ${
+                pressingSide === 'keyboard' ? 'scale-[0.92] translate-y-1.5' : ''
               }`}
             />
-          </div>
-          <div className="text-center leading-relaxed">
-            <span>
-              이 영역에서 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> (숫자패드 0 포함) 입력
-            </span>
-            {leftClickGuide && selectedSide === 'keyboard' && (
-              <div className="mt-1 text-[12px] font-bold text-teal-800">
-                선택됨 · 지금 키보드 Ctrl + 0을 눌러보세요!
-              </div>
-            )}
           </div>
         </div>
 
-        {/* 우측: 마우스 Ctrl + 우클릭 리얼 단추 크기 체험 존 */}
+        {/* 우측: 마우스 Ctrl + 우클릭 (아래→위 3단 충전) */}
         <div
-          {...handlers}
-          onClick={(e) => {
-            setSelectedSide('mouse');
-            setLeftClickGuide(true);
-            e.currentTarget.focus();
-          }}
-          className={`group relative select-none px-5 py-5 rounded-xl border-2 border-dashed flex flex-col items-center justify-between gap-3 text-[13px] text-slate-700 cursor-pointer transition-all duration-150 focus:outline-none ${
+          onMouseDown={handlers.onMouseDown}
+          onContextMenu={handlers.onContextMenu}
+          className={`relative overflow-hidden select-none px-5 py-4 rounded-2xl border-2 flex flex-col items-center justify-between gap-2 transition-all duration-300 cursor-default ${
             pressingSide === 'mouse'
-              ? 'border-teal-500 bg-teal-50 ring-4 ring-teal-400/30 shadow-md'
-              : leftClickGuide && selectedSide === 'mouse'
-                ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-500/20'
+              ? 'border-teal-500 ring-4 ring-teal-400/30 shadow-md bg-slate-50'
+              : msDone
+                ? 'border-emerald-500 shadow-sm ring-2 ring-emerald-500/20 bg-white'
                 : mouseCount > 0
-                  ? 'border-emerald-400 bg-emerald-50/25 hover:border-teal-500 hover:bg-teal-50/40'
-                  : 'border-slate-300 bg-slate-50/90 hover:border-teal-500 hover:bg-teal-50/40'
+                  ? 'border-teal-400 shadow-2xs bg-slate-50/70'
+                  : 'border-dashed border-slate-300 bg-slate-50/85'
           }`}
         >
-          <div className="w-full flex items-center justify-between gap-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-200/80 text-slate-700 text-[12px] font-bold tracking-tight">
-              방법 2 · 마우스 호출
+          {/* 아래에서 위로 차오르는 충전 배경 레이어 */}
+          <div
+            style={{ height: `${msFillPct}%` }}
+            className={`absolute inset-x-0 bottom-0 z-0 pointer-events-none transition-all duration-500 ease-out ${
+              msDone
+                ? 'bg-gradient-to-t from-emerald-300/75 via-teal-200/60 to-emerald-100/65'
+                : mouseCount > 0
+                  ? 'bg-gradient-to-t from-teal-300/80 via-teal-200/65 to-teal-100/60 border-t-2 border-teal-500/75'
+                  : ''
+            }`}
+          />
+
+          <div className="relative z-10 w-full flex items-center justify-between gap-2">
+            <span className="text-[12.5px] font-extrabold text-slate-800 tracking-tight">
+              마우스 호출
             </span>
-            {mouseCount > 0 ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[11px] font-bold shadow-2xs">
-                ✓ {mouseCount}회 성공
-              </span>
-            ) : (
-              <span className="text-[11.5px] font-medium text-slate-400">여러 번 가능</span>
-            )}
+            <span
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11.5px] font-extrabold tabular-nums transition-colors ${
+                msDone
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : mouseCount > 0
+                    ? 'bg-teal-600 text-white shadow-2xs'
+                    : 'bg-white/90 border border-slate-200 text-slate-500'
+              }`}
+            >
+              {msDone ? '✓ 3 / 3 완료' : `${msClamped} / ${TARGET_REPS}`}
+            </span>
           </div>
-          <div className="py-1 flex items-center justify-center">
+
+          <div className="relative z-10 py-2 flex items-center justify-center">
             <img
               src="/ghostkey_ctrl_rightclick.png"
               alt="Ctrl + 마우스 우클릭"
-              className={`h-[108px] sm:h-[124px] w-auto object-contain select-none pointer-events-none transition-transform duration-150 ${
-                pressingSide === 'mouse'
-                  ? 'scale-[0.93] translate-y-1.5'
-                  : 'group-hover:scale-[1.03]'
+              className={`h-[108px] sm:h-[120px] w-auto object-contain select-none pointer-events-none transition-transform duration-150 ${
+                pressingSide === 'mouse' ? 'scale-[0.92] translate-y-1.5' : ''
               }`}
             />
-          </div>
-          <div className="text-center leading-relaxed">
-            <span>
-              이 영역에서 <kbd className={summonKeyBadgeCls}>Ctrl</kbd> 누른 채{' '}
-              <kbd className={summonKeyBadgeCls}>마우스 우클릭</kbd>
-            </span>
-            {leftClickGuide && selectedSide === 'mouse' && (
-              <div className="mt-1 text-[12px] font-bold text-teal-800">
-                선택됨 · 지금 Ctrl을 누른 채 마우스 우클릭해 보세요!
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* 실제 바탕화면 소환 감각을 전달하는 플로팅 샘플 귀신검색창 */}
+      {/* 2초 후 자동 퇴장하는 깔끔한 호출 연습용 샘플 귀신검색창 */}
       {samplePopup &&
         typeof document !== 'undefined' &&
         createPortal(
@@ -482,7 +519,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               ref={popupCardRef}
               style={{
                 ...computePopupStyle(),
-                animation: 'ghostSampleSummonPop 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                animation: 'ghostSampleSummonPop 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
               }}
               onContextMenu={(e) => {
                 if (e.ctrlKey) e.preventDefault();
@@ -490,7 +527,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               className="pointer-events-auto rounded-2xl overflow-hidden bg-white border-2 border-slate-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.45)] ring-4 ring-teal-500/25 select-none"
             >
               {/* 상단 타이틀 바 */}
-              <div className="px-4 py-2.5 bg-slate-900 text-white flex items-center justify-between gap-2">
+              <div className="px-3.5 py-2.5 bg-slate-900 text-white flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <img
                     src="/gwisinkachi_app_icon_512.png"
@@ -501,80 +538,48 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
                     귀신검색창
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[10.5px] font-extrabold whitespace-nowrap">
-                    호출 연습용 샘플
+                    샘플
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="px-2 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-bold whitespace-nowrap">
+                  <span className="text-teal-300 text-[11.5px] font-bold whitespace-nowrap">
                     {samplePopup.method === 'keyboard'
-                      ? '키보드 Ctrl + 0 소환!'
-                      : '마우스 Ctrl + 우클릭 소환!'}
+                      ? `Ctrl + 0 (${Math.min(TARGET_REPS, keyboardCount)}/${TARGET_REPS})`
+                      : `Ctrl + 우클릭 (${Math.min(TARGET_REPS, mouseCount)}/${TARGET_REPS})`}
                   </span>
                   <button
                     type="button"
                     onClick={() => setSamplePopup(null)}
-                    aria-label="샘플 창 닫기"
-                    className="w-6 h-6 rounded-md bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[12px] flex items-center justify-center cursor-pointer transition-colors"
+                    aria-label="닫기"
+                    className="w-6 h-6 rounded-md bg-white/15 hover:bg-white/25 text-white text-[12px] flex items-center justify-center cursor-pointer transition-colors"
                   >
                     ✕
                   </button>
                 </div>
               </div>
 
-              {/* 검색 입력바 모형 (기능 없는 시각 연출 전용) */}
-              <div className="p-3.5 bg-white flex flex-col gap-2.5">
-                <div className="h-11 px-3.5 rounded-xl bg-slate-50 border-2 border-teal-500 flex items-center gap-2.5 shadow-inner">
-                  <span className="material-symbols-outlined text-[19px] text-teal-600">
+              {/* 2초 자동 소멸 진행 바 */}
+              <div className="w-full h-1 bg-slate-800 overflow-hidden">
+                <div
+                  style={{ animation: 'ghostPopupTimerShrink 2000ms linear forwards' }}
+                  className="h-full bg-teal-400"
+                />
+              </div>
+
+              {/* 심플한 검색창 모형 */}
+              <div className="p-3.5 bg-white flex flex-col gap-2">
+                <div className="h-10.5 px-3 rounded-xl bg-slate-50 border-2 border-teal-500 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-teal-600">
                     search
                   </span>
                   <span
                     style={{ animation: 'ghostCaretBlink 1s infinite' }}
-                    className="w-0.5 h-5 bg-teal-600 rounded-full shrink-0"
+                    className="w-0.5 h-4.5 bg-teal-600 rounded-full shrink-0"
                   />
-                  <span className="text-[13px] text-slate-400 truncate">
-                    실제 연결 시 여기서 문서·사진·영상을 바로 검색합니다...
+                  <span className="text-[12.5px] text-slate-400 truncate">
+                    문서 · 사진 속 글자 · 동영상 장면 즉시 검색...
                   </span>
                 </div>
-
-                {/* 샘플 모양 암시 2줄 */}
-                <div className="flex flex-col gap-1.5 opacity-85">
-                  <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-2 text-[12px]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0">
-                        PDF
-                      </span>
-                      <span className="font-semibold text-slate-700 truncate">
-                        2026_표준_임대차계약서.pdf
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 shrink-0">샘플 모양</span>
-                  </div>
-                  <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-2 text-[12px]">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold shrink-0">
-                        사진
-                      </span>
-                      <span className="font-semibold text-slate-700 truncate">
-                        배달주문_영수증_38500원.jpg
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-400 shrink-0">샘플 모양</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 하단 안내 바 */}
-              <div className="px-3.5 py-2 bg-slate-100 border-t border-slate-200 flex items-center justify-between gap-2 text-[11.5px] text-slate-600">
-                <span>
-                  반대쪽 단축키(키보드 ↔ 마우스)도 번갈아 눌러보세요!
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSamplePopup(null)}
-                  className="px-2.5 py-0.5 rounded bg-white hover:bg-slate-200 border border-slate-300 text-slate-700 font-semibold cursor-pointer transition-colors shrink-0"
-                >
-                  닫기 (ESC)
-                </button>
               </div>
             </div>
           </div>,
@@ -795,6 +800,10 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = () => {
   };
 
   const basicsDone = countBasicsDone(progress);
+  const hasAnyProgress =
+    basicsDone > 0 ||
+    (progress.b1Counts?.keyboard ?? 0) > 0 ||
+    (progress.b1Counts?.mouse ?? 0) > 0;
   const BasicSandbox = BASIC_SANDBOXES[activeBasic];
 
   return (
@@ -813,11 +822,14 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = () => {
             <span className="text-[12px] font-semibold text-slate-500 select-none cursor-default">
               진행 {basicsDone}/3 완료
             </span>
-            {basicsDone > 0 && (
+            {hasAnyProgress && (
               <button
                 type="button"
                 onClick={() => {
-                  const resetNext: DojoProgress = { basics: {} };
+                  const resetNext: DojoProgress = {
+                    basics: {},
+                    b1Counts: { keyboard: 0, mouse: 0 },
+                  };
                   setProgress(resetNext);
                   saveDojoProgress(resetNext);
                   setActiveBasic('b1');
