@@ -432,31 +432,31 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   > = {
     secretary: {
       label: '귀신비서',
-      badge: '1. 귀신비서 · 평생 무료',
-      headline: '느려진 PC 심폐소생 · 중복 사진 정리',
-      subline: '은행 보안프로그램은 지우지 않고 절전 수면, 흔들린·중복 사진은 휴지통으로 안전 정리합니다.',
+      badge: '1. 귀신비서 · 평생 0원',
+      headline: '느려진 내 PC·폰, 클릭 한 번에 새것처럼',
+      subline: '은행 보안프로그램은 안 지우고 재우고, 중복 사진·흩어진 문서·깨진 한글 압축까지 광고 없이 1초 만에 해결합니다.',
     },
     search: {
       label: '귀신검색',
-      badge: '2. 귀신검색 · 평생 무료',
-      headline: '파일 이름 몰라도 문서 본문 · 영상 장면 1초 검색',
-      subline: '한글·PDF·엑셀 본문, 촬영한 영수증 글자, 수백 개 동영상 속 원하는 장면까지 열지 않고 바로 찾습니다.',
+      badge: '2. 귀신검색 · 평생 0원',
+      headline: '파일 이름 몰라도, 열지 않고 1초 소환',
+      subline: '계약서 속 문장, 사진 속 글자, 동영상 속 찾던 장면까지 Ctrl+0으로 열지 않고 1초 만에 찾아줍니다.',
     },
     share: {
       label: '사진 공유',
-      badge: '3. 사진 공유 · 인원·장수 무제한 무료',
-      headline: '카톡 만료·화질 저하 없는 가족·모임 평생 무료 원본방',
-      subline: '원본 화질 그대로 보관하고 초대 링크로 간편 합류, 얼굴별로 우리 가족 사진만 1초 만에 모아봅니다.',
+      badge: '3. 사진 공유 · 인원·장수 무제한 0원',
+      headline: '가족·모임 원본 사진, 만료 없이 평생 0원',
+      subline: '카톡 30일 만료와 화질 저하 없이, 몇천 장의 추억도 얼굴별로 원본 그대로 모읍니다.',
     },
     paid: {
       label: '확장 플랜',
-      badge: paidEntryType === 'b2b' ? '기업용 업무 공유 (S:)' : '내 기기 통합 Pro',
+      badge: paidEntryType === 'b2b' ? '5. 업무 공유 (공용 폴더 S:)' : '4. 내 기기 통합 Pro',
       headline:
         paidEntryType === 'b2b'
-          ? '클라우드 월세 없이 팀 PC를 공용 폴더(S: 드라이브) 하나로'
-          : '카톡 나에게 보내기 끝, 내 폰과 PC를 한 몸처럼 연결',
+          ? '클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로'
+          : '카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로',
       subline:
-        '기본 3대 기능은 평생 무료로 유지되며, 다중 기기 연동과 팀 공용 폴더만 선택형 30일 무료체험으로 제공됩니다.',
+        '기본 3대 무료 초능력은 평생 0원으로 유지되며, 다중 기기 연동과 사내 공용 폴더만 카드 없는 30일 무료체험으로 선택합니다.',
     },
   };
 
@@ -594,7 +594,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               }}
             />
             <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold whitespace-nowrap">
-              개인 · 기업 기본 기능 평생 무료
+              광고 0% · 클라우드 월세 0원 · 평생 무료
             </span>
           </div>
 
@@ -726,18 +726,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-5">
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold">
-                기기 내 로컬 정리 · 본문 및 장면 통합 검색 · 광고 0%
+                광고 0% · 클라우드 월세 0원 · PC·모바일 초능력
               </span>
 
               <div className="space-y-2.5">
                 <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight leading-[1.3] text-slate-900 break-keep">
                   {isCompactH1Slot
-                    ? 'PC · 스마트폰 정리와 문서 · 사진 내용 검색을 한곳에서'
-                    : '열지 않고 찾고, 안심하고 정리하는 내 기기 관리 도구'}
+                    ? '느린 PC·폰 정리와 1초 내용 검색 초능력'
+                    : '내 PC와 모바일에 1초 초능력을'}
                 </h1>
 
                 <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
-                  무거워진 백그라운드 보안 모듈을 절전 모드로 전환하고, 파일 이름을 기억하지 못해도 문서 본문과 사진·동영상 장면으로 필요한 자료를 바로 찾습니다.
+                  느려진 PC는 새것처럼 깨우고, 숨은 파일·사진·영상은 열지 않고 1초 만에 찾아냅니다.
                 </p>
               </div>
 
@@ -754,7 +754,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     }
                     className="px-5 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[14px] transition-colors cursor-pointer shadow-xs"
                   >
-                    {isLaunched ? '바로 시작하기' : '가입 없이 바로 체험해 보기'}
+                    {isLaunched ? '10초 만에 무료로 시작하기' : '가입 없이 바로 체험해 보기'}
                   </button>
                   {!isLaunched && !verifiedUserEmail && (
                     <button
@@ -774,7 +774,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   </button>
                 </div>
                 <p className="text-[12.5px] text-slate-500 break-keep">
-                  원본 파일 외부 업로드 없음 · 광고 없음 · 개인 및 민간 기업 기본 기능 평생 무료
+                  {isLaunched
+                    ? '가입·카드 등록 없이 즉시 시작 · 서버 전송 0% · 광고 0% 평생 무료'
+                    : '가입·카드 등록 없이 바로 체험 · 서버 전송 0% · 광고 0% 평생 무료'}
                 </p>
               </div>
 
