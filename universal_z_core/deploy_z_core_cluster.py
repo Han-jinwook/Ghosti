@@ -885,17 +885,15 @@ def main():
 
         if is_weekend:
             log(f"🌐 [주말(토/일) 순수 자동업데이트 모드] GitHub Releases(z-core-latest, v{core_ver}) 업로드 완료!")
-            log("   ↳ 주말에는 2·3·4호컴을 포함한 어떤 원격 PC에도 SSH로 개입하지 않으며, 설치된 엔진들이 스스로 새 버전을 감지해 자동 업데이트합니다.")
+            log("   ↳ 주말에는 1~6호컴(로컬 6호컴 포함) 어디에도 인위적 트리거를 보내지 않으며, 설치된 엔진들이 100% 자연스럽게 스스로 새 버전을 감지해 자동 업데이트합니다.")
         else:
             log(f"🚀 [평일 Track A — QA 전용 0초 직결 설치] 2호컴(100.88.230.16) · 3호컴(100.102.43.42) · 4호컴(100.114.100.24) 무중단 스왑(v{core_ver}) 시작")
             update_pc2(core_ver)
             update_pc3(core_ver)
             update_pc4(core_ver)
-            log(f"🌐 [평일 Track B — 1·5·6호컴] SSH 개입 없이 설치된 엔진이 스스로 GitHub Releases(v{core_ver})를 감지해 자동 업데이트합니다.")
+            log(f"🌐 [평일 Track B — 1·5·6호컴] 인위적 트리거 없이 설치된 엔진이 스스로 GitHub Releases(v{core_ver})를 감지해 자연스럽게 자동 업데이트합니다.")
 
-        # 로컬 개발 PC(6호컴)만 현재 로컬 영구 설치본을 최신 상태로 맞춤
-        _trigger_and_verify_auto_update_node("6호기 (로컬 개발/운영 PC)", None, None, core_ver)
-        log(f"\n🎉 [Z-Core v{core_ver}] GitHub Releases 정식 릴리즈 업로드 및 배포 완료!")
+        log(f"\n🎉 [Z-Core v{core_ver}] GitHub Releases 정식 릴리즈 업로드 완료!")
 
 if __name__ == "__main__":
     main()
