@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.69"
+CORE_VERSION = "2.13.79"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1954,29 +1954,48 @@ def _is_remote_version_newer(remote_ver: str, local_ver: str) -> bool:
 
 
 def start_periodic_remote_version_watcher() -> None:
-    """브라우저를 열지 않은 상태에서도 상주 Z-코어(.exe)가 원격 최신 버전을 주기 감지해 무소음 자동 업데이트합니다."""
+    """브라우저를 열지 않은 상태에서도 설치된 상주 Z-코어(.exe)가 스스로 원격 최신 버전을 주기 감지해
+    누구의 개입 없이도 GitHub Releases에서 즉시 무소음 자동 업데이트합니다."""
     if not getattr(sys, "frozen", False):
         return
 
     def _poll_loop() -> None:
         time.sleep(15.0)
+        gh_zip_url = "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip"
+        version_check_urls = (
+            "https://raw.githubusercontent.com/Han-jinwook/Ghosti/main/public/z_core_version.json",
+            "https://ghosti.sundreamer.app/z_core_version.json",
+        )
         while True:
             try:
-                url = f"https://ghosti.sundreamer.app/z_core_version.json?ts={int(time.time())}"
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": f"Merlin_Z_Core_AutoWatcher/{CORE_VERSION}"},
-                )
-                with urllib.request.urlopen(req, timeout=8.0) as resp:
-                    info = json.loads(resp.read().decode("utf-8", errors="replace"))
-                remote_ver = str(info.get("version") or "").strip()
-                zip_url = str(info.get("zipUrl") or "https://ghosti.sundreamer.app/Merlin_Z_Core.zip").strip()
-                if remote_ver and _is_remote_version_newer(remote_ver, CORE_VERSION):
-                    trigger_silent_self_update({"targetVersion": remote_ver, "downloadUrl": zip_url})
-                    return
+                if not _SELF_UPDATE_IN_PROGRESS:
+                    remote_ver = ""
+                    zip_url = gh_zip_url
+                    for base_u in version_check_urls:
+                        try:
+                            url = f"{base_u}?ts={int(time.time())}"
+                            req = urllib.request.Request(
+                                url,
+                                headers={
+                                    "User-Agent": f"Merlin_Z_Core_AutoWatcher/{CORE_VERSION}",
+                                    "Cache-Control": "no-cache",
+                                },
+                            )
+                            with urllib.request.urlopen(req, timeout=8.0) as resp:
+                                info = json.loads(resp.read().decode("utf-8", errors="replace"))
+                            cand_ver = str(info.get("version") or "").strip()
+                            if cand_ver and _is_remote_version_newer(cand_ver, remote_ver or "0.0.0"):
+                                remote_ver = cand_ver
+                                cand_zip = str(info.get("zipUrl") or "").strip()
+                                if cand_zip and "github.com" in cand_zip:
+                                    zip_url = cand_zip
+                        except Exception:
+                            continue
+                    if remote_ver and _is_remote_version_newer(remote_ver, CORE_VERSION):
+                        trigger_silent_self_update({"targetVersion": remote_ver, "downloadUrl": zip_url})
             except Exception:
                 pass
-            time.sleep(1200.0)
+            time.sleep(180.0)
 
     threading.Thread(target=_poll_loop, daemon=True).start()
 
