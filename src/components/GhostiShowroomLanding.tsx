@@ -287,28 +287,25 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
   const MAIN_TAB_META: Record<
     'secretary' | 'search' | 'share' | 'paid',
-    { label: string; badge: string; headline: string; subline: string; guideLine: string }
+    { label: string; badge: string; headline: string; subline: string }
   > = {
     secretary: {
       label: '귀신비서',
       badge: '1. 귀신비서 · 평생 0원',
       headline: '느려진 내 PC·폰, 클릭 한 번에 새것처럼',
-      subline: '은행 보안프로그램은 안 지우고 재우고, 중복 사진·흩어진 문서·깨진 한글 압축까지 광고 없이 1초 만에 해결합니다.',
-      guideLine: '지우지 않고 잠깐 재웠다 복원까지—아래 샘플 화면에서 안전하게 먼저 눌러보세요!',
+      subline: '은행 보안프로그램은 안 지우고 재우고, 중복·연사 사진과 흩어진 문서까지 1초 정리하는데, 광고 1도 없습니다.',
     },
     search: {
       label: '귀신검색',
       badge: '2. 귀신검색 · 평생 0원',
       headline: '파일 이름 몰라도, 열지 않고 1초 소환',
       subline: '계약서 속 문장, 사진 속 글자, 동영상 속 찾던 장면까지 Ctrl+0으로 열지 않고 1초 만에 찾아줍니다.',
-      guideLine: '동영상 장면부터 영수증·계약서 글자까지—아래 샘플에서 1초 검색을 체험해 보세요!',
     },
     share: {
       label: '사진 공유',
       badge: '3. 사진 공유 · 인원·장수 무제한 0원',
       headline: '카톡 기간 만료 없는 평생 무료 원본 사진방',
       subline: '카톡 기간 만료와 화질 저하 없이, 가족·모임·동창회 사진을 얼굴별로 원본 그대로 모아둡니다.',
-      guideLine: '카톡 기간 만료·화질 저하 없는 원본 사진방—샘플 가족방에 직접 들어가 보세요!',
     },
     paid: {
       label: '확장 플랜',
@@ -319,7 +316,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           : '카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로',
       subline:
         '기본 3대 무료 기능은 평생 0원으로 유지되며, 다중 기기 연동과 사내 공용 폴더만 카드 없는 30일 무료체험으로 선택합니다.',
-      guideLine: '기본 3대 기능은 평생 0원 그대로, 팀·다중 기기 확장만 필요할 때 선택하세요!',
     },
   };
 
@@ -698,59 +694,43 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         {/* 1~3) 선택된 메뉴 전용 페이지 (해당 메뉴 선택 시에만 단독 노출) */}
         {activeMainTab !== 'home' && (
           <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
-            {/* 선택 기능 1줄 직관 풀이 헤더 바 + 귀신비서 아바타 1줄 말풍선 안내 */}
-            <div className="rounded-2xl bg-gradient-to-r from-[#FFF3E6] via-[#FFE6CC] to-[#FFD9B3] border border-[#FDBA74] text-slate-900 px-5 sm:px-7 py-4 shadow-sm space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-0.5 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
-                      {MAIN_TAB_META[activeMainTab].badge}
-                    </span>
-                  </div>
-                  <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
-                    {MAIN_TAB_META[activeMainTab].headline}
-                  </h2>
-                  <p className="text-[12.5px] sm:text-[13px] text-slate-700 break-keep">
-                    {MAIN_TAB_META[activeMainTab].subline}
-                  </p>
+            {/* 선택 기능 1줄 직관 풀이 헤더 바 */}
+            <div className="rounded-2xl bg-gradient-to-r from-[#FFF3E6] via-[#FFE6CC] to-[#FFD9B3] border border-[#FDBA74] text-slate-900 px-5 sm:px-7 py-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
+                    {MAIN_TAB_META[activeMainTab].badge}
+                  </span>
                 </div>
-                {activeMainTab === 'search' && (
-                  <div className="flex items-center gap-1.5 shrink-0 bg-white/85 p-1 rounded-xl border border-[#FDBA74]">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectWeaponChip('video')}
-                      className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                        demoTab === 'video' ? 'bg-[#FED7AA] text-[#9A3412] border border-[#FB923C] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF3E6]'
-                      }`}
-                    >
-                      동영상 장면 · 글자
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectWeaponChip('doc')}
-                      className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                        demoTab === 'doc' ? 'bg-[#FED7AA] text-[#9A3412] border border-[#FB923C] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF3E6]'
-                      }`}
-                    >
-                      문서 본문 · 영수증
-                    </button>
-                  </div>
-                )}
+                <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
+                  {MAIN_TAB_META[activeMainTab].headline}
+                </h2>
+                <p className="text-[12.5px] sm:text-[13px] text-slate-700 break-keep">
+                  {MAIN_TAB_META[activeMainTab].subline}
+                </p>
               </div>
-
-              {/* 귀신비서 고스티(Ghosti) 아바타 + 1줄 말풍선 안내 */}
-              <div className="flex items-center gap-2.5 pt-2.5 border-t border-[#FDBA74]/60">
-                <img
-                  src="/gwisinkachi_app_icon_512.png"
-                  alt="귀신비서 고스티"
-                  className="w-7 h-7 rounded-lg object-cover border border-[#FB923C] bg-white shrink-0"
-                />
-                <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-[#FDBA74] text-[12.5px] text-slate-800 shadow-2xs">
-                  <span className="font-bold text-[#9A3412]">귀신비서 고스티</span>
-                  <span className="text-slate-300">|</span>
-                  <span className="font-medium break-keep">{MAIN_TAB_META[activeMainTab].guideLine}</span>
+              {activeMainTab === 'search' && (
+                <div className="flex items-center gap-1.5 shrink-0 bg-white/85 p-1 rounded-xl border border-[#FDBA74]">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWeaponChip('video')}
+                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                      demoTab === 'video' ? 'bg-[#FED7AA] text-[#9A3412] border border-[#FB923C] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF3E6]'
+                    }`}
+                  >
+                    동영상 장면 · 글자
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWeaponChip('doc')}
+                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                      demoTab === 'doc' ? 'bg-[#FED7AA] text-[#9A3412] border border-[#FB923C] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF3E6]'
+                    }`}
+                  >
+                    문서 본문 · 영수증
+                  </button>
                 </div>
-              </div>
+              )}
             </div>
 
             {activeMainTab !== 'paid' && (
