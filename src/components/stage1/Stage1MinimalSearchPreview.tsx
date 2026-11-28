@@ -333,15 +333,31 @@ export const Stage1MinimalSearchPreview: React.FC<{
   const searchResults = useMemo(() => {
     if (!forceSampleOnly) return store.searchResults;
     const q = demoQuery.trim().toLowerCase();
-    const list = !q
-      ? DEMO_SEARCH_SAMPLE_PHOTOS_2
-      : DEMO_SEARCH_SAMPLE_PHOTOS_2.filter(
-          (p) =>
-            p.name.toLowerCase().includes(q) ||
-            (p.captionKo || '').toLowerCase().includes(q) ||
-            p.tags.some((t) => t.toLowerCase().includes(q)) ||
-            (p.keywordsKo || []).some((k) => k.toLowerCase().includes(q))
-        );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const list =
+      tokens.length === 0
+        ? DEMO_SEARCH_SAMPLE_PHOTOS_2
+        : DEMO_SEARCH_SAMPLE_PHOTOS_2.filter((p) => {
+            const hay = [
+              p.name,
+              p.captionKo || '',
+              ...(p.tags || []),
+              ...(p.keywordsKo || []),
+            ]
+              .join(' ')
+              .toLowerCase();
+            return tokens.every((tok) => hay.includes(tok)) || tokens.some((tok) => hay.includes(tok));
+          }).sort((a, b) => {
+            const hayA = [a.name, a.captionKo || '', ...(a.tags || []), ...(a.keywordsKo || [])]
+              .join(' ')
+              .toLowerCase();
+            const hayB = [b.name, b.captionKo || '', ...(b.tags || []), ...(b.keywordsKo || [])]
+              .join(' ')
+              .toLowerCase();
+            const scoreA = tokens.filter((tok) => hayA.includes(tok)).length;
+            const scoreB = tokens.filter((tok) => hayB.includes(tok)).length;
+            return scoreB - scoreA;
+          });
     return (list.length > 0 ? list : DEMO_SEARCH_SAMPLE_PHOTOS_2).map((photo) => ({
       photo,
       score: 0.98,
@@ -352,56 +368,74 @@ export const Stage1MinimalSearchPreview: React.FC<{
   const matchedVideoScenes = useMemo(() => {
     if (!forceSampleOnly) return store.matchedVideoScenes;
     const q = demoQuery.trim().toLowerCase();
-    if (!q) return DEMO_SEARCH_SAMPLE_VIDEOS_2;
-    const filtered = DEMO_SEARCH_SAMPLE_VIDEOS_2.filter(
-      (v) =>
-        v.title.toLowerCase().includes(q) ||
-        (v.sceneDescription || '').toLowerCase().includes(q) ||
-        (v.ocrFullText || '').toLowerCase().includes(q) ||
-        v.keywords.some((k: string) => k.toLowerCase().includes(q))
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return DEMO_SEARCH_SAMPLE_VIDEOS_2;
+    const filtered = DEMO_SEARCH_SAMPLE_VIDEOS_2.filter((v) => {
+      const hay = [
+        v.title,
+        v.sceneDescription || '',
+        v.ocrFullText || '',
+        ...(v.keywords || []),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return tokens.some((tok) => hay.includes(tok));
+    });
     return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_VIDEOS_2;
   }, [forceSampleOnly, store.matchedVideoScenes, demoQuery]);
   const matchedLocalDocs = useMemo(() => {
     if (!forceSampleOnly) return store.matchedLocalDocs;
     const q = demoQuery.trim().toLowerCase();
-    if (!q) return DEMO_SEARCH_SAMPLE_DOCS_2;
-    const filtered = DEMO_SEARCH_SAMPLE_DOCS_2.filter(
-      (d) =>
-        d.title.toLowerCase().includes(q) ||
-        d.fileName.toLowerCase().includes(q) ||
-        d.extractedText.toLowerCase().includes(q) ||
-        d.keywords.some((k: string) => k.toLowerCase().includes(q))
-    );
+    const tokens = q.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return DEMO_SEARCH_SAMPLE_DOCS_2;
+    const filtered = DEMO_SEARCH_SAMPLE_DOCS_2.filter((d) => {
+      const hay = [d.title, d.fileName, d.extractedText, ...(d.keywords || [])]
+        .join(' ')
+        .toLowerCase();
+      return tokens.some((tok) => hay.includes(tok));
+    });
     return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_DOCS_2;
   }, [forceSampleOnly, store.matchedLocalDocs, demoQuery]);
 
   const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
-  const [demoRelabeledMap, setDemoRelabeledMap] = useState<Record<string, string>>({});
   const [clearInputSignal, setClearInputSignal] = useState<number>(0);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
 
   useEffect(() => {
+    if (!forceSampleOnly || typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('ghosti_dojo_sample_active_query', {
+        detail: { query: demoQuery },
+      })
+    );
+  }, [forceSampleOnly, demoQuery]);
+
+  useEffect(() => {
     if (!forceSampleOnly) return;
-    const onDojoPreviewCmd = (e: Event) => {
-      const detail = (e as CustomEvent<{ command?: 'ocr' | 'labeler' | 'reset' }>).detail;
-      if (!detail?.command) return;
-      if (detail.command === 'reset') {
-        setDemoRelabeledMap({});
+    const onDojoPreviewSearch = (e: Event) => {
+      const detail = (
+        e as CustomEvent<{
+          space?: 'gallery' | 'video' | 'vault';
+          query?: string;
+          reset?: boolean;
+        }>
+      ).detail;
+      if (!detail) return;
+      if (detail.space) {
+        useSaySeeStore.getState().setSearchSpace(detail.space);
+      }
+      if (detail.reset || !detail.query) {
+        setDemoQuery('');
+        setDemoExecuted(false);
+        setClearInputSignal((c) => c + 1);
         return;
       }
-      useSaySeeStore.getState().setSearchSpace('gallery');
-      const targetPhoto = DEMO_SEARCH_SAMPLE_PHOTOS_2[0];
-      if (!targetPhoto) return;
-      if (detail.command === 'ocr') {
-        setOcrModalPhoto(targetPhoto);
-      } else if (detail.command === 'labeler') {
-        const smartLabel = '250802_배달주문내역_수제버거_38500원.jpg';
-        setDemoRelabeledMap((prev) => ({ ...prev, [targetPhoto.id]: smartLabel }));
-      }
+      setDemoQuery(detail.query);
+      setDemoExecuted(true);
     };
-    window.addEventListener('ghosti_dojo_preview_command', onDojoPreviewCmd as EventListener);
-    return () => window.removeEventListener('ghosti_dojo_preview_command', onDojoPreviewCmd as EventListener);
+    window.addEventListener('ghosti_dojo_preview_search', onDojoPreviewSearch as EventListener);
+    return () =>
+      window.removeEventListener('ghosti_dojo_preview_search', onDojoPreviewSearch as EventListener);
   }, [forceSampleOnly]);
 
   useEffect(() => {
@@ -578,11 +612,13 @@ export const Stage1MinimalSearchPreview: React.FC<{
   return (
     <main className="flex-1 w-full px-4 sm:px-6 py-4 sm:py-5 flex flex-col gap-4 bg-white text-slate-900">
       <div className="w-full flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 px-0.5">
-          <h1 className="text-[18px] md:text-[20px] text-slate-900 font-bold tracking-tight">
-            내 기기 검색
-          </h1>
-        </div>
+        {!forceSampleOnly && (
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-0.5">
+            <h1 className="text-[18px] md:text-[20px] text-slate-900 font-bold tracking-tight">
+              내 기기 검색
+            </h1>
+          </div>
+        )}
 
         <ExternalDrivePromptBanner forceSampleOnly={forceSampleOnly} />
 
@@ -669,23 +705,25 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 </span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  const targetPhoto =
-                    searchResults[0]?.photo ||
-                    photos.find((p) => !p.quarantined) ||
-                    photos[0] ||
-                    null;
-                  if (targetPhoto) {
-                    setOcrModalPhoto(targetPhoto);
-                  }
-                }}
-                title="사진에서 글자·표 추출"
-                className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-[12.5px] font-medium flex items-center gap-1 shrink-0 whitespace-nowrap transition-colors cursor-pointer"
-              >
-                <span>글자 추출 (OCR)</span>
-              </button>
+              {!forceSampleOnly && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetPhoto =
+                      searchResults[0]?.photo ||
+                      photos.find((p) => !p.quarantined) ||
+                      photos[0] ||
+                      null;
+                    if (targetPhoto) {
+                      setOcrModalPhoto(targetPhoto);
+                    }
+                  }}
+                  title="사진에서 글자·표 추출"
+                  className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-[12.5px] font-medium flex items-center gap-1 shrink-0 whitespace-nowrap transition-colors cursor-pointer"
+                >
+                  <span>글자 추출 (OCR)</span>
+                </button>
+              )}
             </div>
 
             {hasExecutedUserSearch && (
@@ -907,12 +945,14 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[12px] font-medium">
                   {matchedTotalDocsCount}건
                 </span>
-                <span className="text-[11.5px] text-slate-500 font-medium">
-                  · <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 날짜·내용 기반 한글 파일명을 바로 복사합니다
-                </span>
+                {!forceSampleOnly && (
+                  <span className="text-[11.5px] text-slate-500 font-medium">
+                    · <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 날짜·내용 기반 한글 파일명을 바로 복사합니다
+                  </span>
+                )}
               </div>
 
-              {!isMobileOrStore && (
+              {!isMobileOrStore && !forceSampleOnly && (
                 <button
                   onClick={() => void openLocalFolder('docs')}
                   className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-[12px] font-medium border border-slate-200 flex items-center gap-1.5 cursor-pointer"
@@ -1273,37 +1313,32 @@ export const Stage1MinimalSearchPreview: React.FC<{
                             </span>
                           </button>
 
-                          <div className="absolute bottom-9 right-2 z-10 flex items-center gap-1">
-                            <GhostLabelerActionButton variant="gallery_photo" photo={item.photo} forceSampleOnly={forceSampleOnly} />
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOcrModalPhoto(item.photo);
-                              }}
-                              title="사진에서 글자·표 추출 (OCR)"
-                              className="px-2 py-0.5 rounded bg-black/75 hover:bg-black text-white text-[10.5px] font-semibold transition-colors cursor-pointer"
-                            >
-                              OCR
-                            </button>
-                          </div>
-
-                          <div className="absolute inset-x-0 bottom-0 min-h-[44px] px-2.5 pb-2 pt-5 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex flex-col justify-end gap-1 pointer-events-none">
-                            {demoRelabeledMap[item.photo.id] && (
-                              <div className="px-2 py-0.5 rounded bg-emerald-500 text-white text-[10.5px] font-bold truncate shadow-xs">
-                                🏷️ {demoRelabeledMap[item.photo.id]}
-                              </div>
-                            )}
-                            <div className="flex items-end justify-between gap-2">
-                              <span className="text-[11px] font-medium text-white truncate">
-                                {demoRelabeledMap[item.photo.id] ? `원본: ${item.photo.name}` : item.photo.name}
-                              </span>
-                              {(item.photo.tags || [])[0] && (
-                                <span className="text-[11px] text-zinc-200 truncate shrink-0">
-                                  {(item.photo.tags || [])[0]}
-                                </span>
-                              )}
+                          {!forceSampleOnly && (
+                            <div className="absolute bottom-9 right-2 z-10 flex items-center gap-1">
+                              <GhostLabelerActionButton variant="gallery_photo" photo={item.photo} forceSampleOnly={forceSampleOnly} />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOcrModalPhoto(item.photo);
+                                }}
+                                title="사진에서 글자·표 추출 (OCR)"
+                                className="px-2 py-0.5 rounded bg-black/75 hover:bg-black text-white text-[10.5px] font-semibold transition-colors cursor-pointer"
+                              >
+                                OCR
+                              </button>
                             </div>
+                          )}
+
+                          <div className="absolute inset-x-0 bottom-0 min-h-[42px] px-2.5 pb-2 pt-5 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
+                            <span className="text-[11px] font-medium text-white truncate">
+                              {item.photo.name}
+                            </span>
+                            {(item.photo.tags || [])[0] && (
+                              <span className="text-[11px] text-zinc-200 truncate shrink-0">
+                                {(item.photo.tags || [])[0]}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </article>

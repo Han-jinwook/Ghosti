@@ -2,11 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import {
   computeGhostSearchWindowRect,
-  resolveGhostSearchResponsiveSpec,
   GHOST_SEARCH_STAGE_LABELS,
   DEFAULT_WORK_AREA,
   type GhostSearchStage,
-  type GhostSearchWindowMode,
 } from '../../services/ghostSearchWindowGeometry';
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
@@ -258,69 +256,152 @@ function consumePendingGhostSearchQuery(): string {
 const SIMULATOR_WORK_AREA = { left: 0, top: 0, right: 1120, bottom: 660 };
 type GameStepId = GhostDojoStepId;
 
-const AUTO_MORPH_SCRIPT: Array<{
-  phase: number;
-  stage: GhostSearchStage | null;
-  cursorPct: { x: number; y: number };
-  clicking: boolean;
-  badge: string;
-  desc: string;
-}> = [
+interface DesktopIconItem {
+  id: string;
+  label: string;
+  kind: 'folder' | 'pdf' | 'xlsx' | 'photo' | 'video';
+  thumbSrc?: string;
+  space: 'vault' | 'gallery' | 'video';
+  query: string;
+  stepId?: GameStepId;
+}
+
+const VIRTUAL_DESKTOP_ICONS: DesktopIconItem[] = [
   {
-    phase: 0,
-    stage: null,
-    cursorPct: { x: 62, y: 54 },
-    clicking: true,
-    badge: '단축키 호출 · 바탕화면에서 Ctrl + 0 또는 Ctrl + 우클릭',
-    desc: '바탕화면에서 단축키를 누르면 마우스 위치에 귀신검색창이 열립니다.',
+    id: 'desk_folder',
+    label: '받은 파일',
+    kind: 'folder',
+    space: 'vault',
+    query: '',
   },
   {
-    phase: 1,
-    stage: 'small',
-    cursorPct: { x: 56, y: 32 },
-    clicking: false,
-    badge: '작게 보기 · 빠른 검색과 첫 번째 결과 요약',
-    desc: '사진·동영상·문서 검색 결과와 첫 번째 항목 미리보기를 바로 확인합니다.',
+    id: 'desk_pdf',
+    label: '임대차계약서.pdf',
+    kind: 'pdf',
+    space: 'vault',
+    query: '보증금',
+    stepId: 'doc_search',
   },
   {
-    phase: 2,
-    stage: 'large',
-    cursorPct: { x: 82, y: 12 },
-    clicking: true,
-    badge: '크게 보기 · 전체 갤러리 화면',
-    desc: '많은 사진과 문서를 넓은 화면에서 한눈에 살펴볼 수 있습니다.',
+    id: 'desk_xlsx',
+    label: '거래처_견적서.xlsx',
+    kind: 'xlsx',
+    space: 'vault',
+    query: '공급단가',
+    stepId: 'doc_search',
+  },
+  {
+    id: 'desk_photo_family',
+    label: '가족여행_바다.jpg',
+    kind: 'photo',
+    thumbSrc: '/sample_photos_301/IMG_20250510_1001.jpg',
+    space: 'gallery',
+    query: '해변 가족 산책',
+    stepId: 'photo_natural',
+  },
+  {
+    id: 'desk_photo_receipt',
+    label: '배달영수증.jpg',
+    kind: 'photo',
+    thumbSrc: '/sample_photos_301/Screenshot_20250802_1002_배달주문내역.jpg',
+    space: 'gallery',
+    query: '38,500원',
+    stepId: 'photo_text',
+  },
+  {
+    id: 'desk_video',
+    label: '회의_매출목표.mp4',
+    kind: 'video',
+    thumbSrc: '/poc/results/video_frames/20260918_202442_t00.jpg',
+    space: 'video',
+    query: '매출 35억',
+    stepId: 'video_text',
   },
 ];
+
+const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
+  if (item.kind === 'folder') {
+    return (
+      <svg viewBox="0 0 48 48" className="w-9 h-9 drop-shadow-md">
+        <path
+          d="M6 11a4 4 0 0 1 4-4h10l4 4h14a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V11z"
+          fill="#F59E0B"
+        />
+        <path
+          d="M6 16h36v21a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V16z"
+          fill="#FBBF24"
+        />
+      </svg>
+    );
+  }
+  if (item.kind === 'pdf') {
+    return (
+      <div className="w-8 h-9 rounded-sm bg-white border border-slate-300 shadow-md flex flex-col justify-between overflow-hidden">
+        <div className="px-1 pt-1 flex flex-col gap-0.5">
+          <span className="h-0.5 w-4 bg-slate-300 rounded-full" />
+          <span className="h-0.5 w-5 bg-slate-300 rounded-full" />
+        </div>
+        <div className="bg-rose-600 text-white text-[8px] font-extrabold text-center py-0.5 tracking-tighter">
+          PDF
+        </div>
+      </div>
+    );
+  }
+  if (item.kind === 'xlsx') {
+    return (
+      <div className="w-8 h-9 rounded-sm bg-white border border-slate-300 shadow-md flex flex-col justify-between overflow-hidden">
+        <div className="px-1 pt-1 grid grid-cols-2 gap-0.5">
+          <span className="h-1 bg-emerald-200" />
+          <span className="h-1 bg-slate-200" />
+          <span className="h-1 bg-emerald-200" />
+          <span className="h-1 bg-slate-200" />
+        </div>
+        <div className="bg-emerald-600 text-white text-[7.5px] font-extrabold text-center py-0.5 tracking-tighter">
+          XLSX
+        </div>
+      </div>
+    );
+  }
+  if (item.kind === 'photo' && item.thumbSrc) {
+    return (
+      <div className="w-9 h-8 rounded-xs bg-zinc-900 border border-white/80 shadow-md overflow-hidden">
+        <img src={item.thumbSrc} alt={item.label} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div className="relative w-9 h-8 rounded-xs bg-zinc-950 border border-white/70 shadow-md overflow-hidden flex items-center justify-center">
+      {item.thumbSrc && (
+        <img src={item.thumbSrc} alt={item.label} className="w-full h-full object-cover opacity-85" />
+      )}
+      <span className="absolute inset-0 flex items-center justify-center">
+        <span className="w-4 h-4 rounded-full bg-black/75 text-white text-[8px] flex items-center justify-center">
+          ▶
+        </span>
+      </span>
+    </div>
+  );
+};
 
 const VirtualMonitorSimulator: React.FC<{
   onStep: (id: GameStepId) => void;
   initialQuery?: string;
-  connected?: boolean;
 }> = ({
   onStep,
   initialQuery = '',
-  connected = true,
 }) => {
   const {
     searchSpace,
-    hasExecutedUserSearch,
-    activeQuery,
-    searchResults,
-    matchedLocalDocs,
-    matchedVaultPhotos,
-    matchedVideoScenes,
     setSelectedPhoto,
     setSelectedDocModal,
     setSelectedVideoModal,
   } = useSaySeeStore();
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
-  const [windowMode, setWindowMode] = useState<GhostSearchWindowMode>('compact');
-  const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : 'small');
-  const [customSlimHeight, setCustomSlimHeight] = useState<number | undefined>(initialQuery ? undefined : 340);
+  const [stage, setStage] = useState<GhostSearchStage | null>('medium');
   const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
-  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
-  const [autoPhase, setAutoPhase] = useState<number>(initialQuery ? 2 : 1);
+  const [selectedIconId, setSelectedIconId] = useState<string | null>(null);
+  const [sampleQueryText, setSampleQueryText] = useState<string>(initialQuery);
 
   useEffect(() => {
     const el = monitorRef.current;
@@ -332,150 +413,77 @@ const VirtualMonitorSimulator: React.FC<{
   }, []);
 
   useEffect(() => {
-    if (!isAutoPlaying) return;
-    const stepInfo = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
-    setStage(stepInfo.stage);
-    setWindowMode(stepInfo.stage === 'large' ? 'large' : 'compact');
-    setCustomSlimHeight(stepInfo.stage === 'small' ? 340 : undefined);
-    const duration = stepInfo.stage === null ? 1600 : 2900;
-    const timer = window.setTimeout(() => {
-      setAutoPhase((prev) => (prev + 1) % AUTO_MORPH_SCRIPT.length);
-    }, duration);
-    return () => window.clearTimeout(timer);
-  }, [isAutoPlaying, autoPhase]);
-
-  useEffect(() => {
-    if (isAutoPlaying || !stage || windowMode === 'large') return;
-    const cleanQ =
-      hasExecutedUserSearch &&
-      activeQuery &&
-      !activeQuery.startsWith('전체 갤러리 사진') &&
-      !activeQuery.startsWith('동영상 ') &&
-      !activeQuery.startsWith('최근 서류 ')
-        ? activeQuery.trim()
-        : '';
-    if (!cleanQ && stage === 'medium') return;
-    const timer = window.setTimeout(() => {
-      const totalMatched =
-        searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
-      const spec = resolveGhostSearchResponsiveSpec({
-        mode: 'compact',
-        hasQuery: Boolean(cleanQ),
-        resultCount: totalMatched,
-        hasRichPreview: searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
-      });
-      setStage(spec.stage);
-      setCustomSlimHeight(spec.customHeight);
-    }, 120);
-    return () => window.clearTimeout(timer);
-  }, [
-    isAutoPlaying,
-    stage,
-    windowMode,
-    hasExecutedUserSearch,
-    activeQuery,
-    searchResults.length,
-    matchedLocalDocs.length,
-    matchedVaultPhotos.length,
-    matchedVideoScenes.length,
-  ]);
-
-  useEffect(() => {
     const onFocusMonitorWin = (e: Event) => {
       const detail = (e as CustomEvent<{ stage?: GhostSearchStage }>).detail;
-      const nextStage: GhostSearchStage = detail?.stage || 'medium';
-      setIsAutoPlaying(false);
-      setWindowMode(nextStage === 'large' ? 'large' : 'compact');
+      const nextStage: GhostSearchStage = detail?.stage === 'large' ? 'large' : 'medium';
       setStage(nextStage);
-      setCustomSlimHeight(nextStage === 'small' ? 340 : undefined);
-      setAutoPhase(nextStage === 'large' ? 3 : nextStage === 'medium' ? 2 : 1);
     };
+    const onDojoPreviewSearch = (e: Event) => {
+      const detail = (
+        e as CustomEvent<{
+          space?: 'gallery' | 'video' | 'vault';
+          query?: string;
+          reset?: boolean;
+        }>
+      ).detail;
+      if (!detail) return;
+      if (!stage) setStage('medium');
+      setSampleQueryText(detail.reset ? '' : detail.query || '');
+    };
+    const onSampleActiveQuery = (e: Event) => {
+      const detail = (e as CustomEvent<{ query?: string }>).detail;
+      setSampleQueryText(detail?.query ?? '');
+    };
+
     window.addEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
-    return () => window.removeEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
-  }, []);
-
-  const setManualMode = (nextMode: GhostSearchWindowMode | null, customAnchor?: { x: number; y: number }) => {
-    setIsAutoPlaying(false);
-    if (customAnchor) setAnchor(customAnchor);
-    if (nextMode === null) {
-      setStage(null);
-      setAutoPhase(0);
-      return;
-    }
-    setWindowMode(nextMode);
-    playBabyGhostChime('summon');
-    if (nextMode === 'large') {
-      setStage('large');
-      setCustomSlimHeight(undefined);
-      setAutoPhase(3);
-      onStep('large');
-    } else {
-      const cleanQ =
-        hasExecutedUserSearch &&
-        activeQuery &&
-        !activeQuery.startsWith('전체 갤러리 사진') &&
-        !activeQuery.startsWith('동영상 ') &&
-        !activeQuery.startsWith('최근 서류 ')
-          ? activeQuery.trim()
-          : initialQuery.trim();
-      const totalMatched =
-        searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
-      const spec = resolveGhostSearchResponsiveSpec({
-        mode: 'compact',
-        hasQuery: Boolean(cleanQ),
-        resultCount: totalMatched,
-        hasRichPreview: searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
-      });
-      setStage(spec.stage);
-      setCustomSlimHeight(spec.customHeight);
-      setAutoPhase(spec.stage === 'medium' ? 2 : 1);
-      if (spec.stage === 'small') onStep('summon');
-      if (spec.stage === 'medium') onStep('medium');
-    }
-  };
-
-  const selectExplicitStage = (targetStage: GhostSearchStage) => {
-    setIsAutoPlaying(false);
-    playBabyGhostChime('summon');
-    if (targetStage === 'small') {
-      setWindowMode('compact');
-      setStage('small');
-      setCustomSlimHeight(330);
-      setAutoPhase(1);
-      onStep('summon');
-    } else if (targetStage === 'medium') {
-      setWindowMode('compact');
-      setStage('medium');
-      setCustomSlimHeight(undefined);
-      setAutoPhase(2);
-      onStep('medium');
-    } else {
-      setWindowMode('large');
-      setStage('large');
-      setCustomSlimHeight(undefined);
-      setAutoPhase(3);
-      onStep('large');
-    }
-  };
+    window.addEventListener('ghosti_dojo_preview_search', onDojoPreviewSearch as EventListener);
+    window.addEventListener('ghosti_dojo_sample_active_query', onSampleActiveQuery as EventListener);
+    return () => {
+      window.removeEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
+      window.removeEventListener('ghosti_dojo_preview_search', onDojoPreviewSearch as EventListener);
+      window.removeEventListener('ghosti_dojo_sample_active_query', onSampleActiveQuery as EventListener);
+    };
+  }, [stage]);
 
   const summon = (x?: number, y?: number) => {
-    setManualMode(
-      'compact',
-      typeof x === 'number' && typeof y === 'number' ? { x, y } : undefined,
-    );
+    if (typeof x === 'number' && typeof y === 'number') {
+      setAnchor({ x, y });
+    }
+    playBabyGhostChime('summon');
+    setStage((prev) => prev ?? 'medium');
+  };
+
+  const handleDesktopIconClick = (item: DesktopIconItem) => {
+    setSelectedIconId(item.id);
+    playBabyGhostChime('summon');
+    if (!stage) {
+      setStage('medium');
+    }
+    if (item.stepId) {
+      onStep(item.stepId);
+    }
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('ghosti_dojo_preview_search', {
+          detail: {
+            space: item.space,
+            query: item.query,
+            reset: !item.query,
+          },
+        })
+      );
+    }, 30);
+  };
+
+  const toggleWindowMaximize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStage((prev) => (prev === 'large' ? 'medium' : 'large'));
   };
 
   const scale = monitorW / SIMULATOR_WORK_AREA.right;
   const rect = stage
-    ? computeGhostSearchWindowRect(
-        stage,
-        anchor.x,
-        anchor.y,
-        SIMULATOR_WORK_AREA,
-        stage === 'small' ? customSlimHeight : undefined
-      )
+    ? computeGhostSearchWindowRect(stage, anchor.x, anchor.y, SIMULATOR_WORK_AREA)
     : null;
-  const currentScript = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
 
   const toVirtual = (e: React.MouseEvent) => {
     const box = monitorRef.current?.getBoundingClientRect();
@@ -483,60 +491,74 @@ const VirtualMonitorSimulator: React.FC<{
     return { x: Math.round((e.clientX - box.left) / scale), y: Math.round((e.clientY - box.top) / scale) };
   };
 
+  const qLower = sampleQueryText.trim().toLowerCase();
+  const qTokens = qLower.split(/\s+/).filter(Boolean);
+
+  const resolveTopPhoto = () => {
+    if (searchSpace !== 'gallery') return undefined;
+    if (qTokens.length === 0) return DEMO_SEARCH_SAMPLE_PHOTOS_2[0];
+    const matched = DEMO_SEARCH_SAMPLE_PHOTOS_2.filter((p) => {
+      const hay = [p.name, p.captionKo || '', ...(p.tags || []), ...(p.keywordsKo || [])]
+        .join(' ')
+        .toLowerCase();
+      return qTokens.some((t) => hay.includes(t));
+    }).sort((a, b) => {
+      const hayA = [a.name, a.captionKo || '', ...(a.tags || []), ...(a.keywordsKo || [])].join(' ').toLowerCase();
+      const hayB = [b.name, b.captionKo || '', ...(b.tags || []), ...(b.keywordsKo || [])].join(' ').toLowerCase();
+      return qTokens.filter((t) => hayB.includes(t)).length - qTokens.filter((t) => hayA.includes(t)).length;
+    });
+    return matched[0] || DEMO_SEARCH_SAMPLE_PHOTOS_2[0];
+  };
+
+  const resolveTopVideo = () => {
+    if (searchSpace !== 'video') return undefined;
+    if (qTokens.length === 0) return DEMO_SEARCH_SAMPLE_VIDEOS_2[0];
+    return (
+      DEMO_SEARCH_SAMPLE_VIDEOS_2.find((v) => {
+        const hay = [v.title, v.sceneDescription || '', v.ocrFullText || '', ...(v.keywords || [])]
+          .join(' ')
+          .toLowerCase();
+        return qTokens.some((t) => hay.includes(t));
+      }) || DEMO_SEARCH_SAMPLE_VIDEOS_2[0]
+    );
+  };
+
+  const resolveTopDoc = () => {
+    if (searchSpace !== 'vault') return undefined;
+    if (qTokens.length === 0) return DEMO_SEARCH_SAMPLE_DOCS_2[0];
+    return (
+      DEMO_SEARCH_SAMPLE_DOCS_2.find((d) => {
+        const hay = [d.title, d.fileName, d.extractedText, ...(d.keywords || [])]
+          .join(' ')
+          .toLowerCase();
+        return qTokens.some((t) => hay.includes(t));
+      }) || DEMO_SEARCH_SAMPLE_DOCS_2[0]
+    );
+  };
+
   return (
     <div className="flex flex-col items-center w-full select-none">
-      <div className="w-full rounded-xl overflow-hidden border border-slate-300 bg-slate-100 shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 text-[12px] text-slate-600">
-          <div className="flex items-center gap-2 min-w-0 cursor-default">
-            <span className="font-bold text-slate-900">귀신검색창 미리보기</span>
-            <span className="text-slate-400 hidden sm:inline">·</span>
-            <span className="text-slate-500 hidden sm:inline truncate">
-              {isAutoPlaying
-                ? currentScript.badge
-                : `직접 체험 가능 (${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'})`}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => selectExplicitStage('small')}
-              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-all cursor-pointer ${
-                stage === 'small' || stage === 'medium'
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-300 hover:border-teal-500'
-              }`}
-            >
-              ⤡ 작게
-            </button>
-            <button
-              type="button"
-              onClick={() => selectExplicitStage('large')}
-              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-all cursor-pointer ${
-                stage === 'large'
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-300 hover:border-teal-500'
-              }`}
-            >
-              ⤢ 크게(갤러리)
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (isAutoPlaying) {
-                  setIsAutoPlaying(false);
-                } else {
-                  setIsAutoPlaying(true);
-                  setAutoPhase((prev) => (prev + 1) % AUTO_MORPH_SCRIPT.length);
-                }
-              }}
-              className="px-2.5 py-1 rounded-md text-[11.5px] font-semibold cursor-pointer border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-all"
-            >
-              {isAutoPlaying ? '⏸ 일시정지' : '▶ 자동 시연'}
-            </button>
+      {/* 실제 모니터 베젤 (상단 카메라 + 메탈 프레임 + 하단 모니터 턱) */}
+      <div
+        data-keep-dark="true"
+        className="w-full rounded-[22px] p-3 sm:p-3.5 shadow-2xl border-2 border-zinc-600/80"
+        style={{
+          background: 'linear-gradient(180deg, #27272a 0%, #18181b 50%, #09090b 100%)',
+          boxShadow: '0 22px 50px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
+        }}
+      >
+        {/* 모니터 상단 슬림 카메라 베젤 */}
+        <div
+          data-keep-dark="true"
+          className="flex items-center justify-center pb-2"
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black/55 border border-white/10">
+            <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-500 shadow-inner" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           </div>
         </div>
 
+        {/* 모니터 실제 LCD 바탕화면 영역 */}
         <div
           ref={monitorRef}
           data-keep-dark="true"
@@ -550,50 +572,73 @@ const VirtualMonitorSimulator: React.FC<{
               summon(pos.x, pos.y);
             }
           }}
-          className="relative w-full overflow-hidden"
+          onClick={() => setSelectedIconId(null)}
+          className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
           style={{
             aspectRatio: `${SIMULATOR_WORK_AREA.right} / ${SIMULATOR_WORK_AREA.bottom}`,
-            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+            background: 'linear-gradient(135deg, #0c192c 0%, #172554 45%, #1e1b4b 78%, #09090b 100%)',
           }}
         >
-          <div data-keep-dark="true" className="absolute top-3.5 left-3.5 flex flex-col gap-2.5 text-[11px] text-white font-medium">
-            {[
-              '받은 파일',
-              '다운로드',
-              '2026_견적서.xlsx',
-              '가족여행_바다.jpg',
-            ].map((name) => (
-              <div
-                key={name}
-                onClick={() => setManualMode(windowMode)}
-                className="flex flex-col items-center gap-1 w-20 p-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 cursor-pointer transition-colors text-center"
-              >
-                <span className="material-symbols-outlined text-[18px] text-slate-200">
-                  {name.includes('.') ? 'description' : 'folder'}
-                </span>
-                <span className="truncate w-full text-[10px] text-slate-200">{name}</span>
-              </div>
-            ))}
+          {/* 윈도우 데스크톱 배경 은은한 광원 */}
+          <div
+            data-keep-dark="true"
+            className="absolute inset-0 pointer-events-none opacity-30"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 75% 25%, rgba(45, 212, 191, 0.35), transparent 45%), radial-gradient(circle at 22% 72%, rgba(56, 189, 248, 0.3), transparent 50%)',
+            }}
+          />
+
+          {/* 리얼 윈도우 바탕화면 아이콘 (클릭 시 해당 파일 즉시 검색 반응) */}
+          <div
+            data-keep-dark="true"
+            className="absolute top-3.5 left-3.5 z-10 grid grid-cols-1 gap-1.5"
+          >
+            {VIRTUAL_DESKTOP_ICONS.map((item) => {
+              const isSelected = selectedIconId === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  title={`${item.label} — 클릭하면 귀신검색창에서 바로 찾아줍니다`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDesktopIconClick(item);
+                  }}
+                  className={`w-[86px] px-1.5 py-1.5 rounded-md flex flex-col items-center gap-1 cursor-pointer transition-all text-center ${
+                    isSelected
+                      ? 'bg-sky-400/25 border border-sky-300/60 shadow-xs'
+                      : 'border border-transparent hover:bg-white/12 hover:border-white/15'
+                  }`}
+                >
+                  <DesktopIconVisual item={item} />
+                  <span className="w-full text-[10.5px] leading-tight font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] line-clamp-1">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {!stage && (
-            <div data-keep-dark="true" className="absolute inset-0 flex items-center justify-center">
+            <div data-keep-dark="true" className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <button
                 type="button"
-                onClick={() => summon(1300, 600)}
-                className="px-4 py-2.5 rounded-lg bg-white text-slate-900 text-[13px] font-bold shadow-lg cursor-pointer hover:bg-slate-50 hover:-translate-y-0.5 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  summon(1300, 600);
+                }}
+                className="pointer-events-auto px-4 py-2.5 rounded-xl bg-white text-slate-900 text-[13px] font-bold shadow-xl cursor-pointer hover:bg-teal-50 hover:-translate-y-0.5 transition-all"
               >
-                클릭하거나 Ctrl + 0으로 귀신검색창 열기
+                귀신검색창 다시 열기 (Ctrl + 0)
               </button>
             </div>
           )}
 
           {rect && (
             <div
-              onMouseDown={() => {
-                if (isAutoPlaying) setIsAutoPlaying(false);
-              }}
-              className="absolute rounded-xl overflow-hidden shadow-2xl border border-slate-300 bg-white transition-all duration-500 ease-out z-20"
+              onClick={(e) => e.stopPropagation()}
+              className="absolute rounded-xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.55)] border border-slate-300 bg-white transition-all duration-300 ease-out z-20"
               style={{
                 left: rect.x * scale,
                 top: rect.y * scale,
@@ -605,65 +650,53 @@ const VirtualMonitorSimulator: React.FC<{
                 className="origin-top-left bg-white text-slate-900"
                 style={{ width: rect.width, height: rect.height, transform: `scale(${scale})` }}
               >
-                <div className="h-9 px-3.5 flex items-center justify-between gap-2 bg-slate-50 border-b border-slate-200 text-slate-800 text-[12px] font-semibold">
+                {/* 실제 귀신검색창 순정 타이틀 바 (크기 설명 문구 없음 · 순수 창 아이콘만 배치) */}
+                <div className="h-9 px-3.5 flex items-center justify-between gap-2 bg-slate-900 text-white text-[12px] font-semibold">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-bold text-slate-900 whitespace-nowrap">
+                    <img
+                      src="/gwisinkachi_app_icon_512.png"
+                      alt="귀신같이"
+                      className="w-4 h-4 rounded-xs object-cover shrink-0"
+                    />
+                    <span className="font-bold text-white whitespace-nowrap">
                       귀신검색창
                     </span>
-                    <span className="text-slate-400 text-[11px] truncate">
-                      {rect.framelessAppMode ? '전체 갤러리 보기' : '결과 수에 맞춰 크기 자동 조절'}
-                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectExplicitStage('small');
-                      }}
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-                        stage !== 'large'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
-                      }`}
+                      onClick={toggleWindowMaximize}
+                      title={stage === 'large' ? '기본 창 크기로 복원' : '넓은 화면으로 펼치기'}
+                      aria-label={stage === 'large' ? '기본 창 크기로 복원' : '넓은 화면으로 펼치기'}
+                      className="w-6 h-6 rounded hover:bg-white/15 text-slate-200 hover:text-white text-[12px] flex items-center justify-center transition-colors cursor-pointer"
                     >
-                      ⤡ 작게
+                      {stage === 'large' ? '⤡' : '⤢'}
                     </button>
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        selectExplicitStage('large');
+                        setStage(null);
                       }}
-                      className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
-                        stage === 'large'
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
-                      }`}
+                      title="창 닫기"
+                      aria-label="창 닫기"
+                      className="w-6 h-6 rounded hover:bg-rose-500 text-slate-300 hover:text-white text-[12px] flex items-center justify-center transition-colors cursor-pointer"
                     >
-                      ⤢ 크게(갤러리)
+                      ✕
                     </button>
                   </div>
                 </div>
-                <div
-                  className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-white"
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    if (isAutoPlaying) setIsAutoPlaying(false);
-                  }}
-                >
+
+                <div className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-white">
                   <div className="flex-1 min-w-0 h-full overflow-y-auto">
                     <Stage1MinimalSearchPreview initialQuery={initialQuery} forceSampleOnly={true} />
                   </div>
-                  {(stage === 'small' || stage === 'medium') && (() => {
-                    const topPhoto =
-                      searchSpace === 'gallery' ? DEMO_SEARCH_SAMPLE_PHOTOS_2[0] : undefined;
-                    const topVideo =
-                      searchSpace === 'video' ? DEMO_SEARCH_SAMPLE_VIDEOS_2[0] : undefined;
-                    const topDoc =
-                      searchSpace === 'vault' ? DEMO_SEARCH_SAMPLE_DOCS_2[0] : undefined;
+                  {stage === 'medium' && (() => {
+                    const topPhoto = resolveTopPhoto();
+                    const topVideo = resolveTopVideo();
+                    const topDoc = resolveTopDoc();
                     return (
-                      <aside className="w-[320px] shrink-0 h-full border-l border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2.5 overflow-y-auto">
+                      <aside className="w-[310px] shrink-0 h-full border-l border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2.5 overflow-y-auto">
                         <div className="text-[12px] font-bold text-slate-800">
                           첫 번째 결과 미리보기
                         </div>
@@ -682,20 +715,20 @@ const VirtualMonitorSimulator: React.FC<{
                                 {topDoc.fileName}
                               </div>
                             </div>
-                            <div className="text-[11px] text-slate-600 leading-relaxed line-clamp-8 whitespace-pre-line bg-white p-2.5 rounded-lg border border-slate-200">
+                            <div className="text-[11.5px] text-slate-700 leading-relaxed line-clamp-8 whitespace-pre-line bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
                               {maskSensitiveDocText(topDoc.extractedText) || '문서 미리보기'}
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedDocModal(topDoc)}
-                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-bold cursor-pointer transition-colors"
                             >
                               문서 본문 열기
                             </button>
                           </>
                         ) : topVideo ? (
                           <>
-                            <div data-keep-dark="true" className="w-full h-[180px] rounded-lg overflow-hidden bg-black border border-slate-200 flex items-center justify-center relative">
+                            <div data-keep-dark="true" className="w-full h-[175px] rounded-lg overflow-hidden bg-black border border-slate-200 flex items-center justify-center relative">
                               {resolveVideoCardThumbUrl(topVideo) ? (
                                 <img
                                   src={resolveVideoCardThumbUrl(topVideo)}
@@ -705,45 +738,45 @@ const VirtualMonitorSimulator: React.FC<{
                               ) : (
                                 <span className="text-[12px] text-slate-400">{topVideo.videoFileName}</span>
                               )}
-                              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-[10.5px] font-semibold">
-                                {cleanVideoTimestampLabel(topVideo.matchedTimestamp)}
+                              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-teal-300 text-[10.5px] font-bold">
+                                {cleanVideoTimestampLabel(topVideo.matchedTimestamp)} 구간
                               </span>
                             </div>
-                            <div className="text-[12px] font-semibold text-slate-900 truncate">
-                              {topVideo.videoFileName}
+                            <div className="text-[12px] font-bold text-slate-900 truncate">
+                              {topVideo.title}
                             </div>
-                            <div className="text-[11px] text-slate-600 line-clamp-3">
-                              {topVideo.matchedFrameCaption || topVideo.sceneDescription}
+                            <div className="text-[11.5px] text-slate-700 bg-amber-50/70 border border-amber-200 rounded-lg p-2 line-clamp-3">
+                              {topVideo.ocrFullText || topVideo.matchedFrameCaption || topVideo.sceneDescription}
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedVideoModal(topVideo)}
-                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-bold cursor-pointer transition-colors"
                             >
                               해당 장면 재생
                             </button>
                           </>
                         ) : topPhoto ? (
                           <>
-                            <div data-keep-dark="true" className="w-full h-[200px] rounded-lg overflow-hidden bg-black border border-slate-200 flex items-center justify-center">
+                            <div data-keep-dark="true" className="w-full h-[195px] rounded-lg overflow-hidden bg-black border border-slate-200 flex items-center justify-center">
                               <img
                                 src={topPhoto.thumbUrl}
                                 alt={topPhoto.name}
                                 className="w-full h-full object-contain"
                               />
                             </div>
-                            <div className="text-[12px] font-semibold text-slate-900 truncate">
+                            <div className="text-[12px] font-bold text-slate-900 truncate">
                               {topPhoto.name}
                             </div>
-                            <div className="text-[11px] text-slate-600 line-clamp-3">
+                            <div className="text-[11.5px] text-slate-600 line-clamp-3">
                               {topPhoto.captionKo || topPhoto.tags.join(' · ')}
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedPhoto(topPhoto, null)}
-                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-bold cursor-pointer transition-colors"
                             >
-                              상세 보기 · 글자 추출
+                              사진 크게 보기
                             </button>
                           </>
                         ) : (
@@ -759,21 +792,71 @@ const VirtualMonitorSimulator: React.FC<{
             </div>
           )}
 
+          {/* 가상 윈도우 작업표시줄 */}
           <div
             data-keep-dark="true"
-            className="absolute bottom-0 inset-x-0 h-7 px-3 bg-black/75 border-t border-white/10 flex items-center justify-between text-[10.5px] text-zinc-300 z-10 pointer-events-none"
+            className="absolute bottom-0 inset-x-0 h-8 px-3 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between text-[11px] text-zinc-300 z-10"
           >
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-white/10 text-white font-medium">시작</span>
-              <span className="text-zinc-300">귀신같이 실행 중 (Ctrl + 0)</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white/10 text-white font-semibold cursor-default">
+                <span className="grid grid-cols-2 gap-0.5 w-2.5 h-2.5">
+                  <span className="bg-sky-400 rounded-[0.5px]" />
+                  <span className="bg-sky-400 rounded-[0.5px]" />
+                  <span className="bg-sky-400 rounded-[0.5px]" />
+                  <span className="bg-sky-400 rounded-[0.5px]" />
+                </span>
+                <span>시작</span>
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  summon(1300, 600);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/30 text-teal-300 font-semibold cursor-pointer transition-colors"
+              >
+                <img
+                  src="/gwisinkachi_app_icon_512.png"
+                  alt=""
+                  className="w-3.5 h-3.5 rounded-xs object-cover"
+                />
+                <span>귀신같이 실행 중 (Ctrl + 0)</span>
+              </button>
             </div>
-            <div className="flex items-center gap-2 text-zinc-400">
-              <span>KOR</span>
+            <div className="flex items-center gap-2.5 text-zinc-400 font-medium cursor-default">
+              <span>한</span>
               <span>오후 2:05</span>
             </div>
           </div>
         </div>
+
+        {/* 모니터 하단 턱 (Chin Bezel: 브랜드 마크 + 전원 LED) */}
+        <div
+          data-keep-dark="true"
+          className="pt-2.5 px-4 flex items-center justify-between text-[11px] text-zinc-400"
+        >
+          <span className="w-16" />
+          <span className="font-black tracking-[0.22em] text-zinc-400 text-[10.5px]">
+            GHOSTI DISPLAY
+          </span>
+          <div className="flex items-center justify-end gap-1.5 w-16">
+            <span className="text-[9.5px] text-zinc-500 font-semibold">POWER</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+          </div>
+        </div>
       </div>
+
+      {/* 실제 모니터 다리 (목 Neck & 스탠드 받침대 Stand Base) */}
+      <div
+        data-keep-dark="true"
+        className="w-24 h-7 border-x border-zinc-600/70 shadow-inner"
+        style={{ background: 'linear-gradient(180deg, #18181b 0%, #3f3f46 50%, #27272a 100%)' }}
+      />
+      <div
+        data-keep-dark="true"
+        className="w-64 sm:w-80 h-3.5 rounded-t-2xl border-t border-zinc-500/70 shadow-lg"
+        style={{ background: 'linear-gradient(90deg, #18181b 0%, #52525b 50%, #18181b 100%)' }}
+      />
     </div>
   );
 };
@@ -932,7 +1015,6 @@ export const GhostSearchTrainingPage: React.FC = () => {
           <VirtualMonitorSimulator
             onStep={markStep}
             initialQuery={pendingQuery}
-            connected={connected}
           />
         </section>
 

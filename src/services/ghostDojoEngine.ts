@@ -10,25 +10,13 @@
 /** 소환 즉시 반응 판정 시간 (ms) — Ctrl+0 / Ctrl+우클릭 즉시 소환 규격 */
 export const SUMMON_HOLD_MS = 0;
 
-export type BasicStepId = 'b1' | 'b2' | 'b3';
+export type BasicStepId = 'b1';
 
 export const BASIC_STEPS: Array<{ id: BasicStepId; title: string; mission: string }> = [
   {
     id: 'b1',
     title: 'Ctrl+0 / Ctrl+우클릭 소환',
     mission: '키보드(Ctrl + 0)와 마우스(Ctrl + 우클릭)를 각각 3번씩 눌러 게이지를 채워보세요!',
-  },
-  {
-    id: 'b2',
-    title: '파일 안 열고 "단가" 바로 찾기',
-    mission:
-      '엑셀·한글 견적서를 일일이 열지 않아도 됩니다! 아래 카톡 입력창 위에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 눌러 파일 속 "단가(145,000원)"를 1초 만에 꽂아 넣어보세요.',
-  },
-  {
-    id: 'b3',
-    title: '영수증 사진 속 글자 콕 찍기',
-    mission:
-      '아래 실제 영수증 사진 위에서 반짝이는 [사업자번호 123-45-67890] 영역(또는 우측 추출 단어칩)을 마우스로 콕 찍어 입력칸에 바로 넣어보세요!',
   },
 ];
 

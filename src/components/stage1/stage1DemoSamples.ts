@@ -2,6 +2,20 @@ import type { LocalDocumentFile, PhotoItem, VideoSceneItem } from '../../types/s
 
 export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
   {
+    id: 'demo_sample_photo_family',
+    name: 'IMG_20250510_1001.jpg',
+    size: 1840000,
+    date: '2025-05-10',
+    mtimeMs: 1746840000000,
+    thumbUrl: '/sample_photos_301/IMG_20250510_1001.jpg',
+    fullUrl: '/sample_photos_301/IMG_20250510_1001.jpg',
+    tags: ['#가족·인물', '#해변', '#노을산책'],
+    ontologyPrimaryTags: ['가족', '해변', '일몰'],
+    captionKo: '해변 노을 아래 가족이 함께 산책하는 사진입니다.',
+    captionEn: 'Family walking on the beach at sunset.',
+    keywordsKo: ['가족', '인물', '해변', '바다', '노을', '산책', '여행'],
+  },
+  {
     id: 'demo_sample_photo_1',
     name: 'IMG_20250802_1002.jpg',
     size: 1620000,
@@ -11,9 +25,9 @@ export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
     fullUrl: '/sample_photos_301/Screenshot_20250802_1002_배달주문내역.jpg',
     tags: ['#영수증·주문내역', '#수제버거', '#38,500원'],
     ontologyPrimaryTags: ['배달주문내역', '수제버거', '38500원'],
-    captionKo: '청라 수제버거 & 치킨 하우스 배달 주문 결제내역(38,500원) 캡처 이미지입니다.',
+    captionKo: '청라 수제버거 & 치킨 하우스 배달 주문 결제내역(38,500원, 더블 치즈버거 세트) 캡처 이미지입니다.',
     captionEn: 'Delivery order receipt screenshot for burger and chicken.',
-    keywordsKo: ['영수증', '주문', '배달', '버거', '치킨', '결제금액', '38,500원', '신한카드'],
+    keywordsKo: ['영수증', '주문', '배달', '버거', '수제버거', '치킨', '결제금액', '38,500원', '38500', '신한카드'],
   },
   {
     id: 'demo_sample_photo_2',
@@ -27,7 +41,7 @@ export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
     ontologyPrimaryTags: ['코타키나발루', '패러세일링', '여름휴가'],
     captionKo: '푸른 바다 위에서 패러세일링을 타는 여름휴가 사진입니다.',
     captionEn: 'Parasailing over the blue ocean.',
-    keywordsKo: ['패러세일링', '바다', '여름휴가', '여행', '하늘', '보트'],
+    keywordsKo: ['패러세일링', '바다', '여름휴가', '여행', '하늘', '보트', '코타키나발루'],
   },
 ];
 

@@ -1,47 +1,56 @@
 import React, { useEffect, useState } from 'react';
 import { copyTextSafeToClipboard } from '../../services/proFeatureGate';
 
-export const GHOST_DOJO_STORAGE_KEY = 'ghosti_search_game_v1';
+export const GHOST_DOJO_STORAGE_KEY = 'ghosti_search_game_v2';
 export const GHOST_DOJO_EVENT_NAME = 'ghosti_dojo_progress_updated';
 
-export type GhostDojoStepId = 'summon' | 'medium' | 'large' | 'ocr' | 'labeler';
+export type GhostDojoStepId =
+  | 'doc_search'
+  | 'photo_natural'
+  | 'photo_text'
+  | 'video_text'
+  | 'summon'
+  | 'medium'
+  | 'large'
+  | 'ocr'
+  | 'labeler';
 
 export interface GhostDojoStepDef {
-  id: 'summon' | 'large' | 'ocr' | 'labeler';
+  id: 'doc_search' | 'photo_natural' | 'photo_text' | 'video_text';
   shortTitle: string;
-  actionLabel: string;
-  doneLabel: string;
+  sampleQuery: string;
+  targetSpace: 'vault' | 'gallery' | 'video';
   description: string;
 }
 
 export const GHOST_DOJO_STEPS: GhostDojoStepDef[] = [
   {
-    id: 'summon',
-    shortTitle: '⤡ 작게 모드',
-    actionLabel: '⤡ 작게 모드 보기',
-    doneLabel: '⤡ 작게 모드 완료',
-    description: '아담한 귀신검색창과 우측 첫 번째 결과 요약을 바로 확인합니다.',
+    id: 'doc_search',
+    shortTitle: '문서 속 문장 검색',
+    sampleQuery: '공급단가',
+    targetSpace: 'vault',
+    description: '엑셀·PDF 파일을 열지 않고 "공급단가", "보증금" 같은 안쪽 문장을 바로 찾습니다.',
   },
   {
-    id: 'large',
-    shortTitle: '⤢ 크게(갤러리)',
-    actionLabel: '⤢ 크게(갤러리) 보기',
-    doneLabel: '⤢ 크게(갤러리) 완료',
-    description: '사진·동영상·문서를 넓은 갤러리 화면으로 펼쳐 한눈에 탐색합니다.',
+    id: 'photo_natural',
+    shortTitle: '사진 자연어·인물 검색',
+    sampleQuery: '해변 가족 산책',
+    targetSpace: 'gallery',
+    description: '파일명을 몰라도 "해변 가족 산책"처럼 상황과 인물을 말하듯 쳐서 찾습니다.',
   },
   {
-    id: 'ocr',
-    shortTitle: '사진·표 OCR 추출',
-    actionLabel: '사진·표 OCR 추출하기',
-    doneLabel: '사진·표 OCR 완료',
-    description: '미리보기 속 주문·영수증 사진에서 글자와 표를 추출해 바로 복사합니다.',
+    id: 'photo_text',
+    shortTitle: '사진 속 글자 검색',
+    sampleQuery: '38,500원',
+    targetSpace: 'gallery',
+    description: '사진첩에 묻힌 영수증·메모 캡처도 사진 안의 글자("38,500원")로 1초 만에 찾습니다.',
   },
   {
-    id: 'labeler',
-    shortTitle: '귀신라벨링',
-    actionLabel: '귀신라벨링 실행하기',
-    doneLabel: '귀신라벨링 완료',
-    description: 'IMG_20250802.jpg 같은 이름을 날짜·내용 한글 파일명으로 즉시 바꿉니다.',
+    id: 'video_text',
+    shortTitle: '동영상 속 텍스트 검색',
+    sampleQuery: '매출 35억',
+    targetSpace: 'video',
+    description: '긴 영상을 다 돌려보지 않아도 화면 속 글자("매출 35억")가 나온 장면(00:08)을 바로 찾습니다.',
   },
 ];
 
@@ -110,11 +119,10 @@ interface GhostSearchDojoStampBoardProps {
 export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps> = ({
   variant = 'full',
   embeddedInCard = false,
-  onRequestStagePreview,
   onJumpToSearchTab,
 }) => {
   const [progress, setProgress] = useState<GhostDojoProgress>(() => loadGhostDojoProgress());
-  const [activeStepId, setActiveStepId] = useState<GhostDojoStepDef['id'] | null>('summon');
+  const [activeStepId, setActiveStepId] = useState<GhostDojoStepDef['id'] | null>(null);
   const [demoNotice, setDemoNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -170,78 +178,32 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
 
   const handleStepClick = async (step: GhostDojoStepDef) => {
     setActiveStepId(step.id);
+    const next = markGhostDojoStep(step.id);
+    setProgress(next);
 
-    if (step.id === 'summon' || step.id === 'large') {
-      const targetStage = step.id === 'summon' ? 'small' : 'large';
-      const next = markGhostDojoStep(step.id);
-      setProgress(next);
-      if (onRequestStagePreview) {
-        onRequestStagePreview(targetStage);
-      } else if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('ghosti_focus_virtual_monitor_window', {
-            detail: { stage: targetStage },
-          })
-        );
-      }
-      setDemoNotice(
-        step.id === 'summon'
-          ? '⤡ 작게 모드 전환 완료! 아래 귀신검색창 미리보기 우측에서 첫 번째 검색 결과 요약이 함께 표시됩니다.'
-          : '⤢ 크게(갤러리) 전환 완료! 아래 귀신검색창 미리보기에서 사진·동영상·문서를 넓은 화면으로 한눈에 탐색할 수 있습니다.'
+    if (variant === 'full' && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('ghosti_dojo_preview_search', {
+          detail: {
+            space: step.targetSpace,
+            query: step.sampleQuery,
+          },
+        })
       );
-      return;
-    }
-
-    if (step.id === 'ocr') {
-      const next = markGhostDojoStep('ocr');
-      setProgress(next);
-      if (variant === 'full' && typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('ghosti_focus_virtual_monitor_window', {
-            detail: { stage: 'large' },
-          })
-        );
-        window.setTimeout(() => {
-          window.dispatchEvent(
-            new CustomEvent('ghosti_dojo_preview_command', {
-              detail: { command: 'ocr' },
-            })
-          );
-        }, 60);
-        setDemoNotice(
-          '사진·표 OCR 추출 창을 열었습니다! 주문내역 사진 속 글자와 표를 클릭해 복사해 보세요.'
-        );
-      } else {
-        const sampleOcr = '주문매장: 청라 수제버거 & 치킨 하우스 | 메뉴: 더블 치즈버거 세트 x 2 | 결제금액: 38,500원';
-        await copyTextSafeToClipboard(sampleOcr);
-        setDemoNotice(
-          `사진·표 OCR 체험 완료! 예시 영수증 글자를 클립보드에 복사했습니다: "${sampleOcr}"`
-        );
+      if (step.id === 'doc_search') {
+        setDemoNotice('아래 모니터 속 귀신검색창에서 엑셀 파일을 열지 않고 "공급단가(145,000원)" 문장을 즉시 찾아냈습니다.');
+      } else if (step.id === 'photo_natural') {
+        setDemoNotice('아래 모니터 속 귀신검색창에서 파일명 없이 "해변 가족 산책" 설명만으로 사진을 찾아냈습니다.');
+      } else if (step.id === 'photo_text') {
+        setDemoNotice('아래 모니터 속 귀신검색창에서 영수증 캡처 속 "38,500원" 글자를 읽어 해당 사진을 찾아냈습니다.');
+      } else if (step.id === 'video_text') {
+        setDemoNotice('아래 모니터 속 귀신검색창에서 회의 영상 화면 속 "매출 35억" 글자가 나오는 00:08 장면을 찾아냈습니다.');
       }
       return;
     }
 
-    if (step.id === 'labeler') {
-      const sampleLabel = '250802_배달주문내역_수제버거_38500원.jpg';
-      await copyTextSafeToClipboard(sampleLabel);
-      const next = markGhostDojoStep('labeler');
-      setProgress(next);
-      if (variant === 'full' && typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('ghosti_focus_virtual_monitor_window', {
-            detail: { stage: 'large' },
-          })
-        );
-        window.dispatchEvent(
-          new CustomEvent('ghosti_dojo_preview_command', {
-            detail: { command: 'labeler' },
-          })
-        );
-      }
-      setDemoNotice(
-        `귀신라벨링 실행 완료! 아래 미리보기 사진 "IMG_20250802_1002.jpg" ➔ "${sampleLabel}" 한글 파일명이 생성·복사되었습니다.`
-      );
-    }
+    await copyTextSafeToClipboard(step.sampleQuery);
+    setDemoNotice(`"${step.sampleQuery}" 검색 예시를 체험했습니다. [귀신검색 열기]에서 직접 확인해 보세요!`);
   };
 
   const containerCls = embeddedInCard
@@ -296,11 +258,12 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
               onClick={() => {
                 resetGhostDojoProgress();
                 setProgress({});
+                setActiveStepId(null);
                 setDemoNotice(null);
                 if (typeof window !== 'undefined') {
                   window.dispatchEvent(
-                    new CustomEvent('ghosti_dojo_preview_command', {
-                      detail: { command: 'reset' },
+                    new CustomEvent('ghosti_dojo_preview_search', {
+                      detail: { space: 'gallery', query: '', reset: true },
                     })
                   );
                 }
