@@ -682,9 +682,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <div className="w-full max-w-md rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-sm">
                   <img
                     src="/gwisinkachi_hero_banner_neon_after.jpg"
-                    alt="귀신같이 대표 이미지"
+                    alt="귀신비서 고스티(Ghosti) 대표 이미지"
                     className="w-full h-auto object-cover"
                   />
+                  <div className="px-3.5 py-2 bg-white border-t border-slate-200 flex items-center justify-between gap-2 text-[12px]">
+                    <span className="font-bold text-[#0F766E]">귀신비서 · 고스티(Ghosti)</span>
+                    <span className="text-slate-500 font-medium">내 PC·폰 전담 아기귀신</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -734,15 +738,15 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 )}
               </div>
 
-              {/* 귀신비서 아바타 + 1줄 말풍선 안내 */}
+              {/* 귀신비서 고스티(Ghosti) 아바타 + 1줄 말풍선 안내 */}
               <div className="flex items-center gap-2.5 pt-2.5 border-t border-[#FDBA74]/60">
                 <img
                   src="/gwisinkachi_app_icon_512.png"
-                  alt="귀신비서"
+                  alt="귀신비서 고스티"
                   className="w-7 h-7 rounded-lg object-cover border border-[#FB923C] bg-white shrink-0"
                 />
                 <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-[#FDBA74] text-[12.5px] text-slate-800 shadow-2xs">
-                  <span className="font-bold text-[#9A3412]">귀신비서</span>
+                  <span className="font-bold text-[#9A3412]">귀신비서 고스티</span>
                   <span className="text-slate-300">|</span>
                   <span className="font-medium break-keep">{MAIN_TAB_META[activeMainTab].guideLine}</span>
                 </div>

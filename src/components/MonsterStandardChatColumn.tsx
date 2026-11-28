@@ -2244,7 +2244,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
           />
           <span className="text-[13.5px] font-semibold text-slate-900 tracking-tight whitespace-nowrap">
-            귀신비서
+            귀신비서 고스티
           </span>
           <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium whitespace-nowrap">
             실행 취소 지원
