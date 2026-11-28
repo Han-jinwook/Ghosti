@@ -130,53 +130,6 @@ def shutdown_superpower_daemon_for_update() -> None:
         pass
 
 
-def _purge_hijacking_legacy_seq_paste() -> bool:
-    """[구버전 비서실/외부 seq_paste_daemon.py 포트 51988 찬탈 방어 & 자동실행 잔재 영구 청소]
-    - D:\\Secretary\\tools\\seq_paste_daemon.py 또는 C:\\MerlinTools\\seq_paste_daemon.py 등
-      정식 Z-코어(Merlin_Z_Core_Setup.exe / D:\\Ghosti\\universal_z_core) 외부의 구버전 스크립트가
-      기동되어 51988 포트를 찬탈하면 즉시 강제 사살하고 MerlinSeqPaste 자동실행 3종을 제거합니다."""
-    if os.name != "nt":
-        return False
-    killed_any = False
-    try:
-        import psutil
-        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
-            try:
-                pname = str(proc.info.get("name") or "").lower()
-                if "merlin_z_core_setup" in pname or "sensetalk_engine" in pname:
-                    continue
-                cmdline_list = proc.info.get("cmdline") or []
-                cmdline = " ".join(str(x) for x in cmdline_list).lower()
-                if "seq_paste_daemon.py" not in cmdline:
-                    continue
-                is_rogue = False
-                if getattr(sys, "frozen", False):
-                    # 정식 exe 모드에서는 외부 python/pythonw로 띄운 모든 seq_paste_daemon.py가 구버전 찬탈 프로세스임
-                    is_rogue = True
-                else:
-                    if "secretary" in cmdline or "merlintools" in cmdline:
-                        is_rogue = True
-                if is_rogue:
-                    proc.kill()
-                    killed_any = True
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # 구버전 MerlinSeqPaste.vbs 시작프로그램 파일이 부활했으면 즉시 삭제
-    try:
-        appdata_dir = os.environ.get("APPDATA", "")
-        if appdata_dir:
-            legacy_vbs = Path(appdata_dir) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "MerlinSeqPaste.vbs"
-            if legacy_vbs.exists():
-                legacy_vbs.unlink(missing_ok=True)
-                killed_any = True
-    except Exception:
-        pass
-    return killed_any
-
-
 def ensure_superpower_daemon_running() -> bool:
     """
     [프로세스 완전 분리 모드 + 0순위 병렬 기동 + PING/PONG 활성 검증 (Z-Core v2.8.69)]:
@@ -188,7 +141,6 @@ def ensure_superpower_daemon_running() -> bool:
     global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
     if os.name != "nt":
         return True
-    _purge_hijacking_legacy_seq_paste()
     try:
         import socket
 

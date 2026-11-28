@@ -477,6 +477,7 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
   - **주말(토·일요일) 직결 절대 금지**: 토·일요일에는 `2·3·4호컴`에 SSH 직결 덮어쓰기를 전면 중단(Skip)하고 GitHub Releases에만 최신 버전을 올려둡니다. 주말 동안 집에서 버전업된 릴리즈를 사무실 `2·3·4호컴`이 스스로 감지해 자동 업데이트했는지 월요일 아침 사무실 출근 시 실증 확인합니다.
 - **② Track B — 실유저 GitHub Releases 기반 Auto-Update 상시 검증 (`1호컴` `100.86.161.8` · `5호컴` `100.122.235.63` · `6호컴` 로컬)**: AI가 SSH로 파일을 강제 덮어쓰지 않고, MS 공인 코드서명(`sundream-public-cert`, `https://krc.codesigning.azure.net/`, `CN=썬드림주식회사`)이 날인된 `Merlin_Z_Core.zip`을 **GitHub Releases (`z-core-latest`)**에 업로드한 뒤 실제 고객과 100% 동일하게 자체 백그라운드 자동 업데이트(`/__merlin/self-update`)로만 교체·기동되는지 상시 교차 검증합니다.
 - **③ Wave 1 `귀신Key` (구 귀신창) 하드락 & 자가업데이트 무소음 보장**: Wave 1 본체 출격 기간에는 Wave 2로 분리된 `귀신Key`(순차복붙·다림질·한영 자동변환·상용구·단축키 1~5번) 플러그를 하드락(`is_ghostkey_active_mode() -> False`)으로 완전 분리하여 복사(`Ctrl+C`)나 한영 타이핑 시 일절 개입·팝업·효과음이 나지 않게 하며, 자가업데이트·재기동 시에도 귀신소리가 절대 울리지 않도록 무소음 가드를 유지합니다.
+- **④ 구버전 잔재 정리는 하드코딩 목록 없이 ‘일반화된 단일 SSOT 규칙(`_self_purge_legacy_conflicts`)’으로만 수행**: 상용 Z-코어에 특정 구버전 이름 목록을 하드코딩하거나 8초마다 프로세스를 뒤지는 방어 코드를 넣는 것을 영구 금지합니다. 새 버전 Z-코어 기동 시 1회 실행되는 `_self_purge_legacy_conflicts()`에서 **정식 설치 경로(`%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe`) 및 현재 프로세스 트리를 제외한 모든 타 경로/이전 버전 프로세스, 설치·임시 폴더 내 백업·스테이징 찌꺼기(`_bak_dir`, `_staging_dir`, `*.zombie_*`, `*.old.*`, `*.bak.*`), 구형 자동실행 항목을 이름·버전 불문 일반화 규칙 1개로 자동 정리**합니다.
 
 ---
 

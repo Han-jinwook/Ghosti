@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.59"
+CORE_VERSION = "2.13.69"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2074,27 +2074,51 @@ def _kill_pids_tree_and_wait(target_pids: set[int], protected_pids: set[int], ti
 
 
 def _self_purge_legacy_conflicts() -> None:
-    """기동 직후 백그라운드 1회 실행: 구형 독립 seq_paste_daemon.py 및 중복 작업 스케줄러 자동 숙청.
-    (주의: SenseTalk_Engine.exe 는 당분간 별도 분리 운영이므로 절대 숙청 목록에 넣지 않습니다!)
+    """[기동 직후 백그라운드 1회 실행 — 일반화된 구버전·타 경로 Z-코어 잔재 자동 정리 SSOT (하드코딩 목록 0건)]
+    1) 프로세스 단일화: 현재 실행 중인 정식 Z-코어(protected PID 트리 및 정식 경로)를 제외하고,
+       다른 경로(Downloads 임시폴더, 구버전 폴더 등)에서 실행 중인 모든 이전 버전 Z-코어/보조 데몬 프로세스를 종료합니다.
+       (단, 별도 분리 운영 중인 SenseTalk_Engine.exe는 보호)
+    2) 설치·업데이트 폴더 구버전 백업·임시 잔재 자동 청소: 새 버전이 정상 기동된 직후이므로,
+       정식 설치 폴더(%LOCALAPPDATA%\\Programs\\MerlinFamily)와 임시 업데이트 폴더(%TEMP%\\merlin_zcore_silent_update)에
+       남아 있는 이전 버전 백업(_bak_dir), 스테이징(_staging_dir, *.staging.*), 교체된 구버전 파일(*.zombie_*, *.old.*, *.bak.*)을
+       버전·이름 불문하고 일괄 정리합니다.
+    3) 자동실행(HKCU Run · Startup 폴더) 단일 SSOT 유지: 정식 경로(%LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe)가
+       아닌 다른 경로의 Z-코어나 구형 스크립트를 가리키는 자동실행 항목을 일반화 규칙으로 정리합니다.
     """
     if sys.platform != "win32":
         return
+    import shutil as _sh_clean
+
     protected = _collect_protected_self_pids()
+    try:
+        import psutil as _ps_chk
+        for _ch_p in _ps_chk.Process(os.getpid()).children(recursive=True):
+            protected.add(int(_ch_p.pid))
+    except Exception:
+        pass
+
+    canonical_exe_norm = os.path.normcase(os.path.abspath(w32.get_persistent_zcore_exe_path()))
+    canonical_dir = Path(canonical_exe_norm).parent
     legacy_pids: set[int] = set()
     try:
         import psutil
 
-        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        for proc in psutil.process_iter(["pid", "name", "exe", "cmdline"]):
             try:
                 pid = int(proc.info.get("pid") or 0)
                 if pid <= 4 or pid in protected:
                     continue
                 pname = str(proc.info.get("name") or "").lower()
-                # SenseTalk_Engine.exe 절대 보호
                 if "sensetalk_engine" in pname:
                     continue
-                cmdline = " ".join(proc.info.get("cmdline") or []).lower()
-                if "seq_paste_daemon.py" in cmdline and "merlin_z_core_setup" not in pname:
+                pexe = os.path.normcase(os.path.abspath(str(proc.info.get("exe") or ""))) if proc.info.get("exe") else ""
+                cmdline = " ".join(str(x) for x in (proc.info.get("cmdline") or [])).lower()
+                # 정식 설치 경로가 아닌 타 경로에서 실행 중인 이전/중복 Merlin_Z_Core 또는 독립 seq_paste_daemon 정리
+                if ("merlin_z_core" in pname or "merlin_z_core" in cmdline) and pexe != canonical_exe_norm:
+                    legacy_pids.add(pid)
+                elif "seq_paste_daemon" in cmdline and "merlin_z_core_setup" not in pname:
+                    if not getattr(sys, "frozen", False) and str(THIS_DIR.parent).lower() in cmdline:
+                        continue
                     legacy_pids.add(pid)
             except Exception:
                 continue
@@ -2104,52 +2128,72 @@ def _self_purge_legacy_conflicts() -> None:
     if legacy_pids:
         _kill_pids_tree_and_wait(legacy_pids, protected, timeout_sec=2.5)
 
-    # 자동실행은 HKCU\...\Run\MerlinZCoreDaemon 단 1개 SSOT로 통일하고 구형 중복 스케줄러 자동 삭제
-    legacy_tasks = (
-        "MerlinSeqPaste",
-        "MerlinSeqPasteStart",
-        "MerlinTestWorker",
-        "MerlinToolWorker",
-        "MerlinZCoreRestart",
-        "MerlinZCoreOverlay",
-        "MerlinZCoreDirectExplorer",
-        "MerlinZCoreOpenFolder",
-        "MerlinOpenFolder",
-        "MerlinTestShell",
-        "TempGhostiWinProbe",
-    )
-    for task_name in legacy_tasks:
-        try:
-            subprocess.run(
-                ["schtasks", "/Delete", "/TN", task_name, "/F"],
-                capture_output=True,
-                timeout=3,
-                creationflags=0x08000000,
-            )
-        except Exception:
-            pass
+    # 2) 정식 설치 폴더 및 임시 업데이트 폴더 내 이전 버전 잔재(_bak_dir, _staging_dir, *.zombie_*, *.old.*, *.bak.*, *.staging.*) 일반화 청소
     try:
-        subprocess.run(
-            ["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "MerlinSeqPaste", "/f"],
-            capture_output=True,
-            timeout=3,
-            creationflags=0x08000000,
-        )
+        if canonical_dir.is_dir():
+            for item in canonical_dir.iterdir():
+                iname = item.name.lower()
+                if (
+                    iname in ("_bak_dir", "_staging_dir", "_internal.staging")
+                    or ".zombie_" in iname
+                    or iname.endswith((".old.exe", ".bak.exe", ".staging.exe", ".staging.zip", ".tmp"))
+                ):
+                    try:
+                        if item.is_dir():
+                            _sh_clean.rmtree(item, ignore_errors=True)
+                        else:
+                            item.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+        legacy_merlin_exe = Path(os.environ.get("LOCALAPPDATA", "")) / "Merlin" / "Merlin_Z_Core_Setup.exe"
+        if legacy_merlin_exe.exists():
+            legacy_merlin_exe.unlink(missing_ok=True)
+        upd_tmp_dir = Path(tempfile.gettempdir()) / "merlin_zcore_silent_update"
+        if upd_tmp_dir.is_dir():
+            _sh_clean.rmtree(upd_tmp_dir, ignore_errors=True)
     except Exception:
         pass
-    for _old_mt in (
-        r"C:\MerlinTools\seq_paste_daemon.py",
-        r"C:\MerlinTools\seq_paste_daemon.py.disabled",
-        r"C:\MerlinTools\ghost_search_window_ui2.py",
-        r"C:\MerlinTools\install_seq_paste.py",
-        r"C:\MerlinTools\start_seq_paste.vbs",
-        r"C:\MerlinTools\start_zcore_5199.vbs",
-    ):
-        try:
-            if os.path.exists(_old_mt):
-                os.remove(_old_mt)
-        except Exception:
-            pass
+
+    # 3) 자동실행(HKCU Run 및 시작프로그램 폴더) 일반화 정리 — 정식 MerlinZCoreDaemon 외 구형/타 경로 항목 자동 제거
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, w32.AUTOSTART_REG_PATH, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as key:
+            idx = 0
+            to_delete: list[str] = []
+            while True:
+                try:
+                    vname, vdata, _ = winreg.EnumValue(key, idx)
+                    idx += 1
+                    vdata_low = str(vdata or "").lower()
+                    if vname != w32.AUTOSTART_VALUE_NAME and (
+                        "merlin_z_core" in vdata_low or "seq_paste" in vdata_low
+                    ):
+                        to_delete.append(vname)
+                except OSError:
+                    break
+            for vname in to_delete:
+                try:
+                    winreg.DeleteValue(key, vname)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    try:
+        appdata_roam = os.environ.get("APPDATA", "")
+        if appdata_roam:
+            startup_dir = Path(appdata_roam) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+            if startup_dir.is_dir():
+                for sf in startup_dir.iterdir():
+                    sf_low = sf.name.lower()
+                    if "merlin_z_core" in sf_low or "seq_paste" in sf_low or "seqpaste" in sf_low:
+                        try:
+                            sf.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+    except Exception:
+        pass
 
 
 def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
