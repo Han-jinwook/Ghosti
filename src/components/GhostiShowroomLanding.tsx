@@ -754,18 +754,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   </h1>
 
                   <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
-                    느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료 없이 얼굴별로 원본 그대로 나눕니다.
+                    느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료 없이 중복 없는 원본 하나씩만 제대로 공유합니다.
                   </p>
                 </div>
 
-                {/* 소제목 스타일 (아래 3개 체험 카드 안내) + 중복 문구 제거 */}
+                {/* 소제목 스타일 (아래 3개 체험 카드 안내) */}
                 <div className="pt-2 space-y-2.5">
                   <div className="flex items-center gap-2">
                     <span className="w-1.5 h-4 rounded-full bg-teal-600 shrink-0" />
                     <span className="text-[14px] font-bold text-slate-800">
                       {isLaunched ? '원하는 기능을 눌러 바로 시작해 보세요' : '가입 없이 바로 체험해 보기'}
                     </span>
-                    <span className="text-[12px] text-slate-500">아래 메뉴를 클릭하면 해당 페이지로 이동합니다</span>
                   </div>
 
                   {/* 본진 앱과 100% 일치하는 3대 무료 기능 선택 카드 */}
@@ -822,19 +821,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               </div>
 
               <div className="lg:col-span-5 flex flex-col items-center">
-                <div
-                  onClick={() => handleSelectMainTab('search', true, 'video')}
-                  className="w-full max-w-md rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-sm cursor-pointer group"
-                >
+                <div className="w-full max-w-md rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-sm">
                   <img
                     src="/gwisinkachi_hero_banner_neon_after.jpg"
                     alt="귀신같이 대표 이미지"
-                    className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
+                    className="w-full h-auto object-cover"
                   />
-                  <div className="px-4 py-2.5 bg-[#FFF7E6] border-t border-[#F3D7A5] text-[#78350F] flex items-center justify-between gap-2 text-[12.5px]">
-                    <span className="font-semibold">귀신비서 · 귀신검색 · 사진 공유</span>
-                    <span className="text-teal-700 font-semibold whitespace-nowrap">클릭해서 바로 체험 →</span>
-                  </div>
                 </div>
               </div>
             </div>
