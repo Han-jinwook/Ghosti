@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 👻 귀신같이 (Ghosti) — 사내 실무 도그푸딩 & 순수 QA 겸용 『3대 모드 원클릭 전환기』
-- 버전: v1.3.0
+- 버전: v1.4.0
 - 핵심 설계 원칙:
   1. 프로덕션 웹 코드(src/*, https://ghosti.sundreamer.app) 무간섭 0.00% 원칙:
      테스트용 URL 파라미터(?factoryReset 등)를 실서버 웹 코드에 일절 넣지 않고,
@@ -42,7 +42,7 @@ import urllib.request
 import webbrowser
 import zipfile
 
-SWITCHER_VERSION = "1.3.0"
+SWITCHER_VERSION = "1.4.0"
 WINDOW_TITLE = f"👻 귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
 
 GHOSTI_ORIGIN = "https://ghosti.sundreamer.app"
@@ -1282,15 +1282,72 @@ def query_s_drive_subst() -> Tuple[bool, str]:
     return mounted, target
 
 
-def count_personal_merlin_cache_items() -> int:
+ACTIVE_MERLIN_DATA_WHITELIST = {
+    "caresuite",
+    "shadowvault",
+    "systemgit",
+    "external_cache",
+    "photo_thumbs",
+    "video_thumbs",
+    "video_stream_cache",
+    "zcore_rt",
+    "업무공유폴더_s",
+    "doc_text_cache_v1.json",
+    "photo_ocr_cache_v1.json",
+    "video_duration_fast_cache.json",
+    "video_scene_ocr_cache_v2.json",
+    "virtual_drive_listing_cache_v1.json",
+    "gdrive_smart_index_v1.json",
+    "restore_points.json",
+    "ghosti_recycle_ledger.json",
+    "ghosti_blackbox_audit.jsonl",
+    "ghosti_custom_scan_roots.json",
+    "work_sdrive_config.json",
+    "external_drive_policies.json",
+    "active_pc_account_owner.json",
+    "last_cache_gc_ts.txt",
+}
+
+
+def purge_obsolete_merlin_data_files() -> int:
+    """%LOCALAPPDATA%\\Merlin 폴더에서 현역 스키마(ACTIVE_MERLIN_DATA_WHITELIST) 외 구버전 찌꺼기를 자동 삭제합니다."""
     mdir = get_merlin_data_dir()
     if not mdir.is_dir():
         return 0
+    removed = 0
+    for item in list(mdir.iterdir()):
+        if item.name.lower() not in ACTIVE_MERLIN_DATA_WHITELIST:
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    item.unlink(missing_ok=True)
+                removed += 1
+            except Exception:
+                pass
+    return removed
+
+
+def count_personal_merlin_cache_items() -> int:
+    purge_obsolete_merlin_data_files()
+    mdir = get_merlin_data_dir()
+    if not mdir.is_dir():
+        return 0
+    core_caches = (
+        "doc_text_cache_v1.json",
+        "virtual_drive_listing_cache_v1.json",
+        "video_scene_ocr_cache_v2.json",
+        "photo_ocr_cache_v1.json",
+        "photo_thumbs",
+        "video_thumbs",
+    )
     cnt = 0
-    for item in mdir.iterdir():
-        if item.name in ("work_sdrive_config.json", "업무공유폴더_S", "zcore_rt"):
-            continue
-        cnt += 1
+    for cname in core_caches:
+        p = mdir / cname
+        if p.is_file() and p.stat().st_size > 16:
+            cnt += 1
+        elif p.is_dir() and any(p.iterdir()):
+            cnt += 1
     return cnt
 
 
@@ -1451,6 +1508,7 @@ def ensure_installer_exe_ready() -> Optional[Path]:
 
 def backup_personal_merlin_dir_if_nonempty(move_mode: bool = False) -> None:
     """개인 인덱싱 DB(%LOCALAPPDATA%\\Merlin)를 금고에 보관합니다(move_mode=True 시 동일 드라이브 즉시 이동)."""
+    purge_obsolete_merlin_data_files()
     mdir = get_merlin_data_dir()
     if not mdir.is_dir():
         return
@@ -2037,7 +2095,7 @@ def launch_gui() -> None:
 
     root = tk.Tk()
     root.title(WINDOW_TITLE)
-    root.configure(bg="#0F172A")
+    root.configure(bg="#F8FAFC")
     root.resizable(False, False)
 
     ico_cand = Path(__file__).with_name("ghosti_icon.ico")
@@ -2047,7 +2105,7 @@ def launch_gui() -> None:
         except Exception:
             pass
 
-    win_w, win_h = 500, 520
+    win_w, win_h = 510, 535
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
     pos_x = max(20, (sw - win_w) // 2)
@@ -2055,69 +2113,125 @@ def launch_gui() -> None:
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
     root.attributes("-topmost", True)
 
-    # 상단 헤더
-    hdr = tk.Frame(root, bg="#0F172A", padx=18, pady=14)
+    # 상단 헤더 (밝고 깔끔한 화이트 헤더 + 하단 구분선)
+    hdr = tk.Frame(root, bg="#FFFFFF", padx=20, pady=14, highlightbackground="#E2E8F0", highlightthickness=1)
     hdr.pack(fill="x")
     tk.Label(
         hdr,
         text="👻 귀신같이 PC 상태 & 3대 모드 전환기",
         font=("Malgun Gothic", 13, "bold"),
-        fg="#F8FAFC",
-        bg="#0F172A",
+        fg="#0F172A",
+        bg="#FFFFFF",
     ).pack(anchor="w")
     tk.Label(
         hdr,
         text="실서버 웹 코드 무간섭 · 센스톡/노션/구글 로그인 보존 · 귀신같이만 핀셋 전환",
         font=("Malgun Gothic", 9),
-        fg="#94A3B8",
-        bg="#0F172A",
+        fg="#64748B",
+        bg="#FFFFFF",
     ).pack(anchor="w", pady=(3, 0))
 
-    # 상태 진단 카드
-    card = tk.Frame(root, bg="#1E293B", padx=14, pady=12, highlightbackground="#334155", highlightthickness=1)
-    card.pack(fill="x", padx=18, pady=(0, 12))
+    # 상태 진단 카드 (화사한 화이트 카드 + 소프트 블루 테두리)
+    card = tk.Frame(root, bg="#FFFFFF", padx=16, pady=12, highlightbackground="#CBD5E1", highlightthickness=1)
+    card.pack(fill="x", padx=18, pady=(12, 10))
 
-    lbl_mode = tk.Label(card, text="현재 모드 진단 중...", font=("Malgun Gothic", 10, "bold"), fg="#38BDF8", bg="#1E293B")
+    lbl_mode = tk.Label(card, text="현재 모드 진단 중...", font=("Malgun Gothic", 10, "bold"), fg="#2563EB", bg="#FFFFFF")
     lbl_mode.pack(anchor="w")
-    lbl_zcore = tk.Label(card, text="• PC 엔진 (Z코어): 확인 중...", font=("Malgun Gothic", 9), fg="#E2E8F0", bg="#1E293B")
-    lbl_zcore.pack(anchor="w", pady=(4, 0))
-    lbl_db = tk.Label(card, text="• 개인 인덱싱 DB: 확인 중...", font=("Malgun Gothic", 9), fg="#E2E8F0", bg="#1E293B")
+    lbl_zcore = tk.Label(card, text="• PC 엔진 (Z코어): 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
+    lbl_zcore.pack(anchor="w", pady=(5, 0))
+    lbl_db = tk.Label(card, text="• 내 파일 빠른검색: 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
     lbl_db.pack(anchor="w", pady=(2, 0))
-    lbl_sdrive = tk.Label(card, text="• 업무 드라이브 (S:): 확인 중...", font=("Malgun Gothic", 9), fg="#E2E8F0", bg="#1E293B")
+    lbl_sdrive = tk.Label(card, text="• 업무 드라이브 (S:): 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
     lbl_sdrive.pack(anchor="w", pady=(2, 0))
-    lbl_vault = tk.Label(card, text="• 3번 업무방 금고: 확인 중...", font=("Malgun Gothic", 9), fg="#94A3B8", bg="#1E293B")
+    lbl_vault = tk.Label(card, text="• 업무방 복귀 금고: 확인 중...", font=("Malgun Gothic", 9), fg="#64748B", bg="#FFFFFF")
     lbl_vault.pack(anchor="w", pady=(2, 0))
 
     open_browser_var = tk.BooleanVar(value=True)
-    opt_frame = tk.Frame(root, bg="#0F172A", padx=18)
-    opt_frame.pack(fill="x", pady=(0, 8))
+    opt_frame = tk.Frame(root, bg="#F8FAFC", padx=18)
+    opt_frame.pack(fill="x", pady=(0, 6))
     tk.Checkbutton(
         opt_frame,
         text="모드 전환 완료 후 귀신같이 웹 화면 자동으로 열기",
         variable=open_browser_var,
         font=("Malgun Gothic", 9),
-        fg="#CBD5E1",
-        bg="#0F172A",
-        selectcolor="#1E293B",
-        activebackground="#0F172A",
-        activeforeground="#FFFFFF",
+        fg="#334155",
+        bg="#F8FAFC",
+        selectcolor="#FFFFFF",
+        activebackground="#F8FAFC",
+        activeforeground="#0F172A",
     ).pack(anchor="w")
 
-    btn_frame = tk.Frame(root, bg="#0F172A", padx=18)
+    btn_frame = tk.Frame(root, bg="#F8FAFC", padx=18)
     btn_frame.pack(fill="x")
 
     status_bar = tk.Label(
         root,
-        text="원하시는 모드의 버튼을 클릭하세요.",
+        text="전환할 모드 버튼을 클릭하세요. (현재 사용 중인 모드는 자동 잠금)",
         font=("Malgun Gothic", 9, "bold"),
-        fg="#34D399",
-        bg="#0F172A",
+        fg="#059669",
+        bg="#F8FAFC",
         pady=8,
     )
     status_bar.pack(side="bottom", fill="x", padx=18)
 
     is_busy = {"flag": False}
-    buttons: List[tk.Button] = []
+    btn_specs = [
+        (
+            1,
+            "🧹  1. 완전 백지 모드  (첫 방문자 · 엔진+전체DB 초기화)",
+            "엔진 미설치 + 내 파일 데이터 0건 + 귀신같이 로그아웃 (타 사이트 로그인 유지)",
+            "#FFF1F2",
+            "#FFE4E6",
+            "#BE123C",
+            "#FDA4AF",
+        ),
+        (
+            2,
+            "👤  2. 순수 개인 모드  (엔진+내 파일 유지 · S: 드라이브만 해제)",
+            "내 파일 빠른검색은 그대로 살리고 S: 드라이브·업무방 로그인만 깔끔히 분리",
+            "#ECFDF5",
+            "#D1FAE5",
+            "#047857",
+            "#6EE7B7",
+        ),
+        (
+            3,
+            "💼  3. 사무실 업무공유 모드  (S:\\ · 업무방 완전 복귀)",
+            "Z코어 가동 + 탐색기 S:\\ 자동 연결 + 원래 업무방·로그인 즉시 복원",
+            "#EFF6FF",
+            "#DBEAFE",
+            "#1D4ED8",
+            "#93C5FD",
+        ),
+    ]
+    btn_widgets: Dict[int, Tuple[tk.Frame, tk.Button, str, str, str, str, str, str]] = {}
+
+    def apply_button_states(active_mode: int) -> None:
+        for m_num, (wrap, b, title_txt, sub_txt, bg_col, active_col, fg_col, border_col) in btn_widgets.items():
+            if is_busy["flag"]:
+                b.config(state="disabled", cursor="arrow")
+                continue
+            if m_num == active_mode:
+                b.config(
+                    text=f"✔ [현재 적용 중]  {title_txt}\n{sub_txt}",
+                    state="disabled",
+                    bg="#E2E8F0",
+                    fg="#94A3B8",
+                    disabledforeground="#64748B",
+                    cursor="arrow",
+                )
+                wrap.config(highlightbackground="#CBD5E1")
+            else:
+                b.config(
+                    text=f"{title_txt}\n{sub_txt}",
+                    state="normal",
+                    bg=bg_col,
+                    activebackground=active_col,
+                    fg=fg_col,
+                    activeforeground=fg_col,
+                    cursor="hand2",
+                )
+                wrap.config(highlightbackground=border_col)
 
     def refresh_ui_status() -> None:
         if is_busy["flag"]:
@@ -2125,27 +2239,30 @@ def launch_gui() -> None:
             return
         try:
             d = collect_live_diagnostics()
-            lbl_mode.config(text=f"현재 판정: {d['modeLabel']}")
+            cur_mode = int(d.get("currentMode") or 2)
+            lbl_mode.config(text=f"현재 상태: {d['modeLabel']}")
             if d["zcoreAlive"]:
-                ver_txt = f"v{d['zcoreVersion']}" if d["zcoreVersion"] else "연결됨"
-                lbl_zcore.config(text=f"• PC 엔진 (Z코어) : 🟢 실행 중 ({ver_txt})", fg="#86EFAC")
+                ver_txt = f"v{d['zcoreVersion']}" if d["zcoreVersion"] else "정상"
+                lbl_zcore.config(text=f"• PC 엔진 (Z코어)  : 🟢 정상 작동 중 ({ver_txt})", fg="#059669")
             else:
-                lbl_zcore.config(text="• PC 엔진 (Z코어) : ⚪ 꺼짐 / 미설치 (첫 방문자 상태)", fg="#CBD5E1")
+                lbl_zcore.config(text="• PC 엔진 (Z코어)  : ⚪ 꺼짐 / 미설치 (첫 방문자 상태)", fg="#64748B")
 
             if d["personalCacheCount"] > 0:
-                lbl_db.config(text=f"• 개인 인덱싱 DB  : 🟢 보유 중 (로컬 항목 {d['personalCacheCount']}개)", fg="#86EFAC")
+                lbl_db.config(text="• 내 파일 빠른검색 : 🟢 준비 완료 (문서·사진·영상 즉시 검색)", fg="#059669")
             else:
-                lbl_db.config(text="• 개인 인덱싱 DB  : ⚪ 비어 있음 (0건 백지)", fg="#CBD5E1")
+                lbl_db.config(text="• 내 파일 빠른검색 : ⚪ 초기 백지 상태", fg="#64748B")
 
             if d["sDriveMounted"]:
-                lbl_sdrive.config(text="• 업무 드라이브   : 🔵 S:\\ 연결됨 (업무공유 활성)", fg="#93C5FD")
+                lbl_sdrive.config(text="• 업무 드라이브    : 🔵 S:\\ 연결됨 (사무실 업무공유 중)", fg="#2563EB")
             else:
-                lbl_sdrive.config(text="• 업무 드라이브   : ⚪ S:\\ 연결 안 됨 (개인/백지 상태)", fg="#CBD5E1")
+                lbl_sdrive.config(text="• 업무 드라이브    : ⚪ S:\\ 연결 안 됨 (개인/백지 상태)", fg="#64748B")
 
             if d["hasMode3Snapshot"]:
-                lbl_vault.config(text="• 업무방 복귀 금고: 📦 백업 보관됨 ([3번] 클릭 시 100% 즉시 복귀)", fg="#FDE68A")
+                lbl_vault.config(text="• 업무방 복귀 금고 : 📦 안전 보관됨 ([3번] 클릭 시 100% 즉시 복귀)", fg="#D97706")
             else:
-                lbl_vault.config(text="• 업무방 복귀 금고: 아직 저장된 업무방 스냅샷 없음", fg="#94A3B8")
+                lbl_vault.config(text="• 업무방 복귀 금고 : 저장된 업무방 기록 없음", fg="#94A3B8")
+
+            apply_button_states(cur_mode)
         except Exception:
             pass
         root.after(2200, refresh_ui_status)
@@ -2156,16 +2273,16 @@ def launch_gui() -> None:
         prompts = {
             1: (
                 "🧹 [1. 완전 백지 모드]로 전환할까요?\n\n"
-                "• Z코어 엔진·로컬 인덱싱 DB·S: 드라이브가 모두 제거되고\n"
+                "• Z코어 엔진·내 파일 검색 데이터·S: 드라이브가 모두 정리되고\n"
                 "  브라우저에서 『귀신같이 웹』만 로그아웃됩니다.\n"
                 "• 센스톡·노션·구글·카톡 로그인은 100% 그대로 유지됩니다.\n"
-                "• 직전 업무방과 인덱싱 DB는 안전 금고에 자동 백업되어\n"
+                "• 직전 업무방과 검색 데이터는 안전 금고에 자동 백업되어\n"
                 "  나중에 [2번]·[3번]으로 언제든 복구할 수 있습니다."
             ),
             2: (
                 "👤 [2. 순수 개인 모드]로 전환할까요?\n\n"
-                "• 내 PC 엔진(Z코어)과 개인 사진·문서 인덱싱 DB는 그대로 보존됩니다.\n"
-                "• 윈도우 S: 업무 드라이브와 『귀신같이 웹』 로그인 세션만 분리되어\n"
+                "• 내 PC 엔진(Z코어)과 내 파일 빠른검색 상태는 그대로 유지됩니다.\n"
+                "• 윈도우 S: 업무 드라이브와 『귀신같이 웹』 로그인만 분리되어\n"
                 "  순수 단독 사용자 상태로 테스트할 수 있습니다.\n"
                 "• (이 상태에서 새 초대 링크를 눌러 업무방을 연결하거나,\n"
                 "  [3번]을 눌러 원래 업무방으로 100% 복귀할 수 있습니다.)"
@@ -2181,8 +2298,8 @@ def launch_gui() -> None:
             return
 
         is_busy["flag"] = True
-        for b in buttons:
-            b.config(state="disabled")
+        for _, b, *_ in btn_widgets.values():
+            b.config(state="disabled", cursor="arrow")
 
         def worker() -> None:
             try:
@@ -2192,7 +2309,7 @@ def launch_gui() -> None:
                 res = switch_to_mode(
                     mode_num,
                     open_browser=want_open,
-                    progress_cb=lambda m: root.after(0, lambda msg=m: status_bar.config(text=msg, fg="#FBBF24")),
+                    progress_cb=lambda m: root.after(0, lambda msg=m: status_bar.config(text=msg, fg="#D97706")),
                 )
                 b_stats = res.get("browserStats") or {}
                 v_cnt = b_stats.get("verifiedLoggedOut")
@@ -2202,56 +2319,38 @@ def launch_gui() -> None:
                     2: f"✅ [2. 순수 개인 모드] 전환 완료!{v_suffix}",
                     3: "✅ [3. 사무실 업무공유 모드] S:\\ 및 로그인 복귀 완료!",
                 }
-                root.after(0, lambda: status_bar.config(text=done_names[mode_num], fg="#34D399"))
+                root.after(0, lambda: status_bar.config(text=done_names[mode_num], fg="#059669"))
             except Exception as exc:
-                root.after(0, lambda e=exc: status_bar.config(text=f"⚠️ 오류: {e}", fg="#F87171"))
+                root.after(0, lambda e=exc: status_bar.config(text=f"⚠️ 오류: {e}", fg="#DC2626"))
             finally:
                 def unlock() -> None:
                     is_busy["flag"] = False
-                    for b in buttons:
-                        b.config(state="normal")
                     refresh_ui_status()
                 root.after(200, unlock)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    btn_specs = [
-        (
-            1,
-            "🧹  1. 완전 백지 모드  (첫 방문자 · 엔진+전체DB 삭제)",
-            "엔진 미설치 + 인덱싱 0건 + 귀신같이 로그아웃 (타 사이트 로그인 유지)",
-            "#7F1D1D",
-            "#991B1B",
-        ),
-        (
-            2,
-            "👤  2. 순수 개인 모드  (엔진+개인DB 유지 · S: 만 해제)",
-            "내 파일 인덱싱은 살리고 S: 드라이브·업무방 세션만 깔끔히 분리",
-            "#0F766E",
-            "#115E59",
-        ),
-        (
-            3,
-            "💼  3. 사무실 업무공유 모드  (S:\\ · 업무방 완전 복귀)",
-            "Z코어 가동 + 탐색기 S:\\ 자동 마운트 + 원래 업무방·로그인 즉시 복원",
-            "#1D4ED8",
-            "#1E40AF",
-        ),
-    ]
-
-    for m_num, title_txt, sub_txt, bg_col, active_col in btn_specs:
-        wrap = tk.Frame(btn_frame, bg="#0F172A", pady=5)
-        wrap.pack(fill="x")
+    for m_num, title_txt, sub_txt, bg_col, active_col, fg_col, border_col in btn_specs:
+        wrap = tk.Frame(
+            btn_frame,
+            bg=border_col,
+            highlightbackground=border_col,
+            highlightthickness=1,
+            bd=0,
+        )
+        wrap.pack(fill="x", pady=5)
         b = tk.Button(
             wrap,
             text=f"{title_txt}\n{sub_txt}",
             font=("Malgun Gothic", 9, "bold"),
-            fg="#FFFFFF",
+            fg=fg_col,
             bg=bg_col,
             activebackground=active_col,
-            activeforeground="#FFFFFF",
+            activeforeground=fg_col,
+            disabledforeground="#64748B",
             relief="flat",
-            padx=12,
+            bd=0,
+            padx=14,
             pady=9,
             justify="left",
             anchor="w",
@@ -2259,7 +2358,7 @@ def launch_gui() -> None:
             command=lambda n=m_num: on_click_mode(n),
         )
         b.pack(fill="x")
-        buttons.append(b)
+        btn_widgets[m_num] = (wrap, b, title_txt, sub_txt, bg_col, active_col, fg_col, border_col)
 
     refresh_ui_status()
     root.mainloop()

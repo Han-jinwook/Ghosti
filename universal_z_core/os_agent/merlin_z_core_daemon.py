@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.89"
+CORE_VERSION = "2.13.99"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2197,6 +2197,45 @@ def _self_purge_legacy_conflicts() -> None:
         upd_tmp_dir = Path(tempfile.gettempdir()) / "merlin_zcore_silent_update"
         if upd_tmp_dir.is_dir():
             _sh_clean.rmtree(upd_tmp_dir, ignore_errors=True)
+
+        # 2-B) %LOCALAPPDATA%\Merlin 데이터 폴더 현역 스키마 외 구버전 폐기 파일/임시 찌꺼기 자동 청소 (영구 누적 원천 차단)
+        merlin_data_dir = Path(os.environ.get("LOCALAPPDATA", "")) / "Merlin"
+        if merlin_data_dir.is_dir():
+            _ACTIVE_MERLIN_DATA_NAMES = {
+                "caresuite",
+                "shadowvault",
+                "systemgit",
+                "external_cache",
+                "photo_thumbs",
+                "video_thumbs",
+                "video_stream_cache",
+                "zcore_rt",
+                "업무공유폴더_s",
+                "doc_text_cache_v1.json",
+                "photo_ocr_cache_v1.json",
+                "video_duration_fast_cache.json",
+                "video_scene_ocr_cache_v2.json",
+                "virtual_drive_listing_cache_v1.json",
+                "gdrive_smart_index_v1.json",
+                "restore_points.json",
+                "ghosti_recycle_ledger.json",
+                "ghosti_blackbox_audit.jsonl",
+                "ghosti_custom_scan_roots.json",
+                "work_sdrive_config.json",
+                "external_drive_policies.json",
+                "active_pc_account_owner.json",
+                "last_cache_gc_ts.txt",
+            }
+            for m_item in merlin_data_dir.iterdir():
+                m_low = m_item.name.lower()
+                if m_low not in _ACTIVE_MERLIN_DATA_NAMES:
+                    try:
+                        if m_item.is_dir():
+                            _sh_clean.rmtree(m_item, ignore_errors=True)
+                        else:
+                            m_item.unlink(missing_ok=True)
+                    except Exception:
+                        pass
     except Exception:
         pass
 

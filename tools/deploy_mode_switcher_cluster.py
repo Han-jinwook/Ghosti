@@ -171,7 +171,17 @@ if ($hadOpenWindow) {
                 return False
 
     # 3) 실제 Windows 바탕화면([Environment]::GetFolderPath("Desktop"))에 단축 아이콘 갱신(구버전 아이콘 덮어쓰기) + 셀프테스트 검증
-    reopen_line = 'Start-Process -FilePath $pywPath -ArgumentList "`"$scriptPath`"" -WorkingDirectory $appDir' if need_reopen else ""
+    # 원격 SSH에서 Start-Process로 GUI를 띄우면 Session 0(비가시 세션)에 떠서 바탕화면 더블클릭을 가로채므로 대화형 작업 스케줄러(/it)로 사용자 데스크톱에 재오픈
+    reopen_line = (
+        r"""
+schtasks /create /tn "GhostiSwitcherReopen" /tr "`"$pywPath`" `"$scriptPath`"" /sc ONCE /st 00:00 /it /f | Out-Null
+schtasks /run /tn "GhostiSwitcherReopen" | Out-Null
+Start-Sleep -Milliseconds 1200
+schtasks /delete /tn "GhostiSwitcherReopen" /f | Out-Null
+"""
+        if need_reopen
+        else ""
+    )
     shortcut_ps = rf"""
 $appDir = Join-Path $env:LOCALAPPDATA "Merlin_Mode_Vault\app"
 $scriptPath = Join-Path $appDir "ghosti_mode_switcher.py"
