@@ -8,7 +8,7 @@ import {
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
 import { playBabyGhostChime } from './OnboardingModal';
-import { silencePendingEnterGiggleOnLogoClick } from '../services/babyGhostSound';
+import { GhostiBrandLogo } from './GhostiBrandLogo';
 import {
   SAMPLE_FAMILY_PHOTOS,
   SAMPLE_FAMILY_GROUPS,
@@ -519,35 +519,22 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   return (
     <div
       style={{ overflowX: 'clip' }}
-      className="min-h-screen bg-[#FBFBFA] text-slate-900 font-sans selection:bg-slate-200 selection:text-slate-900 relative"
+      className="min-h-screen bg-[#EDF2F7] text-slate-900 font-sans selection:bg-slate-200 selection:text-slate-900 relative"
     >
       <style>{`
         html, body { overscroll-behavior-y: auto !important; }
       `}</style>
 
       {/* 상단 GNB */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200">
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-300 shadow-2xs">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 shrink-0">
-            <div
-              data-ghosti-brand-logo="true"
-              className="flex items-center gap-2.5 cursor-pointer shrink-0"
+            <GhostiBrandLogo
+              size="desktop"
               onClick={() => {
-                silencePendingEnterGiggleOnLogoClick();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-            >
-              <img
-                src="/gwisinkachi_app_icon_512.png"
-                alt="귀신같이 아이콘"
-                className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"
-              />
-              <img
-                src="/gwisinkachi_wordmark_dark_ink.png"
-                alt="귀신같이 로고"
-                className="h-6 w-auto object-contain shrink-0"
-              />
-            </div>
+            />
             <span className="hidden 2xl:inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium whitespace-nowrap">
               개인 · 민간 기업 기본 기능 무료
             </span>
@@ -779,7 +766,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         )}
 
         {/* 심플 히어로 배너 */}
-        <div className="rounded-2xl bg-white border border-slate-200 p-6 sm:p-10 shadow-xs">
+        <div className="rounded-2xl bg-white border border-slate-300/90 p-6 sm:p-10 shadow-sm">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-5">
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
@@ -913,8 +900,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       }}
                       className={`p-3.5 rounded-xl border text-left transition-colors cursor-pointer ${
                         active
-                          ? 'bg-teal-600 border-teal-600 text-white'
-                          : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-900'
+                          ? 'bg-teal-600 border-teal-600 text-white shadow-xs'
+                          : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-900'
                       }`}
                     >
                       <div className={`text-[11.5px] font-medium mb-0.5 ${active ? 'text-white/90' : 'text-slate-500'}`}>
@@ -950,7 +937,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         </div>
 
         {/* [단추 숨김 & 펼치기 UX] 💡 이런 순간, 귀신같이 달라집니다 (실전 활용 사례 Before vs After) */}
-        <div id="before-after-showcase" className="rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+        <div id="before-after-showcase" className="rounded-2xl bg-white border border-slate-300/90 shadow-sm overflow-hidden">
           <div
             onClick={() => {
               playBabyGhostChime();
@@ -1109,7 +1096,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         {/* 2단 체험 영역 */}
         <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* 좌측 대화 안내 */}
-          <aside className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+          <aside className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-300/90 bg-white shadow-sm overflow-hidden">
             <div className="px-4 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 <img
@@ -1237,7 +1224,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           </aside>
 
           {/* 우측 체험 스테이지 */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-white border border-slate-200 p-5 sm:p-7 shadow-xs space-y-6">
+          <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-white border border-slate-300/90 p-5 sm:p-7 shadow-sm space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">

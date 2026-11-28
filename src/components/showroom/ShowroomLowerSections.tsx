@@ -1,4 +1,5 @@
 import React from 'react';
+import { GhostiBrandLogo } from '../GhostiBrandLogo';
 import type { ShortsItem } from './showroomDataAndUtils';
 
 export interface ShowroomLowerSectionsProps {
@@ -32,7 +33,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
 }) => {
   return (
     <>
-      <section id="shorts" className="py-14 px-4 sm:px-6 max-w-6xl mx-auto border-t border-slate-200">
+      <section id="shorts" className="py-6 px-4 sm:px-6 max-w-6xl mx-auto">
+        <div className="rounded-2xl bg-white border border-slate-300/90 shadow-sm p-6 sm:p-8">
         <div className="text-center max-w-2xl mx-auto mb-8">
           <span className="inline-block px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium mb-3">
             기능 미리보기 영상
@@ -58,7 +60,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 className={`px-3.5 py-1.5 rounded-lg text-[13px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
                   selectedCategory === tab.id
                     ? 'bg-slate-900 text-white'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    : 'bg-slate-50 border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
                 {tab.label}
@@ -74,7 +76,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <div
                 key={item.id}
                 onClick={() => setActiveShortsModal(item)}
-                className="group rounded-xl bg-white border border-slate-200 hover:border-slate-300 p-4 transition-all hover:shadow-sm cursor-pointer flex flex-col justify-between"
+                className="group rounded-xl bg-slate-50/70 border border-slate-300/80 hover:border-slate-400 hover:bg-white p-4 transition-all hover:shadow-sm cursor-pointer flex flex-col justify-between"
               >
                 <div>
                   <div
@@ -124,7 +126,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                   </p>
                 </div>
 
-                <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[12px] text-slate-500">
+                <div className="pt-2.5 border-t border-slate-200 flex items-center justify-between text-[12px] text-slate-500">
                   <span className="truncate">{item.recommendedKeyword}</span>
                   <span className="text-slate-900 font-medium shrink-0 ml-2 whitespace-nowrap">보기 →</span>
                 </div>
@@ -132,23 +134,24 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             );
           })}
         </div>
+        </div>
       </section>
 
-      <section id="security" className="py-12 px-4 sm:px-6 max-w-6xl mx-auto border-t border-slate-200 space-y-5">
+      <section id="security" className="py-6 px-4 sm:px-6 max-w-6xl mx-auto space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-1.5">
+          <div className="rounded-xl bg-white border border-slate-300/90 shadow-xs p-5 space-y-1.5">
             <div className="text-[14px] font-semibold text-slate-900">기기 내 로컬 처리</div>
             <p className="text-[13px] text-slate-600 leading-relaxed break-keep">
               문서·사진·영상 원본은 외부 서버로 업로드되지 않고 내 PC와 스마트폰 안에서 색인 및 처리됩니다.
             </p>
           </div>
-          <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-1.5">
+          <div className="rounded-xl bg-white border border-slate-300/90 shadow-xs p-5 space-y-1.5">
             <div className="text-[14px] font-semibold text-slate-900">안전한 절전 전환과 휴지통 보관</div>
             <p className="text-[13px] text-slate-600 leading-relaxed break-keep">
               은행 보안프로그램은 삭제하지 않고 절전 모드로 전환해 필요 시 다시 실행하며, 정리한 사진과 파일도 휴지통에서 언제든 복원할 수 있습니다.
             </p>
           </div>
-          <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-1.5">
+          <div className="rounded-xl bg-white border border-slate-300/90 shadow-xs p-5 space-y-1.5">
             <div className="text-[14px] font-semibold text-slate-900">암호화 기기 연결 및 권한 관리</div>
             <p className="text-[13px] text-slate-600 leading-relaxed break-keep">
               내 기기 통합 및 팀 공용 폴더(S: 드라이브) 연결 시 암호화 전송과 멤버별 접근 권한 회수를 지원합니다.
@@ -156,7 +159,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-5 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div className="rounded-2xl bg-white border border-slate-300/90 shadow-sm p-5 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           <div className="lg:col-span-8 space-y-3.5 min-w-0 flex flex-col items-center text-center lg:items-start lg:text-left">
             <span className="inline-flex items-center px-3 py-1 rounded-full bg-white border border-slate-200 text-slate-700 text-[12px] font-medium">
               개인 · 민간 기업 기본 기능 무료 사용 확인서
@@ -218,8 +221,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
       </section>
 
       {!isStoreAppMode && (
-        <section id="extensions" className="py-10 px-4 sm:px-6 max-w-6xl mx-auto border-t border-slate-200">
-          <div className="rounded-2xl bg-white border border-slate-200 p-6 sm:p-8 space-y-5">
+        <section id="extensions" className="py-6 px-4 sm:px-6 max-w-6xl mx-auto">
+          <div className="rounded-2xl bg-white border border-slate-300/90 shadow-sm p-6 sm:p-8 space-y-5">
             <div className="space-y-1.5">
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
                 선택형 구독 플랜 (30일 무료체험 제공)
@@ -317,10 +320,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </section>
       )}
 
-      <section id="manifesto" className="py-10 px-4 sm:px-6 max-w-6xl mx-auto border-t border-slate-200">
-        <div className="rounded-2xl bg-slate-50 border border-slate-200 p-6 sm:p-8 space-y-4">
+      <section id="manifesto" className="py-6 px-4 sm:px-6 max-w-6xl mx-auto">
+        <div className="rounded-2xl bg-white border border-slate-300/90 shadow-sm p-6 sm:p-8 space-y-4">
           <div className="space-y-1.5">
-            <span className="inline-block px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 text-[12px] font-medium">
+            <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
               서비스 철학
             </span>
             <p className="font-display text-[17px] sm:text-[19px] font-bold text-slate-900 break-keep">
@@ -341,17 +344,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </div>
       </section>
 
-      <footer className="border-t border-slate-200 py-8 px-4 sm:px-6 max-w-6xl mx-auto text-[12.5px] text-slate-500">
+      <footer className="border-t border-slate-300 py-8 px-4 sm:px-6 max-w-6xl mx-auto text-[12.5px] text-slate-500">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-            <div className="flex items-center gap-2">
-              <img
-                src="/gwisinkachi_app_icon_512.png"
-                alt="귀신같이 아이콘"
-                className="w-6 h-6 rounded-md object-cover border border-slate-200"
-              />
-              <span className="font-semibold text-slate-800">귀신같이 (Ghosti)</span>
-            </div>
+            <GhostiBrandLogo size="mobile" />
             <p className="text-slate-500 break-keep">
               (주)썬드림 · 상표출원 제40-2026-0229386호 · 기기 내 로컬 파일 보호 설계
             </p>
