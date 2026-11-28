@@ -362,56 +362,58 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </section>
       )}
 
-      {/* 3) 공통 하단 좌·우 2분할 대형 배너: [좌측: 출시 알림 신청 / 시작하기] | [우측: 개인 · 기업 · 공공기관 무료 사용 확인서] */}
-      <section id="security" className="pb-10 px-4 sm:px-6 max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-          {/* 좌측: 출시 알림 신청 (또는 출시 후 시작하기) */}
-          <div className="lg:col-span-6 rounded-2xl bg-white border border-slate-300 shadow-md p-6 sm:p-7">
-            {launchAlertSlot}
-          </div>
-
-          {/* 우측: 개인 · 기업 · 공공기관 기본 기능 무료 사용 확인서 */}
-          <div className="lg:col-span-6 rounded-2xl bg-white border-2 border-[#F3D7A5] shadow-md p-6 sm:p-7 flex flex-col justify-between gap-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2 min-w-0 flex-1">
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-bold">
-                  무료 사용 확인서
-                </span>
-                <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
-                  개인 · 기업 · 공공기관 어디서나 평생 무료
-                </h3>
-                <p className="text-[12.5px] text-slate-600 break-keep leading-relaxed">
-                  귀신비서·귀신검색·사진 공유는 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 거의 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
-                </p>
-              </div>
-              <div
-                onClick={() => setCertModalOpen(true)}
-                className="hidden sm:block w-24 md:w-28 rounded-xl overflow-hidden border-2 border-slate-300 shadow-xs cursor-pointer hover:border-[#EAB866] transition-all bg-white shrink-0"
-              >
-                <img
-                  src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261128"
-                  alt="귀신같이 개인·기업·공공기관 무료 사용 확인서"
-                  className="w-full h-auto object-contain"
-                />
-              </div>
+      {/* 3) 공통 하단 좌·우 2분할 고정 배너: 본문(순백 카드)과 명확히 구분되는 전용 파스텔 틴트 밴드 */}
+      <section id="security" className="mt-2 pt-7 pb-10 border-t border-slate-300/90 bg-[#CBD6E2]/65">
+        <div className="px-4 sm:px-6 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* 좌측: 출시 알림 신청 (은은한 소프트 민트 틴트 카드) */}
+            <div className="lg:col-span-6 rounded-2xl bg-gradient-to-br from-[#EFFBF8] to-[#E3F6F2] border border-[#9CDAD0] shadow-sm p-6 sm:p-7">
+              {launchAlertSlot}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setCertModalOpen(true)}
-                className="px-4 py-2.5 rounded-lg bg-[#FDE6B8] hover:bg-[#FCD894] border border-[#EAB866] text-[#78350F] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
-              >
-                무료 사용 확인서 크게 보기
-              </button>
-              <a
-                href="/showroom/certificates/ghosti_b2b_free_certificate.html"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2.5 rounded-lg bg-white hover:bg-[#FFFBEB] border border-slate-300 text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
-              >
-                인쇄 · PDF 저장 ↗
-              </a>
+            {/* 우측: 개인 · 기업 · 공공기관 무료 사용 확인서 (은은한 크림·버터 틴트 카드) */}
+            <div className="lg:col-span-6 rounded-2xl bg-gradient-to-br from-[#FFFBF2] to-[#FEF3DC] border border-[#E8C684] shadow-sm p-6 sm:p-7 flex flex-col justify-between gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2 min-w-0 flex-1">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/90 border border-[#E8C684] text-[#92400E] text-[12px] font-bold">
+                    무료 사용 확인서
+                  </span>
+                  <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
+                    개인 · 기업 · 공공기관 어디서나 평생 무료
+                  </h3>
+                  <p className="text-[12.5px] text-slate-700 break-keep leading-relaxed">
+                    귀신비서·귀신검색·사진 공유는 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 거의 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
+                  </p>
+                </div>
+                <div
+                  onClick={() => setCertModalOpen(true)}
+                  className="hidden sm:block w-24 md:w-28 rounded-xl overflow-hidden border-2 border-[#E2C285] shadow-xs cursor-pointer hover:border-[#C99B45] transition-all bg-white shrink-0"
+                >
+                  <img
+                    src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261128"
+                    alt="귀신같이 개인·기업·공공기관 무료 사용 확인서"
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCertModalOpen(true)}
+                  className="px-4 py-2.5 rounded-lg bg-[#FDE2A8] hover:bg-[#FCD582] border border-[#DFB05C] text-[#78350F] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
+                >
+                  무료 사용 확인서 크게 보기
+                </button>
+                <a
+                  href="/showroom/certificates/ghosti_b2b_free_certificate.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-lg bg-white/95 hover:bg-white border border-[#E2C285] text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
+                >
+                  인쇄 · PDF 저장 ↗
+                </a>
+              </div>
             </div>
           </div>
         </div>

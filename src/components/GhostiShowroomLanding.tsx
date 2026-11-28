@@ -1710,13 +1710,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             {!isLaunched ? (
               <>
                 <div className="space-y-1.5">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[12px] font-bold">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/90 border border-[#9CDAD0] text-teal-800 text-[12px] font-bold">
                     정식 출시 1순위 알림 예약
                   </span>
                   <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
                     정식 오픈 시 이메일로 시작 링크를 보내드립니다
                   </h3>
-                  <p className="text-[12.5px] text-slate-500 break-keep">
+                  <p className="text-[12.5px] text-slate-600 break-keep">
                     광고 스팸 없이 오픈 당일 딱 1회만 안내해 드립니다.
                   </p>
                 </div>
@@ -1808,7 +1808,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           if (formNotice) setFormNotice(null);
                         }}
                         placeholder="이메일 주소 입력 (예: myid@naver.com)"
-                        className="flex-1 px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-300 focus:bg-white focus:border-teal-600 text-slate-900 placeholder-slate-400 text-[13px] outline-none"
+                        className="flex-1 px-3.5 py-2.5 rounded-lg bg-white border border-[#9CDAD0] focus:border-teal-600 text-slate-900 placeholder-slate-400 text-[13px] outline-none shadow-2xs"
                       />
                       <button
                         type="submit"
@@ -1818,14 +1818,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         {otpStatus === 'sending' ? '발송 중...' : '출시 알림 신청'}
                       </button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-500">
+                    <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-600">
                       <span>빠른 입력:</span>
                       {QUICK_EMAIL_DOMAINS.map((domain) => (
                         <button
                           key={domain}
                           type="button"
                           onClick={() => applyQuickDomain(domain)}
-                          className="px-2 py-0.5 rounded bg-slate-50 hover:bg-[#FFFBEB] text-slate-600 border border-slate-200 font-mono text-[11.5px] cursor-pointer"
+                          className="px-2 py-0.5 rounded bg-white/90 hover:bg-white text-slate-700 border border-[#B5E2DA] font-mono text-[11.5px] cursor-pointer"
                         >
                           {domain}
                         </button>
