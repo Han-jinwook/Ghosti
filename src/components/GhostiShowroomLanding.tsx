@@ -467,8 +467,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     share: {
       label: '사진 공유',
       badge: '3. 사진 공유 · 인원·장수 무제한 0원',
-      headline: '가족·모임 원본 사진, 만료 없이 평생 0원',
-      subline: '카톡 30일 만료와 화질 저하 없이, 몇천 장의 추억도 얼굴별로 원본 그대로 모읍니다.',
+      headline: '카톡 기간 만료 없는 평생 무료 원본 사진방',
+      subline: '카톡 기간 만료와 화질 저하 없이, 가족·모임·동창회 사진을 얼굴별로 원본 그대로 모아둡니다.',
     },
     paid: {
       label: '확장 플랜',
@@ -759,7 +759,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </h1>
 
                 <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
-                  느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 만료 없이 얼굴별로 원본 그대로 나눕니다.
+                  느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료 없이 얼굴별로 원본 그대로 나눕니다.
                 </p>
               </div>
 
@@ -822,7 +822,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       key: 'share',
                       stat: '3. 원본 화질 공유',
                       title: '사진 공유',
-                      sub: '가족 · 동호회 · 동창회 무료 앨범',
+                      sub: '카톡 기간 만료 없는 무료 원본방',
                     },
                     ...(showPaidTab
                       ? [
