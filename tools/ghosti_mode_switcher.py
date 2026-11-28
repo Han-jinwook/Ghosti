@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 👻 귀신같이 (Ghosti) — 사내 실무 도그푸딩 & 순수 QA 겸용 『3대 모드 원클릭 전환기』
-- 버전: v1.4.0
+- 버전: v1.5.0
 - 핵심 설계 원칙:
   1. 프로덕션 웹 코드(src/*, https://ghosti.sundreamer.app) 무간섭 0.00% 원칙:
      테스트용 URL 파라미터(?factoryReset 등)를 실서버 웹 코드에 일절 넣지 않고,
@@ -42,8 +42,8 @@ import urllib.request
 import webbrowser
 import zipfile
 
-SWITCHER_VERSION = "1.4.0"
-WINDOW_TITLE = f"👻 귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
+SWITCHER_VERSION = "1.5.0"
+WINDOW_TITLE = f"귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
 
 GHOSTI_ORIGIN = "https://ghosti.sundreamer.app"
 GHOSTI_HOST = "ghosti.sundreamer.app"
@@ -1934,13 +1934,13 @@ def collect_live_diagnostics() -> Dict[str, Any]:
 
     if not z_alive and not installed_exe and personal_cnt == 0 and not s_mounted:
         current_mode = 1
-        mode_label = "🧹 1. 완전 백지 상태 (첫 방문자)"
+        mode_label = "1. 완전 백지 상태 (첫 방문자)"
     elif s_mounted:
         current_mode = 3
-        mode_label = "💼 3. 사무실 업무공유 모드 (S:\\ 활성)"
+        mode_label = "3. 사무실 업무공유 모드 (S:\\ 활성)"
     else:
         current_mode = 2
-        mode_label = "👤 2. 순수 개인 단독 모드 (S: 없음)"
+        mode_label = "2. 순수 개인 단독 모드 (S: 없음)"
 
     return {
         "currentMode": current_mode,
@@ -2095,7 +2095,7 @@ def launch_gui() -> None:
 
     root = tk.Tk()
     root.title(WINDOW_TITLE)
-    root.configure(bg="#F8FAFC")
+    root.configure(bg="#F1F5F9")
     root.resizable(False, False)
 
     ico_cand = Path(__file__).with_name("ghosti_icon.ico")
@@ -2105,7 +2105,7 @@ def launch_gui() -> None:
         except Exception:
             pass
 
-    win_w, win_h = 510, 535
+    win_w, win_h = 520, 540
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
     pos_x = max(20, (sw - win_w) // 2)
@@ -2113,8 +2113,8 @@ def launch_gui() -> None:
     root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
     root.attributes("-topmost", True)
 
-    # 상단 헤더 (밝고 깔끔한 화이트 헤더 + 하단 구분선)
-    hdr = tk.Frame(root, bg="#FFFFFF", padx=20, pady=14, highlightbackground="#E2E8F0", highlightthickness=1)
+    # 상단 헤더 (전체 창에서 이모지는 제목 맨 앞 👻 딱 1개만 사용)
+    hdr = tk.Frame(root, bg="#FFFFFF", padx=22, pady=15, highlightbackground="#E2E8F0", highlightthickness=1)
     hdr.pack(fill="x")
     tk.Label(
         hdr,
@@ -2125,29 +2125,33 @@ def launch_gui() -> None:
     ).pack(anchor="w")
     tk.Label(
         hdr,
-        text="실서버 웹 코드 무간섭 · 센스톡/노션/구글 로그인 보존 · 귀신같이만 핀셋 전환",
+        text="실서버 웹 코드 무간섭  |  센스톡·노션·구글 로그인 보존  |  귀신같이만 핀셋 전환",
         font=("Malgun Gothic", 9),
         fg="#64748B",
         bg="#FFFFFF",
     ).pack(anchor="w", pady=(3, 0))
 
-    # 상태 진단 카드 (화사한 화이트 카드 + 소프트 블루 테두리)
-    card = tk.Frame(root, bg="#FFFFFF", padx=16, pady=12, highlightbackground="#CBD5E1", highlightthickness=1)
-    card.pack(fill="x", padx=18, pady=(12, 10))
+    # 상태 진단 카드 (이모지 0개 · 깔끔한 타이포그래피 계층)
+    card = tk.Frame(root, bg="#FFFFFF", padx=18, pady=13, highlightbackground="#CBD5E1", highlightthickness=1)
+    card.pack(fill="x", padx=18, pady=(14, 10))
 
-    lbl_mode = tk.Label(card, text="현재 모드 진단 중...", font=("Malgun Gothic", 10, "bold"), fg="#2563EB", bg="#FFFFFF")
-    lbl_mode.pack(anchor="w")
-    lbl_zcore = tk.Label(card, text="• PC 엔진 (Z코어): 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
-    lbl_zcore.pack(anchor="w", pady=(5, 0))
-    lbl_db = tk.Label(card, text="• 내 파일 빠른검색: 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
+    lbl_mode = tk.Label(card, text="현재 상태 진단 중...", font=("Malgun Gothic", 10, "bold"), fg="#1E40AF", bg="#FFFFFF")
+    lbl_mode.pack(anchor="w", pady=(0, 6))
+
+    sep = tk.Frame(card, bg="#F1F5F9", height=1)
+    sep.pack(fill="x", pady=(0, 6))
+
+    lbl_zcore = tk.Label(card, text="· PC 엔진 (Z코어)   : 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
+    lbl_zcore.pack(anchor="w", pady=(2, 0))
+    lbl_db = tk.Label(card, text="· 내 파일 빠른검색  : 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
     lbl_db.pack(anchor="w", pady=(2, 0))
-    lbl_sdrive = tk.Label(card, text="• 업무 드라이브 (S:): 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
+    lbl_sdrive = tk.Label(card, text="· 업무 드라이브 (S:) : 확인 중...", font=("Malgun Gothic", 9), fg="#334155", bg="#FFFFFF")
     lbl_sdrive.pack(anchor="w", pady=(2, 0))
-    lbl_vault = tk.Label(card, text="• 업무방 복귀 금고: 확인 중...", font=("Malgun Gothic", 9), fg="#64748B", bg="#FFFFFF")
+    lbl_vault = tk.Label(card, text="· 업무방 복귀 금고  : 확인 중...", font=("Malgun Gothic", 9), fg="#64748B", bg="#FFFFFF")
     lbl_vault.pack(anchor="w", pady=(2, 0))
 
     open_browser_var = tk.BooleanVar(value=True)
-    opt_frame = tk.Frame(root, bg="#F8FAFC", padx=18)
+    opt_frame = tk.Frame(root, bg="#F1F5F9", padx=18)
     opt_frame.pack(fill="x", pady=(0, 6))
     tk.Checkbutton(
         opt_frame,
@@ -2155,83 +2159,109 @@ def launch_gui() -> None:
         variable=open_browser_var,
         font=("Malgun Gothic", 9),
         fg="#334155",
-        bg="#F8FAFC",
+        bg="#F1F5F9",
         selectcolor="#FFFFFF",
-        activebackground="#F8FAFC",
+        activebackground="#F1F5F9",
         activeforeground="#0F172A",
     ).pack(anchor="w")
 
-    btn_frame = tk.Frame(root, bg="#F8FAFC", padx=18)
+    btn_frame = tk.Frame(root, bg="#F1F5F9", padx=18)
     btn_frame.pack(fill="x")
 
     status_bar = tk.Label(
         root,
-        text="전환할 모드 버튼을 클릭하세요. (현재 사용 중인 모드는 자동 잠금)",
+        text="전환할 모드를 클릭하세요. (현재 적용 중인 모드는 잠금 처리됨)",
         font=("Malgun Gothic", 9, "bold"),
-        fg="#059669",
-        bg="#F8FAFC",
-        pady=8,
+        fg="#334155",
+        bg="#F1F5F9",
+        pady=10,
     )
     status_bar.pack(side="bottom", fill="x", padx=18)
 
-    is_busy = {"flag": False}
+    is_busy = {"flag": False, "active_mode": 2}
     btn_specs = [
         (
             1,
-            "🧹  1. 완전 백지 모드  (첫 방문자 · 엔진+전체DB 초기화)",
-            "엔진 미설치 + 내 파일 데이터 0건 + 귀신같이 로그아웃 (타 사이트 로그인 유지)",
-            "#FFF1F2",
-            "#FFE4E6",
-            "#BE123C",
-            "#FDA4AF",
+            "1. 완전 백지 모드  (첫 방문자 · 엔진 + 전체 데이터 초기화)",
+            "엔진 미설치 · 내 파일 검색 데이터 0건 · 귀신같이 로그아웃 (타 사이트 로그인 유지)",
         ),
         (
             2,
-            "👤  2. 순수 개인 모드  (엔진+내 파일 유지 · S: 드라이브만 해제)",
-            "내 파일 빠른검색은 그대로 살리고 S: 드라이브·업무방 로그인만 깔끔히 분리",
-            "#ECFDF5",
-            "#D1FAE5",
-            "#047857",
-            "#6EE7B7",
+            "2. 순수 개인 모드  (엔진 + 내 파일 유지 · S: 드라이브만 해제)",
+            "내 파일 빠른검색은 그대로 유지하고 S: 드라이브와 업무방 로그인만 분리",
         ),
         (
             3,
-            "💼  3. 사무실 업무공유 모드  (S:\\ · 업무방 완전 복귀)",
-            "Z코어 가동 + 탐색기 S:\\ 자동 연결 + 원래 업무방·로그인 즉시 복원",
-            "#EFF6FF",
-            "#DBEAFE",
-            "#1D4ED8",
-            "#93C5FD",
+            "3. 사무실 업무공유 모드  (S:\\ 드라이브 · 업무방 완전 복귀)",
+            "Z코어 가동 · 탐색기 S:\\ 자동 연결 · 원래 업무방 및 로그인 세션 즉시 복원",
         ),
     ]
-    btn_widgets: Dict[int, Tuple[tk.Frame, tk.Button, str, str, str, str, str, str]] = {}
+
+    # 색상 통일 기준:
+    # - 클릭 가능한 활성 카드(2개): 선명한 화이트(#FFFFFF) 카드 + 블루 포인트 테두리(#93C5FD) + 굵은 네이비 제목(#0F172A) & 슬레이트 본문(#475569)
+    # - 마우스 오버(Hover) 시: 소프트 블루 배경(#EFF6FF) + 진한 블루 테두리(#2563EB) + 블루 제목(#1D4ED8)
+    # - 현재 적용 중인 비활성 카드(1개): 차분한 회색(#E2E8F0) 배경 + 연회색 테두리(#CBD5E1) + 흐린 회색 텍스트(#94A3B8) (클릭/호버 완전 잠금)
+    COLOR_ACTIVE_BG = "#FFFFFF"
+    COLOR_ACTIVE_BORDER = "#93C5FD"
+    COLOR_ACTIVE_TITLE = "#0F172A"
+    COLOR_ACTIVE_DESC = "#475569"
+    COLOR_ACTIVE_BADGE_BG = "#EFF6FF"
+    COLOR_ACTIVE_BADGE_FG = "#1D4ED8"
+
+    COLOR_HOVER_BG = "#EFF6FF"
+    COLOR_HOVER_BORDER = "#2563EB"
+    COLOR_HOVER_TITLE = "#1D4ED8"
+    COLOR_HOVER_DESC = "#1E3A8A"
+    COLOR_HOVER_BADGE_BG = "#2563EB"
+    COLOR_HOVER_BADGE_FG = "#FFFFFF"
+
+    COLOR_DISABLED_BG = "#E2E8F0"
+    COLOR_DISABLED_BORDER = "#CBD5E1"
+    COLOR_DISABLED_TITLE = "#94A3B8"
+    COLOR_DISABLED_DESC = "#94A3B8"
+    COLOR_DISABLED_BADGE_BG = "#CBD5E1"
+    COLOR_DISABLED_BADGE_FG = "#64748B"
+
+    btn_cards: Dict[int, Dict[str, Any]] = {}
+
+    def set_card_visual(m_num: int, state_mode: str) -> None:
+        item = btn_cards[m_num]
+        wrap: tk.Frame = item["wrap"]
+        inner: tk.Frame = item["inner"]
+        top_row: tk.Frame = item["top_row"]
+        lbl_t: tk.Label = item["lbl_title"]
+        lbl_badge: tk.Label = item["lbl_badge"]
+        lbl_d: tk.Label = item["lbl_desc"]
+
+        if state_mode == "disabled":
+            wrap.config(bg=COLOR_DISABLED_BORDER, highlightbackground=COLOR_DISABLED_BORDER)
+            inner.config(bg=COLOR_DISABLED_BG, cursor="arrow")
+            top_row.config(bg=COLOR_DISABLED_BG, cursor="arrow")
+            lbl_t.config(bg=COLOR_DISABLED_BG, fg=COLOR_DISABLED_TITLE, cursor="arrow")
+            lbl_badge.config(text="현재 적용 중", bg=COLOR_DISABLED_BADGE_BG, fg=COLOR_DISABLED_BADGE_FG, cursor="arrow")
+            lbl_d.config(bg=COLOR_DISABLED_BG, fg=COLOR_DISABLED_DESC, cursor="arrow")
+        elif state_mode == "hover":
+            wrap.config(bg=COLOR_HOVER_BORDER, highlightbackground=COLOR_HOVER_BORDER)
+            inner.config(bg=COLOR_HOVER_BG, cursor="hand2")
+            top_row.config(bg=COLOR_HOVER_BG, cursor="hand2")
+            lbl_t.config(bg=COLOR_HOVER_BG, fg=COLOR_HOVER_TITLE, cursor="hand2")
+            lbl_badge.config(text="전환하기", bg=COLOR_HOVER_BADGE_BG, fg=COLOR_HOVER_BADGE_FG, cursor="hand2")
+            lbl_d.config(bg=COLOR_HOVER_BG, fg=COLOR_HOVER_DESC, cursor="hand2")
+        else:
+            wrap.config(bg=COLOR_ACTIVE_BORDER, highlightbackground=COLOR_ACTIVE_BORDER)
+            inner.config(bg=COLOR_ACTIVE_BG, cursor="hand2")
+            top_row.config(bg=COLOR_ACTIVE_BG, cursor="hand2")
+            lbl_t.config(bg=COLOR_ACTIVE_BG, fg=COLOR_ACTIVE_TITLE, cursor="hand2")
+            lbl_badge.config(text="전환 가능", bg=COLOR_ACTIVE_BADGE_BG, fg=COLOR_ACTIVE_BADGE_FG, cursor="hand2")
+            lbl_d.config(bg=COLOR_ACTIVE_BG, fg=COLOR_ACTIVE_DESC, cursor="hand2")
 
     def apply_button_states(active_mode: int) -> None:
-        for m_num, (wrap, b, title_txt, sub_txt, bg_col, active_col, fg_col, border_col) in btn_widgets.items():
-            if is_busy["flag"]:
-                b.config(state="disabled", cursor="arrow")
-                continue
-            if m_num == active_mode:
-                b.config(
-                    text=f"✔ [현재 적용 중]  {title_txt}\n{sub_txt}",
-                    state="disabled",
-                    bg="#E2E8F0",
-                    fg="#94A3B8",
-                    disabledforeground="#64748B",
-                    cursor="arrow",
-                )
-                wrap.config(highlightbackground="#CBD5E1")
+        is_busy["active_mode"] = active_mode
+        for m_num in btn_cards:
+            if is_busy["flag"] or m_num == active_mode:
+                set_card_visual(m_num, "disabled")
             else:
-                b.config(
-                    text=f"{title_txt}\n{sub_txt}",
-                    state="normal",
-                    bg=bg_col,
-                    activebackground=active_col,
-                    fg=fg_col,
-                    activeforeground=fg_col,
-                    cursor="hand2",
-                )
-                wrap.config(highlightbackground=border_col)
+                set_card_visual(m_num, "normal")
 
     def refresh_ui_status() -> None:
         if is_busy["flag"]:
@@ -2240,27 +2270,27 @@ def launch_gui() -> None:
         try:
             d = collect_live_diagnostics()
             cur_mode = int(d.get("currentMode") or 2)
-            lbl_mode.config(text=f"현재 상태: {d['modeLabel']}")
+            lbl_mode.config(text=f"현재 상태 :  {d['modeLabel']}")
             if d["zcoreAlive"]:
                 ver_txt = f"v{d['zcoreVersion']}" if d["zcoreVersion"] else "정상"
-                lbl_zcore.config(text=f"• PC 엔진 (Z코어)  : 🟢 정상 작동 중 ({ver_txt})", fg="#059669")
+                lbl_zcore.config(text=f"· PC 엔진 (Z코어)   :  정상 작동 중 ({ver_txt})", fg="#0F172A")
             else:
-                lbl_zcore.config(text="• PC 엔진 (Z코어)  : ⚪ 꺼짐 / 미설치 (첫 방문자 상태)", fg="#64748B")
+                lbl_zcore.config(text="· PC 엔진 (Z코어)   :  꺼짐 / 미설치 (첫 방문자 상태)", fg="#64748B")
 
             if d["personalCacheCount"] > 0:
-                lbl_db.config(text="• 내 파일 빠른검색 : 🟢 준비 완료 (문서·사진·영상 즉시 검색)", fg="#059669")
+                lbl_db.config(text="· 내 파일 빠른검색  :  준비 완료 (문서·사진·영상 즉시 검색)", fg="#0F172A")
             else:
-                lbl_db.config(text="• 내 파일 빠른검색 : ⚪ 초기 백지 상태", fg="#64748B")
+                lbl_db.config(text="· 내 파일 빠른검색  :  초기 백지 상태", fg="#64748B")
 
             if d["sDriveMounted"]:
-                lbl_sdrive.config(text="• 업무 드라이브    : 🔵 S:\\ 연결됨 (사무실 업무공유 중)", fg="#2563EB")
+                lbl_sdrive.config(text="· 업무 드라이브 (S:) :  S:\\ 연결됨 (사무실 업무공유 활성)", fg="#1D4ED8")
             else:
-                lbl_sdrive.config(text="• 업무 드라이브    : ⚪ S:\\ 연결 안 됨 (개인/백지 상태)", fg="#64748B")
+                lbl_sdrive.config(text="· 업무 드라이브 (S:) :  연결 안 됨 (개인 / 백지 상태)", fg="#64748B")
 
             if d["hasMode3Snapshot"]:
-                lbl_vault.config(text="• 업무방 복귀 금고 : 📦 안전 보관됨 ([3번] 클릭 시 100% 즉시 복귀)", fg="#D97706")
+                lbl_vault.config(text="· 업무방 복귀 금고  :  안전 보관됨 (3번 클릭 시 즉시 복귀)", fg="#475569")
             else:
-                lbl_vault.config(text="• 업무방 복귀 금고 : 저장된 업무방 기록 없음", fg="#94A3B8")
+                lbl_vault.config(text="· 업무방 복귀 금고  :  저장된 업무방 기록 없음", fg="#94A3B8")
 
             apply_button_states(cur_mode)
         except Exception:
@@ -2268,28 +2298,28 @@ def launch_gui() -> None:
         root.after(2200, refresh_ui_status)
 
     def on_click_mode(mode_num: int) -> None:
-        if is_busy["flag"]:
+        if is_busy["flag"] or mode_num == is_busy["active_mode"]:
             return
         prompts = {
             1: (
-                "🧹 [1. 완전 백지 모드]로 전환할까요?\n\n"
-                "• Z코어 엔진·내 파일 검색 데이터·S: 드라이브가 모두 정리되고\n"
+                "[1. 완전 백지 모드]로 전환할까요?\n\n"
+                "· Z코어 엔진·내 파일 검색 데이터·S: 드라이브가 모두 정리되고\n"
                 "  브라우저에서 『귀신같이 웹』만 로그아웃됩니다.\n"
-                "• 센스톡·노션·구글·카톡 로그인은 100% 그대로 유지됩니다.\n"
-                "• 직전 업무방과 검색 데이터는 안전 금고에 자동 백업되어\n"
+                "· 센스톡·노션·구글·카톡 로그인은 100% 그대로 유지됩니다.\n"
+                "· 직전 업무방과 검색 데이터는 안전 금고에 자동 백업되어\n"
                 "  나중에 [2번]·[3번]으로 언제든 복구할 수 있습니다."
             ),
             2: (
-                "👤 [2. 순수 개인 모드]로 전환할까요?\n\n"
-                "• 내 PC 엔진(Z코어)과 내 파일 빠른검색 상태는 그대로 유지됩니다.\n"
-                "• 윈도우 S: 업무 드라이브와 『귀신같이 웹』 로그인만 분리되어\n"
+                "[2. 순수 개인 모드]로 전환할까요?\n\n"
+                "· 내 PC 엔진(Z코어)과 내 파일 빠른검색 상태는 그대로 유지됩니다.\n"
+                "· 윈도우 S: 업무 드라이브와 『귀신같이 웹』 로그인만 분리되어\n"
                 "  순수 단독 사용자 상태로 테스트할 수 있습니다.\n"
-                "• (이 상태에서 새 초대 링크를 눌러 업무방을 연결하거나,\n"
+                "· (이 상태에서 새 초대 링크를 눌러 업무방을 연결하거나,\n"
                 "  [3번]을 눌러 원래 업무방으로 100% 복귀할 수 있습니다.)"
             ),
             3: (
-                "💼 [3. 사무실 업무공유 모드]로 전환(복귀)할까요?\n\n"
-                "• Z코어 엔진 가동 + 윈도우 탐색기 S:\\ 드라이브 연결 +\n"
+                "[3. 사무실 업무공유 모드]로 전환(복귀)할까요?\n\n"
+                "· Z코어 엔진 가동 + 윈도우 탐색기 S:\\ 드라이브 연결 +\n"
                 "  금고에 보관된 업무방 파일 및 『귀신같이 웹』 로그인 세션을\n"
                 "  원래 상태 그대로 100% 복원합니다."
             ),
@@ -2298,8 +2328,8 @@ def launch_gui() -> None:
             return
 
         is_busy["flag"] = True
-        for _, b, *_ in btn_widgets.values():
-            b.config(state="disabled", cursor="arrow")
+        for m_num in btn_cards:
+            set_card_visual(m_num, "disabled")
 
         def worker() -> None:
             try:
@@ -2309,19 +2339,19 @@ def launch_gui() -> None:
                 res = switch_to_mode(
                     mode_num,
                     open_browser=want_open,
-                    progress_cb=lambda m: root.after(0, lambda msg=m: status_bar.config(text=msg, fg="#D97706")),
+                    progress_cb=lambda m: root.after(0, lambda msg=m: status_bar.config(text=msg, fg="#1D4ED8")),
                 )
                 b_stats = res.get("browserStats") or {}
                 v_cnt = b_stats.get("verifiedLoggedOut")
                 v_suffix = f" (브라우저 {v_cnt}개 프로필 검증)" if isinstance(v_cnt, int) and v_cnt > 0 else ""
                 done_names = {
-                    1: f"✅ [1. 완전 백지 모드] 초기화 완료!{v_suffix}",
-                    2: f"✅ [2. 순수 개인 모드] 전환 완료!{v_suffix}",
-                    3: "✅ [3. 사무실 업무공유 모드] S:\\ 및 로그인 복귀 완료!",
+                    1: f"[1. 완전 백지 모드] 전환 완료{v_suffix}",
+                    2: f"[2. 순수 개인 모드] 전환 완료{v_suffix}",
+                    3: "[3. 사무실 업무공유 모드] S:\\ 및 로그인 복귀 완료",
                 }
-                root.after(0, lambda: status_bar.config(text=done_names[mode_num], fg="#059669"))
+                root.after(0, lambda: status_bar.config(text=done_names[mode_num], fg="#047857"))
             except Exception as exc:
-                root.after(0, lambda e=exc: status_bar.config(text=f"⚠️ 오류: {e}", fg="#DC2626"))
+                root.after(0, lambda e=exc: status_bar.config(text=f"오류: {e}", fg="#DC2626"))
             finally:
                 def unlock() -> None:
                     is_busy["flag"] = False
@@ -2330,35 +2360,81 @@ def launch_gui() -> None:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    for m_num, title_txt, sub_txt, bg_col, active_col, fg_col, border_col in btn_specs:
+    for m_num, title_txt, sub_txt in btn_specs:
         wrap = tk.Frame(
             btn_frame,
-            bg=border_col,
-            highlightbackground=border_col,
+            bg=COLOR_ACTIVE_BORDER,
+            highlightbackground=COLOR_ACTIVE_BORDER,
             highlightthickness=1,
             bd=0,
         )
         wrap.pack(fill="x", pady=5)
-        b = tk.Button(
-            wrap,
-            text=f"{title_txt}\n{sub_txt}",
-            font=("Malgun Gothic", 9, "bold"),
-            fg=fg_col,
-            bg=bg_col,
-            activebackground=active_col,
-            activeforeground=fg_col,
-            disabledforeground="#64748B",
-            relief="flat",
-            bd=0,
-            padx=14,
-            pady=9,
-            justify="left",
+
+        inner = tk.Frame(wrap, bg=COLOR_ACTIVE_BG, padx=14, pady=10)
+        inner.pack(fill="x")
+
+        top_row = tk.Frame(inner, bg=COLOR_ACTIVE_BG)
+        top_row.pack(fill="x")
+
+        # 1) 제목 글씨: 10pt Bold (선명한 타이틀)
+        lbl_title = tk.Label(
+            top_row,
+            text=title_txt,
+            font=("Malgun Gothic", 10, "bold"),
+            fg=COLOR_ACTIVE_TITLE,
+            bg=COLOR_ACTIVE_BG,
             anchor="w",
-            cursor="hand2",
-            command=lambda n=m_num: on_click_mode(n),
         )
-        b.pack(fill="x")
-        btn_widgets[m_num] = (wrap, b, title_txt, sub_txt, bg_col, active_col, fg_col, border_col)
+        lbl_title.pack(side="left")
+
+        # 우측 상태 배지 (전환 가능 / 전환하기 / 현재 적용 중)
+        lbl_badge = tk.Label(
+            top_row,
+            text="전환 가능",
+            font=("Malgun Gothic", 8, "bold"),
+            fg=COLOR_ACTIVE_BADGE_FG,
+            bg=COLOR_ACTIVE_BADGE_BG,
+            padx=8,
+            pady=2,
+        )
+        lbl_badge.pack(side="right")
+
+        # 2) 내부 설명 텍스트: 9pt Regular (제목과 확실히 구분되는 얇고 차분한 서브 텍스트)
+        lbl_desc = tk.Label(
+            inner,
+            text=sub_txt,
+            font=("Malgun Gothic", 9),
+            fg=COLOR_ACTIVE_DESC,
+            bg=COLOR_ACTIVE_BG,
+            anchor="w",
+            justify="left",
+        )
+        lbl_desc.pack(fill="x", pady=(4, 0))
+
+        btn_cards[m_num] = {
+            "wrap": wrap,
+            "inner": inner,
+            "top_row": top_row,
+            "lbl_title": lbl_title,
+            "lbl_badge": lbl_badge,
+            "lbl_desc": lbl_desc,
+        }
+
+        def _on_enter(_e: Any, n: int = m_num) -> None:
+            if not is_busy["flag"] and n != is_busy["active_mode"]:
+                set_card_visual(n, "hover")
+
+        def _on_leave(_e: Any, n: int = m_num) -> None:
+            if not is_busy["flag"] and n != is_busy["active_mode"]:
+                set_card_visual(n, "normal")
+
+        def _on_click(_e: Any, n: int = m_num) -> None:
+            on_click_mode(n)
+
+        for w in (wrap, inner, top_row, lbl_title, lbl_badge, lbl_desc):
+            w.bind("<Enter>", _on_enter)
+            w.bind("<Leave>", _on_leave)
+            w.bind("<Button-1>", _on_click)
 
     refresh_ui_status()
     root.mainloop()
