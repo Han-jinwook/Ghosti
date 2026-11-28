@@ -1,7 +1,6 @@
 export {
   LOUNGE_TABS,
   PLAN_BADGE_LABELS,
-  LoungeModeSwitcherBar,
   HostThreeBodyControlPanel,
   formatLoungeBytes,
 } from '../domains/shared/loungeHelpers';

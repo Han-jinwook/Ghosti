@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 
-export const LoungeModeSwitcherBar: React.FC = () => null;
-
 interface ConnectedComputeNode {
   id: string;
   deviceName: string;

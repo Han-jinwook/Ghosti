@@ -479,6 +479,7 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 - **③ Wave 1 `귀신Key` (구 귀신창) 하드락 & 자가업데이트 무소음 보장**: Wave 1 본체 출격 기간에는 Wave 2로 분리된 `귀신Key`(순차복붙·다림질·한영 자동변환·상용구·단축키 1~5번) 플러그를 하드락(`is_ghostkey_active_mode() -> False`)으로 완전 분리하여 복사(`Ctrl+C`)나 한영 타이핑 시 일절 개입·팝업·효과음이 나지 않게 하며, 자가업데이트·재기동 시에도 귀신소리가 절대 울리지 않도록 무소음 가드를 유지합니다.
 - **④ 구버전 잔재 정리는 하드코딩 목록 없이 ‘일반화된 단일 SSOT 규칙(`_self_purge_legacy_conflicts`)’으로만 수행**: 상용 Z-코어에 특정 구버전 이름 목록을 하드코딩하거나 8초마다 프로세스를 뒤지는 방어 코드를 넣는 것을 영구 금지합니다. 새 버전 Z-코어 기동 시 1회 실행되는 `_self_purge_legacy_conflicts()`에서 **정식 설치 경로(`%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe`) 및 현재 프로세스 트리를 제외한 모든 타 경로/이전 버전 프로세스, 설치·임시 폴더 내 백업·스테이징 찌꺼기(`_bak_dir`, `_staging_dir`, `*.zombie_*`, `*.old.*`, `*.bak.*`), 구형 자동실행 항목을 이름·버전 불문 일반화 규칙 1개로 자동 정리**합니다.
 - **⑤ `[1귀신]` 매일 체크인 시 1~6호컴 전 클러스터 엔진 버전 일치 & 구버전 충돌 유무 자동 전수점검 의무**: Z-코어 총괄인 `1귀신`은 매일 체크인할 때마다(`python z_core_watcher.py --role 1` 내장 `_audit_cluster_zcore_version_parity()` 자동 실행) **1~6호컴 전 컴퓨터의 실시간 Z-코어 버전(`5199/__merlin/health`)이 최신 릴리즈(`public/z_core_version.json`)와 일치하는지, 그리고 타 경로 구버전 프로세스 충돌이 없는지 전수 확인하여 체크인 첫 보고에 반드시 포함**합니다.
+- **⑥ `3대 모드 전환기` (`tools/ghosti_mode_switcher.py` 현행 `v1.3.0`) 버전업 시 `1~6호컴` 전 기기 수동 일괄 설치 & 구버전 정리 의무**: 모드 전환기는 프로덕션 웹 코드(`src/*`)에 어떠한 버튼이나 더미 컴포넌트(`LoungeModeSwitcherBar` 등 영구 제거)도 두지 않고 오직 Windows 바탕화면 독립 실행 프로그램(`귀신같이 모드 전환기.lnk`)으로만 운영하며, 버전업될 때마다 반드시 `python tools/deploy_mode_switcher_cluster.py`를 실행해 **`1~6호컴` 전체에 수동 설치하고 기존 구버전 전환기 프로세스·캐시·구형 금고 파일은 깨끗이 정리**합니다.
 
 ---
 

@@ -74,4 +74,4 @@ export function formatLoungeBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, idx)).toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
 }
 
-export { LoungeModeSwitcherBar, HostThreeBodyControlPanel } from './LoungeSharedComponents';
+export { HostThreeBodyControlPanel } from './LoungeSharedComponents';

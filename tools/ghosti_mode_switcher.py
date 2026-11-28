@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 👻 귀신같이 (Ghosti) — 사내 실무 도그푸딩 & 순수 QA 겸용 『3대 모드 원클릭 전환기』
-- 버전: v1.1.0
+- 버전: v1.3.0
 - 핵심 설계 원칙:
   1. 프로덕션 웹 코드(src/*, https://ghosti.sundreamer.app) 무간섭 0.00% 원칙:
      테스트용 URL 파라미터(?factoryReset 등)를 실서버 웹 코드에 일절 넣지 않고,
@@ -42,7 +42,7 @@ import urllib.request
 import webbrowser
 import zipfile
 
-SWITCHER_VERSION = "1.2.0"
+SWITCHER_VERSION = "1.3.0"
 WINDOW_TITLE = f"👻 귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
 
 GHOSTI_ORIGIN = "https://ghosti.sundreamer.app"
@@ -1372,7 +1372,6 @@ def cache_installer_exe_if_available(move_from_installed: bool = False) -> Optio
     candidates = [
         installed_exe,
         Path(r"D:\Ghosti\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup\Merlin_Z_Core_Setup.exe"),
-        Path(r"C:\MerlinTools\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup\Merlin_Z_Core_Setup.exe"),
     ]
     dl = get_user_downloads_dir()
     if dl.is_dir():
@@ -1421,10 +1420,10 @@ def ensure_installer_exe_ready() -> Optional[Path]:
     cached = cache_installer_exe_if_available()
     if cached and _is_valid_onedir_bundle(cached):
         return cached
-    # 최후 폴백: 정식 배포 서버에서 Merlin_Z_Core.zip(--onedir 전체: exe + _internal/) 무소음 다운로드 후 추출
+    # 최후 폴백: GitHub Releases 정식 배포본에서 Merlin_Z_Core.zip(--onedir 전체: exe + _internal/) 무소음 다운로드 후 추출
     try:
         req = urllib.request.Request(
-            "https://ghosti.sundreamer.app/Merlin_Z_Core.zip",
+            "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip",
             headers={"User-Agent": f"GhostiModeSwitcher/{SWITCHER_VERSION}"},
         )
         with urllib.request.urlopen(req, timeout=35) as resp:
