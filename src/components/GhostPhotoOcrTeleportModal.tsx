@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import {
@@ -89,10 +90,73 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
   );
 
   useEffect(() => {
-    if (!photo || isDemoSamplePhoto) {
+    if (!photo) {
       setOcrResult(null);
       setCopiedNotice('');
       setCursorBuffer('');
+      return;
+    }
+
+    if (isDemoSamplePhoto) {
+      setLoading(false);
+      setCopiedNotice('');
+      setCursorBuffer('');
+      setGateState('allowed');
+      setTrialBadge('샘플 체험 · 내 컴퓨터 연결 시 실제 사진에서 추출');
+      markGhostDojoStep('ocr');
+
+      const isDeliveryReceipt = (photo.fullUrl || '').includes('배달주문내역') || (photo.name || '').includes('20250802');
+      if (isDeliveryReceipt) {
+        setOcrResult({
+          ok: true,
+          hasText: true,
+          hasTable: true,
+          fullText:
+            '주문매장: 청라 수제버거 & 치킨 하우스\n배달예정: 약 28분 뒤 도착 예정\n• 더블 치즈버거 세트 x 2\n• 순살 크리스피 치킨 1마리\n결제금액: 38,500원 (신한카드 결제완료)',
+          tsvTable:
+            '항목\t수량/내용\t비고\n주문매장\t청라 수제버거 & 치킨 하우스\t배달주문\n더블 치즈버거 세트\t2개\t세트메뉴\n순살 크리스피 치킨\t1마리\t단품\n결제금액\t38,500원\t신한카드 결제완료',
+          spots: [
+            {
+              id: 'demo_spot_store',
+              categoryHint: '주문매장',
+              displayText: '청라 수제버거 & 치킨 하우스',
+              insertValue: '청라 수제버거 & 치킨 하우스',
+              isPrimaryHighlight: true,
+            },
+            {
+              id: 'demo_spot_amount',
+              categoryHint: '결제금액',
+              displayText: '38,500원 (신한카드 결제완료)',
+              insertValue: '38,500원',
+              isPrimaryHighlight: true,
+            },
+            {
+              id: 'demo_spot_items',
+              categoryHint: '주문메뉴',
+              displayText: '더블 치즈버거 세트 x 2 / 순살 크리스피 치킨 1마리',
+              insertValue: '더블 치즈버거 세트 x 2, 순살 크리스피 치킨 1마리',
+            },
+          ],
+          chips: ['청라 수제버거 & 치킨 하우스', '더블 치즈버거 세트 x 2', '순살 크리스피 치킨 1마리', '38,500원', '신한카드 결제완료'],
+        });
+      } else {
+        setOcrResult({
+          ok: true,
+          hasText: true,
+          hasTable: false,
+          fullText: photo.captionKo || `${photo.name} (일반 풍경·인물 샘플 사진)`,
+          tsvTable: '',
+          spots: [
+            {
+              id: 'demo_spot_caption',
+              categoryHint: '사진 요약',
+              displayText: photo.captionKo || photo.name,
+              insertValue: photo.captionKo || photo.name,
+            },
+          ],
+          chips: photo.keywordsKo || ['여름휴가', '패러세일링', '코타키나발루'],
+        });
+      }
       return;
     }
 
@@ -357,7 +421,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
     });
   };
 
-  return (
+  const modalContent = (
     <div
       onClick={onClose}
       className="fixed inset-0 z-[130] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
@@ -372,7 +436,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
             <GhostBabyMascotBadge />
             <span className="text-[13px] text-slate-500 truncate">{photo.name}</span>
             {trialBadge && (
-              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium shrink-0">
+              <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold shrink-0">
                 {trialBadge}
               </span>
             )}
@@ -386,26 +450,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
           </button>
         </div>
 
-        {isDemoSamplePhoto ? (
-          <div className="flex flex-col gap-3">
-            <div className="px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[12.5px]">
-              현재 샘플 사진 또는 PC 엔진 미연결 상태입니다. PC 엔진을 연결한 뒤 실제 영수증·문서 사진을 선택하면 글자와 표를 추출할 수 있습니다.
-            </div>
-            <div className="p-4 rounded-xl bg-slate-50/60 border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
-              <img
-                src={photo.fullUrl || photo.thumbUrl}
-                alt={photo.name}
-                className="w-full sm:w-52 max-h-52 rounded-lg object-contain bg-slate-900 border border-slate-200 shrink-0"
-              />
-              <div className="flex flex-col gap-1.5 text-[13px] text-slate-600">
-                <div className="font-semibold text-slate-900">{photo.name}</div>
-                <p className="leading-relaxed">
-                  PC 연결 후 사진의 [OCR] 버튼을 누르면 이미지 속 글자와 표를 복사하거나 파일로 저장할 수 있습니다.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : gateState === 'need_opt_in' ? (
+        {gateState === 'need_opt_in' ? (
           <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center text-center gap-3.5">
             <span className="px-2.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 text-[11.5px] font-medium">
               30일 무료체험 안내
@@ -662,4 +707,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       </div>
     </div>
   );
+
+  if (typeof document === 'undefined') return modalContent;
+  return createPortal(modalContent, document.body);
 };

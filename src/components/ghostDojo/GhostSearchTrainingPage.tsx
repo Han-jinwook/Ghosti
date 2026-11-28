@@ -25,9 +25,7 @@ import { maskSensitiveDocText } from '../PricingModal';
 import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../../services/aiEngine';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import {
-  GhostSecretaryFirstGuard,
   jumpToGhostSecretary,
-  openGhostSecretaryFirstModal,
 } from '../GhostSecretaryFirstGuard';
 
 export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
@@ -274,7 +272,7 @@ const AUTO_MORPH_SCRIPT: Array<{
     cursorPct: { x: 62, y: 54 },
     clicking: true,
     badge: '단축키 호출 · 바탕화면에서 Ctrl + 0 또는 Ctrl + 우클릭',
-    desc: '바탕화면에서 단축키를 누르면 마우스 위치에 검색창이 열립니다.',
+    desc: '바탕화면에서 단축키를 누르면 마우스 위치에 귀신검색창이 열립니다.',
   },
   {
     phase: 1,
@@ -321,7 +319,7 @@ const VirtualMonitorSimulator: React.FC<{
   const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : 'small');
   const [customSlimHeight, setCustomSlimHeight] = useState<number | undefined>(initialQuery ? undefined : 340);
   const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
-  const [isAutoPlaying, setIsAutoPlaying] = useState(!initialQuery);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [autoPhase, setAutoPhase] = useState<number>(initialQuery ? 2 : 1);
 
   useEffect(() => {
@@ -487,26 +485,26 @@ const VirtualMonitorSimulator: React.FC<{
 
   return (
     <div className="flex flex-col items-center w-full select-none">
-      <div className="w-full rounded-xl overflow-hidden border border-slate-300 bg-slate-100 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-white border-b border-slate-200 text-[12px] text-slate-600">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-slate-900">검색창 미리보기</span>
+      <div className="w-full rounded-xl overflow-hidden border border-slate-300 bg-slate-100 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-slate-50 border-b border-slate-200 text-[12px] text-slate-600">
+          <div className="flex items-center gap-2 min-w-0 cursor-default">
+            <span className="font-bold text-slate-900">귀신검색창 미리보기</span>
             <span className="text-slate-400 hidden sm:inline">·</span>
             <span className="text-slate-500 hidden sm:inline truncate">
               {isAutoPlaying
                 ? currentScript.badge
-                : `직접 조작 중 (${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'})`}
+                : `직접 체험 가능 (${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'})`}
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5" data-allow-secretary-jump="true">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={() => selectExplicitStage('small')}
-              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-all cursor-pointer ${
                 stage === 'small' || stage === 'medium'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-300 hover:border-teal-500'
               }`}
             >
               ⤡ 작게
@@ -514,10 +512,10 @@ const VirtualMonitorSimulator: React.FC<{
             <button
               type="button"
               onClick={() => selectExplicitStage('large')}
-              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-all cursor-pointer ${
                 stage === 'large'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-white hover:bg-teal-50 text-slate-700 border border-slate-300 hover:border-teal-500'
               }`}
             >
               ⤢ 크게(갤러리)
@@ -532,9 +530,9 @@ const VirtualMonitorSimulator: React.FC<{
                   setAutoPhase((prev) => (prev + 1) % AUTO_MORPH_SCRIPT.length);
                 }
               }}
-              className="px-2.5 py-1 rounded-md text-[11.5px] font-medium cursor-pointer border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
+              className="px-2.5 py-1 rounded-md text-[11.5px] font-semibold cursor-pointer border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-all"
             >
-              {isAutoPlaying ? '일시정지' : '자동 시연'}
+              {isAutoPlaying ? '⏸ 일시정지' : '▶ 자동 시연'}
             </button>
           </div>
         </div>
@@ -542,7 +540,6 @@ const VirtualMonitorSimulator: React.FC<{
         <div
           ref={monitorRef}
           data-keep-dark="true"
-          data-guard-interactive="true"
           onContextMenu={(e) => {
             if (e.ctrlKey) e.preventDefault();
           }}
@@ -584,9 +581,9 @@ const VirtualMonitorSimulator: React.FC<{
               <button
                 type="button"
                 onClick={() => summon(1300, 600)}
-                className="px-4 py-2.5 rounded-lg bg-white text-slate-900 text-[13px] font-semibold shadow-lg cursor-pointer hover:bg-slate-50 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-white text-slate-900 text-[13px] font-bold shadow-lg cursor-pointer hover:bg-slate-50 hover:-translate-y-0.5 transition-all"
               >
-                클릭하거나 Ctrl + 0으로 검색창 열기
+                클릭하거나 Ctrl + 0으로 귀신검색창 열기
               </button>
             </div>
           )}
@@ -886,13 +883,17 @@ export const GhostSearchTrainingPage: React.FC = () => {
   return (
     <div className="flex-1 w-full min-h-full bg-[#D8E1EC]">
       <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-20">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* 1단: 귀신검색 정체성 슬로건 + '귀신검색창' 호출 안내 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 cursor-default">
           <div className="flex flex-col gap-1.5">
-            <h1 className="text-[22px] sm:text-[24px] font-extrabold tracking-tight text-slate-900">
+            <h1 className="text-[22px] sm:text-[25px] font-extrabold tracking-tight text-slate-900">
               귀신검색
             </h1>
+            <p className="text-[15px] sm:text-[16px] font-bold text-slate-800 leading-snug">
+              파일 이름 몰라도 열지 않고 1초 소환 — 계약서 속 문장, 사진 속 글자, 동영상 속 찾던 장면까지 찾아줍니다.
+            </p>
             <p className="text-[13.5px] text-slate-600 leading-relaxed">
-              바탕화면이나 작업 화면에서 언제든 검색창을 바로 열 수 있습니다.
+              바탕화면이나 작업 화면 어디서든 단축키 하나로 <strong className="font-bold text-slate-800">귀신검색창</strong>을 바로 열 수 있습니다.
             </p>
           </div>
           {connected && (
@@ -902,7 +903,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
               onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
               className="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-[13px] font-bold border-b-2 border-teal-800 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer shrink-0 transition-all duration-150"
             >
-              <span>{isLaunchingRealWindow ? '검색창 여는 중...' : '귀신검색창 열기'}</span>
+              <span>{isLaunchingRealWindow ? '귀신검색창 여는 중...' : '귀신검색창 열기'}</span>
               <span className="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">
                 ↗
               </span>
@@ -910,22 +911,48 @@ export const GhostSearchTrainingPage: React.FC = () => {
           )}
         </div>
 
-        {!connected && (
-          <div
+        {realPopupToast && (
+          <div className="px-4 py-2.5 rounded-lg bg-white border border-slate-300 shadow-xs text-slate-800 text-[13px] font-medium cursor-default">
+            {realPopupToast}
+          </div>
+        )}
+
+        {/* 2단: 1단계 · 단축키 호출 연습 (미연결 시에도 100% 자유 체험) */}
+        <section className="flex flex-col gap-2">
+          <GhostSuperpowerDojo variant="basics" />
+        </section>
+
+        {/* 3단: 2단계 · 4가지 핵심 기능 × 귀신검색창 미리보기 일체형 체험 스테이지 */}
+        <section
+          ref={monitorSectionRef}
+          className="p-5 rounded-2xl bg-white border border-slate-300 shadow-sm flex flex-col gap-4"
+        >
+          <GhostSearchDojoStampBoard variant="full" embeddedInCard={true} />
+
+          <VirtualMonitorSimulator
+            onStep={markStep}
+            initialQuery={pendingQuery}
+            connected={connected}
+          />
+        </section>
+
+        {/* 4단: 최하단 마무리 배너 — 샘플 체험 후 내 컴퓨터 실전 연결 유도 */}
+        {!connected ? (
+          <section
             role="status"
-            className="px-4 sm:px-5 py-3.5 rounded-xl bg-amber-50/95 border border-amber-300 border-l-[5px] border-l-amber-500 shadow-xs flex flex-wrap items-center justify-between gap-3 cursor-default"
+            className="px-5 py-4 rounded-2xl bg-amber-50/95 border border-amber-300 border-l-[5px] border-l-amber-500 shadow-sm flex flex-wrap items-center justify-between gap-4 cursor-default"
           >
             <div className="flex flex-col gap-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/20 text-amber-900 text-[11px] font-bold tracking-tight">
                   샘플 체험 모드
                 </span>
-                <span className="text-[14px] font-bold text-amber-950">
-                  현재 샘플 미리보기 화면입니다
+                <span className="text-[14.5px] font-extrabold text-amber-950">
+                  체험해 보셨나요? 이제 내 컴퓨터를 연결해 진짜 내 문서·사진·영상을 1초 만에 찾아보세요!
                 </span>
               </div>
-              <span className="text-[12.5px] text-amber-900/85 leading-relaxed">
-                내 컴퓨터의 실제 사진·영상·문서를 찾으려면 먼저 귀신비서에서 내 컴퓨터를 연결해 주세요.
+              <span className="text-[13px] text-amber-900/85 leading-relaxed">
+                위 화면은 체험용 샘플 미리보기입니다. 귀신비서에서 내 컴퓨터를 연결하면 바탕화면 어디서든 Ctrl + 0으로 내 실제 파일을 바로 찾습니다.
               </span>
             </div>
             <button
@@ -934,62 +961,40 @@ export const GhostSearchTrainingPage: React.FC = () => {
               onClick={jumpToGhostSecretary}
               className="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-[13px] font-bold border-b-2 border-teal-800 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-150 cursor-pointer shrink-0"
             >
-              <span>귀신비서로 이동</span>
+              <span>귀신비서에서 내 컴퓨터 연결하기</span>
               <span className="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">
                 →
               </span>
             </button>
-          </div>
-        )}
-
-        {realPopupToast && (
-          <div className="px-4 py-2.5 rounded-lg bg-white border border-slate-300 shadow-xs text-slate-800 text-[13px] font-medium cursor-default">
-            {realPopupToast}
-          </div>
-        )}
-
-        <GhostSecretaryFirstGuard>
-          <section className="flex flex-col gap-2">
-            <GhostSuperpowerDojo variant="basics" />
           </section>
-
-          <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
-            <GhostSearchDojoStampBoard variant="full" />
-
-            <VirtualMonitorSimulator
-              onStep={markStep}
-              initialQuery={pendingQuery}
-              connected={connected}
-            />
-          </section>
-        </GhostSecretaryFirstGuard>
-
-        <section className="p-4 rounded-xl bg-white/85 border border-slate-300/90 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[13.5px] font-medium text-slate-700">
-            {connected
-              ? '바탕화면에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 누르면 실제 내 파일을 검색할 수 있습니다.'
-              : '내 컴퓨터의 실제 사진과 문서를 검색하려면 귀신비서에서 내 컴퓨터를 연결해 주세요.'}
-          </span>
-          {connected ? (
+        ) : (
+          <section className="px-5 py-4 rounded-2xl bg-white border border-slate-300 border-l-[5px] border-l-teal-600 shadow-sm flex flex-wrap items-center justify-between gap-4 cursor-default">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-teal-500/15 text-teal-900 text-[11px] font-bold tracking-tight">
+                  내 컴퓨터 연결됨
+                </span>
+                <span className="text-[14.5px] font-extrabold text-slate-900">
+                  내 컴퓨터 연결이 완료되었습니다! 지금 바로 실제 귀신검색창을 열어 내 파일을 찾아보세요.
+                </span>
+              </div>
+              <span className="text-[13px] text-slate-600 leading-relaxed">
+                바탕화면에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 누르거나 오른쪽 버튼을 누르면 실제 내 파일이 담긴 귀신검색창이 열립니다.
+              </span>
+            </div>
             <button
               type="button"
               aria-busy={isLaunchingRealWindow}
               onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-              className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+              className="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-[13px] font-bold border-b-2 border-teal-800 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer shrink-0 transition-all duration-150"
             >
-              {isLaunchingRealWindow ? '여는 중...' : '귀신검색창 열기'}
+              <span>{isLaunchingRealWindow ? '귀신검색창 여는 중...' : '실제 귀신검색창 열기'}</span>
+              <span className="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">
+                ↗
+              </span>
             </button>
-          ) : (
-            <button
-              type="button"
-              data-allow-secretary-jump="true"
-              onClick={jumpToGhostSecretary}
-              className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
-            >
-              귀신비서로 이동
-            </button>
-          )}
-        </section>
+          </section>
+        )}
       </div>
     </div>
   );

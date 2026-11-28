@@ -377,8 +377,32 @@ export const Stage1MinimalSearchPreview: React.FC<{
   }, [forceSampleOnly, store.matchedLocalDocs, demoQuery]);
 
   const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
+  const [demoRelabeledMap, setDemoRelabeledMap] = useState<Record<string, string>>({});
   const [clearInputSignal, setClearInputSignal] = useState<number>(0);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
+
+  useEffect(() => {
+    if (!forceSampleOnly) return;
+    const onDojoPreviewCmd = (e: Event) => {
+      const detail = (e as CustomEvent<{ command?: 'ocr' | 'labeler' | 'reset' }>).detail;
+      if (!detail?.command) return;
+      if (detail.command === 'reset') {
+        setDemoRelabeledMap({});
+        return;
+      }
+      useSaySeeStore.getState().setSearchSpace('gallery');
+      const targetPhoto = DEMO_SEARCH_SAMPLE_PHOTOS_2[0];
+      if (!targetPhoto) return;
+      if (detail.command === 'ocr') {
+        setOcrModalPhoto(targetPhoto);
+      } else if (detail.command === 'labeler') {
+        const smartLabel = '250802_배달주문내역_수제버거_38500원.jpg';
+        setDemoRelabeledMap((prev) => ({ ...prev, [targetPhoto.id]: smartLabel }));
+      }
+    };
+    window.addEventListener('ghosti_dojo_preview_command', onDojoPreviewCmd as EventListener);
+    return () => window.removeEventListener('ghosti_dojo_preview_command', onDojoPreviewCmd as EventListener);
+  }, [forceSampleOnly]);
 
   useEffect(() => {
     setIsZCoreConnected(zCoreBridge.isConnected);
@@ -684,8 +708,8 @@ export const Stage1MinimalSearchPreview: React.FC<{
           </div>
 
           {forceSampleOnly ? (
-            <div className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-600">
-              샘플 미리보기 화면입니다 (사진 2 · 동영상 2 · 문서 2). 실제 PC 파일은 귀신비서 연결 후 Ctrl + 0 검색창에서 찾습니다.
+            <div className="w-full px-3 py-2 rounded-lg bg-slate-100/80 text-[12px] text-slate-600 cursor-default">
+              체험용 샘플 파일이 들어 있습니다 (사진 2 · 동영상 2 · 문서 2) — 검색어를 입력하거나 사진·문서·동영상을 직접 눌러 체험해 보세요.
             </div>
           ) : isZCoreConnected || isGhostSearchWindowMode || hasRealLocalFiles ? (
             <SilentIndexingStatusBar variant="search-bar" />
@@ -1264,15 +1288,22 @@ export const Stage1MinimalSearchPreview: React.FC<{
                             </button>
                           </div>
 
-                          <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[40px] px-2.5 pb-2 pt-4 bg-gradient-to-t from-black/85 via-black/45 to-transparent flex items-end justify-between gap-2 pointer-events-none">
-                            <span className="text-[11px] font-medium text-white whitespace-nowrap shrink-0">
-                              {String(item.photo.date || '').split(' ')[0]}
-                            </span>
-                            {(item.photo.tags || [])[0] && (
-                              <span className="text-[11px] text-zinc-200 truncate">
-                                {(item.photo.tags || [])[0]}
-                              </span>
+                          <div className="absolute inset-x-0 bottom-0 min-h-[44px] px-2.5 pb-2 pt-5 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex flex-col justify-end gap-1 pointer-events-none">
+                            {demoRelabeledMap[item.photo.id] && (
+                              <div className="px-2 py-0.5 rounded bg-emerald-500 text-white text-[10.5px] font-bold truncate shadow-xs">
+                                🏷️ {demoRelabeledMap[item.photo.id]}
+                              </div>
                             )}
+                            <div className="flex items-end justify-between gap-2">
+                              <span className="text-[11px] font-medium text-white truncate">
+                                {demoRelabeledMap[item.photo.id] ? `원본: ${item.photo.name}` : item.photo.name}
+                              </span>
+                              {(item.photo.tags || [])[0] && (
+                                <span className="text-[11px] text-zinc-200 truncate shrink-0">
+                                  {(item.photo.tags || [])[0]}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </article>
