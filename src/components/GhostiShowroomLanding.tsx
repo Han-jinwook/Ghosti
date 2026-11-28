@@ -615,8 +615,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={() => handleSelectMainTab(item.id, true)}
                   className={`px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-slate-900 text-white shadow-2xs'
-                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-700 hover:bg-blue-50 hover:text-blue-700'
                   }`}
                 >
                   {item.label}
@@ -672,7 +672,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={() => setDevFullView((v) => !v)}
                   className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium border transition-colors cursor-pointer ${
                     devFullView
-                      ? 'bg-slate-900 text-white border-slate-900'
+                      ? 'bg-blue-600 text-white border-blue-600'
                       : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
                   }`}
                 >
@@ -708,7 +708,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 onClick={() => handleSelectMainTab(item.id, true)}
                 className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
                   isActive
-                    ? 'bg-slate-900 text-white'
+                    ? 'bg-blue-600 text-white shadow-2xs'
                     : 'bg-slate-100 text-slate-700 border border-slate-200'
                 }`}
               >
@@ -760,7 +760,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <button
                       type="button"
                       onClick={scrollToEmailBox}
-                      className="px-4 py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13.5px] transition-colors cursor-pointer"
+                      className="px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13.5px] transition-colors cursor-pointer shadow-xs"
                     >
                       출시 알림 신청
                     </button>
@@ -822,15 +822,15 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       onClick={() => handleSelectMainTab(card.key, true)}
                       className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                         active
-                          ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
                           : 'bg-slate-50 hover:bg-blue-50/70 border-slate-300 hover:border-blue-400 text-slate-900'
                       }`}
                     >
-                      <div className={`text-[11.5px] font-semibold mb-0.5 ${active ? 'text-blue-300' : 'text-blue-700'}`}>
+                      <div className={`text-[11.5px] font-semibold mb-0.5 ${active ? 'text-blue-100' : 'text-blue-700'}`}>
                         {card.stat}
                       </div>
                       <div className="text-[14.5px] font-bold">{card.title}</div>
-                      <div className={`text-[12px] break-keep leading-snug mt-0.5 ${active ? 'text-slate-200' : 'text-slate-600'}`}>
+                      <div className={`text-[12px] break-keep leading-snug mt-0.5 ${active ? 'text-blue-50' : 'text-slate-600'}`}>
                         {card.sub}
                       </div>
                     </button>
@@ -849,9 +849,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   alt="귀신같이 대표 이미지"
                   className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
                 />
-                <div className="px-4 py-2.5 bg-slate-900 text-white flex items-center justify-between gap-2 text-[12.5px]">
+                <div className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between gap-2 text-[12.5px]">
                   <span className="font-semibold">귀신비서 · 귀신검색 · 사진 공유</span>
-                  <span className="text-teal-300 font-semibold whitespace-nowrap">아래에서 바로 체험 →</span>
+                  <span className="text-teal-200 font-semibold whitespace-nowrap">아래에서 바로 체험 →</span>
                 </div>
               </div>
             </div>
@@ -861,30 +861,30 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         {/* 선택된 기능 1개 완결 스테이지 (상단 메뉴 클릭 시 항상 이 시작점에 칼정렬) */}
         <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
           {/* 선택 기능 1줄 직관 풀이 헤더 바 */}
-          <div className="rounded-2xl bg-slate-900 text-white px-5 sm:px-7 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
+          <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-5 sm:px-7 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-blue-600 text-white text-[11.5px] font-semibold">
+                <span className="px-2.5 py-0.5 rounded-md bg-white/20 text-white text-[11.5px] font-semibold backdrop-blur-xs">
                   {MAIN_TAB_META[activeMainTab].badge}
                 </span>
-                <span className="text-[12px] text-slate-300 hidden sm:inline">
+                <span className="text-[12px] text-blue-100 hidden sm:inline">
                   체험 · 활용 사례 · 짧은 영상을 한 화면에서 확인
                 </span>
               </div>
               <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight break-keep">
                 {MAIN_TAB_META[activeMainTab].headline}
               </h2>
-              <p className="text-[12.5px] sm:text-[13px] text-slate-300 break-keep">
+              <p className="text-[12.5px] sm:text-[13px] text-blue-50 break-keep">
                 {MAIN_TAB_META[activeMainTab].subline}
               </p>
             </div>
             {activeMainTab === 'search' && (
-              <div className="flex items-center gap-1.5 shrink-0 bg-slate-800 p-1 rounded-xl border border-slate-700">
+              <div className="flex items-center gap-1.5 shrink-0 bg-white/15 p-1 rounded-xl border border-white/25">
                 <button
                   type="button"
                   onClick={() => handleSelectWeaponChip('video')}
                   className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                    demoTab === 'video' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+                    demoTab === 'video' ? 'bg-white text-blue-700 shadow-2xs' : 'text-white hover:bg-white/10'
                   }`}
                 >
                   동영상 장면 · 글자
@@ -893,7 +893,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   type="button"
                   onClick={() => handleSelectWeaponChip('doc')}
                   className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                    demoTab === 'doc' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+                    demoTab === 'doc' ? 'bg-white text-blue-700 shadow-2xs' : 'text-white hover:bg-white/10'
                   }`}
                 >
                   문서 본문 · 영수증
@@ -962,7 +962,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     <div
                       className={`max-w-[92%] rounded-xl px-3 py-2 text-[12px] leading-relaxed whitespace-pre-line break-keep ${
                         isUser
-                          ? 'bg-slate-900 text-white'
+                          ? 'bg-blue-600 text-white'
                           : 'bg-slate-50 border border-slate-200 text-slate-800'
                       }`}
                     >
@@ -989,13 +989,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       onClick={() => handleSelectWeaponChip(tabKey)}
                       className={`h-full min-h-[76px] p-2.5 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
-                          ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
                           : 'bg-white hover:bg-blue-50/60 border-slate-300 text-slate-900'
                       }`}
                     >
                       <span
                         className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          isActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-800'
+                          isActive ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-800'
                         }`}
                       >
                         {item.keywordBadge}
@@ -1025,7 +1025,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-[12px] shrink-0 cursor-pointer transition-colors"
+                className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[12px] shrink-0 cursor-pointer transition-colors"
               >
                 전송
               </button>
@@ -1183,7 +1183,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 style={{
                                   width: `${INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].progressPct}%`,
                                 }}
-                                className="h-full rounded-full bg-slate-900 transition-all duration-300"
+                                className="h-full rounded-full bg-blue-600 transition-all duration-300"
                               />
                             </div>
                           </div>
@@ -1378,7 +1378,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                                 <div
                                   style={{ width: `${gaugePct ?? 0}%` }}
-                                  className="h-full rounded-full bg-slate-900 transition-all duration-300"
+                                  className="h-full rounded-full bg-blue-600 transition-all duration-300"
                                 />
                               </div>
                             </div>

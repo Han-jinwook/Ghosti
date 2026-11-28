@@ -70,7 +70,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[11.5px] font-semibold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white text-[11.5px] font-semibold">
                     실전 활용 사례 · Before vs After
                   </span>
                   <span className="px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-[11.5px] font-semibold">
@@ -240,7 +240,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[15px] font-bold text-slate-900">4. 내 기기 통합 Pro</span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[12px] font-semibold whitespace-nowrap">
+                  <span className="px-2.5 py-0.5 rounded-md bg-blue-600 text-white text-[12px] font-semibold whitespace-nowrap">
                     30일 무료체험 · 월 3,900원
                   </span>
                 </div>
@@ -265,7 +265,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-[15px] font-bold text-slate-900">5. 업무 공유 (공용 폴더 S:)</span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[12px] font-semibold whitespace-nowrap">
+                  <span className="px-2.5 py-0.5 rounded-md bg-blue-600 text-white text-[12px] font-semibold whitespace-nowrap">
                     30일 무료체험 · 월 9,900원~
                   </span>
                 </div>
@@ -343,7 +343,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
-                className="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap"
+                className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-xs"
               >
                 무료 사용 확인서 크게 보기
               </button>
