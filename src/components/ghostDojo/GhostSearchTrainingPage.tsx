@@ -7,6 +7,7 @@ import {
   type GhostSearchStage,
 } from '../../services/ghostSearchWindowGeometry';
 import { playBabyGhostChime } from '../OnboardingModal';
+import { loadDojoProgress } from '../../services/ghostDojoEngine';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import {
   GhostSearchDojoStampBoard,
@@ -358,9 +359,11 @@ const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
 const VirtualMonitorSimulator: React.FC<{
   onStep: (id: GameStepId) => void;
   initialQuery?: string;
+  locked?: boolean;
 }> = ({
   onStep: _onStep,
   initialQuery = '',
+  locked = false,
 }) => {
   void _onStep;
   const {
@@ -370,10 +373,23 @@ const VirtualMonitorSimulator: React.FC<{
     setSelectedVideoModal,
   } = useSaySeeStore();
   const monitorRef = useRef<HTMLDivElement | null>(null);
+  const lockedRef = useRef<boolean>(locked);
+  lockedRef.current = locked;
   const [monitorW, setMonitorW] = useState(960);
-  const [stage, setStage] = useState<GhostSearchStage | null>(initialQuery ? 'medium' : 'small');
+  const [stage, setStage] = useState<GhostSearchStage | null>(() =>
+    locked ? null : initialQuery ? 'medium' : 'small',
+  );
   const [anchor, setAnchor] = useState({ x: 360, y: 110 });
   const [sampleQueryText, setSampleQueryText] = useState<string>(initialQuery);
+
+  useEffect(() => {
+    if (locked) {
+      setStage(null);
+      setSampleQueryText('');
+    } else {
+      setStage((prev) => prev ?? (initialQuery ? 'medium' : 'small'));
+    }
+  }, [locked, initialQuery]);
 
   useEffect(() => {
     const el = monitorRef.current;
@@ -384,8 +400,83 @@ const VirtualMonitorSimulator: React.FC<{
     return () => ro.disconnect();
   }, []);
 
+  const summon = React.useCallback((x?: number, y?: number) => {
+    if (lockedRef.current) return;
+    if (typeof x === 'number' && typeof y === 'number') {
+      setAnchor({ x, y });
+    }
+    playBabyGhostChime('summon');
+    setStage((prev) => prev ?? (sampleQueryText.trim() ? 'medium' : 'small'));
+  }, [sampleQueryText]);
+
+  // 1단계 완료 후(locked === false): 2단계 모니터에서 ✕로 창을 닫은 뒤 Ctrl+0 / Ctrl+우클릭 호출 시
+  // 1단계가 아니라 이 2단계 모니터 속 귀신검색창이 즉시 다시 열리도록 직결
+  useEffect(() => {
+    if (locked) return;
+
+    const isZeroKey = (e: KeyboardEvent) =>
+      e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0' || e.keyCode === 48 || e.keyCode === 96;
+
+    const onWinKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && isZeroKey(e)) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        e.preventDefault();
+        summon(360, 110);
+      }
+    };
+
+    const resolveClickAnchor = (clientX: number, clientY: number) => {
+      const box = monitorRef.current?.getBoundingClientRect();
+      if (
+        box &&
+        clientX >= box.left &&
+        clientX <= box.right &&
+        clientY >= box.top &&
+        clientY <= box.bottom
+      ) {
+        const curScale = box.width / SIMULATOR_LCD_SIZE.width;
+        return {
+          x: Math.round((clientX - box.left) / curScale),
+          y: Math.round((clientY - box.top) / curScale),
+        };
+      }
+      return { x: 360, y: 110 };
+    };
+
+    const onWinMouseDown = (e: MouseEvent) => {
+      if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        const pt = resolveClickAnchor(e.clientX, e.clientY);
+        summon(pt.x, pt.y);
+      }
+    };
+
+    const onWinContextMenu = (e: MouseEvent) => {
+      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+      }
+    };
+
+    const onDaemonSummon = () => {
+      summon(360, 110);
+    };
+
+    window.addEventListener('keydown', onWinKeyDown);
+    window.addEventListener('mousedown', onWinMouseDown);
+    window.addEventListener('contextmenu', onWinContextMenu);
+    window.addEventListener('ghosti_daemon_ctrl0_summon', onDaemonSummon);
+    return () => {
+      window.removeEventListener('keydown', onWinKeyDown);
+      window.removeEventListener('mousedown', onWinMouseDown);
+      window.removeEventListener('contextmenu', onWinContextMenu);
+      window.removeEventListener('ghosti_daemon_ctrl0_summon', onDaemonSummon);
+    };
+  }, [locked, summon]);
+
   useEffect(() => {
     const onFocusMonitorWin = (e: Event) => {
+      if (lockedRef.current) return;
       const detail = (e as CustomEvent<{ stage?: GhostSearchStage }>).detail;
       const nextStage: GhostSearchStage =
         detail?.stage === 'large' ? 'large' : detail?.stage === 'small' ? 'small' : 'medium';
@@ -400,6 +491,11 @@ const VirtualMonitorSimulator: React.FC<{
         }>
       ).detail;
       if (!detail) return;
+      if (lockedRef.current) {
+        setSampleQueryText('');
+        setStage(null);
+        return;
+      }
       const nextQ = detail.reset ? '' : (detail.query || '').trim();
       setSampleQueryText(nextQ);
       setStage((prev) => {
@@ -409,6 +505,7 @@ const VirtualMonitorSimulator: React.FC<{
       });
     };
     const onSampleActiveQuery = (e: Event) => {
+      if (lockedRef.current) return;
       const detail = (e as CustomEvent<{ query?: string }>).detail;
       const nextQ = (detail?.query ?? '').trim();
       setSampleQueryText(nextQ);
@@ -427,14 +524,6 @@ const VirtualMonitorSimulator: React.FC<{
       window.removeEventListener('ghosti_dojo_sample_active_query', onSampleActiveQuery as EventListener);
     };
   }, []);
-
-  const summon = (x?: number, y?: number) => {
-    if (typeof x === 'number' && typeof y === 'number') {
-      setAnchor({ x, y });
-    }
-    playBabyGhostChime('summon');
-    setStage((prev) => prev ?? (sampleQueryText.trim() ? 'medium' : 'small'));
-  };
 
   const toggleWindowMaximize = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -460,12 +549,6 @@ const VirtualMonitorSimulator: React.FC<{
     }
     return computeGhostSearchWindowRect('large', anchor.x, anchor.y, SIMULATOR_WORK_AREA, 18);
   })();
-
-  const toVirtual = (e: React.MouseEvent) => {
-    const box = monitorRef.current?.getBoundingClientRect();
-    if (!box) return { x: 560, y: 330 };
-    return { x: Math.round((e.clientX - box.left) / scale), y: Math.round((e.clientY - box.top) / scale) };
-  };
 
   const qLower = sampleQueryText.trim().toLowerCase();
   const qTokens = qLower.split(/\s+/).filter(Boolean);
@@ -538,14 +621,7 @@ const VirtualMonitorSimulator: React.FC<{
           ref={monitorRef}
           data-keep-dark="true"
           onContextMenu={(e) => {
-            if (e.ctrlKey) e.preventDefault();
-          }}
-          onMouseDown={(e) => {
-            if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
-              e.preventDefault();
-              const pos = toVirtual(e);
-              summon(pos.x, pos.y);
-            }
+            if (!locked && e.ctrlKey) e.preventDefault();
           }}
           className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
           style={{
@@ -583,17 +659,23 @@ const VirtualMonitorSimulator: React.FC<{
           </div>
 
           {!stage && (
-            <div data-keep-dark="true" className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  summon(360, 110);
-                }}
-                className="pointer-events-auto px-4 py-2.5 rounded-xl bg-white text-slate-900 text-[13px] font-bold shadow-xl cursor-pointer hover:bg-teal-50 hover:-translate-y-0.5 transition-all"
-              >
-                귀신검색창 다시 열기 (Ctrl + 0)
-              </button>
+            <div data-keep-dark="true" className="absolute inset-0 flex items-center justify-center px-4 pointer-events-none">
+              {locked ? (
+                <div className="px-4 py-2.5 rounded-xl bg-black/55 backdrop-blur-md border border-white/15 text-zinc-200 text-[12.5px] font-semibold shadow-lg text-center">
+                  위 1단계 단축키 호출 연습(양쪽 3회)을 완료하면 이곳에 귀신검색창이 열립니다
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    summon(360, 110);
+                  }}
+                  className="pointer-events-auto px-4 py-2.5 rounded-xl bg-white text-slate-900 text-[13px] font-bold shadow-xl cursor-pointer hover:bg-teal-50 hover:-translate-y-0.5 transition-all"
+                >
+                  귀신검색창 다시 열기 (Ctrl + 0)
+                </button>
+              )}
             </div>
           )}
 
@@ -773,21 +855,23 @@ const VirtualMonitorSimulator: React.FC<{
                 </span>
                 <span>시작</span>
               </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  summon(360, 110);
-                }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/30 text-teal-300 font-semibold cursor-pointer transition-colors"
-              >
-                <img
-                  src="/gwisinkachi_app_icon_512.png"
-                  alt=""
-                  className="w-3.5 h-3.5 rounded-xs object-cover"
-                />
-                <span>귀신같이 실행 중 (Ctrl + 0)</span>
-              </button>
+              {!locked && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    summon(360, 110);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/30 text-teal-300 font-semibold cursor-pointer transition-colors"
+                >
+                  <img
+                    src="/gwisinkachi_app_icon_512.png"
+                    alt=""
+                    className="w-3.5 h-3.5 rounded-xs object-cover"
+                  />
+                  <span>귀신같이 실행 중 (Ctrl + 0)</span>
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2.5 text-zinc-400 font-medium cursor-default">
               <span>한</span>
@@ -829,11 +913,24 @@ const VirtualMonitorSimulator: React.FC<{
 
 export const GhostSearchTrainingPage: React.FC = () => {
   const [connected, setConnected] = useState(zCoreBridge.isConnected);
+  const [isStep1Done, setIsStep1Done] = useState<boolean>(() => Boolean(loadDojoProgress().basics.b1));
   const [pendingQuery] = useState(() => consumePendingGhostSearchQuery());
   const [realPopupToast, setRealPopupToast] = useState<string | null>(null);
   const [isLaunchingRealWindow, setIsLaunchingRealWindow] = useState(false);
   const monitorSectionRef = useRef<HTMLElement | null>(null);
   const isLaunchingRef = useRef(false);
+
+  useEffect(() => {
+    const syncStep1 = () => {
+      setIsStep1Done(Boolean(loadDojoProgress().basics.b1));
+    };
+    window.addEventListener('ghosti_dojo_progress_updated', syncStep1);
+    window.addEventListener('storage', syncStep1);
+    return () => {
+      window.removeEventListener('ghosti_dojo_progress_updated', syncStep1);
+      window.removeEventListener('storage', syncStep1);
+    };
+  }, []);
 
   const markStep = (id: GameStepId) => {
     markGhostDojoStep(id);
@@ -976,11 +1073,16 @@ export const GhostSearchTrainingPage: React.FC = () => {
           ref={monitorSectionRef}
           className="p-5 rounded-2xl bg-white border border-slate-300 shadow-sm flex flex-col gap-4"
         >
-          <GhostSearchDojoStampBoard variant="full" embeddedInCard={true} />
+          <GhostSearchDojoStampBoard
+            variant="full"
+            embeddedInCard={true}
+            locked={!isStep1Done}
+          />
 
           <VirtualMonitorSimulator
             onStep={markStep}
             initialQuery={pendingQuery}
+            locked={!isStep1Done}
           />
         </section>
 

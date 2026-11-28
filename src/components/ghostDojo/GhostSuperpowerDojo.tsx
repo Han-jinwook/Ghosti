@@ -5,6 +5,7 @@ import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import {
   BASIC_STEPS,
   loadDojoProgress,
+  resetDojoProgress,
   saveDojoProgress,
   type DojoProgress,
 } from '../../services/ghostDojoEngine';
@@ -297,7 +298,7 @@ const LiquidWaveFill: React.FC<{ count: number; target: number }> = ({ count, ta
   );
 };
 
-const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+const Basic1: React.FC<{ onDone: () => void; isStep1Done: boolean }> = ({ onDone, isStep1Done }) => {
   const initialCounts = loadDojoProgress().b1Counts ?? { keyboard: 0, mouse: 0 };
   const [keyboardCount, setKeyboardCount] = useState(initialCounts.keyboard);
   const [mouseCount, setMouseCount] = useState(initialCounts.mouse);
@@ -311,6 +312,9 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const pressTimerRef = useRef<number | null>(null);
 
   const { handlers } = useInstantSummonTrigger((meta) => {
+    if (kbCountRef.current >= TARGET_REPS && msCountRef.current >= TARGET_REPS) {
+      return;
+    }
     playBabyGhostChime('summon');
     setPressingSide(meta.method);
     if (pressTimerRef.current) window.clearTimeout(pressTimerRef.current);
@@ -342,7 +346,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     if (bothCompleted) {
       onDone();
     }
-  }, true);
+  }, !isStep1Done);
 
   useEffect(() => {
     return () => {
@@ -468,8 +472,8 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       >
         {/* 좌측: 키보드 Ctrl + 0 (아래→위 찰랑 물결 충전) */}
         <div
-          onMouseDown={handlers.onMouseDown}
-          onContextMenu={handlers.onContextMenu}
+          onMouseDown={isStep1Done ? undefined : handlers.onMouseDown}
+          onContextMenu={isStep1Done ? undefined : handlers.onContextMenu}
           className={`relative overflow-hidden select-none px-5 py-4 rounded-2xl border-2 flex flex-col items-center justify-between gap-2 transition-all duration-300 cursor-default ${
             pressingSide === 'keyboard'
               ? 'border-teal-500 ring-4 ring-teal-400/30 shadow-md bg-slate-50'
@@ -512,8 +516,8 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 
         {/* 우측: 마우스 Ctrl + 우클릭 (아래→위 찰랑 물결 충전) */}
         <div
-          onMouseDown={handlers.onMouseDown}
-          onContextMenu={handlers.onContextMenu}
+          onMouseDown={isStep1Done ? undefined : handlers.onMouseDown}
+          onContextMenu={isStep1Done ? undefined : handlers.onContextMenu}
           className={`relative overflow-hidden select-none px-5 py-4 rounded-2xl border-2 flex flex-col items-center justify-between gap-2 transition-all duration-300 cursor-default ${
             pressingSide === 'mouse'
               ? 'border-teal-500 ring-4 ring-teal-400/30 shadow-md bg-slate-50'
@@ -722,12 +726,8 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = () => {
               <button
                 type="button"
                 onClick={() => {
-                  const resetNext: DojoProgress = {
-                    basics: {},
-                    b1Counts: { keyboard: 0, mouse: 0 },
-                  };
+                  const resetNext = resetDojoProgress();
                   setProgress(resetNext);
-                  saveDojoProgress(resetNext);
                   setSandboxKey((k) => k + 1);
                 }}
                 className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 text-slate-700 text-[11.5px] font-semibold shadow-2xs active:scale-95 transition-all cursor-pointer"
@@ -737,7 +737,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = () => {
             )}
           </div>
         </div>
-        <Basic1 key={`b1_${sandboxKey}`} onDone={markB1Done} />
+        <Basic1 key={`b1_${sandboxKey}`} onDone={markB1Done} isStep1Done={isDone} />
       </section>
     </div>
   );

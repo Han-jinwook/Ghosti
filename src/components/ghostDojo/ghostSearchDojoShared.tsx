@@ -112,6 +112,7 @@ export function resetGhostDojoProgress(): void {
 interface GhostSearchDojoStampBoardProps {
   variant?: 'full' | 'compact';
   embeddedInCard?: boolean;
+  locked?: boolean;
   onRequestStagePreview?: (stage: 'small' | 'large') => void;
   onJumpToSearchTab?: () => void;
 }
@@ -119,11 +120,22 @@ interface GhostSearchDojoStampBoardProps {
 export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps> = ({
   variant = 'full',
   embeddedInCard = false,
+  locked = false,
   onJumpToSearchTab,
 }) => {
   const [progress, setProgress] = useState<GhostDojoProgress>(() => loadGhostDojoProgress());
   const [activeStepId, setActiveStepId] = useState<GhostDojoStepDef['id'] | null>(null);
   const [demoNotice, setDemoNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (locked) {
+      setActiveStepId(null);
+      setDemoNotice(null);
+      setProgress({});
+    } else {
+      setProgress(loadGhostDojoProgress());
+    }
+  }, [locked]);
 
   useEffect(() => {
     const sync = () => setProgress(loadGhostDojoProgress());
@@ -177,6 +189,7 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
   const hasAnyCompleted = completedCount > 0;
 
   const handleStepClick = async (step: GhostDojoStepDef) => {
+    if (locked) return;
     setActiveStepId(step.id);
     const next = markGhostDojoStep(step.id);
     setProgress(next);
@@ -240,9 +253,16 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[12px] font-semibold text-slate-500 select-none cursor-default">
-            진행 {completedCount}/4 완료
-          </span>
+          {locked ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11.5px] font-bold text-slate-500 select-none cursor-default">
+              <span>🔒</span>
+              <span>1단계 완료 후 열림</span>
+            </span>
+          ) : (
+            <span className="text-[12px] font-semibold text-slate-500 select-none cursor-default">
+              진행 {completedCount}/4 완료
+            </span>
+          )}
           {onJumpToSearchTab && (
             <button
               type="button"
@@ -252,7 +272,7 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
               귀신검색 열기 →
             </button>
           )}
-          {hasAnyCompleted && (
+          {!locked && hasAnyCompleted && (
             <button
               type="button"
               onClick={() => {
@@ -278,36 +298,41 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
         {GHOST_DOJO_STEPS.map((s, idx) => {
-          const done = Boolean(progress[s.id]);
-          const isActive = activeStepId === s.id;
+          const done = !locked && Boolean(progress[s.id]);
+          const isActive = !locked && activeStepId === s.id;
           return (
             <button
               key={s.id}
               type="button"
+              disabled={locked}
               aria-pressed={isActive}
               onClick={() => void handleStepClick(s)}
-              className={`group text-left px-3.5 py-3 rounded-xl cursor-pointer transition-all duration-150 flex flex-col justify-between gap-1.5 ${
-                isActive
-                  ? 'bg-slate-900 text-white border-2 border-slate-900 shadow-md'
-                  : 'bg-white text-slate-800 border border-slate-300 border-b-[3px] border-b-slate-300 shadow-2xs hover:-translate-y-0.5 hover:shadow-md hover:border-teal-500 hover:border-b-teal-600 hover:bg-teal-50/70 active:translate-y-0 active:scale-[0.98]'
+              className={`group text-left px-3.5 py-3 rounded-xl transition-all duration-150 flex flex-col justify-between gap-1.5 ${
+                locked
+                  ? 'bg-slate-50/90 text-slate-400 border border-slate-200 cursor-not-allowed select-none opacity-65'
+                  : isActive
+                    ? 'bg-slate-900 text-white border-2 border-slate-900 shadow-md cursor-pointer'
+                    : 'bg-white text-slate-800 border border-slate-300 border-b-[3px] border-b-slate-300 shadow-2xs hover:-translate-y-0.5 hover:shadow-md hover:border-teal-500 hover:border-b-teal-600 hover:bg-teal-50/70 active:translate-y-0 active:scale-[0.98] cursor-pointer'
               }`}
             >
               <div className="flex items-center justify-between gap-1.5 w-full">
                 <div className="flex items-center gap-2 min-w-0">
                   <span
                     className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
-                      done
-                        ? 'bg-emerald-500 text-white shadow-2xs'
-                        : isActive
-                          ? 'bg-teal-400 text-slate-950'
-                          : 'bg-slate-100 border border-slate-300 text-slate-600 group-hover:border-teal-500 group-hover:bg-teal-100 group-hover:text-teal-900'
+                      locked
+                        ? 'bg-slate-200/80 text-slate-400'
+                        : done
+                          ? 'bg-emerald-500 text-white shadow-2xs'
+                          : isActive
+                            ? 'bg-teal-400 text-slate-950'
+                            : 'bg-slate-100 border border-slate-300 text-slate-600 group-hover:border-teal-500 group-hover:bg-teal-100 group-hover:text-teal-900'
                     }`}
                   >
                     {done ? '✓' : idx + 1}
                   </span>
                   <span className="text-[13px] font-bold truncate">{s.shortTitle}</span>
                 </div>
-                {!isActive && (
+                {!locked && !isActive && (
                   <span
                     aria-hidden="true"
                     className="text-[14px] leading-none text-slate-400 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all shrink-0"
@@ -318,7 +343,11 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
               </div>
               <span
                 className={`text-[11.5px] leading-snug ${
-                  isActive ? 'text-slate-300' : 'text-slate-500 group-hover:text-slate-700'
+                  locked
+                    ? 'text-slate-400'
+                    : isActive
+                      ? 'text-slate-300'
+                      : 'text-slate-500 group-hover:text-slate-700'
                 }`}
               >
                 {s.description}
