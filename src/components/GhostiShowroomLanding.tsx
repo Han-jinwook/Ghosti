@@ -483,16 +483,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   };
 
   const scrollToEmailBox = () => {
-    if (activeMainTab === 'paid') {
-      setActiveMainTab('secretary');
-      setDemoTab('clean');
-    }
     setTimeout(() => {
       heroCtaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => {
         emailInputRef.current?.focus();
       }, 350);
-    }, 40);
+    }, 30);
   };
 
   const applyQuickDomain = (domain: string) => {
@@ -774,25 +770,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             .getElementById('main-feature-stage')
                             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }
-                    className="px-5 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[14px] transition-colors cursor-pointer shadow-xs"
+                    className="px-6 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[14.5px] transition-colors cursor-pointer shadow-xs"
                   >
                     {isLaunched ? '10초 만에 무료로 시작하기' : '가입 없이 바로 체험해 보기'}
-                  </button>
-                  {!isLaunched && !verifiedUserEmail && (
-                    <button
-                      type="button"
-                      onClick={scrollToEmailBox}
-                      className="px-4 py-3 rounded-lg bg-[#FFEDD5] hover:bg-[#FED7AA] border border-[#F2BE86] text-[#9A3412] font-semibold text-[13.5px] transition-colors cursor-pointer shadow-2xs"
-                    >
-                      출시 알림 신청
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCertModalOpen(true)}
-                    className="px-4 py-3 rounded-lg bg-white hover:bg-[#FFFBEB] border border-slate-300 text-slate-800 font-medium text-[13.5px] transition-colors cursor-pointer"
-                  >
-                    무료 사용 확인서
                   </button>
                 </div>
                 <p className="text-[12.5px] text-slate-500 break-keep">
@@ -1618,173 +1598,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 )}
               </div>
             )}
-
-            {/* 하단 사전등록 / 시작 박스 */}
-            <div ref={heroCtaRef} className="pt-4 border-t border-slate-200">
-              {!isLaunched ? (
-                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 sm:p-5">
-                  {verifiedUserEmail && !isChangingEmail ? (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[13.5px] font-semibold text-slate-900">
-                          {dbSyncStatus === 'syncing'
-                            ? '알림 예약 등록 중...'
-                            : `✓ ${verifiedUserEmail} 님, 출시 알림 신청이 완료되었습니다`}
-                        </div>
-                        <p className="text-[12.5px] text-slate-500 mt-0.5 break-keep">
-                          정식 오픈 시 이메일로 시작 링크를 보내드립니다.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setCertModalOpen(true)}
-                          className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium text-[12.5px] cursor-pointer"
-                        >
-                          무료 확인서 열기
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            try {
-                              localStorage.removeItem('ghosti_prelaunch_verified_email');
-                            } catch {}
-                            setLocalVerifiedEmail('');
-                            setIsChangingEmail(true);
-                            setEmailInput('');
-                            resetOtp();
-                            setTimeout(() => emailInputRef.current?.focus(), 60);
-                          }}
-                          className="px-2 py-1.5 text-[12.5px] text-slate-500 hover:text-slate-900 underline cursor-pointer"
-                        >
-                          이메일 변경
-                        </button>
-                      </div>
-                    </div>
-                  ) : otpStatus === 'sent' || otpStatus === 'verifying' ? (
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-[13px] font-medium text-slate-800 min-w-0 break-keep">
-                          <span className="font-semibold break-all">{emailInput.trim().toLowerCase()}</span>로 발송된 인증번호 6자리를 입력해 주세요.
-                        </span>
-                        <span className="px-2.5 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 text-[12px] font-mono font-medium shrink-0">
-                          {formatTimer()}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-center gap-2" onPaste={handleOtpPaste}>
-                        {otpDigits.map((digit, idx) => (
-                          <input
-                            key={idx}
-                            ref={(el) => {
-                              otpInputRefs.current[idx] = el;
-                            }}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={6}
-                            value={digit}
-                            onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
-                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                            className="w-10 h-11 sm:w-11 sm:h-12 rounded-lg bg-white border border-slate-300 focus:border-slate-900 text-center text-lg font-semibold text-slate-900 outline-none"
-                          />
-                        ))}
-                      </div>
-                      {otpError && <p className="text-[12.5px] text-rose-600 font-medium text-center">{otpError}</p>}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          disabled={otpStatus === 'verifying' || otpDigits.join('').length < 6}
-                          onClick={() => void handleVerifyOtpCode(otpDigits.join(''))}
-                          className="flex-1 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] cursor-pointer disabled:opacity-50 transition-colors"
-                        >
-                          {otpStatus === 'verifying' ? '인증 확인 중...' : '인증 완료 및 출시 알림 등록'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => resetOtp()}
-                          className="px-3 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-[12.5px] font-medium cursor-pointer"
-                        >
-                          다시 입력
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleRequestEmailVerification} className="space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-1">
-                        <span className="text-[13.5px] font-semibold text-slate-900">
-                          정식 오픈 시 이메일로 시작 안내 받기
-                        </span>
-                        <span className="text-[12px] text-slate-500">
-                          오픈 당일 시작 링크 1회 발송
-                        </span>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          ref={emailInputRef}
-                          type="email"
-                          value={emailInput}
-                          onChange={(e) => {
-                            setEmailInput(e.target.value);
-                            if (formNotice) setFormNotice(null);
-                          }}
-                          placeholder="이메일 주소 입력 (예: myid@naver.com)"
-                          className="flex-1 px-3.5 py-2.5 rounded-lg bg-white border border-slate-300 focus:border-slate-900 text-slate-900 placeholder-slate-400 text-[13px] outline-none"
-                        />
-                        <button
-                          type="submit"
-                          disabled={otpStatus === 'sending'}
-                          className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] shrink-0 cursor-pointer transition-colors"
-                        >
-                          {otpStatus === 'sending' ? '발송 중...' : '출시 알림 신청'}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-500">
-                        <span>도메인 선택:</span>
-                        {QUICK_EMAIL_DOMAINS.map((domain) => (
-                          <button
-                            key={domain}
-                            type="button"
-                            onClick={() => applyQuickDomain(domain)}
-                            className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 font-mono text-[11.5px] cursor-pointer"
-                          >
-                            {domain}
-                          </button>
-                        ))}
-                      </div>
-                      {(formNotice || otpError) && (
-                        <p className="text-[12.5px] text-rose-600 font-medium">{formNotice || otpError}</p>
-                      )}
-                    </form>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div>
-                    <div className="text-[14px] font-semibold text-slate-900 mb-0.5">
-                      정식 배포 오픈 — 지금 바로 시작하세요
-                    </div>
-                    <p className="text-[12.5px] text-slate-500 break-keep">
-                      별도 카드 등록 없이 웹에서 바로 시작하거나 Windows PC 엔진을 내려받을 수 있습니다.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onEnterWorkspace(true)}
-                      className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] cursor-pointer transition-colors"
-                    >
-                      웹 앱 시작하기 →
-                    </button>
-                    <a
-                      href={Z_CORE_ZIP_URL}
-                      download="Merlin_Z_Core.zip"
-                      className="px-3.5 py-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium text-[13px] transition-colors"
-                    >
-                      PC 엔진 다운로드
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
           )}
@@ -1917,6 +1730,171 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         verifiedUserEmail={verifiedUserEmail}
         scrollToEmailBox={scrollToEmailBox}
         onSelectFreeTab={(tab) => handleSelectMainTab(tab, true)}
+        launchAlertSlot={
+          <div ref={heroCtaRef} className="h-full flex flex-col justify-between space-y-4">
+            {!isLaunched ? (
+              <>
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[12px] font-bold">
+                    정식 출시 1순위 알림 예약
+                  </span>
+                  <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
+                    정식 오픈 시 이메일로 시작 링크를 보내드립니다
+                  </h3>
+                  <p className="text-[12.5px] text-slate-500 break-keep">
+                    광고 스팸 없이 오픈 당일 딱 1회만 안내해 드립니다.
+                  </p>
+                </div>
+
+                {verifiedUserEmail && !isChangingEmail ? (
+                  <div className="rounded-xl bg-teal-50/60 border border-teal-200 p-4 space-y-3">
+                    <div>
+                      <div className="text-[14px] font-bold text-teal-900">
+                        {dbSyncStatus === 'syncing'
+                          ? '알림 예약 등록 중...'
+                          : `✓ ${verifiedUserEmail} 님, 출시 알림 신청 완료`}
+                      </div>
+                      <p className="text-[12.5px] text-slate-600 mt-1 break-keep">
+                        정식 오픈 당일 가장 먼저 시작 링크를 발송해 드립니다.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          localStorage.removeItem('ghosti_prelaunch_verified_email');
+                        } catch {}
+                        setLocalVerifiedEmail('');
+                        setIsChangingEmail(true);
+                        setEmailInput('');
+                        resetOtp();
+                        setTimeout(() => emailInputRef.current?.focus(), 60);
+                      }}
+                      className="text-[12.5px] text-slate-600 hover:text-slate-900 underline cursor-pointer"
+                    >
+                      다른 이메일로 변경하기
+                    </button>
+                  </div>
+                ) : otpStatus === 'sent' || otpStatus === 'verifying' ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[13px] font-medium text-slate-800 min-w-0 break-keep">
+                        <span className="font-semibold break-all">{emailInput.trim().toLowerCase()}</span>로 발송된 인증번호 6자리를 입력해 주세요.
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-mono font-medium shrink-0">
+                        {formatTimer()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-center gap-2" onPaste={handleOtpPaste}>
+                      {otpDigits.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={(el) => {
+                            otpInputRefs.current[idx] = el;
+                          }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          value={digit}
+                          onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                          className="w-10 h-11 rounded-lg bg-white border border-slate-300 focus:border-teal-600 text-center text-lg font-semibold text-slate-900 outline-none"
+                        />
+                      ))}
+                    </div>
+                    {otpError && <p className="text-[12.5px] text-rose-600 font-medium text-center">{otpError}</p>}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={otpStatus === 'verifying' || otpDigits.join('').length < 6}
+                        onClick={() => void handleVerifyOtpCode(otpDigits.join(''))}
+                        className="flex-1 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13px] cursor-pointer disabled:opacity-50 transition-colors"
+                      >
+                        {otpStatus === 'verifying' ? '인증 확인 중...' : '인증 완료 및 출시 알림 등록'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => resetOtp()}
+                        className="px-3 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-700 text-[12.5px] font-medium cursor-pointer"
+                      >
+                        다시 입력
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleRequestEmailVerification} className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        ref={emailInputRef}
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => {
+                          setEmailInput(e.target.value);
+                          if (formNotice) setFormNotice(null);
+                        }}
+                        placeholder="이메일 주소 입력 (예: myid@naver.com)"
+                        className="flex-1 px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-300 focus:bg-white focus:border-teal-600 text-slate-900 placeholder-slate-400 text-[13px] outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={otpStatus === 'sending'}
+                        className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13px] shrink-0 cursor-pointer transition-colors"
+                      >
+                        {otpStatus === 'sending' ? '발송 중...' : '출시 알림 신청'}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-500">
+                      <span>빠른 입력:</span>
+                      {QUICK_EMAIL_DOMAINS.map((domain) => (
+                        <button
+                          key={domain}
+                          type="button"
+                          onClick={() => applyQuickDomain(domain)}
+                          className="px-2 py-0.5 rounded bg-slate-50 hover:bg-[#FFFBEB] text-slate-600 border border-slate-200 font-mono text-[11.5px] cursor-pointer"
+                        >
+                          {domain}
+                        </button>
+                      ))}
+                    </div>
+                    {(formNotice || otpError) && (
+                      <p className="text-[12.5px] text-rose-600 font-medium">{formNotice || otpError}</p>
+                    )}
+                  </form>
+                )}
+              </>
+            ) : (
+              <div className="h-full flex flex-col justify-between gap-4">
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[12px] font-bold">
+                    정식 배포 오픈
+                  </span>
+                  <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900">
+                    지금 바로 무료로 시작하세요
+                  </h3>
+                  <p className="text-[12.5px] text-slate-600 break-keep">
+                    별도 카드 등록 없이 웹에서 바로 시작하거나 Windows PC 엔진을 내려받을 수 있습니다.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onEnterWorkspace(true)}
+                    className="px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13.5px] cursor-pointer transition-colors"
+                  >
+                    웹 앱 시작하기 →
+                  </button>
+                  <a
+                    href={Z_CORE_ZIP_URL}
+                    download="Merlin_Z_Core.zip"
+                    className="px-4 py-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-semibold text-[13px] transition-colors"
+                  >
+                    PC 엔진 다운로드
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        }
       />
     </div>
   );

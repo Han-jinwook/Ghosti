@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { GhostiBrandLogo } from '../GhostiBrandLogo';
 import {
   SHOWROOM_BEFORE_AFTER_JOB_CASES,
@@ -18,6 +18,7 @@ export interface ShowroomLowerSectionsProps {
   verifiedUserEmail: string;
   scrollToEmailBox: () => void;
   onSelectFreeTab: (tab: 'secretary' | 'search' | 'share') => void;
+  launchAlertSlot?: React.ReactNode;
 }
 
 export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
@@ -32,7 +33,58 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
   verifiedUserEmail,
   scrollToEmailBox,
   onSelectFreeTab,
+  launchAlertSlot,
 }) => {
+  // 마우스 뒤로가기(브라우저 Back) 및 ESC 키로 확인서/쇼츠 모달 즉시 닫기
+  const pushedModalHistoryRef = useRef(false);
+  const anyModalOpen = Boolean(certModalOpen || activeShortsModal);
+
+  useEffect(() => {
+    if (!anyModalOpen) return;
+    if (!pushedModalHistoryRef.current) {
+      try {
+        window.history.pushState({ ...(window.history.state || {}), ghostiShowroomModal: true }, '');
+        pushedModalHistoryRef.current = true;
+      } catch {
+        // ignore
+      }
+    }
+
+    const handlePopState = () => {
+      pushedModalHistoryRef.current = false;
+      setCertModalOpen(false);
+      setActiveShortsModal(null);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (pushedModalHistoryRef.current) {
+          pushedModalHistoryRef.current = false;
+          window.history.back();
+        } else {
+          setCertModalOpen(false);
+          setActiveShortsModal(null);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [anyModalOpen, setCertModalOpen, setActiveShortsModal]);
+
+  const closeActiveModals = () => {
+    if (pushedModalHistoryRef.current) {
+      pushedModalHistoryRef.current = false;
+      window.history.back();
+    } else {
+      setCertModalOpen(false);
+      setActiveShortsModal(null);
+    }
+  };
   // 현재 선택된 무료 탭에 해당하는 Before vs After 사례 & 쇼츠 영상만 핀셋 필터링
   const matchedMenuCase =
     activeMainTab === 'secretary'
@@ -310,36 +362,41 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </section>
       )}
 
-      {/* 3) 공통 하단 대형 신뢰 배너: 각 기능 메뉴 하단에 큼직하게 고정되는 [개인 · 민간 기업 기본 기능 무료 사용 확인서] */}
-      <section id="security" className="pb-10 px-4 sm:px-6 max-w-6xl mx-auto space-y-5">
-        <div className="rounded-2xl bg-white border-2 border-[#F3D7A5] shadow-md p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          <div className="lg:col-span-8 space-y-3.5 min-w-0 flex flex-col items-center text-center lg:items-start lg:text-left">
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-bold">
-              개인 · 민간 기업 기본 기능 평생 무료 사용 확인서
-            </span>
-            <h3 className="font-display text-xl sm:text-2xl font-bold text-slate-900 leading-snug break-keep">
-              집 PC는 물론 회사 PC에서도 기본 3대 기능은 평생 무료로 안심하고 쓰세요
-            </h3>
+      {/* 3) 공통 하단 좌·우 2분할 대형 배너: [좌측: 출시 알림 신청 / 시작하기] | [우측: 개인 · 민간 기업 무료 사용 확인서] */}
+      <section id="security" className="pb-10 px-4 sm:px-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* 좌측: 출시 알림 신청 (또는 출시 후 시작하기) */}
+          <div className="lg:col-span-6 rounded-2xl bg-white border border-slate-300 shadow-md p-6 sm:p-7">
+            {launchAlertSlot}
+          </div>
 
-            <div className="flex flex-wrap justify-center lg:justify-start gap-2 text-[12.5px] font-semibold text-slate-800">
-              {[
-                '귀신비서 · 귀신검색 · 사진 공유 평생 0원',
-                '원본 파일 외부 서버 업로드 0%',
-                '광고 팝업 0% · 공식 무료 확인서 제공',
-              ].map((pill) => (
-                <span
-                  key={pill}
-                  className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-300 break-keep"
-                >
-                  {pill}
+          {/* 우측: 개인 · 민간 기업 기본 기능 무료 사용 확인서 */}
+          <div className="lg:col-span-6 rounded-2xl bg-white border-2 border-[#F3D7A5] shadow-md p-6 sm:p-7 flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2 min-w-0 flex-1">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-bold">
+                  개인 · 민간 기업 무료 사용 확인서
                 </span>
-              ))}
+                <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
+                  집 PC는 물론 회사 PC에서도 기본 3대 기능 평생 무료
+                </h3>
+                <p className="text-[12.5px] text-slate-600 break-keep leading-relaxed">
+                  외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 유지비가 0원이므로, 개인과 민간 기업 모두에게 평생 무료로 제공합니다. (공공기관 별도 문의)
+                </p>
+              </div>
+              <div
+                onClick={() => setCertModalOpen(true)}
+                className="hidden sm:block w-24 md:w-28 rounded-xl overflow-hidden border-2 border-slate-300 shadow-xs cursor-pointer hover:border-[#EAB866] transition-all bg-white shrink-0"
+              >
+                <img
+                  src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261123"
+                  alt="귀신같이 무료 사용 확인서"
+                  className="w-full h-auto object-contain"
+                />
+              </div>
             </div>
-            <p className="text-[12.5px] text-slate-600 break-keep leading-relaxed">
-              기본 3대 기능은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 유지비가 들지 않으므로 개인과 민간 기업 모두에게 평생 무료로 제공합니다. (공공기관 별도 문의)
-            </p>
 
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2.5 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
@@ -353,21 +410,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 rel="noopener noreferrer"
                 className="px-4 py-2.5 rounded-lg bg-white hover:bg-[#FFFBEB] border border-slate-300 text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
               >
-                인쇄 · PDF 저장 페이지 열기 ↗
+                인쇄 · PDF 저장 ↗
               </a>
-            </div>
-          </div>
-
-          <div className="lg:col-span-4 flex justify-center">
-            <div
-              onClick={() => setCertModalOpen(true)}
-              className="w-44 sm:w-52 rounded-xl overflow-hidden border-2 border-slate-300 shadow-sm cursor-pointer hover:border-blue-500 transition-all bg-white"
-            >
-              <img
-                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261123"
-                alt="귀신같이 무료 사용 확인서"
-                className="w-full h-auto object-contain"
-              />
             </div>
           </div>
         </div>
@@ -388,7 +432,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
       {activeShortsModal && (
         <div
           className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 pt-safe pb-safe"
-          onClick={() => setActiveShortsModal(null)}
+          onClick={closeActiveModals}
         >
           <div
             className="relative w-full max-w-sm rounded-2xl bg-white border border-slate-300 p-4 sm:p-5 shadow-xl flex flex-col justify-between max-h-[90dvh] overflow-y-auto"
@@ -396,7 +440,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
           >
             <button
               type="button"
-              onClick={() => setActiveShortsModal(null)}
+              onClick={closeActiveModals}
               className="absolute top-3.5 right-3.5 w-8 h-8 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-sm font-medium z-20 cursor-pointer"
             >
               ✕
@@ -442,8 +486,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <button
               type="button"
               onClick={() => {
-                setActiveShortsModal(null);
-                scrollToEmailBox();
+                closeActiveModals();
+                setTimeout(() => scrollToEmailBox(), 80);
               }}
               className="w-full py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13.5px] cursor-pointer transition-colors"
             >
@@ -456,7 +500,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
       {certModalOpen && (
         <div
           className="fixed inset-0 z-[110] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe"
-          onClick={() => setCertModalOpen(false)}
+          onClick={closeActiveModals}
         >
           <div
             className="relative max-w-2xl w-full max-h-[92dvh] overflow-y-auto rounded-2xl bg-white border border-slate-300 p-4 sm:p-6 shadow-xl space-y-4"
@@ -468,7 +512,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => setCertModalOpen(false)}
+                onClick={closeActiveModals}
                 className="w-8 h-8 shrink-0 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 cursor-pointer"
               >
                 ✕
@@ -492,7 +536,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               </a>
               <button
                 type="button"
-                onClick={() => setCertModalOpen(false)}
+                onClick={closeActiveModals}
                 className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-medium text-[13px] cursor-pointer transition-colors"
               >
                 닫기
