@@ -28,7 +28,11 @@ import zipfile
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 OS_AGENT_DIR = ROOT_DIR / "universal_z_core" / "os_agent"
-BUILT_EXE = OS_AGENT_DIR / "dist" / "Merlin_Z_Core_Setup.exe"
+BUILT_EXE = (
+    OS_AGENT_DIR / "dist" / "Merlin_Z_Core_Setup" / "Merlin_Z_Core_Setup.exe"
+    if (OS_AGENT_DIR / "dist" / "Merlin_Z_Core_Setup" / "Merlin_Z_Core_Setup.exe").exists()
+    else OS_AGENT_DIR / "dist" / "Merlin_Z_Core_Setup.exe"
+)
 SEVEN_Z_EXE = OS_AGENT_DIR / "bin" / "7z" / "7z.exe"
 
 if str(OS_AGENT_DIR) not in sys.path:
@@ -545,14 +549,48 @@ def test_8_packaged_exe_http_cors_csrf_security():
         except urllib.error.HTTPError as he:
             assert he.code == 403, he.code
 
-        # 8-D) Mutating action via GET (`/api/care/sleep`, `/api/care/extract-archive`, `/__zcore/deep-uninstall-execute`) -> 405!
-        for bad_get in ("/api/care/sleep", "/api/care/extract-archive", "/__zcore/deep-uninstall-execute"):
+        # 8-D) Mutating action via GET (`/api/care/sleep`, `/api/care/extract-archive`, `/__archive/extract`, `/__zcore/deep-uninstall-execute`) -> 405!
+        for bad_get in ("/api/care/sleep", "/api/care/extract-archive", "/__archive/extract", "/__zcore/deep-uninstall-execute"):
             req_mut = urllib.request.Request(f"{base}{bad_get}", method="GET")
             try:
                 urllib.request.urlopen(req_mut, timeout=5)
                 raise AssertionError(f"GET {bad_get} should have returned 405!")
             except urllib.error.HTTPError as he:
                 assert he.code == 405, f"Expected 405 for {bad_get}, got {he.code}"
+
+        # 8-F) 2귀신 Direct Smart Archive Routes (`/__archive/create`, `/__archive/peek`, `/__archive/extract`) -> 200
+        with tempfile.TemporaryDirectory() as td_arch:
+            td_p = Path(td_arch)
+            sample_f = td_p / "한글계약서_테스트.txt"
+            sample_f.write_text("한일건재 LED 모듈 공급단가 145,000원", encoding="utf-8")
+            req_cr = urllib.request.Request(
+                f"{base}/__archive/create",
+                data=json.dumps({"paths": [str(sample_f)]}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Origin": "https://ghosti.sundreamer.app"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req_cr, timeout=10) as r_cr:
+                cr_out = json.loads(r_cr.read().decode("utf-8"))
+                assert cr_out.get("ok") is True and Path(cr_out["zipPath"]).exists(), cr_out
+                z_created = cr_out["zipPath"]
+            req_pk = urllib.request.Request(
+                f"{base}/__archive/peek",
+                data=json.dumps({"path": z_created}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Origin": "https://ghosti.sundreamer.app"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req_pk, timeout=10) as r_pk:
+                pk_out = json.loads(r_pk.read().decode("utf-8"))
+                assert pk_out.get("sealedArchiveRespect") is True, pk_out
+            req_ex = urllib.request.Request(
+                f"{base}/__archive/extract",
+                data=json.dumps({"path": z_created, "openExplorer": False}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Origin": "https://ghosti.sundreamer.app"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req_ex, timeout=10) as r_ex:
+                ex_out = json.loads(r_ex.read().decode("utf-8"))
+                assert ex_out.get("ok") is True and Path(ex_out["extractedFolder"]).exists(), ex_out
 
         # 8-E) Read-only `GET /__zcore/deep-uninstall-scan?appQuery=Alyac` & `GET /api/care/guardian-history` -> 200
         with urllib.request.urlopen(f"{base}/__zcore/deep-uninstall-scan?appQuery=Alyac", timeout=8) as r_scan:

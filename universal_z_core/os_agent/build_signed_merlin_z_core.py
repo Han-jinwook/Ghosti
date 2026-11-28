@@ -323,6 +323,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--hidden-import", "olefile",
         "--hidden-import", "numpy",
         "--hidden-import", "plugin_ghosti_care_suite",
+        "--hidden-import", "plugin_ghosti_archive",
         "--hidden-import", "pyzipper",
         "--hidden-import", "plugin_ghosti_superpowers",
         "--hidden-import", "seq_paste_daemon",

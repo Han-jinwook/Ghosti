@@ -689,7 +689,7 @@ _PHOTO_PATH_INDEX: Dict[str, Path] = {}
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic"}
 _VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".wmv", ".3gp", ".ts", ".mts", ".flv"}
 _PHOTO_EXTS = _IMAGE_EXTS | _VIDEO_EXTS
-_DOC_EXTS = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".csv", ".gsheet", ".gdoc", ".gslides"}
+_DOC_EXTS = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".csv", ".gsheet", ".gdoc", ".gslides", ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"}
 _SKIP_DIR_NAMES = {
     "node_modules",
     ".git",
@@ -3690,6 +3690,8 @@ def _extract_doc_text(
     flush_disk: bool = True,
 ) -> str:
     ext = entry.suffix.lower()
+    if ext in (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"):
+        return f"📦 [{entry.parent.name}] 폴더의 압축파일({entry.name})입니다. 봉인 존중 원칙에 따라 풀기 전 내부를 열람하지 않으며, [📦 1초 압축 풀기] 클릭 시 안전 폴더에 해제되어 즉시 검색됩니다."
     if ext not in (".gsheet", ".gdoc", ".gslides") and _is_cloud_virtual_or_unpinned_file(entry):
         return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 클라우드 연동 문서입니다. 파일명 및 키워드로 즉시 검색됩니다."
     cache_sig = ""
@@ -4021,6 +4023,10 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                     continue
                 if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
                     continue
+                if nm_low.startswith("merlin_z_core") and nm_low.endswith(".zip"):
+                    continue
+                if re.search(r"\.part(?!0*1\.rar$)0*\d+\.rar$", nm_low) or re.search(r"\.7z\.(?!0*1$)0*\d+$", nm_low):
+                    continue
                 nd = abs_doc.lower()
                 if nd not in seen_paths:
                     seen_paths.add(nd)
@@ -4055,6 +4061,10 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
                     if dot < 0 or nm_low[dot:] not in _DOC_EXTS:
                         continue
                     if nm.startswith((".", "~$", ".~lock.")) or nm_low in ("desktop.ini", "thumbs.db"):
+                        continue
+                    if nm_low.startswith("merlin_z_core") and nm_low.endswith(".zip"):
+                        continue
+                    if re.search(r"\.part(?!0*1\.rar$)0*\d+\.rar$", nm_low) or re.search(r"\.7z\.(?!0*1$)0*\d+$", nm_low):
                         continue
                     if _is_antivirus_decoy_sibling_file(d, nm_low[:dot]):
                         continue
@@ -4099,6 +4109,12 @@ def _list_local_docs_unlocked() -> Dict[str, Any]:
         ".gsheet": ("GSHEET", "📊 구글 스프레드시트(.gsheet)"),
         ".gdoc": ("GDOC", "📘 구글 문서(.gdoc)"),
         ".gslides": ("GSLIDES", "📙 구글 프레젠테이션(.gslides)"),
+        ".zip": ("ZIP", "📦 압축파일(ZIP) · 1초 스마트 압축 풀기"),
+        ".7z": ("7Z", "📦 압축파일(7Z) · 1초 스마트 압축 풀기"),
+        ".rar": ("RAR", "📦 압축파일(RAR) · 1초 스마트 압축 풀기"),
+        ".tar": ("TAR", "📦 압축파일(TAR) · 1초 스마트 압축 풀기"),
+        ".gz": ("GZ", "📦 압축파일(GZ) · 1초 스마트 압축 풀기"),
+        ".tgz": ("TGZ", "📦 압축파일(TGZ) · 1초 스마트 압축 풀기"),
     }
 
     if len(_DOCS_ENTRY_MEM_CACHE) > 20000:

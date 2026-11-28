@@ -9,7 +9,9 @@ import {
 } from '../../services/aiEngine';
 import {
   buildDocPreviewSnippet,
+  extractLocalArchiveOneClick,
   formatVideoCardOcrSummary,
+  isSmartArchiveDoc,
   openLocalDocWithMissingGuard,
   renderDocTextWithInlineCredentialCopy,
   renderHighlightedDocText,
@@ -1068,6 +1070,18 @@ export const Stage1MinimalSearchPreview: React.FC<{
                         <div className="flex items-center gap-1.5 flex-wrap justify-end">
                           {!forceSampleOnly && (
                             <GhostLabelerActionButton variant="doc" doc={doc} forceSampleOnly={forceSampleOnly} />
+                          )}
+                          {!forceSampleOnly && isZCoreConnected && isSmartArchiveDoc(doc) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void extractLocalArchiveOneClick(doc);
+                              }}
+                              className="px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11.5px] font-bold transition-colors cursor-pointer"
+                            >
+                              📦 1초 압축 풀기
+                            </button>
                           )}
                           <button
                             type="button"

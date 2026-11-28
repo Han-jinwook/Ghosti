@@ -3,6 +3,7 @@ import { stripKoSearchParticle } from '../../services/aiEngine';
 import { formatQuickKoreanLabelCore } from '../../services/ai/aiSharedRuntime';
 import { executeRealOsAction } from '../../services/setupMonsterEngine';
 import { copyTextSafeToClipboard } from '../../services/proFeatureGate';
+import { getZCoreUrl } from '../../services/zCoreBridge';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 
 const DOC_SNIPPET_STOP_WORDS = new Set([
@@ -325,6 +326,76 @@ export function formatQuickKoreanLabelForFile(
   options?: { takenAtMs?: number; mtimeMs?: number; existingNames?: string[] }
 ): string {
   return formatQuickKoreanLabelCore(fileName, dateStr, tagsOrTitle, options);
+}
+
+const SMART_ARCHIVE_EXT_RE = /\.(?:zip|7z|rar|tar|gz|tgz)$/i;
+
+export function isSmartArchiveDoc(doc: { fileName?: string; path?: string; ext?: string }): boolean {
+  const target = (doc.fileName || doc.path || '').trim();
+  if (SMART_ARCHIVE_EXT_RE.test(target)) return true;
+  const extUp = (doc.ext || '').trim().toUpperCase();
+  return ['ZIP', '7Z', 'RAR', 'TAR', 'GZ', 'TGZ'].includes(extUp);
+}
+
+export async function extractLocalArchiveOneClick(doc: {
+  fileName: string;
+  path?: string;
+}): Promise<void> {
+  const targetPath = (doc.path || '').trim();
+  if (!targetPath) {
+    useSaySeeStore.setState({
+      lastQuarantineToast: '실제 내 컴퓨터 파일 경로가 없어 압축을 풀 수 없습니다.',
+    });
+    return;
+  }
+  useSaySeeStore.setState({
+    lastQuarantineToast: `⏳ '${doc.fileName}' 압축을 안전 폴더에 푸는 중입니다...`,
+  });
+  try {
+    const res = await fetch(getZCoreUrl('/__archive/extract'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: targetPath,
+        interactivePasswordPrompt: true,
+        openExplorer: true,
+      }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      extractedFolder?: string;
+      extractedCount?: number;
+      cancelled?: boolean;
+      message?: string;
+      error?: string;
+    };
+    if (data.ok) {
+      const folderName =
+        String(data.extractedFolder || '')
+          .split(/[\\/]/)
+          .filter(Boolean)
+          .pop() || doc.fileName;
+      const countLabel = typeof data.extractedCount === 'number' ? ` (${data.extractedCount}개 파일)` : '';
+      useSaySeeStore.setState({
+        lastQuarantineToast: `✅ '${folderName}' 폴더에 깔끔하게 압축을 풀었습니다${countLabel}! 풀린 문서도 바로 검색됩니다.`,
+      });
+      void useSaySeeStore.getState().refreshLiveLocalFilesInSearchWindow();
+      return;
+    }
+    if (data.cancelled) {
+      useSaySeeStore.setState({
+        lastQuarantineToast: '암호 입력이 취소되었습니다.',
+      });
+      return;
+    }
+    useSaySeeStore.setState({
+      lastQuarantineToast: data.message || data.error || '압축 해제 중 오류가 발생했습니다.',
+    });
+  } catch {
+    useSaySeeStore.setState({
+      lastQuarantineToast: 'PC 엔진 연결 상태를 확인한 뒤 다시 시도해 주세요.',
+    });
+  }
 }
 
 export async function openLocalDocWithMissingGuard(doc: {

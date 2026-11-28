@@ -270,13 +270,18 @@ _early_care_flags = {
     "--smart-zip",
     "--register-menu",
     "--unregister-menu",
+    "--register-context-menu",
+    "--unregister-context-menu",
     "--install-and-run-helper",
     "--run-elevated-helper",
 }
 if any(a in _early_care_flags or any(a.startswith(f + "=") for f in _early_care_flags) for a in _early_argv):
-    import plugin_ghosti_care_suite
+    import plugin_ghosti_archive
 
-    plugin_ghosti_care_suite.handle_care_cli_args(_early_argv)
+    if not plugin_ghosti_archive.handle_archive_cli_args(_early_argv):
+        import plugin_ghosti_care_suite
+
+        plugin_ghosti_care_suite.handle_care_cli_args(_early_argv)
     sys.exit(0)
 
 if "--gui-task-runner" in _early_argv or "gui-task-runner" in _early_argv:
@@ -294,7 +299,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.99"
+CORE_VERSION = "2.14.9"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -308,6 +313,12 @@ def get_unified_health() -> Dict[str, Any]:
         "senstalk": plugin_senstalk.PLUGIN_METADATA,
         "aggrofilter": plugin_aggrofilter.PLUGIN_METADATA,
     }
+    try:
+        import plugin_ghosti_archive
+
+        builtin_plugins["ghosti_archive"] = plugin_ghosti_archive.PLUGIN_METADATA
+    except Exception:
+        pass
     try:
         import plugin_ghosti_care_suite
 
@@ -338,6 +349,10 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
     data = payload or {}
     if p in ("ghosti", "ghosti_os", "os", "monster"):
         return plugin_ghosti_os.handle_request(action, data)
+    if p in ("archive", "ghosti_archive", "smart_archive"):
+        import plugin_ghosti_archive
+
+        return plugin_ghosti_archive.handle_archive_request(action, data)
     if p in ("care", "care_suite", "ghosti_care_suite"):
         import plugin_ghosti_care_suite
 
@@ -349,7 +364,7 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
     return {
         "ok": False,
         "error": f"UNKNOWN_BUILTIN_PLUGIN: {plugin_name}",
-        "availablePlugins": ["ghosti_os", "ghosti_care_suite", "senstalk", "aggrofilter"],
+        "availablePlugins": ["ghosti_os", "ghosti_archive", "ghosti_care_suite", "senstalk", "aggrofilter"],
     }
 
 
@@ -1194,6 +1209,29 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": str(exc)}, status=500)
                 return
 
+        # [2귀신 스마트 압축 전용 직결 엔드포인트 GET (`/__archive/*`)]
+        if path.startswith("/__archive/"):
+            if self._reject_untrusted():
+                return
+            try:
+                import plugin_ghosti_archive
+
+                sub_arch = path[len("/__archive/") :].strip("/").lower()
+                if sub_arch == "peek":
+                    self._send_json(plugin_ghosti_archive.handle_archive_request("peek", qp))
+                    return
+                if sub_arch in ("explorer-selected", "explorer_selected"):
+                    self._send_json(plugin_ghosti_archive.handle_archive_request("explorer-selected", qp))
+                    return
+                self._send_json(
+                    {"ok": False, "error": "METHOD_NOT_ALLOWED_USE_POST", "action": sub_arch},
+                    status=405,
+                )
+                return
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
+                return
+
         # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 (Try-Except Firewall + Lazy-Import + GET Read-Only 강제)
         if path.startswith("/api/care/"):
             try:
@@ -1393,6 +1431,20 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                     return
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc)}, status=500)
+                return
+
+        # [2귀신 스마트 압축 전용 직결 엔드포인트 POST (`/__archive/extract`, `/__archive/create`, `/__archive/peek`)]
+        if path.startswith("/__archive/"):
+            if self._reject_untrusted():
+                return
+            try:
+                import plugin_ghosti_archive
+
+                sub_arch = path[len("/__archive/") :].strip("/").lower()
+                self._send_json(plugin_ghosti_archive.handle_archive_request(sub_arch, body))
+                return
+            except Exception as exc:
+                self._send_json({"ok": False, "isolatedFirewall": True, "error": str(exc)}, status=500)
                 return
 
         # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 POST (Try-Except Firewall + Lazy-Import)

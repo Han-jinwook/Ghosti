@@ -3329,7 +3329,7 @@ def _index_external_volume_to_local_cache_worker(vol_id: str, drv_letter: str, d
         duration_ms=4200,
     )
 
-    doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md", ".gsheet", ".gdoc", ".gslides"}
+    doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md", ".gsheet", ".gdoc", ".gslides", ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"}
     img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
     vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
 
@@ -4125,7 +4125,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         ):
             return _LOCAL_FILE_CACHE["items"]
 
-        doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md", ".gsheet", ".gdoc", ".gslides"}
+        doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md", ".gsheet", ".gdoc", ".gslides", ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"}
         img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
         vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
 
@@ -6162,9 +6162,14 @@ def _toast_worker() -> None:
                             ):
                                 if _cand_ag.exists() and str(_cand_ag) not in sys.path:
                                     sys.path.insert(0, str(_cand_ag))
-                            import plugin_ghosti_care_suite as _cs
+                            try:
+                                import plugin_ghosti_archive as _arch_mod
 
-                            return _cs
+                                return _arch_mod
+                            except Exception:
+                                import plugin_ghosti_care_suite as _cs
+
+                                return _cs
 
                         def _on_unzip_result(res):
                             try:

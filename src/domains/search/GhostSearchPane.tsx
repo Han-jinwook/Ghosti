@@ -18,7 +18,11 @@ import {
   renderHighlightedDocText,
   maskSensitiveDocText,
 } from '../../components/PricingModal';
-import { openLocalDocWithMissingGuard } from '../../components/searchModals/docAndVideoFormatUtils';
+import {
+  extractLocalArchiveOneClick,
+  isSmartArchiveDoc,
+  openLocalDocWithMissingGuard,
+} from '../../components/searchModals/docAndVideoFormatUtils';
 import { GhostSearchTrainingPage } from '../../components/ghostDojo/GhostSearchTrainingPage';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
 import { useDashboardNavStore } from '../shared/dashboardNavState';
@@ -544,7 +548,19 @@ export const GhostSearchPane: React.FC<{
 
                                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11.5px] text-slate-500 gap-2">
                                       <span>{doc.date}</span>
-                                      <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                        {zCoreBridge.isConnected && isSmartArchiveDoc(doc) && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              void extractLocalArchiveOneClick(doc);
+                                            }}
+                                            className="px-2.5 py-1 rounded-md bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11.5px] font-bold transition-colors cursor-pointer"
+                                          >
+                                            📦 1초 압축 풀기
+                                          </button>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={(e) => {

@@ -1506,6 +1506,95 @@ def build_ui2_search_window(
         _render_search_results()
         _resize_for_stage(activate=False)
 
+    _UI2_ARCHIVE_EXTS = (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")
+    _ui2_unzip_busy = [False]
+
+    def _load_ui2_archive_mod() -> Any:
+        _bdir = Path(getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent)))
+        for _cand_ag in (
+            _bdir,
+            Path(__file__).resolve().parent,
+            Path(__file__).resolve().parent / "os_agent",
+            Path(r"D:\Ghosti\universal_z_core\os_agent"),
+        ):
+            if _cand_ag.exists() and str(_cand_ag) not in sys.path:
+                sys.path.insert(0, str(_cand_ag))
+        try:
+            import plugin_ghosti_archive as _arch_mod
+
+            return _arch_mod
+        except Exception:
+            import plugin_ghosti_care_suite as _cs_fallback
+
+            return _cs_fallback
+
+    def _trigger_ui2_smart_unzip(arch_fp: str) -> str:
+        """Ctrl+0 귀신검색창에서 압축파일(.zip/.7z/.rar/.tar/.gz/.tgz)을 1클릭으로 안전 폴더에 해제하고 즉시 검색 연동합니다."""
+        if not arch_fp or not os.path.exists(arch_fp) or _ui2_unzip_busy[0]:
+            return "break"
+        _ui2_unzip_busy[0] = True
+        is_hovered[0] = True
+        opened_at[0] = time.time()
+        arch_name = Path(arch_fp).name
+        toast_queue.put((f"⏳ '{arch_name}' 1초 압축 해제 중... (한글깨짐·폭탄 방지)", 2400))
+
+        def _on_done(res: dict[str, Any]) -> None:
+            if not res.get("ok") and res.get("needPassword"):
+                try:
+                    arch_mod = _load_ui2_archive_mod()
+                    err_msg = str(res.get("message") or "") if res.get("wrongPassword") else ""
+                    parent_target = win if (current_win[0] is win and win.winfo_exists()) else None
+                    pwd = arch_mod._prompt_archive_password_tk(
+                        arch_name,
+                        error_message=err_msg,
+                        parent_win=parent_target,
+                    )
+                except Exception:
+                    pwd = None
+                if pwd is None:
+                    _ui2_unzip_busy[0] = False
+                    toast_queue.put(("암호 입력이 취소되었습니다.", 2000))
+                    return
+                threading.Thread(target=_worker, args=(pwd,), daemon=True).start()
+                return
+
+            _ui2_unzip_busy[0] = False
+            if res.get("ok"):
+                out_folder = str(res.get("extractedFolder") or "")
+                cnt = int(res.get("extractedCount") or 0)
+                if out_folder and sys.platform == "win32":
+                    try:
+                        os.startfile(out_folder)
+                    except Exception:
+                        pass
+                folder_label = Path(out_folder).name if out_folder else arch_name
+                toast_queue.put(
+                    (f"✅ '{folder_label}' 폴더에 {cnt}개 파일 해제 완료! 방금 풀린 문서도 바로 검색됩니다.", 3200)
+                )
+                try:
+                    if current_win[0] is win and win.winfo_exists():
+                        _ext_exists_cache.clear()
+                        _render_search_results()
+                except Exception:
+                    pass
+            else:
+                err_txt = str(res.get("message") or res.get("error") or "압축 해제에 실패했습니다.")
+                toast_queue.put((f"⚠️ {err_txt}", 3200))
+
+        def _worker(pwd_val: str | None = None) -> None:
+            try:
+                arch_mod = _load_ui2_archive_mod()
+                res = arch_mod.smart_extract_archive(arch_fp, password=pwd_val)
+            except Exception as ex:
+                res = {"ok": False, "message": f"압축 해제 오류: {ex}"}
+            try:
+                root.after(0, lambda r=res: _on_done(r))
+            except Exception:
+                _ui2_unzip_busy[0] = False
+
+        threading.Thread(target=_worker, args=(None,), daemon=True).start()
+        return "break"
+
     def _open_video_ocr_extractor(rec: dict[str, Any]) -> None:
         """선택한 동영상에서 화면 속 글자 전체를 추출하여 바로 복사·커서 주입할 수 있는 인라인 뷰를 엽니다."""
         is_hovered[0] = True
@@ -2194,7 +2283,13 @@ def build_ui2_search_window(
                 card.pack(fill="x", pady=2)
 
             kind = rec.get("kind", "text")
-            icon_ch = "🖼️" if kind == "image" else ("🎬" if kind == "video" else ("📄" if kind == "doc" else "📋"))
+            row_fp_early = str(rec.get("img_path") or rec.get("file_path") or "").strip()
+            is_arch_row = bool(row_fp_early and row_fp_early.lower().endswith(_UI2_ARCHIVE_EXTS))
+            icon_ch = (
+                "📦"
+                if is_arch_row
+                else ("🖼️" if kind == "image" else ("🎬" if kind == "video" else ("📄" if kind == "doc" else "📋")))
+            )
             rel_t = format_rel_time(rec.get("ts", time.time()))
             raw_txt = rec.get("text", "")
             disp_txt = _mask_sensitive_doc_text(clean_ocr_noise(raw_txt) if kind == "image" else raw_txt)
@@ -2229,6 +2324,22 @@ def build_ui2_search_window(
                     pass
 
             row_fp = str(rec.get("img_path") or rec.get("file_path") or "").strip()
+            if row_fp and row_fp.lower().endswith(_UI2_ARCHIVE_EXTS):
+                unz_row_b = tk.Label(
+                    card,
+                    text="📦 1초 압축 풀기",
+                    fg="#0B1120",
+                    bg="#FBBF24",
+                    padx=5,
+                    pady=1,
+                    font=("Malgun Gothic", 8, "bold"),
+                    cursor="hand2",
+                )
+                unz_row_b.pack(side="right", padx=(3, 0))
+                unz_row_b.bind(
+                    "<Button-1>",
+                    lambda _e, fp=row_fp: _trigger_ui2_smart_unzip(fp),
+                )
             if row_fp:
                 lbl_row_b = tk.Label(
                     card,
@@ -2450,6 +2561,22 @@ def build_ui2_search_window(
                 anchor="w",
             ).pack(fill="x", pady=(0, 8))
             if s_fpath:
+                if s_fpath.lower().endswith(_UI2_ARCHIVE_EXTS):
+                    unz_prev_b = tk.Label(
+                        preview_pane,
+                        text="📦 1초 압축 풀기 (한글깨짐·폭탄 방지 · 즉시 검색)",
+                        fg="#0B1120",
+                        bg="#FBBF24",
+                        padx=8,
+                        pady=5,
+                        font=("Malgun Gothic", 9, "bold"),
+                        cursor="hand2",
+                    )
+                    unz_prev_b.pack(fill="x", pady=(0, 4))
+                    unz_prev_b.bind(
+                        "<Button-1>",
+                        lambda _e, fp=s_fpath: _trigger_ui2_smart_unzip(fp),
+                    )
                 if Path(s_fpath).suffix.lower() in (".gsheet", ".gdoc", ".gslides"):
                     gweb_b = tk.Label(
                         preview_pane,
