@@ -401,7 +401,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 <button
                   type="button"
                   onClick={() => setCertModalOpen(true)}
-                  className="px-4 py-2.5 rounded-lg bg-[#FDE2A8] hover:bg-[#FCD582] border border-[#DFB05C] text-[#78350F] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
+                  className="px-4 py-2.5 rounded-lg bg-[#FFE4E6] hover:bg-[#FECDD3] border border-[#FDA4AF] text-[#9F1239] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
                 >
                   무료 사용 확인서 크게 보기
                 </button>

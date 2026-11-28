@@ -609,7 +609,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 handleSelectMainTab('home', true);
               }}
             />
-            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold whitespace-nowrap">
+            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-[#ECFCCB] border border-[#A3E635] text-[#365314] text-[12px] font-semibold whitespace-nowrap">
               가입·카드 등록 없이 · 광고 0% 평생 무료
             </span>
           </div>
@@ -631,8 +631,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={() => handleSelectMainTab(item.id, true)}
                   className={`px-4 py-2 rounded-lg transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs'
-                      : 'text-slate-700 hover:bg-[#FFF7ED] hover:text-[#9A3412] border border-transparent'
+                      ? 'bg-[#FEF08A] text-slate-900 border border-[#FACC15] shadow-2xs'
+                      : 'text-slate-700 hover:bg-[#FEF9C3] hover:text-slate-900 border border-transparent'
                   }`}
                 >
                   {item.label}
@@ -836,21 +836,21 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         {/* 1~3) 선택된 메뉴 전용 페이지 (해당 메뉴 선택 시에만 단독 노출) */}
         {activeMainTab !== 'home' && (
           <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
-            {/* 선택 기능 1줄 직관 풀이 헤더 바 (따뜻한 저채도 크림·살구 톤) */}
-            <div className="rounded-2xl bg-gradient-to-r from-[#FFF8EB] via-[#FEF1D4] to-[#FDEBD0] border border-[#ECC88A] text-[#451A03] px-5 sm:px-7 py-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+            {/* 선택 기능 1줄 직관 풀이 헤더 바 (샘플 C: 맑은 시트러스 오렌지·피치) */}
+            <div className="rounded-2xl bg-gradient-to-r from-[#FFF3E6] via-[#FFE6CC] to-[#FFD9B3] border border-[#FDBA74] text-slate-900 px-5 sm:px-7 py-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
               <div className="space-y-0.5 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#FDE2AD] border border-[#EAB866] text-[#78350F] text-[11.5px] font-bold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
                     {MAIN_TAB_META[activeMainTab].badge}
                   </span>
-                  <span className="text-[12px] text-[#92400E] hidden sm:inline">
+                  <span className="text-[12px] text-[#9A3412] hidden sm:inline">
                     체험 · 활용 사례 · 짧은 영상을 한 화면에서 확인
                   </span>
                 </div>
                 <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
                   {MAIN_TAB_META[activeMainTab].headline}
                 </h2>
-                <p className="text-[12.5px] sm:text-[13px] text-[#78350F]/90 break-keep">
+                <p className="text-[12.5px] sm:text-[13px] text-slate-700 break-keep">
                   {MAIN_TAB_META[activeMainTab].subline}
                 </p>
               </div>
@@ -1013,7 +1013,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold">
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#CFFAFE] border border-[#22D3EE] text-[#155E75] text-[12px] font-semibold">
                     샘플 화면 체험
                   </span>
                   <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
@@ -1293,8 +1293,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               on
-                                ? 'bg-[#FDE6B8] text-[#78350F] border-[#EAB866] font-semibold'
-                                : 'bg-white hover:bg-[#FFFBF0] text-slate-700 border-slate-300'
+                                ? 'bg-[#CFFAFE] text-[#155E75] border-[#22D3EE] font-semibold'
+                                : 'bg-white hover:bg-[#ECFEFF] text-slate-700 border-slate-300'
                             }`}
                           >
                             {st.label}
