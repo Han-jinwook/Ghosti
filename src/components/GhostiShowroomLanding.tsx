@@ -1001,7 +1001,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 rounded-lg bg-[#FED7AA] hover:bg-[#FDBA74] border border-[#FB923C] text-[#9A3412] font-semibold text-[12px] shrink-0 cursor-pointer transition-colors"
+                className="px-3.5 py-2 rounded-lg bg-[#CFFAFE] hover:bg-[#A5F3FC] border border-[#22D3EE] text-[#155E75] font-semibold text-[12px] shrink-0 cursor-pointer transition-colors"
               >
                 전송
               </button>
@@ -1013,7 +1013,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#FFF3E6] border border-[#FDBA74] text-[#9A3412] text-[12px] font-semibold">
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#CFFAFE] border border-[#22D3EE] text-[#155E75] text-[12px] font-semibold">
                     샘플 화면 체험
                   </span>
                   <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
@@ -1097,8 +1097,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold'
-                                : 'bg-white hover:bg-[#FFF3E6] text-slate-700 border-slate-300'
+                                ? 'bg-[#CFFAFE] text-[#155E75] border-[#22D3EE] font-semibold'
+                                : 'bg-white hover:bg-[#ECFEFF] text-slate-700 border-slate-300'
                             }`}
                           >
                             “{item.query}”
@@ -1158,7 +1158,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 style={{
                                   width: `${INTERACTIVE_SCENARIOS.video[selectedVideoScenarioIdx].progressPct}%`,
                                 }}
-                                className="h-full rounded-full bg-[#E59E45] transition-all duration-300"
+                                className="h-full rounded-full bg-[#06B6D4] transition-all duration-300"
                               />
                             </div>
                           </div>
@@ -1214,8 +1214,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold'
-                                : 'bg-white hover:bg-[#FFF3E6] text-slate-700 border-slate-300'
+                                ? 'bg-[#CFFAFE] text-[#155E75] border-[#22D3EE] font-semibold'
+                                : 'bg-white hover:bg-[#ECFEFF] text-slate-700 border-slate-300'
                             }`}
                           >
                             “{item.query}”
@@ -1350,7 +1350,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                                 <div
                                   style={{ width: `${gaugePct ?? 0}%` }}
-                                  className="h-full rounded-full bg-[#E59E45] transition-all duration-300"
+                                  className="h-full rounded-full bg-[#06B6D4] transition-all duration-300"
                                 />
                               </div>
                             </div>
@@ -1402,7 +1402,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   !b.enabled
                                     ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                                     : b.active
-                                    ? 'bg-[#FED7AA] text-[#9A3412] border-[#FB923C] font-semibold cursor-pointer shadow-2xs'
+                                    ? 'bg-[#CFFAFE] text-[#155E75] border-[#22D3EE] font-semibold cursor-pointer shadow-2xs'
                                     : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 cursor-pointer'
                                 }`}
                               >

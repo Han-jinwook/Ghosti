@@ -122,7 +122,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#CFFAFE] border border-[#22D3EE] text-[#155E75] text-[11.5px] font-bold">
                     실전 활용 사례 · Before vs After
                   </span>
                   <span className="px-2.5 py-0.5 rounded-md bg-[#FFF3E6] border border-[#FDBA74] text-[#9A3412] text-[11.5px] font-semibold">
@@ -164,7 +164,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <div className="pt-2 border-t border-slate-200 space-y-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-[#FFEDD5] border border-[#F2BE86] text-[#9A3412] text-[11.5px] font-bold">
+                    <span className="px-2.5 py-0.5 rounded-md bg-[#CFFAFE] border border-[#22D3EE] text-[#155E75] text-[11.5px] font-bold">
                       15초 미리보기 영상
                     </span>
                     <span className="text-[14px] font-bold text-slate-900">
