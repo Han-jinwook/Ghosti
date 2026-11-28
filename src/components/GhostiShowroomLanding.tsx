@@ -405,9 +405,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       } else {
         setCleanSubTab('speed');
       }
-    } else if (/무료|가격|유료|보증서|기업|회사|라이선스|결제/.test(q)) {
+    } else if (/무료|가격|유료|보증서|기업|회사|공공|관공서|라이선스|결제/.test(q)) {
       customReply =
-        '개인 PC와 민간 기업 사내 PC 모두 기본 기능(귀신비서 · 귀신검색 · 사진 공유)을 별도 비용 없이 사용하실 수 있어요.\n상단 [무료 사용 확인서] 버튼에서 공식 확인서를 열람하실 수 있습니다.';
+        '개인 PC는 물론 기업과 공공기관 PC에서도 기본 기능(귀신비서 · 귀신검색 · 사진 공유)을 별도 비용 없이 사용하실 수 있어요.\n하단 [무료 사용 확인서] 배너에서 공식 확인서를 열람하실 수 있습니다.';
     }
 
     if (matchedTab) {

@@ -362,7 +362,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </section>
       )}
 
-      {/* 3) 공통 하단 좌·우 2분할 대형 배너: [좌측: 출시 알림 신청 / 시작하기] | [우측: 개인 · 민간 기업 무료 사용 확인서] */}
+      {/* 3) 공통 하단 좌·우 2분할 대형 배너: [좌측: 출시 알림 신청 / 시작하기] | [우측: 개인 · 기업 · 공공기관 무료 사용 확인서] */}
       <section id="security" className="pb-10 px-4 sm:px-6 max-w-6xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
           {/* 좌측: 출시 알림 신청 (또는 출시 후 시작하기) */}
@@ -370,18 +370,18 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             {launchAlertSlot}
           </div>
 
-          {/* 우측: 개인 · 민간 기업 기본 기능 무료 사용 확인서 */}
+          {/* 우측: 개인 · 기업 · 공공기관 기본 기능 무료 사용 확인서 */}
           <div className="lg:col-span-6 rounded-2xl bg-white border-2 border-[#F3D7A5] shadow-md p-6 sm:p-7 flex flex-col justify-between gap-4">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2 min-w-0 flex-1">
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-bold">
-                  개인 · 민간 기업 무료 사용 확인서
+                  개인 · 기업 · 공공기관 무료 사용 확인서
                 </span>
                 <h3 className="font-display text-lg sm:text-xl font-bold text-slate-900 leading-snug break-keep">
-                  집 PC는 물론 회사 PC에서도 기본 3대 기능 평생 무료
+                  개인 · 기업 · 공공기관 PC 모두 기본 3대 기능 평생 무료
                 </h3>
                 <p className="text-[12.5px] text-slate-600 break-keep leading-relaxed">
-                  외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 유지비가 0원이므로, 개인과 민간 기업 모두에게 평생 무료로 제공합니다. (공공기관 별도 문의)
+                  기본 3대 기능은 내 기기 안에서만 직접 처리되어 일부 AI 처리 외 별도 서버 유지비가 거의 들지 않으므로, 개인·기업·공공기관 모두에게 평생 무료로 제공합니다.
                 </p>
               </div>
               <div
@@ -389,8 +389,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 className="hidden sm:block w-24 md:w-28 rounded-xl overflow-hidden border-2 border-slate-300 shadow-xs cursor-pointer hover:border-[#EAB866] transition-all bg-white shrink-0"
               >
                 <img
-                  src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261123"
-                  alt="귀신같이 무료 사용 확인서"
+                  src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261128"
+                  alt="귀신같이 개인·기업·공공기관 무료 사용 확인서"
                   className="w-full h-auto object-contain"
                 />
               </div>
@@ -508,7 +508,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-slate-900 font-semibold text-sm sm:text-base min-w-0 break-keep">
-                개인 및 민간 기업 PC 기본 기능 무료 사용 확인서
+                개인 · 기업 · 공공기관 PC 기본 기능 무료 사용 확인서
               </span>
               <button
                 type="button"
@@ -520,8 +520,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             </div>
             <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
               <img
-                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261123"
-                alt="귀신같이 무료 사용 확인서"
+                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261128"
+                alt="귀신같이 개인·기업·공공기관 무료 사용 확인서"
                 className="w-full h-auto object-contain"
               />
             </div>
