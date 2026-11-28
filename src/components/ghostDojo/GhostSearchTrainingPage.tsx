@@ -261,68 +261,36 @@ interface DesktopIconItem {
   label: string;
   kind: 'folder' | 'pdf' | 'xlsx' | 'photo' | 'video';
   thumbSrc?: string;
-  space: 'vault' | 'gallery' | 'video';
-  query: string;
-  stepId?: GameStepId;
 }
 
 const VIRTUAL_DESKTOP_ICONS: DesktopIconItem[] = [
   {
     id: 'desk_folder',
-    label: '받은 파일',
+    label: '내 문서',
     kind: 'folder',
-    space: 'vault',
-    query: '',
   },
   {
     id: 'desk_pdf',
-    label: '임대차계약서.pdf',
+    label: '계약서.pdf',
     kind: 'pdf',
-    space: 'vault',
-    query: '보증금',
-    stepId: 'doc_search',
   },
   {
     id: 'desk_xlsx',
-    label: '거래처_견적서.xlsx',
+    label: '견적서.xlsx',
     kind: 'xlsx',
-    space: 'vault',
-    query: '공급단가',
-    stepId: 'doc_search',
   },
   {
     id: 'desk_photo_family',
-    label: '가족여행_바다.jpg',
+    label: '가족여행.jpg',
     kind: 'photo',
     thumbSrc: '/sample_photos_301/IMG_20250510_1001.jpg',
-    space: 'gallery',
-    query: '해변 가족 산책',
-    stepId: 'photo_natural',
-  },
-  {
-    id: 'desk_photo_receipt',
-    label: '배달영수증.jpg',
-    kind: 'photo',
-    thumbSrc: '/sample_photos_301/Screenshot_20250802_1002_배달주문내역.jpg',
-    space: 'gallery',
-    query: '38,500원',
-    stepId: 'photo_text',
-  },
-  {
-    id: 'desk_video',
-    label: '회의_매출목표.mp4',
-    kind: 'video',
-    thumbSrc: '/poc/results/video_frames/20260918_202442_t00.jpg',
-    space: 'video',
-    query: '매출 35억',
-    stepId: 'video_text',
   },
 ];
 
 const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
   if (item.kind === 'folder') {
     return (
-      <svg viewBox="0 0 48 48" className="w-9 h-9 drop-shadow-md">
+      <svg viewBox="0 0 48 48" className="w-7 h-7 drop-shadow-sm">
         <path
           d="M6 11a4 4 0 0 1 4-4h10l4 4h14a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V11z"
           fill="#F59E0B"
@@ -336,12 +304,12 @@ const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
   }
   if (item.kind === 'pdf') {
     return (
-      <div className="w-8 h-9 rounded-sm bg-white border border-slate-300 shadow-md flex flex-col justify-between overflow-hidden">
+      <div className="w-6 h-7 rounded-xs bg-white border border-slate-300 shadow-sm flex flex-col justify-between overflow-hidden">
         <div className="px-1 pt-1 flex flex-col gap-0.5">
+          <span className="h-0.5 w-3 bg-slate-300 rounded-full" />
           <span className="h-0.5 w-4 bg-slate-300 rounded-full" />
-          <span className="h-0.5 w-5 bg-slate-300 rounded-full" />
         </div>
-        <div className="bg-rose-600 text-white text-[8px] font-extrabold text-center py-0.5 tracking-tighter">
+        <div className="bg-rose-600 text-white text-[7px] font-extrabold text-center py-px tracking-tighter">
           PDF
         </div>
       </div>
@@ -349,14 +317,14 @@ const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
   }
   if (item.kind === 'xlsx') {
     return (
-      <div className="w-8 h-9 rounded-sm bg-white border border-slate-300 shadow-md flex flex-col justify-between overflow-hidden">
-        <div className="px-1 pt-1 grid grid-cols-2 gap-0.5">
-          <span className="h-1 bg-emerald-200" />
-          <span className="h-1 bg-slate-200" />
-          <span className="h-1 bg-emerald-200" />
-          <span className="h-1 bg-slate-200" />
+      <div className="w-6 h-7 rounded-xs bg-white border border-slate-300 shadow-sm flex flex-col justify-between overflow-hidden">
+        <div className="px-0.5 pt-1 grid grid-cols-2 gap-0.5">
+          <span className="h-0.5 bg-emerald-200" />
+          <span className="h-0.5 bg-slate-200" />
+          <span className="h-0.5 bg-emerald-200" />
+          <span className="h-0.5 bg-slate-200" />
         </div>
-        <div className="bg-emerald-600 text-white text-[7.5px] font-extrabold text-center py-0.5 tracking-tighter">
+        <div className="bg-emerald-600 text-white text-[6.5px] font-extrabold text-center py-px tracking-tighter">
           XLSX
         </div>
       </div>
@@ -364,32 +332,22 @@ const DesktopIconVisual: React.FC<{ item: DesktopIconItem }> = ({ item }) => {
   }
   if (item.kind === 'photo' && item.thumbSrc) {
     return (
-      <div className="w-9 h-8 rounded-xs bg-zinc-900 border border-white/80 shadow-md overflow-hidden">
-        <img src={item.thumbSrc} alt={item.label} className="w-full h-full object-cover" />
+      <div className="w-7 h-6 rounded-xs bg-zinc-900 border border-white/75 shadow-sm overflow-hidden">
+        <img src={item.thumbSrc} alt="" className="w-full h-full object-cover" />
       </div>
     );
   }
-  return (
-    <div className="relative w-9 h-8 rounded-xs bg-zinc-950 border border-white/70 shadow-md overflow-hidden flex items-center justify-center">
-      {item.thumbSrc && (
-        <img src={item.thumbSrc} alt={item.label} className="w-full h-full object-cover opacity-85" />
-      )}
-      <span className="absolute inset-0 flex items-center justify-center">
-        <span className="w-4 h-4 rounded-full bg-black/75 text-white text-[8px] flex items-center justify-center">
-          ▶
-        </span>
-      </span>
-    </div>
-  );
+  return null;
 };
 
 const VirtualMonitorSimulator: React.FC<{
   onStep: (id: GameStepId) => void;
   initialQuery?: string;
 }> = ({
-  onStep,
+  onStep: _onStep,
   initialQuery = '',
 }) => {
+  void _onStep;
   const {
     searchSpace,
     setSelectedPhoto,
@@ -400,7 +358,6 @@ const VirtualMonitorSimulator: React.FC<{
   const [monitorW, setMonitorW] = useState(960);
   const [stage, setStage] = useState<GhostSearchStage | null>('medium');
   const [anchor, setAnchor] = useState({ x: 1300, y: 600 });
-  const [selectedIconId, setSelectedIconId] = useState<string | null>(null);
   const [sampleQueryText, setSampleQueryText] = useState<string>(initialQuery);
 
   useEffect(() => {
@@ -451,28 +408,6 @@ const VirtualMonitorSimulator: React.FC<{
     }
     playBabyGhostChime('summon');
     setStage((prev) => prev ?? 'medium');
-  };
-
-  const handleDesktopIconClick = (item: DesktopIconItem) => {
-    setSelectedIconId(item.id);
-    playBabyGhostChime('summon');
-    if (!stage) {
-      setStage('medium');
-    }
-    if (item.stepId) {
-      onStep(item.stepId);
-    }
-    window.setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent('ghosti_dojo_preview_search', {
-          detail: {
-            space: item.space,
-            query: item.query,
-            reset: !item.query,
-          },
-        })
-      );
-    }, 30);
   };
 
   const toggleWindowMaximize = (e: React.MouseEvent) => {
@@ -572,7 +507,6 @@ const VirtualMonitorSimulator: React.FC<{
               summon(pos.x, pos.y);
             }
           }}
-          onClick={() => setSelectedIconId(null)}
           className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
           style={{
             aspectRatio: `${SIMULATOR_WORK_AREA.right} / ${SIMULATOR_WORK_AREA.bottom}`,
@@ -589,35 +523,23 @@ const VirtualMonitorSimulator: React.FC<{
             }}
           />
 
-          {/* 리얼 윈도우 바탕화면 아이콘 (클릭 시 해당 파일 즉시 검색 반응) */}
+          {/* 조그맣고 은은한 순수 바탕화면 데코레이션 아이콘 (비클릭 배경 소품) */}
           <div
             data-keep-dark="true"
-            className="absolute top-3.5 left-3.5 z-10 grid grid-cols-1 gap-1.5"
+            aria-hidden="true"
+            className="absolute top-3 left-3 z-0 flex flex-col gap-2.5 opacity-80 pointer-events-none select-none"
           >
-            {VIRTUAL_DESKTOP_ICONS.map((item) => {
-              const isSelected = selectedIconId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  title={`${item.label} — 클릭하면 귀신검색창에서 바로 찾아줍니다`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDesktopIconClick(item);
-                  }}
-                  className={`w-[86px] px-1.5 py-1.5 rounded-md flex flex-col items-center gap-1 cursor-pointer transition-all text-center ${
-                    isSelected
-                      ? 'bg-sky-400/25 border border-sky-300/60 shadow-xs'
-                      : 'border border-transparent hover:bg-white/12 hover:border-white/15'
-                  }`}
-                >
-                  <DesktopIconVisual item={item} />
-                  <span className="w-full text-[10.5px] leading-tight font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] line-clamp-1">
-                    {item.label}
-                  </span>
-                </button>
-              );
-            })}
+            {VIRTUAL_DESKTOP_ICONS.map((item) => (
+              <div
+                key={item.id}
+                className="w-[64px] flex flex-col items-center gap-0.5 text-center"
+              >
+                <DesktopIconVisual item={item} />
+                <span className="w-full text-[9.5px] leading-tight font-normal text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] truncate">
+                  {item.label}
+                </span>
+              </div>
+            ))}
           </div>
 
           {!stage && (
