@@ -267,6 +267,65 @@ interface SamplePopupState {
 
 const TARGET_REPS = 3;
 
+const LiquidWaveFill: React.FC<{ count: number; target: number }> = ({ count, target }) => {
+  const clamped = Math.min(target, count);
+  const done = count >= target;
+  const bodyPct =
+    clamped === 0 ? 0 : done ? 105 : Math.round((clamped / target) * 100);
+
+  if (clamped === 0) return null;
+
+  const frontFill = done ? 'rgba(110, 231, 183, 0.62)' : 'rgba(153, 246, 228, 0.72)';
+  const backFill = done ? 'rgba(52, 211, 153, 0.35)' : 'rgba(45, 212, 191, 0.38)';
+
+  return (
+    <div
+      style={{ height: `${bodyPct}%` }}
+      className="absolute inset-x-0 bottom-0 z-0 pointer-events-none transition-[height] duration-500 ease-out"
+    >
+      {/* 찰랑찰랑 2중 물결 상단 표면 (완료 전 1/3, 2/3 구간에서 물결 연출) */}
+      {!done && (
+        <div className="absolute inset-x-0 -top-[20px] h-[22px] overflow-hidden">
+          {/* 뒤쪽 잔물결 */}
+          <svg
+            viewBox="0 0 1200 28"
+            preserveAspectRatio="none"
+            style={{ animation: 'ghostWaveReverse 4.2s linear infinite' }}
+            className="absolute left-0 top-0 w-[200%] h-full"
+          >
+            <path
+              d="M 0 14 Q 150 26 300 14 T 600 14 T 900 14 T 1200 14 V 28 H 0 Z"
+              fill={backFill}
+            />
+          </svg>
+          {/* 앞쪽 주물결 (하단 액체 색상과 무봉제 일체화) */}
+          <svg
+            viewBox="0 0 1200 28"
+            preserveAspectRatio="none"
+            style={{ animation: 'ghostWaveForward 2.8s linear infinite' }}
+            className="absolute left-0 top-[2px] w-[200%] h-full"
+          >
+            <path
+              d="M 0 14 Q 150 2 300 14 T 600 14 T 900 14 T 1200 14 V 28 H 0 Z"
+              fill={frontFill}
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* 물결 아래 차오른 액체 본체 */}
+      <div
+        style={{
+          background: done
+            ? 'linear-gradient(to top, rgba(52, 211, 153, 0.52), rgba(110, 231, 183, 0.62))'
+            : 'linear-gradient(to top, rgba(94, 234, 212, 0.78), rgba(153, 246, 228, 0.72))',
+        }}
+        className="w-full h-full transition-colors duration-500"
+      />
+    </div>
+  );
+};
+
 const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const initialCounts = loadDojoProgress().b1Counts ?? { keyboard: 0, mouse: 0 };
   const [keyboardCount, setKeyboardCount] = useState(initialCounts.keyboard);
@@ -276,6 +335,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 
   const [pressingSide, setPressingSide] = useState<'keyboard' | 'mouse' | null>(null);
   const [samplePopup, setSamplePopup] = useState<SamplePopupState | null>(null);
+  const podsWrapRef = useRef<HTMLDivElement | null>(null);
   const popupCardRef = useRef<HTMLDivElement | null>(null);
   const pressTimerRef = useRef<number | null>(null);
 
@@ -346,37 +406,61 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     };
   }, [samplePopup]);
 
+  // 충전 박스를 절대 가리지 않도록 항상 박스 바깥쪽(하단 외곽)에 배치
   const computePopupStyle = (): React.CSSProperties => {
-    if (
-      samplePopup?.method === 'mouse' &&
-      typeof samplePopup.x === 'number' &&
-      typeof samplePopup.y === 'number' &&
-      typeof window !== 'undefined'
-    ) {
-      const cardW = Math.min(430, window.innerWidth - 32);
-      const cardH = 210;
-      const clampedLeft = Math.max(16, Math.min(samplePopup.x - Math.round(cardW * 0.35), window.innerWidth - cardW - 16));
-      const clampedTop = Math.max(16, Math.min(samplePopup.y + 14, window.innerHeight - cardH - 16));
+    if (typeof window === 'undefined') {
+      return { position: 'fixed', left: '50%', top: '62%', transform: 'translateX(-50%)', width: '460px' };
+    }
+    const cardW = Math.min(460, window.innerWidth - 32);
+    const cardH = 235;
+    const boxRect = podsWrapRef.current?.getBoundingClientRect();
+
+    if (boxRect) {
+      // 기본: 두 충전 박스 바로 아래 바깥쪽(박스 가림 0%)
+      const desiredLeft =
+        samplePopup?.method === 'mouse'
+          ? boxRect.right - cardW
+          : boxRect.left;
+      const clampedLeft = Math.max(16, Math.min(desiredLeft, window.innerWidth - cardW - 16));
+
+      const belowTop = boxRect.bottom + 22;
+      if (belowTop + cardH <= window.innerHeight - 12) {
+        return {
+          position: 'fixed',
+          left: `${clampedLeft}px`,
+          top: `${belowTop}px`,
+          width: `${cardW}px`,
+        };
+      }
+      // 만약 화면 아래 여백이 좁으면 박스 위쪽 바깥(상단 외곽) 또는 우측 외곽에 배치해 박스 가림 방지
+      const aboveTop = boxRect.top - cardH - 18;
+      if (aboveTop >= 12) {
+        return {
+          position: 'fixed',
+          left: `${clampedLeft}px`,
+          top: `${aboveTop}px`,
+          width: `${cardW}px`,
+        };
+      }
       return {
         position: 'fixed',
         left: `${clampedLeft}px`,
-        top: `${clampedTop}px`,
+        top: `${Math.max(16, window.innerHeight - cardH - 16)}px`,
         width: `${cardW}px`,
       };
     }
+
     return {
       position: 'fixed',
       left: '50%',
-      top: '38%',
-      transform: 'translate(-50%, -50%)',
-      width: 'min(430px, calc(100vw - 32px))',
+      top: '65%',
+      transform: 'translateX(-50%)',
+      width: `${cardW}px`,
     };
   };
 
   const kbClamped = Math.min(TARGET_REPS, keyboardCount);
   const msClamped = Math.min(TARGET_REPS, mouseCount);
-  const kbFillPct = (kbClamped / TARGET_REPS) * 100;
-  const msFillPct = (msClamped / TARGET_REPS) * 100;
   const kbDone = keyboardCount >= TARGET_REPS;
   const msDone = mouseCount >= TARGET_REPS;
 
@@ -384,7 +468,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     <div className="py-1">
       <style>{`
         @keyframes ghostSampleSummonPop {
-          0% { opacity: 0; scale: 0.9; }
+          0% { opacity: 0; scale: 0.92; }
           65% { opacity: 1; scale: 1.02; }
           100% { opacity: 1; scale: 1; }
         }
@@ -396,11 +480,22 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           from { width: 100%; }
           to { width: 0%; }
         }
+        @keyframes ghostWaveForward {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @keyframes ghostWaveReverse {
+          0% { transform: translateX(-50%); }
+          100% { transform: translateX(0); }
+        }
       `}</style>
 
-      {/* 여백 조절로 보기 좋게 좁힌 중앙 2열 배터리 충전 카드 */}
-      <div className="w-full max-w-[680px] mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 items-stretch">
-        {/* 좌측: 키보드 Ctrl + 0 (아래→위 3단 충전) */}
+      {/* 여백 조절로 보기 좋게 좁힌 중앙 2열 찰랑 물결 충전 카드 */}
+      <div
+        ref={podsWrapRef}
+        className="w-full max-w-[680px] mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 items-stretch"
+      >
+        {/* 좌측: 키보드 Ctrl + 0 (아래→위 찰랑 물결 충전) */}
         <div
           onMouseDown={handlers.onMouseDown}
           onContextMenu={handlers.onContextMenu}
@@ -414,17 +509,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
                   : 'border-dashed border-slate-300 bg-slate-50/85'
           }`}
         >
-          {/* 아래에서 위로 차오르는 충전 배경 레이어 */}
-          <div
-            style={{ height: `${kbFillPct}%` }}
-            className={`absolute inset-x-0 bottom-0 z-0 pointer-events-none transition-all duration-500 ease-out ${
-              kbDone
-                ? 'bg-gradient-to-t from-emerald-300/75 via-teal-200/60 to-emerald-100/65'
-                : keyboardCount > 0
-                  ? 'bg-gradient-to-t from-teal-300/80 via-teal-200/65 to-teal-100/60 border-t-2 border-teal-500/75'
-                  : ''
-            }`}
-          />
+          <LiquidWaveFill count={keyboardCount} target={TARGET_REPS} />
 
           <div className="relative z-10 w-full flex items-center justify-between gap-2">
             <span className="text-[12.5px] font-extrabold text-slate-800 tracking-tight">
@@ -454,7 +539,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           </div>
         </div>
 
-        {/* 우측: 마우스 Ctrl + 우클릭 (아래→위 3단 충전) */}
+        {/* 우측: 마우스 Ctrl + 우클릭 (아래→위 찰랑 물결 충전) */}
         <div
           onMouseDown={handlers.onMouseDown}
           onContextMenu={handlers.onContextMenu}
@@ -468,17 +553,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
                   : 'border-dashed border-slate-300 bg-slate-50/85'
           }`}
         >
-          {/* 아래에서 위로 차오르는 충전 배경 레이어 */}
-          <div
-            style={{ height: `${msFillPct}%` }}
-            className={`absolute inset-x-0 bottom-0 z-0 pointer-events-none transition-all duration-500 ease-out ${
-              msDone
-                ? 'bg-gradient-to-t from-emerald-300/75 via-teal-200/60 to-emerald-100/65'
-                : mouseCount > 0
-                  ? 'bg-gradient-to-t from-teal-300/80 via-teal-200/65 to-teal-100/60 border-t-2 border-teal-500/75'
-                  : ''
-            }`}
-          />
+          <LiquidWaveFill count={mouseCount} target={TARGET_REPS} />
 
           <div className="relative z-10 w-full flex items-center justify-between gap-2">
             <span className="text-[12.5px] font-extrabold text-slate-800 tracking-tight">
@@ -509,7 +584,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         </div>
       </div>
 
-      {/* 2초 후 자동 퇴장하는 깔끔한 호출 연습용 샘플 귀신검색창 */}
+      {/* 충전 박스 바깥쪽에 뜨고 2초 후 자동 퇴장하는 리얼 샘플 귀신검색창 */}
       {samplePopup &&
         typeof document !== 'undefined' &&
         createPortal(
@@ -519,7 +594,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               ref={popupCardRef}
               style={{
                 ...computePopupStyle(),
-                animation: 'ghostSampleSummonPop 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                animation: 'ghostSampleSummonPop 170ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
               }}
               onContextMenu={(e) => {
                 if (e.ctrlKey) e.preventDefault();
@@ -527,7 +602,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               className="pointer-events-auto rounded-2xl overflow-hidden bg-white border-2 border-slate-800 shadow-[0_24px_60px_-12px_rgba(15,23,42,0.45)] ring-4 ring-teal-500/25 select-none"
             >
               {/* 상단 타이틀 바 */}
-              <div className="px-3.5 py-2.5 bg-slate-900 text-white flex items-center justify-between gap-2">
+              <div className="px-4 py-2.5 bg-slate-900 text-white flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <img
                     src="/gwisinkachi_app_icon_512.png"
@@ -538,19 +613,19 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
                     귀신검색창
                   </span>
                   <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[10.5px] font-extrabold whitespace-nowrap">
-                    샘플
+                    호출 연습용 샘플
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-teal-300 text-[11.5px] font-bold whitespace-nowrap">
+                  <span className="px-2 py-0.5 rounded-full bg-teal-500/25 border border-teal-400/50 text-teal-200 text-[11px] font-bold whitespace-nowrap">
                     {samplePopup.method === 'keyboard'
-                      ? `Ctrl + 0 (${Math.min(TARGET_REPS, keyboardCount)}/${TARGET_REPS})`
-                      : `Ctrl + 우클릭 (${Math.min(TARGET_REPS, mouseCount)}/${TARGET_REPS})`}
+                      ? '키보드 Ctrl + 0 소환!'
+                      : '마우스 Ctrl + 우클릭 소환!'}
                   </span>
                   <button
                     type="button"
                     onClick={() => setSamplePopup(null)}
-                    aria-label="닫기"
+                    aria-label="샘플 창 닫기"
                     className="w-6 h-6 rounded-md bg-white/15 hover:bg-white/25 text-white text-[12px] flex items-center justify-center cursor-pointer transition-colors"
                   >
                     ✕
@@ -558,7 +633,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
                 </div>
               </div>
 
-              {/* 2초 자동 소멸 진행 바 */}
+              {/* 2초 자동 소멸 타이머 바 */}
               <div className="w-full h-1 bg-slate-800 overflow-hidden">
                 <div
                   style={{ animation: 'ghostPopupTimerShrink 2000ms linear forwards' }}
@@ -566,19 +641,44 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
                 />
               </div>
 
-              {/* 심플한 검색창 모형 */}
-              <div className="p-3.5 bg-white flex flex-col gap-2">
-                <div className="h-10.5 px-3 rounded-xl bg-slate-50 border-2 border-teal-500 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px] text-teal-600">
+              {/* 이전 버전의 완성도 높은 검색창 + 샘플 결과 2줄 모형 복원 */}
+              <div className="p-3.5 bg-white flex flex-col gap-2.5">
+                <div className="h-11 px-3.5 rounded-xl bg-slate-50 border-2 border-teal-500 flex items-center gap-2.5 shadow-inner">
+                  <span className="material-symbols-outlined text-[19px] text-teal-600">
                     search
                   </span>
                   <span
                     style={{ animation: 'ghostCaretBlink 1s infinite' }}
-                    className="w-0.5 h-4.5 bg-teal-600 rounded-full shrink-0"
+                    className="w-0.5 h-5 bg-teal-600 rounded-full shrink-0"
                   />
-                  <span className="text-[12.5px] text-slate-400 truncate">
-                    문서 · 사진 속 글자 · 동영상 장면 즉시 검색...
+                  <span className="text-[13px] text-slate-400 truncate">
+                    실제 연결 시 여기서 문서·사진·영상을 바로 검색합니다...
                   </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5 opacity-90">
+                  <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-2 text-[12px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 text-[10px] font-bold shrink-0">
+                        PDF
+                      </span>
+                      <span className="font-semibold text-slate-700 truncate">
+                        2026_표준_임대차계약서.pdf
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 shrink-0">샘플 모양</span>
+                  </div>
+                  <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-2 text-[12px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 text-[10px] font-bold shrink-0">
+                        사진
+                      </span>
+                      <span className="font-semibold text-slate-700 truncate">
+                        배달주문_영수증_38500원.jpg
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 shrink-0">샘플 모양</span>
+                  </div>
                 </div>
               </div>
             </div>
