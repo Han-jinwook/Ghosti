@@ -70,10 +70,10 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white text-[11.5px] font-semibold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FDE6B8] border border-[#EAB866] text-[#78350F] text-[11.5px] font-bold">
                     실전 활용 사례 · Before vs After
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-[11.5px] font-semibold">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[11.5px] font-semibold">
                     {matchedMenuCase.menuTag}
                   </span>
                 </div>
@@ -93,8 +93,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                   ))}
                 </ul>
               </div>
-              <div className="rounded-xl bg-blue-50/70 border border-blue-200 p-4 space-y-2">
-                <div className="text-[12.5px] font-bold text-blue-900">After (귀신같이 도입 후)</div>
+              <div className="rounded-xl bg-[#ECFDF5]/80 border border-teal-200 p-4 space-y-2">
+                <div className="text-[12.5px] font-bold text-teal-800">After (귀신같이 도입 후)</div>
                 <ul className="space-y-1.5 text-[13px] text-slate-800 font-medium leading-relaxed break-keep list-disc pl-4">
                   {matchedMenuCase.afterItems.map((ai, idx) => (
                     <li key={idx}>{ai}</li>
@@ -112,7 +112,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <div className="pt-2 border-t border-slate-200 space-y-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-blue-600 text-white text-[11.5px] font-semibold">
+                    <span className="px-2.5 py-0.5 rounded-md bg-[#FFEDD5] border border-[#F2BE86] text-[#9A3412] text-[11.5px] font-bold">
                       15초 미리보기 영상
                     </span>
                     <span className="text-[14px] font-bold text-slate-900">
@@ -129,7 +129,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                       <div
                         key={item.id}
                         onClick={() => setActiveShortsModal(item)}
-                        className="group rounded-xl bg-slate-50 border border-slate-300 hover:border-blue-500 hover:bg-white p-3.5 transition-all hover:shadow-sm cursor-pointer flex items-center gap-4"
+                        className="group rounded-xl bg-slate-50 border border-slate-300 hover:border-[#EAB866] hover:bg-[#FFFDF8] p-3.5 transition-all hover:shadow-sm cursor-pointer flex items-center gap-4"
                       >
                         <div
                           data-keep-dark="true"
@@ -166,7 +166,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                           <p className="text-[12px] text-slate-600 leading-relaxed break-keep line-clamp-2">
                             {item.solutionLine}
                           </p>
-                          <div className="text-[12px] font-semibold text-blue-700 pt-0.5">
+                          <div className="text-[12px] font-semibold text-[#B45309] pt-0.5">
                             영상 재생하기 →
                           </div>
                         </div>
@@ -312,9 +312,9 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
 
       {/* 3) 공통 하단 대형 신뢰 배너: 각 기능 메뉴 하단에 큼직하게 고정되는 [개인 · 민간 기업 기본 기능 무료 사용 확인서] */}
       <section id="security" className="pb-10 px-4 sm:px-6 max-w-6xl mx-auto space-y-5">
-        <div className="rounded-2xl bg-white border-2 border-blue-200 shadow-md p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div className="rounded-2xl bg-white border-2 border-[#F3D7A5] shadow-md p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           <div className="lg:col-span-8 space-y-3.5 min-w-0 flex flex-col items-center text-center lg:items-start lg:text-left">
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-bold">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-bold">
               개인 · 민간 기업 기본 기능 평생 무료 사용 확인서
             </span>
             <h3 className="font-display text-xl sm:text-2xl font-bold text-slate-900 leading-snug break-keep">
@@ -343,7 +343,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
-                className="px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-xs"
+                className="px-4 py-2.5 rounded-lg bg-[#FDE6B8] hover:bg-[#FCD894] border border-[#EAB866] text-[#78350F] font-semibold text-[13px] cursor-pointer transition-colors whitespace-nowrap shadow-2xs"
               >
                 무료 사용 확인서 크게 보기
               </button>
@@ -351,7 +351,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 href="/showroom/certificates/ghosti_b2b_free_certificate.html"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2.5 rounded-lg bg-white hover:bg-blue-50 border border-slate-300 text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
+                className="px-4 py-2.5 rounded-lg bg-white hover:bg-[#FFFBEB] border border-slate-300 text-slate-800 font-semibold text-[13px] transition-colors whitespace-nowrap"
               >
                 인쇄 · PDF 저장 페이지 열기 ↗
               </a>
