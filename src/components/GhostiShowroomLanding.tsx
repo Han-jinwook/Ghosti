@@ -79,8 +79,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     return null;
   };
   const [paidEntryType, setPaidEntryType] = useState<'pro' | 'b2b' | null>(() => detectPaidEntry());
-  const [activeMainTab, setActiveMainTab] = useState<'secretary' | 'search' | 'share' | 'paid'>(() =>
-    detectPaidEntry() ? 'paid' : 'secretary'
+  const [activeMainTab, setActiveMainTab] = useState<'home' | 'secretary' | 'search' | 'share' | 'paid'>(() =>
+    detectPaidEntry() ? 'paid' : 'home'
   );
 
   useEffect(() => {
@@ -313,8 +313,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   }, [chatMessages]);
 
   const handleSelectMainTab = (
-    tab: 'secretary' | 'search' | 'share' | 'paid',
-    scrollToStage = false,
+    tab: 'home' | 'secretary' | 'search' | 'share' | 'paid',
+    scrollToTop = true,
     preferredSearchSub?: 'video' | 'doc'
   ) => {
     setActiveMainTab(tab);
@@ -330,10 +330,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       setSharePickedPhoto(null);
       setShareUploadHint(false);
     }
-    if (scrollToStage) {
-      setTimeout(() => {
-        document.getElementById('main-feature-stage')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 30);
+    if (scrollToTop) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -608,7 +606,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <GhostiBrandLogo
               size="desktop"
               onClick={() => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                handleSelectMainTab('home', true);
               }}
             />
             <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold whitespace-nowrap">
@@ -738,174 +736,158 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       </header>
 
       {/* 메인 섹션 */}
-      <section className="pt-7 pb-10 px-4 sm:px-6 max-w-6xl mx-auto space-y-7">
-        {/* 심플 히어로 배너 (순백 카드 + 딥 네이비/블루 주력 + 민트 포인트 CTA) */}
-        <div className="rounded-2xl bg-white border border-slate-300 p-6 sm:p-9 shadow-md">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-5">
-              <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold">
-                내 기기 안에서만 작동 · 원본 외부 전송 0%
-              </span>
+      <section className="pt-7 pb-8 px-4 sm:px-6 max-w-6xl mx-auto space-y-6">
+        {/* 0) 최초 접속 온보딩 대문 (activeMainTab === 'home'일 때만 단독 노출) */}
+        {activeMainTab === 'home' && (
+          <div className="rounded-2xl bg-white border border-slate-300 p-6 sm:p-9 shadow-md">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-7 space-y-5">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold">
+                  내 기기 안에서만 작동 · 원본 외부 전송 0%
+                </span>
 
-              <div className="space-y-2.5">
-                <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight leading-[1.3] text-slate-900 break-keep">
-                  {isCompactH1Slot
-                    ? '귀신같이 정리하고, 찾고, 원본 공유까지'
-                    : '귀신같이 정리하고, 찾고, 원본 그대로 모읍니다'}
-                </h1>
+                <div className="space-y-2.5">
+                  <h1 className="font-display text-2xl sm:text-4xl font-bold tracking-tight leading-[1.3] text-slate-900 break-keep">
+                    {isCompactH1Slot
+                      ? '귀신같이 정리하고, 찾고, 원본 공유까지'
+                      : '귀신같이 정리하고, 찾고, 원본 그대로 모읍니다'}
+                  </h1>
 
-                <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
-                  느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료 없이 얼굴별로 원본 그대로 나눕니다.
-                </p>
+                  <p className="text-[15px] sm:text-[16px] text-slate-600 leading-relaxed break-keep max-w-2xl">
+                    느려진 PC와 중복 사진은 가볍게 깨우고, 숨은 문서·영상은 열지 않고 1초 만에 찾으며, 가족·모임 사진은 카톡 기간 만료 없이 얼굴별로 원본 그대로 나눕니다.
+                  </p>
+                </div>
+
+                {/* 소제목 스타일 (아래 3개 체험 카드 안내) + 중복 문구 제거 */}
+                <div className="pt-2 space-y-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-4 rounded-full bg-teal-600 shrink-0" />
+                    <span className="text-[14px] font-bold text-slate-800">
+                      {isLaunched ? '원하는 기능을 눌러 바로 시작해 보세요' : '가입 없이 바로 체험해 보기'}
+                    </span>
+                    <span className="text-[12px] text-slate-500">아래 메뉴를 클릭하면 해당 페이지로 이동합니다</span>
+                  </div>
+
+                  {/* 본진 앱과 100% 일치하는 3대 무료 기능 선택 카드 */}
+                  <div className={`grid grid-cols-1 ${showPaidTab ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'} gap-2.5`}>
+                    {(
+                      [
+                        {
+                          key: 'secretary',
+                          stat: '1. 상태 점검 · 복원',
+                          title: '귀신비서',
+                          sub: '보안모듈 절전 · 중복 사진 정리',
+                        },
+                        {
+                          key: 'search',
+                          stat: '2. 본문 · 장면 검색',
+                          title: '귀신검색',
+                          sub: '문서 본문 · 영상 장면 1초 검색',
+                        },
+                        {
+                          key: 'share',
+                          stat: '3. 원본 화질 공유',
+                          title: '사진 공유',
+                          sub: '카톡 기간 만료 없는 무료 원본방',
+                        },
+                        ...(showPaidTab
+                          ? [
+                              {
+                                key: 'paid',
+                                stat: '선택형 확장 플랜',
+                                title: paidEntryType === 'b2b' ? '업무 공유 (S:)' : '내 기기 통합 Pro',
+                                sub: '다중 기기 연동 · 팀 공용 폴더',
+                              },
+                            ]
+                          : []),
+                      ] as Array<{ key: 'secretary' | 'search' | 'share' | 'paid'; stat: string; title: string; sub: string }>
+                    ).map((card) => (
+                      <button
+                        key={card.key}
+                        type="button"
+                        onClick={() => handleSelectMainTab(card.key, true)}
+                        className="p-3.5 rounded-xl border border-slate-300 bg-slate-50 hover:bg-[#FEF3D6] hover:border-[#EAB866] text-slate-900 text-left transition-all cursor-pointer group shadow-2xs"
+                      >
+                        <div className="text-[11.5px] font-semibold mb-0.5 text-[#B45309]">
+                          {card.stat}
+                        </div>
+                        <div className="text-[14.5px] font-bold group-hover:text-[#78350F]">{card.title}</div>
+                        <div className="text-[12px] break-keep leading-snug mt-0.5 text-slate-600 group-hover:text-[#92400E]">
+                          {card.sub}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2 pt-1">
-                <div className="flex flex-wrap items-center gap-2.5">
+              <div className="lg:col-span-5 flex flex-col items-center">
+                <div
+                  onClick={() => handleSelectMainTab('search', true, 'video')}
+                  className="w-full max-w-md rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-sm cursor-pointer group"
+                >
+                  <img
+                    src="/gwisinkachi_hero_banner_neon_after.jpg"
+                    alt="귀신같이 대표 이미지"
+                    className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
+                  />
+                  <div className="px-4 py-2.5 bg-[#FFF7E6] border-t border-[#F3D7A5] text-[#78350F] flex items-center justify-between gap-2 text-[12.5px]">
+                    <span className="font-semibold">귀신비서 · 귀신검색 · 사진 공유</span>
+                    <span className="text-teal-700 font-semibold whitespace-nowrap">클릭해서 바로 체험 →</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 1~3) 선택된 메뉴 전용 페이지 (해당 메뉴 선택 시에만 단독 노출) */}
+        {activeMainTab !== 'home' && (
+          <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
+            {/* 선택 기능 1줄 직관 풀이 헤더 바 (따뜻한 저채도 크림·살구 톤) */}
+            <div className="rounded-2xl bg-gradient-to-r from-[#FFF8EB] via-[#FEF1D4] to-[#FDEBD0] border border-[#ECC88A] text-[#451A03] px-5 sm:px-7 py-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-md bg-[#FDE2AD] border border-[#EAB866] text-[#78350F] text-[11.5px] font-bold">
+                    {MAIN_TAB_META[activeMainTab].badge}
+                  </span>
+                  <span className="text-[12px] text-[#92400E] hidden sm:inline">
+                    체험 · 활용 사례 · 짧은 영상을 한 화면에서 확인
+                  </span>
+                </div>
+                <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
+                  {MAIN_TAB_META[activeMainTab].headline}
+                </h2>
+                <p className="text-[12.5px] sm:text-[13px] text-[#78350F]/90 break-keep">
+                  {MAIN_TAB_META[activeMainTab].subline}
+                </p>
+              </div>
+              {activeMainTab === 'search' && (
+                <div className="flex items-center gap-1.5 shrink-0 bg-white/80 p-1 rounded-xl border border-[#ECC88A]">
                   <button
                     type="button"
-                    onClick={() =>
-                      isLaunched
-                        ? onEnterWorkspace(true)
-                        : document
-                            .getElementById('main-feature-stage')
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
-                    className="px-6 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[14.5px] transition-colors cursor-pointer shadow-xs"
+                    onClick={() => handleSelectWeaponChip('video')}
+                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                      demoTab === 'video' ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF7ED]'
+                    }`}
                   >
-                    {isLaunched ? '10초 만에 무료로 시작하기' : '가입 없이 바로 체험해 보기'}
+                    동영상 장면 · 글자
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectWeaponChip('doc')}
+                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                      demoTab === 'doc' ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF7ED]'
+                    }`}
+                  >
+                    문서 본문 · 영수증
                   </button>
                 </div>
-                <p className="text-[12.5px] text-slate-500 break-keep">
-                  {isLaunched
-                    ? '가입·카드 등록 없이 즉시 시작 · 서버 전송 0% · 광고 0% 평생 무료'
-                    : '가입·카드 등록 없이 바로 체험 · 서버 전송 0% · 광고 0% 평생 무료'}
-                </p>
-              </div>
-
-              {/* 본진 앱과 100% 일치하는 3대 무료 기능 선택 카드 (유료 링크 유입 시에만 4번째 확장 플랜 카드 표시) */}
-              <div className={`grid grid-cols-1 ${showPaidTab ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'} gap-2.5 pt-1`}>
-                {(
-                  [
-                    {
-                      key: 'secretary',
-                      stat: '1. 상태 점검 · 복원',
-                      title: '귀신비서',
-                      sub: '보안모듈 절전 · 중복 사진 정리',
-                    },
-                    {
-                      key: 'search',
-                      stat: '2. 본문 · 장면 검색',
-                      title: '귀신검색',
-                      sub: '문서 본문 · 영상 장면 1초 검색',
-                    },
-                    {
-                      key: 'share',
-                      stat: '3. 원본 화질 공유',
-                      title: '사진 공유',
-                      sub: '카톡 기간 만료 없는 무료 원본방',
-                    },
-                    ...(showPaidTab
-                      ? [
-                          {
-                            key: 'paid',
-                            stat: '선택형 확장 플랜',
-                            title: paidEntryType === 'b2b' ? '업무 공유 (S:)' : '내 기기 통합 Pro',
-                            sub: '다중 기기 연동 · 팀 공용 폴더',
-                          },
-                        ]
-                      : []),
-                  ] as Array<{ key: 'secretary' | 'search' | 'share' | 'paid'; stat: string; title: string; sub: string }>
-                ).map((card) => {
-                  const active = activeMainTab === card.key;
-                  return (
-                    <button
-                      key={card.key}
-                      type="button"
-                      onClick={() => handleSelectMainTab(card.key, true)}
-                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        active
-                          ? 'bg-[#FEF3D6] border-2 border-[#EAB866] text-[#78350F] shadow-xs'
-                          : 'bg-slate-50 hover:bg-[#FFFBF0] border-slate-300 hover:border-[#F0C987] text-slate-900'
-                      }`}
-                    >
-                      <div className={`text-[11.5px] font-semibold mb-0.5 ${active ? 'text-[#B45309]' : 'text-[#B45309]/80'}`}>
-                        {card.stat}
-                      </div>
-                      <div className="text-[14.5px] font-bold">{card.title}</div>
-                      <div className={`text-[12px] break-keep leading-snug mt-0.5 ${active ? 'text-[#92400E]' : 'text-slate-600'}`}>
-                        {card.sub}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              )}
             </div>
 
-            <div className="lg:col-span-5 flex flex-col items-center">
-              <div
-                onClick={() => handleSelectMainTab('search', true, 'video')}
-                className="w-full max-w-md rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-sm cursor-pointer group"
-              >
-                <img
-                  src="/gwisinkachi_hero_banner_neon_after.jpg"
-                  alt="귀신같이 대표 이미지"
-                  className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
-                />
-                <div className="px-4 py-2.5 bg-[#FFF7E6] border-t border-[#F3D7A5] text-[#78350F] flex items-center justify-between gap-2 text-[12.5px]">
-                  <span className="font-semibold">귀신비서 · 귀신검색 · 사진 공유</span>
-                  <span className="text-teal-700 font-semibold whitespace-nowrap">아래에서 바로 체험 →</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 선택된 기능 1개 완결 스테이지 (상단 메뉴 클릭 시 항상 이 시작점에 칼정렬) */}
-        <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
-          {/* 선택 기능 1줄 직관 풀이 헤더 바 (따뜻한 저채도 크림·살구 톤) */}
-          <div className="rounded-2xl bg-gradient-to-r from-[#FFF8EB] via-[#FEF1D4] to-[#FDEBD0] border border-[#ECC88A] text-[#451A03] px-5 sm:px-7 py-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-0.5 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-[#FDE2AD] border border-[#EAB866] text-[#78350F] text-[11.5px] font-bold">
-                  {MAIN_TAB_META[activeMainTab].badge}
-                </span>
-                <span className="text-[12px] text-[#92400E] hidden sm:inline">
-                  체험 · 활용 사례 · 짧은 영상을 한 화면에서 확인
-                </span>
-              </div>
-              <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
-                {MAIN_TAB_META[activeMainTab].headline}
-              </h2>
-              <p className="text-[12.5px] sm:text-[13px] text-[#78350F]/90 break-keep">
-                {MAIN_TAB_META[activeMainTab].subline}
-              </p>
-            </div>
-            {activeMainTab === 'search' && (
-              <div className="flex items-center gap-1.5 shrink-0 bg-white/80 p-1 rounded-xl border border-[#ECC88A]">
-                <button
-                  type="button"
-                  onClick={() => handleSelectWeaponChip('video')}
-                  className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                    demoTab === 'video' ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF7ED]'
-                  }`}
-                >
-                  동영상 장면 · 글자
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectWeaponChip('doc')}
-                  className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
-                    demoTab === 'doc' ? 'bg-[#FDE6B8] text-[#78350F] border border-[#EAB866] shadow-2xs' : 'text-slate-700 hover:bg-[#FFF7ED]'
-                  }`}
-                >
-                  문서 본문 · 영수증
-                </button>
-              </div>
-            )}
-          </div>
-
-          {activeMainTab !== 'paid' && (
-            <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            {activeMainTab !== 'paid' && (
+              <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
               {/* 좌측 대화 안내 */}
               <aside className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-300 bg-white shadow-md overflow-hidden">
             <div className="px-4 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
@@ -1602,6 +1584,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         </div>
           )}
         </div>
+        )}
 
         {/* 개발자 전용 패널 */}
         {isDevAuthorized && devFullView && (

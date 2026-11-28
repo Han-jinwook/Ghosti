@@ -7,7 +7,7 @@ import {
 } from './showroomDataAndUtils';
 
 export interface ShowroomLowerSectionsProps {
-  activeMainTab: 'secretary' | 'search' | 'share' | 'paid';
+  activeMainTab: 'home' | 'secretary' | 'search' | 'share' | 'paid';
   paidEntryType: 'pro' | 'b2b' | null;
   shortsList: ShortsItem[];
   activeShortsModal: ShortsItem | null;
@@ -115,8 +115,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
 
   return (
     <>
-      {/* 1) 선택된 무료 기능 전용 [Before vs After 사례 + 15초 짧은 영상] 원스톱 결합 섹션 */}
-      {activeMainTab !== 'paid' && matchedMenuCase && (
+      {/* 1) 선택된 무료 기능 전용 [Before vs After 사례 + 15초 짧은 영상] 원스톱 결합 섹션 (home 대문에서는 미노출) */}
+      {activeMainTab !== 'home' && activeMainTab !== 'paid' && matchedMenuCase && (
         <section className="pb-7 px-4 sm:px-6 max-w-6xl mx-auto">
           <div className="rounded-2xl bg-white border border-slate-300 shadow-md p-6 sm:p-8 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-200">
