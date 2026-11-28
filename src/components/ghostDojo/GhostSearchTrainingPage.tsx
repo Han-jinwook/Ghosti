@@ -884,108 +884,129 @@ export const GhostSearchTrainingPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-20">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-[20px] sm:text-[22px] font-bold text-slate-900">귀신검색</h1>
-            <div className="inline-flex flex-wrap items-center gap-2.5 px-3 py-1 rounded-xl bg-white border border-slate-200">
-              <span className="text-[12px] font-semibold text-slate-600 tracking-tight">
-                귀신검색 호출 단축키
-              </span>
-              <span className="h-3.5 w-px bg-slate-200" />
-              <img
-                src="/ghostkey_shortcut_badge.png"
-                alt="Ctrl+0 / Ctrl+우클릭"
-                className="h-6 sm:h-7 w-auto object-contain select-none"
-              />
+    <div className="flex-1 w-full min-h-full bg-[#D8E1EC]">
+      <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-20">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-[22px] sm:text-[24px] font-extrabold tracking-tight text-slate-900">
+                귀신검색
+              </h1>
+              <div
+                aria-label="단축키 안내"
+                className="inline-flex flex-wrap items-center gap-2 px-2.5 py-1 rounded-md bg-slate-900/[0.07] select-none cursor-default"
+              >
+                <span className="text-[12px] font-medium text-slate-600 tracking-tight">
+                  귀신검색 호출 단축키
+                </span>
+                <span className="h-3.5 w-px bg-slate-400/50" />
+                <img
+                  src="/ghostkey_shortcut_badge.png"
+                  alt="Ctrl+0 / Ctrl+우클릭"
+                  className="h-6 sm:h-6.5 w-auto object-contain select-none pointer-events-none"
+                />
+              </div>
             </div>
+            <p className="text-[13.5px] text-slate-600 leading-relaxed">
+              바탕화면이나 작업 화면에서 언제든 검색창을 바로 열 수 있습니다.
+            </p>
           </div>
-          <p className="text-[13.5px] text-slate-500">
-            바탕화면이나 작업 화면에서 언제든 검색창을 바로 열 수 있습니다.
-          </p>
+          {connected && (
+            <button
+              type="button"
+              aria-busy={isLaunchingRealWindow}
+              onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
+              className="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-[13px] font-bold border-b-2 border-teal-800 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] cursor-pointer shrink-0 transition-all duration-150"
+            >
+              <span>{isLaunchingRealWindow ? '검색창 여는 중...' : '귀신검색창 열기'}</span>
+              <span className="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">
+                ↗
+              </span>
+            </button>
+          )}
         </div>
-        {connected && (
-          <button
-            type="button"
-            aria-busy={isLaunchingRealWindow}
-            onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold cursor-pointer shrink-0 transition-colors"
+
+        {!connected && (
+          <div
+            role="status"
+            className="px-4 sm:px-5 py-3.5 rounded-xl bg-amber-50/95 border border-amber-300 border-l-[5px] border-l-amber-500 shadow-xs flex flex-wrap items-center justify-between gap-3 cursor-default"
           >
-            {isLaunchingRealWindow ? '검색창 여는 중...' : '귀신검색창 열기'}
-          </button>
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/20 text-amber-900 text-[11px] font-bold tracking-tight">
+                  샘플 체험 모드
+                </span>
+                <span className="text-[14px] font-bold text-amber-950">
+                  현재 샘플 미리보기 화면입니다
+                </span>
+              </div>
+              <span className="text-[12.5px] text-amber-900/85 leading-relaxed">
+                내 컴퓨터의 실제 사진·영상·문서를 찾으려면 먼저 귀신비서에서 내 컴퓨터를 연결해 주세요.
+              </span>
+            </div>
+            <button
+              type="button"
+              data-allow-secretary-jump="true"
+              onClick={jumpToGhostSecretary}
+              className="group inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-[13px] font-bold border-b-2 border-teal-800 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all duration-150 cursor-pointer shrink-0"
+            >
+              <span>귀신비서로 이동</span>
+              <span className="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">
+                →
+              </span>
+            </button>
+          </div>
         )}
+
+        {realPopupToast && (
+          <div className="px-4 py-2.5 rounded-lg bg-white border border-slate-300 shadow-xs text-slate-800 text-[13px] font-medium cursor-default">
+            {realPopupToast}
+          </div>
+        )}
+
+        <GhostSecretaryFirstGuard>
+          <section className="flex flex-col gap-2">
+            <GhostSuperpowerDojo variant="basics" />
+          </section>
+
+          <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
+            <GhostSearchDojoStampBoard variant="full" />
+
+            <VirtualMonitorSimulator
+              onStep={markStep}
+              initialQuery={pendingQuery}
+              connected={connected}
+            />
+          </section>
+        </GhostSecretaryFirstGuard>
+
+        <section className="p-4 rounded-xl bg-white/85 border border-slate-300/90 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[13.5px] font-medium text-slate-700">
+            {connected
+              ? '바탕화면에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 누르면 실제 내 파일을 검색할 수 있습니다.'
+              : '내 컴퓨터의 실제 사진과 문서를 검색하려면 귀신비서에서 내 컴퓨터를 연결해 주세요.'}
+          </span>
+          {connected ? (
+            <button
+              type="button"
+              aria-busy={isLaunchingRealWindow}
+              onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
+              className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+            >
+              {isLaunchingRealWindow ? '여는 중...' : '귀신검색창 열기'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-allow-secretary-jump="true"
+              onClick={jumpToGhostSecretary}
+              className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+            >
+              귀신비서로 이동
+            </button>
+          )}
+        </section>
       </div>
-
-      {!connected && (
-        <div className="px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="text-[13.5px] font-semibold text-slate-900">
-              현재 샘플 미리보기 화면입니다
-            </span>
-            <span className="text-[12.5px] text-slate-500">
-              내 컴퓨터의 실제 사진·영상·문서를 찾으려면 먼저 귀신비서에서 내 컴퓨터를 연결해 주세요.
-            </span>
-          </div>
-          <button
-            type="button"
-            data-allow-secretary-jump="true"
-            onClick={jumpToGhostSecretary}
-            className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition-colors cursor-pointer shrink-0"
-          >
-            귀신비서로 이동
-          </button>
-        </div>
-      )}
-
-      {realPopupToast && (
-        <div className="px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 text-[13px] font-medium">
-          {realPopupToast}
-        </div>
-      )}
-
-      <GhostSecretaryFirstGuard>
-        <section className="flex flex-col gap-2">
-          <GhostSuperpowerDojo variant="basics" />
-        </section>
-
-        <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
-          <GhostSearchDojoStampBoard variant="full" />
-
-          <VirtualMonitorSimulator
-            onStep={markStep}
-            initialQuery={pendingQuery}
-            connected={connected}
-          />
-        </section>
-      </GhostSecretaryFirstGuard>
-
-      <section className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-        <span className="text-[13.5px] font-medium text-slate-700">
-          {connected
-            ? '바탕화면에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 누르면 실제 내 파일을 검색할 수 있습니다.'
-            : '내 컴퓨터의 실제 사진과 문서를 검색하려면 귀신비서에서 내 컴퓨터를 연결해 주세요.'}
-        </span>
-        {connected ? (
-          <button
-            type="button"
-            aria-busy={isLaunchingRealWindow}
-            onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
-          >
-            {isLaunchingRealWindow ? '여는 중...' : '귀신검색창 열기'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            data-allow-secretary-jump="true"
-            onClick={jumpToGhostSecretary}
-            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
-          >
-            귀신비서로 이동
-          </button>
-        )}
-      </section>
     </div>
   );
 };
