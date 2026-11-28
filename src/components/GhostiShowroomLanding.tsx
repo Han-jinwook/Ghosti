@@ -133,13 +133,41 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [shareUploadHint, setShareUploadHint] = useState<boolean>(false);
 
   useEffect(() => {
+    // 온보딩 최초 접근 시 딱 1번만 아기귀신 효과음 재생 (이후 메뉴·버튼 클릭 시 무음)
+    const SOUND_ONCE_KEY = 'ghosti_showroom_welcome_sound_once_v1';
+    try {
+      if (sessionStorage.getItem(SOUND_ONCE_KEY) === '1') return;
+    } catch {
+      // ignore
+    }
+    let played = false;
+    const playOnce = () => {
+      if (played) return;
+      played = true;
+      try {
+        sessionStorage.setItem(SOUND_ONCE_KEY, '1');
+      } catch {
+        // ignore
+      }
+      playBabyGhostChime();
+      window.removeEventListener('pointerdown', playOnce);
+      window.removeEventListener('keydown', playOnce);
+    };
+    window.addEventListener('pointerdown', playOnce, { once: true });
+    window.addEventListener('keydown', playOnce, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', playOnce);
+      window.removeEventListener('keydown', playOnce);
+    };
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     };
   }, []);
 
   const runSpeedDiagnose = () => {
-    playBabyGhostChime();
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSleptCount(0);
     setSpeedStep(1);
@@ -156,7 +184,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   };
 
   const runSpeedSleep = () => {
-    playBabyGhostChime();
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSpeedStep(2);
     setSleptCount(0);
@@ -182,7 +209,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   };
 
   const runSpeedBankOpen = () => {
-    playBabyGhostChime();
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSleptCount(SAMPLE_PC_PROGRAMS.length);
     setSpeedStep(3);
@@ -199,7 +225,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   };
 
   const runSpeedRestore = () => {
-    playBabyGhostChime();
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSleptCount(0);
     setSpeedStep(4);
@@ -292,7 +317,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     scrollToStage = false,
     preferredSearchSub?: 'video' | 'doc'
   ) => {
-    playBabyGhostChime();
     setActiveMainTab(tab);
     setShowStageShortVideo(false);
     if (tab === 'secretary') {
@@ -314,7 +338,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   };
 
   const handleSelectWeaponChip = (tab: OnboardingWeaponTab, scrollToDemo = false) => {
-    playBabyGhostChime();
     setDemoTab(tab);
     setActiveMainTab(tab === 'clean' ? 'secretary' : tab === 'share' ? 'share' : 'search');
     setShowStageShortVideo(false);
@@ -345,7 +368,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     const q = chatInput.trim();
     if (!q) return;
     setChatInput('');
-    playBabyGhostChime();
     const ts = nowTimeStr();
 
     // 4대 무료 코어(영상 글자·장면 / 문서·영수증 / PC·사진 정리 / 가족·모임 사진공유) 키워드 정밀 매칭
@@ -726,7 +748,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-5">
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#FFFBEB] border border-[#F5D08A] text-[#92400E] text-[12px] font-semibold">
-                기기 내 로컬 처리 · 광고 0% · 평생 무료
+                내 기기 안에서만 작동 · 원본 외부 전송 0%
               </span>
 
               <div className="space-y-2.5">
@@ -1116,7 +1138,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             key={item.query}
                             type="button"
                             onClick={() => {
-                              playBabyGhostChime();
                               setSelectedVideoScenarioIdx(idx);
                               setVideoOcrExtracted(false);
                             }}
@@ -1196,7 +1217,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  playBabyGhostChime();
                                   setVideoOcrExtracted((prev) => !prev);
                                 }}
                                 className={`px-2.5 py-1 rounded-md text-[12px] font-medium cursor-pointer transition-colors whitespace-nowrap ${
@@ -1236,7 +1256,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             key={item.query}
                             type="button"
                             onClick={() => {
-                              playBabyGhostChime();
                               setSelectedDocScenarioIdx(idx);
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
@@ -1316,7 +1335,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             key={st.key}
                             type="button"
                             onClick={() => {
-                              playBabyGhostChime();
                               setCleanSubTab(st.key);
                             }}
                             className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
@@ -1468,7 +1486,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              playBabyGhostChime();
                               setCleanDemoDone(!cleanDemoDone);
                             }}
                             className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[12.5px] transition-colors cursor-pointer shrink-0"
