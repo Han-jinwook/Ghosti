@@ -815,11 +815,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         정식 출시 준비 중
                       </span>
                       <span className="text-[12px] font-bold text-[#9A3412]">
-                        공식 앱 미리보기 안내
+                        공식 체험관 안내
                       </span>
                     </div>
                     <p className="text-[12.5px] font-semibold text-slate-800 leading-snug break-keep">
-                      지금은 출시 전 미리보기 화면입니다. 정식 오픈 날 이 주소에서 본 앱이 바로 열립니다!
+                      출시 전까지는 여기서 주요 기능을 먼저 구경·체험해 보실 수 있으며, 정식 오픈 날 이 주소에서 본 앱이 바로 열립니다!
                     </p>
                   </div>
                 )}
