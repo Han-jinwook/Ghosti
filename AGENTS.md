@@ -278,20 +278,16 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
 ---
 
-### 🚨 [멀린님 절대 지침: Z-코어 수정 시 시간대별 배포 대상 엄격 분리 — 알바 근무시간(09:00~15:00)에는 2·3·4호컴 기본 자동 설치! (2026-11-26 개정)]
+### 🚨 [멀린님 절대 지침: Z-코어 수정 시 원격 SSH 직결 배포 완전 폐지 — 오직 GitHub Releases 단일 자동 업데이트 파이프라인 (사내 45초 / 일반 유저 1시간) (2026-11-28 개정)]
 
-1. **알바생 근무시간(`09:00 ~ 15:00 KST`) 중 Z-코어 배포 철칙 (2·3·4호컴 기본 설치 · 타 PC 간섭 0%)**:
+1. **원격 SSH 직결 배포(Track A) 영구 폐지 & GitHub Releases 단일 파이프라인 통일**:
 
-   - `universal_z_core/` 내 데몬·플러그인·OS 제어 로직을 수정해 배포할 때, **알바생(달나라·해나라) 근무시간인 `09:00 ~ 15:00` 사이에는 통합테스트용 `2호컴(100.88.230.16)`과 `3호컴(100.102.43.42, 달나라)`, `4호컴(100.114.100.24, 해나라)` 3대에 기본 자동 설치**하며, 1호·5호·6호컴에는 설치·재기동하지 않습니다.
-   - `15:00` 이후(`15:00 ~ 익일 09:00`)에만 로컬 6호기 및 1·2·3·4·5호기 전체 클러스터 동기화를 수행합니다.
+   - `universal_z_core/` 내 데몬·플러그인·OS 제어 로직을 수정해 배포할 때, 에이전트가 `1~5호컴` 원격 PC에 SSH/SCP로 파일을 직접 찔러넣거나 강제 재기동하는 행위를 **영구 금지**합니다.
+   - 반드시 `python d:\Ghosti\universal_z_core\deploy_z_core_cluster.py`를 실행하여 **MS 공인 코드서명(`sundream-public-cert`) 빌드 + GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 업로드 + `public/z_core_version.json` & `zCoreBridge.ts` 동기화** 단일 파이프라인으로만 릴리즈합니다.
 
-2. **배포 파이프라인 단일 실행 (`deploy_z_core_cluster.py` 시간대 자동 가드 내장)**:
+2. **상주 엔진 자율 감지 주기 (사내 개발·QA PC `45초` / 일반 유저 PC `1시간`)**:
 
-   - `python d:\Ghosti\universal_z_core\deploy_z_core_cluster.py` 실행 시 스크립트가 현재 시각(`09 <= hour < 15`)을 자동 판별하여:
-
-     - **`09:00 ~ 15:00` (근무시간)**: 1·5·6호기를 건너뛰고 **`2호컴`·`3호컴`·`4호컴`**에 `Merlin_Z_Core_Setup.exe` SCP 전송 + 인터랙티브 스케줄러(`StartMerlinZCore5199`) 재기동 + `/__merlin/health` 헬스체크를 수행합니다 (수동 SSH로도 1·5·6호기에 설치 금지).
-
-     - **`15:00` 이후 (근무 외 시간)**: 로컬 및 1~5호컴 전 클러스터 일괄 동기화를 수행합니다.
+   - 엔진이 설치된 모든 PC는 웹 화면(`https://ghosti.sundreamer.app`)이 열려 있으면 즉시(15~35초 내) 자동 업데이트되며, 브라우저를 열지 않은 백그라운드 상주 상태에서도 자체 버전 감지기(`start_periodic_remote_version_watcher`)가 **사내 1~6호컴은 `45초` 주기**, **일반 외부 고객 PC는 `1시간(3600초)` 주기**로 스스로 감지해 100% 자연스럽게 3초 무소음 자동 업데이트(`/__merlin/self-update`)를 완결합니다.
 
 ---
 
@@ -417,10 +413,10 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
 ---
 
-### 📱 [전사·노션 QA 3단 공식 호칭 엄격 분리 · 2·3·4호컴 직접 배포 의무 · 모바일 OS별 영구 규칙 · iOS TestFlight 무제한 무료 Public 전용 러너 (2026-11-26 최신화)]
+### 📱 [전사·노션 QA 3단 공식 호칭 엄격 분리 · GitHub Releases 단일 자동 업데이트 의무 · 모바일 OS별 영구 규칙 · iOS TestFlight 무제한 무료 Public 전용 러너 (2026-11-28 최신화)]
 
 1. **🏷️ 전사·노션 QA 3단 공식 호칭 엄격 분리 (모바일을 ‘엔진’이라 부르는 것 영구 금지)**:
-   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.13.79`, Microsoft Artifact Signing `sundream-public-cert` `https://krc.codesigning.azure.net/` 공인 코드서명 적용) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신검색창/귀신Key, `G:`/`S:` 드라이브, PC 보안절전·청소·휴지통 구출) 수정 시 버전업하며, **`1·2·3·4귀신` 전원 버전업 때마다 테스터에게 직접 다운받으라고 안내하는 것을 영구 금지하고 반드시 `python universal_z_core/deploy_z_core_cluster.py`로 서명 빌드·GitHub Releases 업로드·클러스터 배포를 한 세트로 완결하여 전 기기의 버전을 100% 동일하게 일치시킵니다. 엔진이 한 번 설치된 모든 PC는 외부 SSH 개입 없이도 상주 엔진(`start_periodic_remote_version_watcher`)과 웹앱이 업버전을 감지하는 즉시 스스로 백그라운드 자동 업데이트(`/__merlin/self-update`)를 수행합니다. 사내 PC의 경우 ① 평일(월~금)에는 QA 테스터가 0초 대기 없이 즉시 테스트할 수 있도록 `Track A (2호컴 통합테스트 · 3호컴 달나라 · 4호컴 해나라)`에만 SSH 무중단 직결 설치를 수행하고 `Track B (1호컴 · 5호컴 · 6호컴)`는 엔진 스스로 자동 업데이트되게 두며, ② 주말(토·일요일)에는 `2·3·4호컴`에도 SSH 직결 설치를 하지 않고 오직 GitHub Releases 릴리즈만 올려두어 설치된 모든 PC가 스스로 업버전을 감지해 자동 업데이트하는지 실증**합니다.
+   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.13.89`, Microsoft Artifact Signing `sundream-public-cert` `https://krc.codesigning.azure.net/` 공인 코드서명 적용) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신검색창/귀신Key, `G:`/`S:` 드라이브, PC 보안절전·청소·휴지통 구출) 수정 시 버전업하며, **`1·2·3·4귀신` 전원 버전업 때마다 테스터에게 직접 다운받으라고 안내하거나 원격 PC에 SSH로 파일을 직결 덮어쓰는 것을 영구 금지하고, 반드시 `python universal_z_core/deploy_z_core_cluster.py`로 MS 공인 서명 빌드 + GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 업로드 + `z_core_version.json` 동기화 단일 파이프라인만 수행합니다. 엔진이 설치된 모든 PC는 외부 SSH 개입 없이 웹앱 접속 시 즉시(15~35초 내) 또는 백그라운드 상주 감지기(`start_periodic_remote_version_watcher`: 사내 1~6호컴 `45초` 주기 / 일반 유저 PC `1시간` 주기)를 통해 스스로 백그라운드 무소음 자동 업데이트(`/__merlin/self-update`)를 완결**합니다.
    - **② `웹 화면` (`웹 UI`)**: `https://ghosti.sundreamer.app` — 일반 UI 디자인, 문구, 채팅 라우터, 공유방 화면 수정 시 (`git push` 즉시 반영).
    - **③ `모바일 앱` (`안드로이드 앱` / `아이폰 앱`)**: 안드로이드 앱(`.aab`, Google Play) 및 아이폰 앱(`.ipa`, Apple TestFlight · Apple ID `6836307976` · `app.sundreamer.ghosti`) — 양대 스토어 1:1 동일 버전 라임 통일 (현행 `1.0.54 (54)`~`1.0.55 (55)`~, 사소한 UI/로직 수정은 모아서 배치 출시). 노션 카드에 GitHub `.apk` 수동 다운로드 링크 기재 영구 금지.
 2. **📱 안드로이드 앱 vs 🍎 아이폰 앱 영구 확정 스펙 (임시 심사 분기 없음 · QA = 정식 출시 100% 동일 고정, `ghosti-guide.html#sec-menus` 박제)**:
@@ -469,17 +465,14 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
 ---
 
-### 🚀 [사내 1~6호컴 배포 트랙 이원화(Track A `2·3·4호컴` 평일 직결/주말 직결 금지 vs Track B `1·5·6호컴` GitHub Releases Auto-Update) · 양 트랙 버전 100% 동일 유지 · Wave 1 `귀신Key` 하드락 철칙 (2026-11-28 멀린님 확정)]
+### 🚀 [Z-코어 원격 SSH 직결 배포 완전 폐지 · GitHub Releases 단일 자동 업데이트(사내 `45초` / 일반 유저 `1시간`) · Wave 1 `귀신Key` 하드락 철칙 (2026-11-28 멀린님 확정)]
 
-- **🚨 양 트랙(Track A · Track B) 버전 100% 동일 유지 절대 철칙**: 어느 귀신이든 Z-코어(`CORE_VERSION`)를 수정·버전업할 때는 로컬 코드만 커밋하고 끝내는 것을 영구 금지하며, 반드시 `python universal_z_core/deploy_z_core_cluster.py`를 실행해 **MS 공인 서명 빌드 + GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 업로드 + `z_core_version.json` 동기화까지 한 세트로 완결**하여 Track A와 Track B가 항상 100% 동일한 버전을 유지하게 합니다.
-- **① 엔진이 설치된 모든 PC의 기본 동작 (외부 SSH 개입 0% 순수 자율 자동 업데이트)**: Z-코어 엔진이 깔려 있는 모든 PC(일반 고객 PC 및 사내 1~6호컴 전체)는 누군가 외부에서 SSH로 찔러주지 않아도, 상주 데몬(`start_periodic_remote_version_watcher`, 3분 주기 GitHub/웹 버전 감지, 실패 시에도 루프 무중단 재시도) 및 웹앱이 업버전을 감지하는 즉시 스스로 GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`)에서 새 빌드를 받아 3초 무소음 자동 업데이트(`/__merlin/self-update`)를 완결합니다.
-- **② 평일(월~금) vs 주말(토·일) 사내 배포 운영**:
-  - **평일(월~금)**: QA 테스터가 3분 감지 주기를 기다리지 않고 0초 만에 즉시 테스트할 수 있도록 **Track A (`2호컴` `100.88.230.16` · `3호컴` `100.102.43.42` · `4호컴` `100.114.100.24`)**에만 SSH/SCP 무중단 직결 스왑을 수행하며, **Track B (`1호컴` · `5호컴` · `6호컴`)**에는 SSH로 개입하지 않고 엔진 스스로 자동 업데이트되게 둡니다.
-  - **주말(토·일요일)**: `2·3·4호컴`에도 SSH 직결 설치를 하지 않고 오직 GitHub Releases 정식 릴리즈만 업로드합니다. 이를 통해 주말 동안 집에서 버전업한 릴리즈를 사무실 `2·3·4호컴`에 깔려 있는 엔진이 스스로 감지해 자동 업데이트했는지 월요일 아침 출근 시 실증 확인합니다.
-- **③ Wave 1 `귀신Key` (구 귀신창) 하드락 & 자가업데이트 무소음 보장**: Wave 1 본체 출격 기간에는 Wave 2로 분리된 `귀신Key`(순차복붙·다림질·한영 자동변환·상용구·단축키 1~5번) 플러그를 하드락(`is_ghostkey_active_mode() -> False`)으로 완전 분리하여 복사(`Ctrl+C`)나 한영 타이핑 시 일절 개입·팝업·효과음이 나지 않게 하며, 자가업데이트·재기동 시에도 귀신소리가 절대 울리지 않도록 무소음 가드를 유지합니다.
-- **④ 구버전 잔재 정리는 하드코딩 목록 없이 ‘일반화된 단일 SSOT 규칙(`_self_purge_legacy_conflicts`)’으로만 수행**: 상용 Z-코어에 특정 구버전 이름 목록을 하드코딩하거나 8초마다 프로세스를 뒤지는 방어 코드를 넣는 것을 영구 금지합니다. 새 버전 Z-코어 기동 시 1회 실행되는 `_self_purge_legacy_conflicts()`에서 **정식 설치 경로(`%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe`) 및 현재 프로세스 트리를 제외한 모든 타 경로/이전 버전 프로세스, 설치·임시 폴더 내 백업·스테이징 찌꺼기(`_bak_dir`, `_staging_dir`, `*.zombie_*`, `*.old.*`, `*.bak.*`), 구형 자동실행 항목을 이름·버전 불문 일반화 규칙 1개로 자동 정리**합니다.
-- **⑤ `[1귀신]` 매일 체크인 시 1~6호컴 전 클러스터 엔진 버전 일치 & 구버전 충돌 유무 자동 전수점검 의무**: Z-코어 총괄인 `1귀신`은 매일 체크인할 때마다(`python z_core_watcher.py --role 1` 내장 `_audit_cluster_zcore_version_parity()` 자동 실행) **1~6호컴 전 컴퓨터의 실시간 Z-코어 버전(`5199/__merlin/health`)이 최신 릴리즈(`public/z_core_version.json`)와 일치하는지, 그리고 타 경로 구버전 프로세스 충돌이 없는지 전수 확인하여 체크인 첫 보고에 반드시 포함**합니다.
-- **⑥ `3대 모드 전환기` (`tools/ghosti_mode_switcher.py` 현행 `v1.3.0`) 버전업 시 `1~6호컴` 전 기기 수동 일괄 설치 & 구버전 정리 의무**: 모드 전환기는 프로덕션 웹 코드(`src/*`)에 어떠한 버튼이나 더미 컴포넌트(`LoungeModeSwitcherBar` 등 영구 제거)도 두지 않고 오직 Windows 바탕화면 독립 실행 프로그램(`귀신같이 모드 전환기.lnk`)으로만 운영하며, 버전업될 때마다 반드시 `python tools/deploy_mode_switcher_cluster.py`를 실행해 **`1~6호컴` 전체에 수동 설치하고 기존 구버전 전환기 프로세스·캐시·구형 금고 파일은 깨끗이 정리**합니다.
+- **🚨 원격 SSH 직결 배포 완전 폐지 & 전 기기 버전 100% 동일 유지 절대 철칙**: 어느 귀신이든 Z-코어(`CORE_VERSION`)를 수정·버전업할 때 로컬 코드만 커밋하고 끝내거나 2·3·4호컴 등에 SSH/SCP로 파일을 직접 찔러넣는 행위를 영구 금지합니다. 반드시 `python universal_z_core/deploy_z_core_cluster.py`를 실행해 **MS 공인 서명 빌드 + GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`) 업로드 + `z_core_version.json` 동기화까지 한 세트로 완결**하여 사내 1~6호컴과 일반 유저 PC 모두가 단 하나의 릴리즈만 바라보게 합니다.
+- **① 엔진이 설치된 모든 PC의 단일 자율 자동 업데이트 (사내 `45초` / 일반 유저 `1시간`)**: Z-코어 엔진이 깔려 있는 모든 PC는 외부 SSH 개입 없이 ① 웹 화면이 열려 있으면 즉시(15~35초 내), ② 브라우저를 열지 않은 백그라운드 상주 상태에서는 자체 버전 감지기(`start_periodic_remote_version_watcher`: **사내 1~6호컴 `45초` 주기 / 일반 외부 유저 PC `1시간(3600초)` 주기**, 실패 시에도 루프 무중단 재시도)가 업버전을 감지하는 즉시 스스로 GitHub Releases(`z-core-latest/Merlin_Z_Core.zip`)에서 새 빌드를 받아 3초 무소음 자동 업데이트(`/__merlin/self-update`)를 완결합니다.
+- **② Wave 1 `귀신Key` (구 귀신창) 하드락 & 자가업데이트 무소음 보장**: Wave 1 본체 출격 기간에는 Wave 2로 분리된 `귀신Key`(순차복붙·다림질·한영 자동변환·상용구·단축키 1~5번) 플러그를 하드락(`is_ghostkey_active_mode() -> False`)으로 완전 분리하여 복사(`Ctrl+C`)나 한영 타이핑 시 일절 개입·팝업·효과음이 나지 않게 하며, 자가업데이트·재기동 시에도 귀신소리가 절대 울리지 않도록 무소음 가드를 유지합니다.
+- **③ 구버전 잔재 정리는 하드코딩 목록 없이 ‘일반화된 단일 SSOT 규칙(`_self_purge_legacy_conflicts`)’으로만 수행**: 상용 Z-코어에 특정 구버전 이름 목록을 하드코딩하거나 8초마다 프로세스를 뒤지는 방어 코드를 넣는 것을 영구 금지합니다. 새 버전 Z-코어 기동 시 1회 실행되는 `_self_purge_legacy_conflicts()`에서 **정식 설치 경로(`%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe`) 및 현재 프로세스 트리를 제외한 모든 타 경로/이전 버전 프로세스, 설치·임시 폴더 내 백업·스테이징 찌꺼기(`_bak_dir`, `_staging_dir`, `*.zombie_*`, `*.old.*`, `*.bak.*`), 구형 자동실행 항목을 이름·버전 불문 일반화 규칙 1개로 자동 정리**합니다.
+- **④ `[1귀신]` 매일 체크인 시 1~6호컴 전 클러스터 엔진 버전 일치 & 구버전 충돌 유무 자동 전수점검 의무**: Z-코어 총괄인 `1귀신`은 매일 체크인할 때마다(`python z_core_watcher.py --role 1` 내장 `_audit_cluster_zcore_version_parity()` 자동 실행) **1~6호컴 전 컴퓨터의 실시간 Z-코어 버전(`5199/__merlin/health`)이 최신 릴리즈(`public/z_core_version.json`)와 일치하는지, 그리고 타 경로 구버전 프로세스 충돌이 없는지 전수 확인하여 체크인 첫 보고에 반드시 포함**합니다.
+- **⑤ `3대 모드 전환기` (`tools/ghosti_mode_switcher.py` 현행 `v1.3.0`) 버전업 시 `1~6호컴` 전 기기 수동 일괄 설치 & 구버전 정리 의무**: 모드 전환기는 프로덕션 웹 코드(`src/*`)에 어떠한 버튼이나 더미 컴포넌트(`LoungeModeSwitcherBar` 등 영구 제거)도 두지 않고 오직 Windows 바탕화면 독립 실행 프로그램(`귀신같이 모드 전환기.lnk`)으로만 운영하며, 버전업될 때마다 반드시 `python tools/deploy_mode_switcher_cluster.py`를 실행해 **`1~6호컴` 전체에 수동 설치하고 기존 구버전 전환기 프로세스·캐시·구형 금고 파일은 깨끗이 정리**합니다.
 
 ---
 

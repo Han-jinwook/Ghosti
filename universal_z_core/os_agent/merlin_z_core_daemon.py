@@ -294,7 +294,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.13.79"
+CORE_VERSION = "2.13.89"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1953,13 +1953,40 @@ def _is_remote_version_newer(remote_ver: str, local_ver: str) -> bool:
     return False
 
 
+def _is_internal_dev_or_qa_machine() -> bool:
+    """사내 개발·QA 테스트용 1~6호컴인지 판별합니다.
+    - 사내 PC: 45초 주기 초고속 버전 감지 (릴리즈 업로드 후 1분 내 전 기기 무소음 자동 업데이트)
+    - 일반 유저 PC: 1시간(3600초) 주기 백그라운드 감지 (웹 접속 시에는 즉시 감지)
+    """
+    try:
+        comp = (os.environ.get("COMPUTERNAME") or "").strip().upper()
+        user = (os.environ.get("USERNAME") or "").strip().lower()
+        if comp in (
+            "DESKTOP-TRRSPRP",
+            "DESKTOP-F8LTVPR",
+            "DESKTOP-IEJJ5OL",
+            "DESKTOP-BPS5LKU",
+            "OFFICE-MERLINCO",
+        ) or user in ("merlincode", "chichi", "sun-multi", "chiuk", "wd"):
+            return True
+        if Path(r"D:\Ghosti").is_dir() or Path(r"D:\Secretary").is_dir():
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def start_periodic_remote_version_watcher() -> None:
     """브라우저를 열지 않은 상태에서도 설치된 상주 Z-코어(.exe)가 스스로 원격 최신 버전을 주기 감지해
-    누구의 개입 없이도 GitHub Releases에서 즉시 무소음 자동 업데이트합니다."""
+    누구의 개입 없이도 GitHub Releases에서 즉시 무소음 자동 업데이트합니다.
+    - 사내 개발·QA PC (1~6호컴): 45초 주기
+    - 일반 외부 유저 PC: 1시간(3600초) 주기
+    """
     if not getattr(sys, "frozen", False):
         return
 
     def _poll_loop() -> None:
+        poll_interval_sec = 45.0 if _is_internal_dev_or_qa_machine() else 3600.0
         time.sleep(15.0)
         gh_zip_url = "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip"
         version_check_urls = (
@@ -1995,7 +2022,7 @@ def start_periodic_remote_version_watcher() -> None:
                         trigger_silent_self_update({"targetVersion": remote_ver, "downloadUrl": zip_url})
             except Exception:
                 pass
-            time.sleep(180.0)
+            time.sleep(poll_interval_sec)
 
     threading.Thread(target=_poll_loop, daemon=True).start()
 
