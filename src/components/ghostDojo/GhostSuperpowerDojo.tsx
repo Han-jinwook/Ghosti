@@ -247,34 +247,90 @@ const summonKeyBadgeCls =
 
 const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [summoned, setSummoned] = useState(false);
+  const [selectedSide, setSelectedSide] = useState<'keyboard' | 'mouse' | null>(null);
   const { leftClickGuide, handlers } = useInstantSummonTrigger(() => {
     playBabyGhostChime('summon');
     setSummoned(true);
     onDone();
   }, !summoned);
+
   return (
-    <div className="flex flex-col gap-2">
-      <div
-        {...handlers}
-        className="group select-none min-h-24 px-4 py-4 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/90 hover:border-teal-500 hover:bg-teal-50/40 flex flex-col items-center justify-center gap-2 text-[13px] text-slate-700 cursor-pointer transition-all duration-150 focus:outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-500/20"
-      >
-        <img
-          src="/ghostkey_shortcut_badge.png"
-          alt="Ctrl+0 / Ctrl+우클릭"
-          className="h-7 sm:h-8 w-auto object-contain select-none pointer-events-none transition-transform duration-150 group-hover:scale-105"
-        />
-        <span>
-          이 영역 위에서 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> 또는{' '}
-          <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd>을 눌러보세요.
-        </span>
-        {leftClickGuide && !summoned && (
-          <span className="text-[12px] font-semibold text-teal-800">
-            선택되었습니다. 이제 Ctrl + 0 또는 Ctrl + 우클릭을 눌러 호출해 보세요.
+    <div className="flex flex-col gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+        {/* 좌측: 키보드 Ctrl + 0 리얼 키캡 크기 체험 존 */}
+        <div
+          {...handlers}
+          onClick={(e) => {
+            setSelectedSide('keyboard');
+            handlers.onClick(e);
+          }}
+          className={`group select-none px-5 py-5 rounded-xl border-2 border-dashed flex flex-col items-center justify-between gap-3 text-[13px] text-slate-700 cursor-pointer transition-all duration-150 focus:outline-none ${
+            leftClickGuide && selectedSide === 'keyboard' && !summoned
+              ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-500/20'
+              : 'border-slate-300 bg-slate-50/90 hover:border-teal-500 hover:bg-teal-50/40'
+          }`}
+        >
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-200/80 text-slate-700 text-[12px] font-bold tracking-tight">
+            방법 1 · 키보드 호출
           </span>
-        )}
+          <div className="py-1 flex items-center justify-center">
+            <img
+              src="/ghostkey_ctrl_zero.png"
+              alt="Ctrl + 0"
+              className="h-[108px] sm:h-[124px] w-auto object-contain select-none pointer-events-none transition-transform duration-150 group-hover:scale-[1.03]"
+            />
+          </div>
+          <div className="text-center leading-relaxed">
+            <span>
+              이 영역에서 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> (숫자패드 0 포함) 입력
+            </span>
+            {leftClickGuide && selectedSide === 'keyboard' && !summoned && (
+              <div className="mt-1 text-[12px] font-bold text-teal-800">
+                선택됨 · 지금 키보드 Ctrl + 0을 눌러보세요!
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 우측: 마우스 Ctrl + 우클릭 리얼 단추 크기 체험 존 */}
+        <div
+          {...handlers}
+          onClick={(e) => {
+            setSelectedSide('mouse');
+            handlers.onClick(e);
+          }}
+          className={`group select-none px-5 py-5 rounded-xl border-2 border-dashed flex flex-col items-center justify-between gap-3 text-[13px] text-slate-700 cursor-pointer transition-all duration-150 focus:outline-none ${
+            leftClickGuide && selectedSide === 'mouse' && !summoned
+              ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-500/20'
+              : 'border-slate-300 bg-slate-50/90 hover:border-teal-500 hover:bg-teal-50/40'
+          }`}
+        >
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-200/80 text-slate-700 text-[12px] font-bold tracking-tight">
+            방법 2 · 마우스 호출
+          </span>
+          <div className="py-1 flex items-center justify-center">
+            <img
+              src="/ghostkey_ctrl_rightclick.png"
+              alt="Ctrl + 마우스 우클릭"
+              className="h-[108px] sm:h-[124px] w-auto object-contain select-none pointer-events-none transition-transform duration-150 group-hover:scale-[1.03]"
+            />
+          </div>
+          <div className="text-center leading-relaxed">
+            <span>
+              이 영역에서 <kbd className={summonKeyBadgeCls}>Ctrl</kbd> 누른 채{' '}
+              <kbd className={summonKeyBadgeCls}>마우스 우클릭</kbd>
+            </span>
+            {leftClickGuide && selectedSide === 'mouse' && !summoned && (
+              <div className="mt-1 text-[12px] font-bold text-teal-800">
+                선택됨 · 지금 Ctrl을 누른 채 마우스 우클릭해 보세요!
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
       {summoned && (
-        <div className="px-3.5 py-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-emerald-950 cursor-default">
+        <div className="px-4 py-3 rounded-xl bg-emerald-50 border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-[13px] text-emerald-950 cursor-default">
           <span className="font-bold">
             ✓ 귀신검색창 호출 완료
           </span>

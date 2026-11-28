@@ -292,19 +292,6 @@ export const GhostSearchPane: React.FC<{
                           ? '동호회 · 모임 사진방'
                           : '동창회 사진방'}
                       </h1>
-                      {activeLoungeType === 'personal' && (
-                        <div className="hidden sm:inline-flex items-center gap-2.5 px-3 py-1 rounded-xl bg-white border border-slate-200">
-                          <span className="text-[12px] font-semibold text-slate-600 tracking-tight">
-                            귀신검색 호출 단축키
-                          </span>
-                          <span className="h-3.5 w-px bg-slate-200" />
-                          <img
-                            src="/ghostkey_shortcut_badge.png"
-                            alt="Ctrl+0 / Ctrl+우클릭"
-                            className="h-6 w-auto object-contain select-none"
-                          />
-                        </div>
-                      )}
                     </div>
 
                     <LoungeFeedContextBanner />
