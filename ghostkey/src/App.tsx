@@ -315,124 +315,55 @@ export const App: React.FC = () => {
             {isExtensionsExpanded && (
               <>
 
-            {/* [확장 1] 내 기기 통합 */}
-            <div className="flex flex-col gap-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsDeviceIntegrationExpanded(true);
-                  setActiveMenu('phone_pc_ext');
-                  if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                  else scrollAppToTop();
-                }}
-                className={mainBtnClass(activeMenu === 'phone_pc_ext')}
-              >
-                <div className="flex flex-col text-left min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <Smartphone className="w-3.5 h-3.5 opacity-75 shrink-0" />
-                    <span className="text-[13.5px]">내 기기 통합</span>
-                    {isTrialBadgeVisible && (
-                      <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
-                        체험중
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[10.5px] opacity-65 font-normal whitespace-normal break-keep leading-snug mt-0.5">
-                    폰 ↔ PC 클립보드 · 상용구 동기화
-                  </span>
+            {/* [확장 1] 내 기기 통합 (단일 클릭 직결) */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMenu('phone_pc_ext');
+                if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                else scrollAppToTop();
+              }}
+              className={mainBtnClass(activeMenu === 'phone_pc_ext')}
+            >
+              <div className="flex flex-col text-left min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 opacity-75 shrink-0" />
+                  <span className="text-[13.5px]">내 기기 통합</span>
+                  {isTrialBadgeVisible && (
+                    <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      체험중
+                    </span>
+                  )}
                 </div>
-                <span
-                  role="button"
-                  aria-label={isDeviceIntegrationExpanded ? '접기' : '펼치기'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsDeviceIntegrationExpanded((v) => !v);
-                  }}
-                  className="text-[10px] opacity-60 hover:opacity-100 shrink-0 px-1 cursor-pointer"
-                >
-                  {isDeviceIntegrationExpanded ? '▾' : '▸'}
+                <span className="text-[10.5px] opacity-65 font-normal whitespace-normal break-keep leading-snug mt-0.5">
+                  폰 ↔ PC 클립보드 · 상용구 동기화
                 </span>
-              </button>
-
-              {isDeviceIntegrationExpanded && (
-                <div className={subWrapClass}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveMenu('phone_pc_ext');
-                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      else scrollAppToTop();
-                    }}
-                    className={subBtnClass(activeMenu === 'phone_pc_ext')}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-50 shrink-0" />
-                      <span className="font-semibold whitespace-normal break-keep leading-snug">
-                        귀신Key : 폰 + PC
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
+              </div>
+            </button>
 
             {/* [확장 2] 업무 공유 (공용 폴더 S:) */}
-            <div className="flex flex-col gap-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsWorkShareExpanded(true);
-                  setActiveMenu('work_team_ext');
-                  if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                  else scrollAppToTop();
-                }}
-                className={mainBtnClass(activeMenu === 'work_team_ext')}
-              >
-                <div className="flex flex-col text-left min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <Briefcase className="w-3.5 h-3.5 opacity-75 shrink-0" />
-                    <span className="text-[13.5px] whitespace-normal break-keep leading-snug">
-                      업무 공유 (공용 폴더 S:)
-                    </span>
-                  </div>
-                  <span className="text-[10.5px] opacity-65 font-normal whitespace-normal break-keep leading-snug mt-0.5">
-                    팀 공유 상용구 · 공용 드라이브
+            {/* 5. 업무 공유 (단일 클릭 직결) */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveMenu('work_team_ext');
+                if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                else scrollAppToTop();
+              }}
+              className={mainBtnClass(activeMenu === 'work_team_ext')}
+            >
+              <div className="flex flex-col text-left min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 opacity-75 shrink-0" />
+                  <span className="text-[13.5px] whitespace-normal break-keep leading-snug">
+                    업무 공유 (공용 폴더 S:)
                   </span>
                 </div>
-                <span
-                  role="button"
-                  aria-label={isWorkShareExpanded ? '접기' : '펼치기'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsWorkShareExpanded((v) => !v);
-                  }}
-                  className="text-[10px] opacity-60 hover:opacity-100 shrink-0 px-1 cursor-pointer"
-                >
-                  {isWorkShareExpanded ? '▾' : '▸'}
+                <span className="text-[10.5px] opacity-65 font-normal whitespace-normal break-keep leading-snug mt-0.5">
+                  팀 공유 상용구 · 공용 드라이브
                 </span>
-              </button>
-
-              {isWorkShareExpanded && (
-                <div className={subWrapClass}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveMenu('work_team_ext');
-                      if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                      else scrollAppToTop();
-                    }}
-                    className={subBtnClass(activeMenu === 'work_team_ext')}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-50 shrink-0" />
-                      <span className="font-semibold whitespace-normal break-keep leading-snug">
-                        귀신Key : 팀 공유
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
+              </div>
+            </button>
 
             <div
               className="mt-1 px-3 py-2 rounded-xl text-[10.5px] leading-relaxed bg-slate-200/55 text-slate-600"

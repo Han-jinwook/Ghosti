@@ -451,139 +451,49 @@ export const DesktopSidebarContainer: React.FC<{
                   기기 · 팀 확장
                 </div>
 
-                {/* 4. 내 기기 통합 */}
-                {(() => {
-                  const isDeviceIntegrationExpanded =
-                    (isDeviceIntegrationAutoExpanded || isPhonePcIntegrationActive) &&
-                    !isDeviceIntegrationCollapsed;
-                  return (
-                    <div className="flex flex-col gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsDeviceIntegrationCollapsed(false);
-                          toggleDeviceIntegrationExpanded(true);
-                          setIsDeviceIntegrationOpen(true);
-                          setActiveLoungeType('personal');
-                          setDesktopTab('sync');
-                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                          else scrollAppToTop();
-                        }}
-                        className={mainBtnClass(isPhonePcIntegrationActive)}
-                      >
-                        <span className="flex items-center gap-2.5 min-w-0">
-                          <SidebarLineIcon kind="sync" />
-                          <span className="truncate">내 기기 통합</span>
-                        </span>
-                        <span className="flex items-center gap-1.5 shrink-0">
-                          {isTrialActive ? (
-                            <span className="text-[10.5px] text-teal-700 font-medium">체험중</span>
-                          ) : !isStoreAppMode ? (
-                            <span className="text-[10.5px] text-slate-400 font-medium">Pro</span>
-                          ) : null}
-                          <span
-                            role="button"
-                            aria-label={isDeviceIntegrationExpanded ? '접기' : '펼치기'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isDeviceIntegrationExpanded) {
-                                setIsDeviceIntegrationCollapsed(true);
-                                toggleDeviceIntegrationExpanded(false);
-                              } else {
-                                setIsDeviceIntegrationCollapsed(false);
-                                toggleDeviceIntegrationExpanded(true);
-                              }
-                            }}
-                            className="text-[11px] text-slate-400 hover:text-slate-700 px-0.5 cursor-pointer"
-                          >
-                            {isDeviceIntegrationExpanded ? '▾' : '▸'}
-                          </span>
-                        </span>
-                      </button>
-
-                      {isDeviceIntegrationExpanded && (
-                        <div className={subWrapClass}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsDeviceIntegrationOpen(true);
-                              setActiveLoungeType('personal');
-                              setDesktopTab('sync');
-                              if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                            }}
-                            className={subBtnClass(isDeviceIntegrationOpen)}
-                          >
-                            <span>기기 연결 (PC · 모바일)</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                {/* 4. 내 기기 통합 (단일 클릭 직결) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(true);
+                    setActiveLoungeType('personal');
+                    setDesktopTab('sync');
+                    if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    else scrollAppToTop();
+                  }}
+                  className={mainBtnClass(isPhonePcIntegrationActive)}
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <SidebarLineIcon kind="sync" />
+                    <span className="truncate">내 기기 통합</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {isTrialActive ? (
+                      <span className="text-[10.5px] text-teal-700 font-medium">체험중</span>
+                    ) : !isStoreAppMode ? (
+                      <span className="text-[10.5px] text-slate-400 font-medium">Pro</span>
+                    ) : null}
+                  </span>
+                </button>
 
                 {/* 5. 업무 공유 */}
-                {(() => {
-                  const isWorkShareExpanded =
-                    (isWorkShareAutoExpanded || isWorkShareActive) && !isWorkShareCollapsed;
-                  return (
-                    <div className="flex flex-col gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsWorkShareCollapsed(false);
-                          toggleWorkShareExpanded(true);
-                          setIsDeviceIntegrationOpen(false);
-                          setActiveLoungeType('work');
-                          setDesktopTab('dashboard');
-                          resetToZenCanvas();
-                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                          else scrollAppToTop();
-                        }}
-                        className={mainBtnClass(isWorkShareActive)}
-                      >
-                        <span className="flex items-center gap-2.5 min-w-0">
-                          <SidebarLineIcon kind="work" />
-                          <span className="truncate">업무 공유 (S:)</span>
-                        </span>
-                        <span
-                          role="button"
-                          aria-label={isWorkShareExpanded ? '접기' : '펼치기'}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isWorkShareExpanded) {
-                              setIsWorkShareCollapsed(true);
-                              toggleWorkShareExpanded(false);
-                            } else {
-                              setIsWorkShareCollapsed(false);
-                              toggleWorkShareExpanded(true);
-                            }
-                          }}
-                          className="text-[11px] text-slate-400 hover:text-slate-700 shrink-0 px-0.5 cursor-pointer"
-                        >
-                          {isWorkShareExpanded ? '▾' : '▸'}
-                        </span>
-                      </button>
-
-                      {isWorkShareExpanded && (
-                        <div className={subWrapClass}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsDeviceIntegrationOpen(false);
-                              setActiveLoungeType('work');
-                              setDesktopTab('dashboard');
-                              resetToZenCanvas();
-                              if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                            }}
-                            className={subBtnClass(activeLoungeType === 'work' && !isDeviceIntegrationOpen)}
-                          >
-                            <span>공용 폴더 (S:)</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDeviceIntegrationOpen(false);
+                    setActiveLoungeType('work');
+                    setDesktopTab('dashboard');
+                    resetToZenCanvas();
+                    if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                    else scrollAppToTop();
+                  }}
+                  className={mainBtnClass(isWorkShareActive)}
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <SidebarLineIcon kind="work" />
+                    <span className="truncate">업무 공유 (S:)</span>
+                  </span>
+                </button>
               </div>
             </div>
           );
