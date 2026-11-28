@@ -425,6 +425,119 @@ def auto_heal_agents_and_handover_files() -> None:
                 pass
 
 
+def _audit_cluster_zcore_version_parity() -> None:
+    """[1귀신 체크인 필수 의무 — 1~6호컴 전 클러스터 Z-코어 버전 일치 및 구버전 충돌 전수 점검]
+    - 1귀신(role=1 또는 기본 체크인) 실행 시 6대 PC(1~6호컴)를 병렬(최대 3.5초)로 점검하여:
+      1) 현재 배포된 기준 버전(public/z_core_version.json)과 각 PC의 실시간 5199 엔진 버전 일치 여부,
+      2) 정식 경로(%LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe) 외 타 경로 구버전 프로세스/자동실행 충돌 유무를
+      한눈에 출력합니다.
+    """
+    import concurrent.futures
+    import json
+    import urllib.request
+
+    expected_ver = ""
+    ver_json = ROOT_DIR / "public" / "z_core_version.json"
+    if ver_json.exists():
+        try:
+            expected_ver = str(json.loads(ver_json.read_text(encoding="utf-8")).get("version") or "").strip()
+        except Exception:
+            pass
+
+    home = Path.home()
+    ssh_key = ""
+    for kname in ("id_ed25519", "merlin_cluster_ed25519", "id_rsa"):
+        cand = home / ".ssh" / kname
+        if cand.exists():
+            ssh_key = str(cand)
+            break
+
+    nodes = [
+        ("1호컴 (사무실 메인)", "chichi@100.86.161.8"),
+        ("2호컴 (통합테스트)", "sun-multi@100.88.230.16"),
+        ("3호컴 (달나라 QA)", "chiuk@100.102.43.42"),
+        ("4호컴 (해나라 QA)", "USER@100.114.100.24"),
+        ("5호컴 (집 메인)", "WD@100.122.235.63"),
+        ("6호컴 (로컬 개발)", None),
+    ]
+
+    ps_probe = (
+        "$h = curl.exe -s --max-time 2 http://127.0.0.1:5199/__merlin/health; "
+        "$v = if ($h -match '\"version\":\\s*\"([^\"]+)\"') { $Matches[1] } else { 'DOWN' }; "
+        "$rogue = @(Get-CimInstance Win32_Process | Where-Object { "
+        "($_.Name -notmatch 'Merlin_Z_Core_Setup|SenseTalk_Engine') -and ($_.CommandLine -match 'seq_paste_daemon\\.py') "
+        " -or (($_.Name -match 'Merlin_Z_Core') -and ($_.ExecutablePath -and $_.ExecutablePath -notmatch 'Programs\\\\MerlinFamily')) "
+        "}).Count; "
+        "Write-Output \"$v|$rogue\""
+    )
+
+    def _check_node(item: tuple[str, str | None]) -> tuple[str, str, int]:
+        label, ssh_target = item
+        if ssh_target is None:
+            ver = "DOWN"
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:5199/__merlin/health", timeout=1.8) as resp:
+                    data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                    ver = str(data.get("version") or "DOWN")
+            except Exception:
+                pass
+            return (label, ver, 0)
+        cmd = ["ssh"]
+        if ssh_key:
+            cmd += ["-i", ssh_key]
+        cmd += [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "ConnectTimeout=2",
+            ssh_target,
+            f'powershell -NoProfile -NonInteractive -Command "{ps_probe}"',
+        ]
+        try:
+            r = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                timeout=4.5,
+                creationflags=0x08000000 if os.name == "nt" else 0,
+            )
+            out = (r.stdout or "").strip().splitlines()
+            last_line = out[-1].strip() if out else ""
+            if "|" in last_line:
+                v_str, r_cnt = last_line.split("|", 1)
+                return (label, v_str.strip(), int(r_cnt.strip() or "0"))
+            return (label, "OFFLINE", 0)
+        except Exception:
+            return (label, "OFFLINE", 0)
+
+    print(f"\n🛡️ [1귀신 체크인 필수 점검] 1~6호컴 Z-코어 엔진 버전 패리티 & 구버전 충돌 전수조사 (기준 최신 버전: v{expected_ver})")
+    mismatches: list[str] = []
+    rogues: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as ex:
+        results = list(ex.map(_check_node, nodes))
+    for label, ver, rogue_cnt in results:
+        if ver == "OFFLINE":
+            status_str = "⚪ 오프라인(절전/꺼짐)"
+        elif ver == expected_ver and rogue_cnt == 0:
+            status_str = f"✅ v{ver} (최신 일치 · 구버전 충돌 0건)"
+        else:
+            flags = []
+            if ver != expected_ver:
+                flags.append(f"버전 불일치: v{ver} != 기준 v{expected_ver}")
+                mismatches.append(f"{label}(v{ver})")
+            if rogue_cnt > 0:
+                flags.append(f"🚨 타 경로 구버전 프로세스 {rogue_cnt}개 감지!")
+                rogues.append(f"{label}({rogue_cnt}개)")
+            status_str = f"⚠️ {', '.join(flags)}"
+        print(f"   • {label}: {status_str}")
+    if rogues or mismatches:
+        print(
+            f"🚨 [1귀신 엔진 버전/충돌 경보] 불일치({', '.join(mismatches) or '없음'}) / 구버전 충돌({', '.join(rogues) or '없음'}) ➔ 멀린님께 즉시 보고하고 최신 동기화 여부를 점검하세요!"
+        )
+    else:
+        print("   ✨ 온라인 상태인 모든 사내 PC가 기준 버전과 100% 일치하며 구버전 충돌이 0건입니다.")
+
+
 def main() -> None:
     auto_heal_agents_and_handover_files()
     merged_now = merge_role_handovers()
@@ -516,6 +629,11 @@ def main() -> None:
         pass
 
     if "--watch" not in sys.argv:
+        if is_primary_watcher:
+            try:
+                _audit_cluster_zcore_version_parity()
+            except Exception as e:
+                print(f"⚠️ [1~6호컴 버전 점검 예외]: {e}")
         print(
             f"✅ [{ROOT_DIR.name} 체크인 3중 점검 및 제목 각인 완료 ({role_badge})] (중앙 우체국 미처리 {len(initial_inbox)}건, 노션 발견된 버그 {len(initial_bugs)}건 | 엔터 즉시 전송을 위해 백그라운드 점유 없이 종료)"
         )

@@ -31,6 +31,7 @@
 
 ---
 
-## 📌 다음 체크인 Todo
+## 📌 다음 체크인 Todo (매일 체크인 시 최우선 의무)
+- [ ] **🛡️ [1귀신 매일 체크인 필수 의무] 1~6호컴 전 컴퓨터 Z-코어 엔진 버전 일치(`public/z_core_version.json` 대비) 및 구버전 프로세스 충돌 유무 전수 확인·보고** (`python z_core_watcher.py --role 1` 실행 시 자동 출력).
 - [ ] 양대 스토어 `v1.0.131 (131)` 반영 후 해나라님 노션 QA 미션(`안 쓰는 앱 솎아내기` 포함) 피드백 모니터링 및 `[발견된 버그]` 발생 시 Single-Piece Flow 즉시 수정.
 - [ ] Google Play Console 정식 심사 제출 시 `PACKAGE_USAGE_STATS` 권한 소명 자료(1회) 준비·제출 확인.
