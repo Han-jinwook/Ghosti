@@ -9,6 +9,7 @@ import {
   supabase,
 } from './supabaseClient';
 import { getSessionToken } from './merlin-hub-sdk/CoreLogic/client';
+import { registerPushToken as registerHubPushToken } from './merlin-hub-sdk/Notification/push';
 import {
   consumePendingNativeClipboardOutbound,
   isCapacitorNativeMobileRuntime,
@@ -1962,6 +1963,16 @@ export async function registerNativeMobilePushToken(rawToken: string): Promise<b
   });
   if (res.ok) {
     lastRegisteredNativePushKey = dedupeKey;
+    // [MerlinHub 중앙 관제 연동] 전사 모바일 백그라운드 푸시 허브 게이트웨이 동시 비동기 등록
+    void registerHubPushToken({
+      pushToken: cleanToken,
+      platform: plat,
+      deviceId: ident.deviceId,
+      apnsEnv: 'production',
+      appVersion: '1.0.130',
+    }).catch(() => {
+      /* non-blocking hub registration */
+    });
     return true;
   }
   return false;

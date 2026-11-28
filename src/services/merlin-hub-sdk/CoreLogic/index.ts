@@ -1,5 +1,5 @@
 /**
- * Merlin Hub SDK
+ * Merlin Hub SDK v2.26.6
  * ─────────────────────────────────────────────
  * 싱글턴 패턴 SDK — 다른 패밀리 앱에서도 복사하여 재사용 가능
  * 
@@ -8,6 +8,7 @@
  *   await MerlinHub.auth.requestOTP('user@example.com');
  *   const result = await MerlinHub.auth.verifyOTP('user@example.com', '123456');
  *   const balance = await MerlinHub.wallet.getBalance();
+ *   await MerlinHub.push.sendPushNotification({ toEmail: 'user@example.com', channel: 'senstalk', title: '알림', body: '내용' });
  */
 
 export { configureMerlinHub, getConfig } from './config';
@@ -33,6 +34,20 @@ export {
 } from '../Wallet/wallet';
 export type { WalletBalance, GiftItem, GiftContact } from '../Wallet/wallet';
 
+export {
+  registerPushToken,
+  revokePushToken,
+  sendPushNotification,
+} from '../Notification/push';
+export type {
+  FamilyPushChannelId,
+  RegisterPushTokenParams,
+  RegisterPushTokenResult,
+  RevokePushTokenParams,
+  SendPushNotificationParams,
+  SendPushNotificationResult,
+} from '../Notification/push';
+
 export { triggerHaptic } from './haptic';
 export type { HapticType } from './haptic';
 
@@ -44,6 +59,7 @@ export { handleCursorToEnd, setCursorToEnd } from './inputUtils';
 // ── Namespace export for convenience ──
 import * as auth from '../Auth/auth';
 import * as wallet from '../Wallet/wallet';
+import * as push from '../Notification/push';
 import * as client from './client';
 import { configureMerlinHub, getConfig } from './config';
 import { triggerHaptic } from './haptic';
@@ -55,6 +71,7 @@ export const MerlinHub = {
   getConfig,
   auth,
   wallet,
+  push,
   client,
   triggerHaptic,
   compressImage,

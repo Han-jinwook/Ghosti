@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Merlin Hub SDK v2.21.0
+ * Merlin Hub SDK v2.26.6
  * ─────────────────────────────────────────────
  * [CLIENT ONLY] 리액트 전용 엔트리
  * 이 파일은 클라이언트 컴포넌트에서만 임포트해야 합니다.
@@ -15,6 +15,7 @@ export { useHubPayment } from './Wallet/useHubPayment';
 export { useHubReferral } from './Referral/useHubReferral';
 
 // 2. Core 로직 (클라이언트에서도 자주 쓰는 함수들)
+export { withdrawApp } from './Auth/auth';
 export { 
   checkSession, 
   logout, 
@@ -29,9 +30,21 @@ export {
   claimGift,
   cancelGift,
   nudgeGift,
+  registerPushToken,
+  revokePushToken,
+  sendPushNotification,
   MerlinHubClient
 } from './CoreLogic';
-export type { GiftItem, GiftContact } from './CoreLogic';
+export type {
+  GiftItem,
+  GiftContact,
+  FamilyPushChannelId,
+  RegisterPushTokenParams,
+  RegisterPushTokenResult,
+  RevokePushTokenParams,
+  SendPushNotificationParams,
+  SendPushNotificationResult,
+} from './CoreLogic';
 export type { HubPayMethodType } from './Wallet/wallet';
 
 // 3. Custom UI Components (표준 UI 부품)
@@ -41,6 +54,8 @@ export { HubAuthModal } from './Auth/HubAuthModal';
 export { HubRegisterNudge } from './UI/HubRegisterNudge';
 export { HubPaymentTrigger } from './Wallet/HubPaymentTrigger';
 export { HubPurchaseWidget } from './Wallet/HubPurchaseWidget';
+export { HubCoinBadge } from './Wallet/HubCoinBadge';
+export type { HubCoinBadgeProps } from './Wallet/HubCoinBadge';
 export { HubGiftBoxModal, AGGRO_GIFT_PRODUCTS, SENSETALK_GIFT_PRODUCTS } from './Wallet/HubGiftBoxModal';
 export type { GiftProductItem } from './Wallet/HubGiftBoxModal';
 export { HubNotifier, showToast } from './CoreLogic/HubNotifier';
