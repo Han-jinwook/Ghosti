@@ -773,21 +773,21 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       [
                         {
                           key: 'secretary',
-                          stat: '1. 상태 점검 · 복원',
+                          stat: '1. PC · 사진 정리',
                           title: '귀신비서',
-                          sub: '보안모듈 절전 · 중복 사진 정리',
+                          sub: '느려진 PC 깨우기 · 중복 사진 정리',
                         },
                         {
                           key: 'search',
-                          stat: '2. 본문 · 장면 검색',
+                          stat: '2. 1초 내용 검색',
                           title: '귀신검색',
-                          sub: '문서 본문 · 영상 장면 1초 검색',
+                          sub: '열지 않고 문서·사진·영상 1초 찾기',
                         },
                         {
                           key: 'share',
-                          stat: '3. 원본 화질 공유',
+                          stat: '3. 가족 · 모임 앨범',
                           title: '사진 공유',
-                          sub: '카톡 기간 만료 없는 무료 원본방',
+                          sub: '카톡 기간 만료 없는 원본 공유방',
                         },
                         ...(showPaidTab
                           ? [
