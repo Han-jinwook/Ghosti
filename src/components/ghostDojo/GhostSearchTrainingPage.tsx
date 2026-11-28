@@ -523,15 +523,14 @@ const VirtualMonitorSimulator: React.FC<{
           boxShadow: '0 22px 50px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
         }}
       >
-        {/* 모니터 상단 슬림 카메라 베젤 */}
+        {/* 모니터 상단 베젤 실크 인쇄 레터링 (삼성 모니터 베젤 감성) */}
         <div
           data-keep-dark="true"
-          className="flex items-center justify-center pb-2"
+          className="flex items-center justify-center pt-0.5 pb-2 px-3"
         >
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black/55 border border-white/10">
-            <span className="w-2 h-2 rounded-full bg-zinc-800 border border-zinc-500 shadow-inner" />
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          </div>
+          <span className="text-[11px] font-semibold tracking-[0.12em] text-zinc-300/80 drop-shadow-[0_1px_1px_rgba(0,0,0,0.85)]">
+            귀신검색창 미리보기 화면
+          </span>
         </div>
 
         {/* 모니터 실제 LCD 바탕화면 영역 */}

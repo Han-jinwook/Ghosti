@@ -232,11 +232,11 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
                 : '귀신검색창 핵심 기능 4가지 직접 써보기'}
             </h2>
           </div>
-          <span className="text-[12.5px] text-slate-600 cursor-default">
-            {variant === 'compact'
-              ? '버튼을 눌러 각 기능을 바로 체험해 보세요.'
-              : '아래 버튼을 누르면 바로 밑의 귀신검색창 미리보기 화면에서 각 기능이 즉시 작동합니다.'}
-          </span>
+          {variant === 'compact' && (
+            <span className="text-[12.5px] text-slate-600 cursor-default">
+              버튼을 눌러 각 기능을 바로 체험해 보세요.
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
