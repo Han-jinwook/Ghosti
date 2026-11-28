@@ -1,6 +1,5 @@
 import React from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
-import { LoungeModeSwitcherBar } from '../LoungeView';
 
 export const MASTER_PASS_AUTO_SWITCH_TIERS = [
   {
@@ -36,7 +35,7 @@ export function validateClubSignboardName(rawName: string): {
 }
 
 export const FoundingMemberFomoBar: React.FC = () => {
-  return <LoungeModeSwitcherBar />;
+  return null;
 };
 
 export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
