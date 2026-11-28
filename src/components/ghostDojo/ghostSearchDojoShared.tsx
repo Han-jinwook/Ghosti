@@ -27,30 +27,30 @@ export const GHOST_DOJO_STEPS: GhostDojoStepDef[] = [
   {
     id: 'doc_search',
     shortTitle: '문서 속 문장 검색',
-    sampleQuery: '한일건재 LED 모듈 공급단가',
+    sampleQuery: '한일 LED 단가',
     targetSpace: 'vault',
-    description: '수많은 견적서 중에서도 "한일건재 LED 모듈 공급단가"처럼 단어 조합·문장으로 딱 1건을 콕 집어냅니다.',
+    description: '정확한 명칭을 몰라도 "한일 LED 단가" 3단어만 치면 한일건재 공급단가 문서를 콕 집어냅니다.',
   },
   {
     id: 'photo_natural',
     shortTitle: '사진 자연어·인물 검색',
-    sampleQuery: '노을 지는 해변 가족 산책',
+    sampleQuery: '노을 해변 가족',
     targetSpace: 'gallery',
-    description: '파일명을 몰라도 "노을 지는 해변 가족 산책"처럼 기억나는 상황을 문장으로 쳐서 바로 찾습니다.',
+    description: '파일명을 몰라도 "노을 해변 가족"처럼 기억나는 3단어만 치면 원하는 사진 1장을 바로 찾습니다.',
   },
   {
     id: 'photo_text',
     shortTitle: '사진 속 글자 검색',
-    sampleQuery: '수제버거 배달 결제 38,500원',
+    sampleQuery: '수제버거 배달 38,500',
     targetSpace: 'gallery',
-    description: '수많은 캡처 속에서도 "수제버거 배달 결제 38,500원"처럼 사진 안 글자 조합으로 영수증을 바로 찾습니다.',
+    description: '수많은 캡처 속에서도 "수제버거 배달 38,500"처럼 사진 안 글자 3개 조합으로 영수증을 찾습니다.',
   },
   {
     id: 'video_text',
     shortTitle: '동영상 속 텍스트 검색',
-    sampleQuery: '회의 화이트보드 목표 매출 35억',
+    sampleQuery: '화이트보드 매출 35억',
     targetSpace: 'video',
-    description: '긴 영상을 다 돌려보지 않아도 "회의 화이트보드 목표 매출 35억"이 적힌 장면(00:08)을 바로 찾습니다.',
+    description: '긴 영상을 돌려보지 않아도 "화이트보드 매출 35억"이 적힌 장면(00:08)을 바로 찾아냅니다.',
   },
 ];
 
@@ -204,13 +204,13 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
         })
       );
       if (step.id === 'doc_search') {
-        setDemoNotice('여러 견적서 중 "한일건재 + LED 모듈 + 공급단가" 조합이 모두 일치하는 납품견적서 1건(145,000원)만 정확히 좁혀 찾았습니다.');
+        setDemoNotice('일부 단어만 친 "한일 LED 단가" 검색만으로 여러 견적서 중 한일건재 LED 모듈 공급단가(145,000원) 1건을 정확히 찾아냈습니다.');
       } else if (step.id === 'photo_natural') {
-        setDemoNotice('파일명 없이 "노을 지는 해변 가족 산책" 문장만으로 여러 사진 중 딱 원하는 사진 1장을 찾아냈습니다.');
+        setDemoNotice('파일명 없이 "노을 해변 가족" 3단어만으로 여러 사진 중 원하는 가족 사진 1장을 정확히 찾아냈습니다.');
       } else if (step.id === 'photo_text') {
-        setDemoNotice('여러 캡처 중 "수제버거 + 배달 결제 + 38,500원" 글자 조합이 들어있는 영수증 1장만 정확히 찾아냈습니다.');
+        setDemoNotice('여러 캡처 중 "수제버거 + 배달 + 38,500" 글자가 함께 들어있는 영수증 1장만 정확히 찾아냈습니다.');
       } else if (step.id === 'video_text') {
-        setDemoNotice('영상 화면 속 "회의 화이트보드 목표 매출 35억" 문장을 읽어 해당 00:08 장면을 바로 찾아냈습니다.');
+        setDemoNotice('영상 화면 속 "화이트보드 매출 35억" 글자를 읽어 해당 00:08 브리핑 장면을 바로 찾아냈습니다.');
       }
       return;
     }

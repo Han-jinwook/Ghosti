@@ -563,7 +563,11 @@ const VirtualMonitorSimulator: React.FC<{
     const scored = items
       .map((it) => {
         const hay = getHay(it).toLowerCase();
-        const hits = qTokens.filter((t) => hay.includes(t)).length;
+        const hayCompact = hay.replace(/[\s,]/g, '');
+        const hits = qTokens.filter((t) => {
+          const tCompact = t.replace(/,/g, '');
+          return hay.includes(t) || (tCompact.length >= 2 && hayCompact.includes(tCompact));
+        }).length;
         return { it, hits };
       })
       .filter((x) => x.hits > 0)

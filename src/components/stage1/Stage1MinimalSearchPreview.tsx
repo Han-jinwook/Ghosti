@@ -366,7 +366,11 @@ export const Stage1MinimalSearchPreview: React.FC<{
       const scored = items
         .map((item) => {
           const hay = getHaystack(item).toLowerCase();
-          const hitCount = tokens.filter((tok) => hay.includes(tok)).length;
+          const hayCompact = hay.replace(/[\s,]/g, '');
+          const hitCount = tokens.filter((tok) => {
+            const tokCompact = tok.replace(/,/g, '');
+            return hay.includes(tok) || (tokCompact.length >= 2 && hayCompact.includes(tokCompact));
+          }).length;
           return { item, hitCount };
         })
         .filter((x) => x.hitCount > 0)
