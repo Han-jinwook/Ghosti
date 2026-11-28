@@ -287,29 +287,33 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
   const MAIN_TAB_META: Record<
     'secretary' | 'search' | 'share' | 'paid',
-    { label: string; badge: string; headline: string; subline: string }
+    { label: string; title: string; priceNote: string; headline: string; subline: string }
   > = {
     secretary: {
       label: '귀신비서',
-      badge: '1. 귀신비서 · 평생 0원',
+      title: '1. 귀신비서',
+      priceNote: '평생 0원',
       headline: '느려진 내 PC·폰, 클릭 한 번에 새것처럼',
       subline: '은행 보안프로그램은 안 지우고 재우고, 중복·연사 사진과 흩어진 문서까지 1초 정리하는데, 광고 1도 없습니다.',
     },
     search: {
       label: '귀신검색',
-      badge: '2. 귀신검색 · 평생 0원',
+      title: '2. 귀신검색',
+      priceNote: '평생 0원',
       headline: '파일 이름 몰라도, 열지 않고 1초 소환',
       subline: '계약서 속 문장, 사진 속 글자, 동영상 속 찾던 장면까지 Ctrl+0으로 열지 않고 1초 만에 찾아줍니다.',
     },
     share: {
       label: '사진 공유',
-      badge: '3. 사진 공유 · 인원·장수 무제한 0원',
+      title: '3. 사진 공유',
+      priceNote: '인원·장수 무제한 0원',
       headline: '카톡 기간 만료 없는 평생 무료 원본 사진방',
       subline: '카톡 기간 만료와 화질 저하 없이, 가족·모임·동창회 사진을 얼굴별로 원본 그대로 모아둡니다.',
     },
     paid: {
       label: '확장 플랜',
-      badge: paidEntryType === 'b2b' ? '5. 업무 공유 (공용 폴더 S:)' : '4. 내 기기 통합 Pro',
+      title: paidEntryType === 'b2b' ? '5. 업무 공유 (공용 폴더 S:)' : '4. 내 기기 통합 Pro',
+      priceNote: '30일 무료체험',
       headline:
         paidEntryType === 'b2b'
           ? '클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로'
@@ -694,20 +698,25 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         {/* 1~3) 선택된 메뉴 전용 페이지 (해당 메뉴 선택 시에만 단독 노출) */}
         {activeMainTab !== 'home' && (
           <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
-            {/* 선택 기능 1줄 직관 풀이 헤더 바 */}
-            <div className="rounded-2xl bg-gradient-to-r from-[#FFF3E6] via-[#FFE6CC] to-[#FFD9B3] border border-[#FDBA74] text-slate-900 px-5 sm:px-7 py-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-md bg-[#FED7AA] border border-[#FB923C] text-[#9A3412] text-[11.5px] font-bold">
-                    {MAIN_TAB_META[activeMainTab].badge}
+            {/* 선택 기능 메인 타이틀 헤더 바 (박스 없는 2배 크기 타이틀 + 우측 들여쓰기 2줄 설명) */}
+            <div className="rounded-2xl bg-gradient-to-r from-[#FFF3E6] via-[#FFE6CC] to-[#FFD9B3] border border-[#FDBA74] text-slate-900 px-5 sm:px-7 py-4 sm:py-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h2 className="font-display text-[22px] sm:text-[26px] font-black tracking-tight text-[#9A3412] leading-tight">
+                    {MAIN_TAB_META[activeMainTab].title}
+                  </h2>
+                  <span className="text-[13.5px] sm:text-[15px] font-bold text-[#EA580C]">
+                    ({MAIN_TAB_META[activeMainTab].priceNote})
                   </span>
                 </div>
-                <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight text-slate-900 break-keep">
-                  {MAIN_TAB_META[activeMainTab].headline}
-                </h2>
-                <p className="text-[12.5px] sm:text-[13px] text-slate-700 break-keep">
-                  {MAIN_TAB_META[activeMainTab].subline}
-                </p>
+                <div className="pl-5 sm:pl-7 space-y-0.5">
+                  <p className="font-display text-[15.5px] sm:text-[17.5px] font-bold tracking-tight text-slate-900 break-keep">
+                    {MAIN_TAB_META[activeMainTab].headline}
+                  </p>
+                  <p className="text-[12.5px] sm:text-[13.5px] text-slate-700 break-keep">
+                    {MAIN_TAB_META[activeMainTab].subline}
+                  </p>
+                </div>
               </div>
               {activeMainTab === 'search' && (
                 <div className="flex items-center gap-1.5 shrink-0 bg-white/85 p-1 rounded-xl border border-[#FDBA74]">
