@@ -31,8 +31,6 @@ import {
   type SafeOnboardingChatMsg,
   WEAPON_META,
   nowTimeStr,
-  SHOWROOM_BEFORE_AFTER_MENU_CASES,
-  SHOWROOM_BEFORE_AFTER_JOB_CASES,
 } from './showroom/showroomDataAndUtils';
 import { ShowroomLowerSections } from './showroom/ShowroomLowerSections';
 
@@ -63,49 +61,42 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   });
 
   const [shortsList, setShortsList] = useState<ShortsItem[]>(DEFAULT_SHORTS_DATA);
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'video' | 'doc' | 'clean'>('all');
   const [activeShortsModal, setActiveShortsModal] = useState<ShortsItem | null>(null);
 
-  // 공식 보증서 모달 상태 & 실전 활용 사례(Before vs After) 펼치기 상태 & B2B 영업 유입(?from=b2b / #work-share) 직통 포커싱 상태
+  // 공식 무료 사용 확인서 모달 & 유료 홍보 링크(?from=pro / ?from=b2b / #work-share) 핀셋 감지
   const [certModalOpen, setCertModalOpen] = useState<boolean>(false);
-  const [beforeAfterOpen, setBeforeAfterOpen] = useState<boolean>(false);
-  const [beforeAfterViewMode, setBeforeAfterViewMode] = useState<'jobs' | 'menus'>('jobs');
-  const [b2bFocused, setB2bFocused] = useState<boolean>(() => {
+  const detectPaidEntry = (): 'pro' | 'b2b' | null => {
     try {
       const params = new URLSearchParams(window.location.search);
-      return (
-        params.get('from') === 'b2b' ||
-        /[?&]from=b2b\b/i.test(window.location.href) ||
-        window.location.hash === '#work-share'
-      );
+      const fromVal = (params.get('from') || '').toLowerCase();
+      if (fromVal === 'pro' || /[?&]from=pro\b/i.test(window.location.href)) return 'pro';
+      if (fromVal === 'b2b' || /[?&]from=b2b\b/i.test(window.location.href) || window.location.hash === '#work-share') {
+        return 'b2b';
+      }
     } catch {
-      return false;
+      // ignore
     }
-  });
+    return null;
+  };
+  const [paidEntryType, setPaidEntryType] = useState<'pro' | 'b2b' | null>(() => detectPaidEntry());
+  const [activeMainTab, setActiveMainTab] = useState<'secretary' | 'search' | 'share' | 'paid'>(() =>
+    detectPaidEntry() ? 'paid' : 'secretary'
+  );
 
   useEffect(() => {
-    const syncB2bFocus = () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const isB2b =
-          params.get('from') === 'b2b' ||
-          /[?&]from=b2b\b/i.test(window.location.href) ||
-          window.location.hash === '#work-share';
-        if (isB2b) {
-          setB2bFocused(true);
-          // [SSOT v2.2 ③] 중간으로 강제 스크롤하지 않고 최상단 B2B 전용 요약 뷰를 우선 노출
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      } catch {
-        // ignore
+    const syncPaidEntry = () => {
+      const detected = detectPaidEntry();
+      if (detected) {
+        setPaidEntryType(detected);
+        setActiveMainTab('paid');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
-    syncB2bFocus();
-    window.addEventListener('hashchange', syncB2bFocus);
-    window.addEventListener('popstate', syncB2bFocus);
+    window.addEventListener('hashchange', syncPaidEntry);
+    window.addEventListener('popstate', syncPaidEntry);
     return () => {
-      window.removeEventListener('hashchange', syncB2bFocus);
-      window.removeEventListener('popstate', syncB2bFocus);
+      window.removeEventListener('hashchange', syncPaidEntry);
+      window.removeEventListener('popstate', syncPaidEntry);
     };
   }, []);
 
@@ -296,9 +287,36 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     }
   }, [chatMessages]);
 
+  const handleSelectMainTab = (
+    tab: 'secretary' | 'search' | 'share' | 'paid',
+    scrollToStage = false,
+    preferredSearchSub?: 'video' | 'doc'
+  ) => {
+    playBabyGhostChime();
+    setActiveMainTab(tab);
+    setShowStageShortVideo(false);
+    if (tab === 'secretary') {
+      setDemoTab('clean');
+      setCleanSubTab('speed');
+    } else if (tab === 'search') {
+      setDemoTab(preferredSearchSub || (demoTab === 'doc' ? 'doc' : 'video'));
+    } else if (tab === 'share') {
+      setDemoTab('share');
+      setShareStep(0);
+      setSharePickedPhoto(null);
+      setShareUploadHint(false);
+    }
+    if (scrollToStage) {
+      setTimeout(() => {
+        document.getElementById('main-feature-stage')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
+    }
+  };
+
   const handleSelectWeaponChip = (tab: OnboardingWeaponTab, scrollToDemo = false) => {
     playBabyGhostChime();
     setDemoTab(tab);
+    setActiveMainTab(tab === 'clean' ? 'secretary' : tab === 'share' ? 'share' : 'search');
     setShowStageShortVideo(false);
     if (tab === 'clean') {
       setCleanSubTab('speed');
@@ -316,7 +334,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       { id: `s-${Date.now() + 1}`, role: 'secretary', text: meta.secretaryReply, timestamp: ts },
     ]);
     if (scrollToDemo) {
-      document.getElementById('interactive-demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(() => {
+        document.getElementById('main-feature-stage')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
     }
   };
 
@@ -372,6 +392,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
     if (matchedTab) {
       setDemoTab(matchedTab);
+      setActiveMainTab(matchedTab === 'clean' ? 'secretary' : matchedTab === 'share' ? 'share' : 'search');
       setShowStageShortVideo(false);
       const replyText = customReply || WEAPON_META[matchedTab].secretaryReply;
       setChatMessages((prev) => [
@@ -403,16 +424,53 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     ]);
   };
 
-  const filteredShorts =
-    selectedCategory === 'all'
-      ? shortsList
-      : shortsList.filter((s) => s.category === selectedCategory);
+  const showPaidTab = Boolean(paidEntryType) && !isStoreAppMode;
+
+  const MAIN_TAB_META: Record<
+    'secretary' | 'search' | 'share' | 'paid',
+    { label: string; badge: string; headline: string; subline: string }
+  > = {
+    secretary: {
+      label: '귀신비서',
+      badge: '1. 귀신비서 · 평생 무료',
+      headline: '느려진 PC 심폐소생 · 중복 사진 정리',
+      subline: '은행 보안프로그램은 지우지 않고 절전 수면, 흔들린·중복 사진은 휴지통으로 안전 정리합니다.',
+    },
+    search: {
+      label: '귀신검색',
+      badge: '2. 귀신검색 · 평생 무료',
+      headline: '파일 이름 몰라도 문서 본문 · 영상 장면 1초 검색',
+      subline: '한글·PDF·엑셀 본문, 촬영한 영수증 글자, 수백 개 동영상 속 원하는 장면까지 열지 않고 바로 찾습니다.',
+    },
+    share: {
+      label: '사진 공유',
+      badge: '3. 사진 공유 · 인원·장수 무제한 무료',
+      headline: '카톡 만료·화질 저하 없는 가족·모임 평생 무료 원본방',
+      subline: '원본 화질 그대로 보관하고 초대 링크로 간편 합류, 얼굴별로 우리 가족 사진만 1초 만에 모아봅니다.',
+    },
+    paid: {
+      label: '확장 플랜',
+      badge: paidEntryType === 'b2b' ? '기업용 업무 공유 (S:)' : '내 기기 통합 Pro',
+      headline:
+        paidEntryType === 'b2b'
+          ? '클라우드 월세 없이 팀 PC를 공용 폴더(S: 드라이브) 하나로'
+          : '카톡 나에게 보내기 끝, 내 폰과 PC를 한 몸처럼 연결',
+      subline:
+        '기본 3대 기능은 평생 무료로 유지되며, 다중 기기 연동과 팀 공용 폴더만 선택형 30일 무료체험으로 제공됩니다.',
+    },
+  };
 
   const scrollToEmailBox = () => {
-    heroCtaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (activeMainTab === 'paid') {
+      setActiveMainTab('secretary');
+      setDemoTab('clean');
+    }
     setTimeout(() => {
-      emailInputRef.current?.focus();
-    }, 450);
+      heroCtaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(() => {
+        emailInputRef.current?.focus();
+      }, 350);
+    }, 40);
   };
 
   const applyQuickDomain = (domain: string) => {
@@ -519,14 +577,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   return (
     <div
       style={{ overflowX: 'clip' }}
-      className="min-h-screen bg-[#EDF2F7] text-slate-900 font-sans selection:bg-slate-200 selection:text-slate-900 relative"
+      className="min-h-screen bg-[#D8E1EC] text-slate-900 font-sans selection:bg-blue-100 selection:text-slate-900 relative"
     >
       <style>{`
         html, body { overscroll-behavior-y: auto !important; }
       `}</style>
 
-      {/* 상단 GNB */}
-      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-300 shadow-2xs">
+      {/* 상단 GNB: 로고 + 평생 무료 슬로건 상시 고정 + 본진 3대 무료 기능 탭 (유료 링크 유입 시에만 확장 플랜 탭 추가) */}
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-300 shadow-xs">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 shrink-0">
             <GhostiBrandLogo
@@ -535,63 +593,36 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             />
-            <span className="hidden 2xl:inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium whitespace-nowrap">
-              개인 · 민간 기업 기본 기능 무료
+            <span className="hidden sm:inline-flex items-center px-2.5 py-1 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold whitespace-nowrap">
+              개인 · 기업 기본 기능 평생 무료
             </span>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1.5 text-[13px] font-medium whitespace-nowrap shrink-0">
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById('interactive-demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              className="px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              기능 체험
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBeforeAfterOpen(true);
-                setTimeout(() => {
-                  document.getElementById('before-after-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 40);
-              }}
-              className="px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              💡 실전 활용 사례
-            </button>
-            {!isStoreAppMode && (
-              <button
-                type="button"
-                onClick={() => {
-                  setB2bFocused(true);
-                  document.getElementById('extensions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className="px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-              >
-                기기 · 업무 플랜
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById('shorts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              className="px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              미리보기 영상
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                document.getElementById('manifesto')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              className="px-3 py-1.5 rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors cursor-pointer"
-            >
-              서비스 소개
-            </button>
+          <nav className="hidden md:flex items-center gap-1.5 text-[13.5px] font-semibold whitespace-nowrap shrink-0">
+            {(
+              [
+                { id: 'secretary', label: '귀신비서' },
+                { id: 'search', label: '귀신검색' },
+                { id: 'share', label: '사진 공유' },
+                ...(showPaidTab ? [{ id: 'paid', label: '확장 플랜' }] : []),
+              ] as Array<{ id: 'secretary' | 'search' | 'share' | 'paid'; label: string }>
+            ).map((item) => {
+              const isActive = activeMainTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectMainTab(item.id, true)}
+                  className={`px-4 py-2 rounded-lg transition-colors cursor-pointer ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </nav>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -618,7 +649,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <button
                   type="button"
                   onClick={scrollToEmailBox}
-                  className={`${canReturnToWorkspace ? 'hidden sm:flex' : 'flex'} px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] sm:text-[13px] font-medium transition-colors cursor-pointer items-center whitespace-nowrap`}
+                  className={`${canReturnToWorkspace ? 'hidden sm:flex' : 'flex'} px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] sm:text-[13px] font-semibold transition-colors cursor-pointer items-center whitespace-nowrap shadow-2xs`}
                 >
                   <span className="sm:hidden">알림 신청</span>
                   <span className="hidden sm:inline">출시 알림 신청</span>
@@ -628,7 +659,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <button
                 type="button"
                 onClick={() => onEnterWorkspace(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-medium transition-colors cursor-pointer whitespace-nowrap"
+                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
               >
                 시작하기
               </button>
@@ -641,8 +672,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={() => setDevFullView((v) => !v)}
                   className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium border transition-colors cursor-pointer ${
                     devFullView
-                      ? 'bg-teal-600 text-white border-teal-600'
-                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
                   }`}
                 >
                   DEV {devFullView ? 'ON' : 'OFF'}
@@ -650,7 +681,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsLaunched(!isLaunched)}
-                  className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-[11.5px] font-medium transition-colors cursor-pointer"
+                  className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-[11.5px] font-medium transition-colors cursor-pointer"
                 >
                   {isLaunched ? '출시후 뷰' : '출시전 뷰'}
                 </button>
@@ -659,118 +690,43 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           </div>
         </div>
 
-        <nav className="md:hidden max-w-6xl mx-auto px-4 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[12px] font-medium whitespace-nowrap">
-          <button
-            type="button"
-            onClick={() =>
-              document.getElementById('interactive-demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
-            className="px-2.5 py-1 rounded-md bg-slate-900 text-white cursor-pointer shrink-0"
-          >
-            기능 체험
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setBeforeAfterOpen(true);
-              setTimeout(() => {
-                document.getElementById('before-after-showcase')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }, 40);
-            }}
-            className="px-2.5 py-1 rounded-md bg-teal-50 text-teal-800 border border-teal-200 cursor-pointer shrink-0"
-          >
-            💡 실전 활용 사례
-          </button>
-          {!isStoreAppMode && (
-            <button
-              type="button"
-              onClick={() => {
-                setB2bFocused(true);
-                document.getElementById('extensions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-              className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
-            >
-              기기 · 업무 플랜
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() =>
-              document.getElementById('shorts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
-            className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
-          >
-            미리보기 영상
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              document.getElementById('manifesto')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }
-            className="px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer shrink-0"
-          >
-            서비스 소개
-          </button>
+        {/* 모바일 3대 기능 탭 바 */}
+        <nav className="md:hidden max-w-6xl mx-auto px-4 pb-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[12.5px] font-semibold whitespace-nowrap">
+          {(
+            [
+              { id: 'secretary', label: '귀신비서' },
+              { id: 'search', label: '귀신검색' },
+              { id: 'share', label: '사진 공유' },
+              ...(showPaidTab ? [{ id: 'paid', label: '확장 플랜' }] : []),
+            ] as Array<{ id: 'secretary' | 'search' | 'share' | 'paid'; label: string }>
+          ).map((item) => {
+            const isActive = activeMainTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelectMainTab(item.id, true)}
+                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                  isActive
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-700 border border-slate-200'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </header>
 
       {/* 메인 섹션 */}
-      <section className="pt-8 pb-14 px-4 sm:px-6 max-w-6xl mx-auto space-y-8">
-        {b2bFocused && !isStoreAppMode && (
-          <div className="rounded-2xl bg-white border border-slate-300 p-6 sm:p-8 shadow-xs space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-center px-3 py-1 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium">
-                기업 · 사무실 안내 · 대표 1인 정액제 (월 9,900원~ · 30일 무료체험)
-              </span>
-              <button
-                type="button"
-                onClick={() => setB2bFocused(false)}
-                className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 text-[12px] font-medium cursor-pointer"
-              >
-                개인용 소개로 보기 ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-              <div className="lg:col-span-8 space-y-2">
-                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-snug break-keep">
-                  사내 문서와 현장 사진을 공용 폴더(S: 드라이브) 하나로 관리하세요
-                </h2>
-                <p className="text-[14px] text-slate-600 leading-relaxed break-keep">
-                  별도 서버 장비 구축 없이 사내 대표 PC 폴더를 팀 공용 드라이브(S:)로 연결해 문서를 함께 검색하고 열람합니다(소호 ~5인 월 9,900원~ · 인당 추가 과금 없음).
-                </p>
-                <div className="flex flex-wrap gap-1.5 pt-1 text-[12px] font-medium text-slate-700">
-                  <span className="px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200">암호화 연결 및 권한 회수</span>
-                  <span className="px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200">휴지통 복원 및 예비 백업</span>
-                  <span className="px-2.5 py-1 rounded-md bg-slate-50 border border-slate-200">법인 세금계산서 발행</span>
-                </div>
-              </div>
-              <div className="lg:col-span-4 flex flex-col sm:flex-row lg:flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => (isLaunched ? onEnterWorkspace(true) : scrollToEmailBox())}
-                  className="w-full px-5 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13.5px] transition-colors cursor-pointer"
-                >
-                  {isLaunched ? '팀 공용 폴더 시작하기' : '출시 알림 신청하기'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCertModalOpen(true)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium text-[13px] transition-colors cursor-pointer"
-                >
-                  기업 기본 기능 무료 확인서 보기
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 심플 히어로 배너 */}
-        <div className="rounded-2xl bg-white border border-slate-300/90 p-6 sm:p-10 shadow-sm">
+      <section className="pt-7 pb-10 px-4 sm:px-6 max-w-6xl mx-auto space-y-7">
+        {/* 심플 히어로 배너 (순백 카드 + 딥 네이비/블루 주력 + 민트 포인트 CTA) */}
+        <div className="rounded-2xl bg-white border border-slate-300 p-6 sm:p-9 shadow-md">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             <div className="lg:col-span-7 space-y-5">
-              <span className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
-                기기 내 로컬 정리 · 본문 및 장면 통합 검색
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold">
+                기기 내 로컬 정리 · 본문 및 장면 통합 검색 · 광고 0%
               </span>
 
               <div className="space-y-2.5">
@@ -793,122 +749,86 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       isLaunched
                         ? onEnterWorkspace(true)
                         : document
-                            .getElementById('interactive-demo')
+                            .getElementById('main-feature-stage')
                             ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }
-                    className="px-5 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[14px] transition-colors cursor-pointer"
+                    className="px-5 py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[14px] transition-colors cursor-pointer shadow-xs"
                   >
                     {isLaunched ? '바로 시작하기' : '가입 없이 바로 체험해 보기'}
-                  </button>
-                  <button
-                    type="button"
-                    data-before-after-toggle="true"
-                    onClick={() => {
-                      playBabyGhostChime();
-                      setBeforeAfterOpen((prev) => {
-                        const next = !prev;
-                        if (next) {
-                          setTimeout(() => {
-                            document
-                              .getElementById('before-after-showcase')
-                              ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                          }, 50);
-                        }
-                        return next;
-                      });
-                    }}
-                    className={`px-4 py-3 rounded-lg border font-semibold text-[13.5px] transition-colors cursor-pointer flex items-center gap-1.5 ${
-                      beforeAfterOpen
-                        ? 'bg-slate-900 border-slate-900 text-white'
-                        : 'bg-teal-50/80 hover:bg-teal-100/80 border-teal-200 text-teal-900'
-                    }`}
-                  >
-                    <span>💡 실전 활용 사례 (Before vs After)</span>
-                    <span className="text-[11px]">{beforeAfterOpen ? '▴ 접기' : '▾ 펼쳐보기'}</span>
                   </button>
                   {!isLaunched && !verifiedUserEmail && (
                     <button
                       type="button"
                       onClick={scrollToEmailBox}
-                      className="px-4 py-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-medium text-[13.5px] transition-colors cursor-pointer"
+                      className="px-4 py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13.5px] transition-colors cursor-pointer"
                     >
                       출시 알림 신청
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setCertModalOpen(true)}
+                    className="px-4 py-3 rounded-lg bg-white hover:bg-blue-50 border border-slate-300 text-slate-800 font-medium text-[13.5px] transition-colors cursor-pointer"
+                  >
+                    무료 사용 확인서
+                  </button>
                 </div>
                 <p className="text-[12.5px] text-slate-500 break-keep">
-                  원본 파일 외부 업로드 없음 · 광고 없음 · 단일 기기 기본 기능 무료
+                  원본 파일 외부 업로드 없음 · 광고 없음 · 개인 및 민간 기업 기본 기능 평생 무료
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
-                {[
-                  {
-                    key: 'secretary',
-                    tab: 'clean' as OnboardingWeaponTab,
-                    stat: '상태 점검 · 복원',
-                    title: '귀신비서',
-                    sub: '보안모듈 절전 · 중복 사진 정리',
-                  },
-                  {
-                    key: 'search',
-                    tab: 'video' as OnboardingWeaponTab,
-                    stat: '본문 · 장면 검색',
-                    title: '귀신검색',
-                    sub: '문서 본문 · 영상 장면 검색',
-                  },
-                  {
-                    key: 'share',
-                    tab: 'share' as OnboardingWeaponTab,
-                    stat: '원본 화질 공유',
-                    title: '사진 공유',
-                    sub: '가족 · 동호회 · 동창회 공유방',
-                  },
-                  ...(!isStoreAppMode
-                    ? [
-                        {
-                          key: 'work',
-                          tab: 'clean' as OnboardingWeaponTab,
-                          stat: '팀 공용 드라이브',
-                          title: '업무 공유 (S:)',
-                          sub: '사내 문서 공용 폴더 · 30일 체험',
-                        },
-                      ]
-                    : []),
-                ].map((card) => {
-                  const active =
-                    card.key === 'work'
-                      ? false
-                      : card.key === 'search'
-                      ? demoTab === 'video' || demoTab === 'doc'
-                      : card.key === 'share'
-                      ? demoTab === 'share'
-                      : demoTab === 'clean';
+              {/* 본진 앱과 100% 일치하는 3대 무료 기능 선택 카드 (유료 링크 유입 시에만 4번째 확장 플랜 카드 표시) */}
+              <div className={`grid grid-cols-1 ${showPaidTab ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'} gap-2.5 pt-1`}>
+                {(
+                  [
+                    {
+                      key: 'secretary',
+                      stat: '1. 상태 점검 · 복원',
+                      title: '귀신비서',
+                      sub: '보안모듈 절전 · 중복 사진 정리',
+                    },
+                    {
+                      key: 'search',
+                      stat: '2. 본문 · 장면 검색',
+                      title: '귀신검색',
+                      sub: '문서 본문 · 영상 장면 1초 검색',
+                    },
+                    {
+                      key: 'share',
+                      stat: '3. 원본 화질 공유',
+                      title: '사진 공유',
+                      sub: '가족 · 동호회 · 동창회 무료 앨범',
+                    },
+                    ...(showPaidTab
+                      ? [
+                          {
+                            key: 'paid',
+                            stat: '선택형 확장 플랜',
+                            title: paidEntryType === 'b2b' ? '업무 공유 (S:)' : '내 기기 통합 Pro',
+                            sub: '다중 기기 연동 · 팀 공용 폴더',
+                          },
+                        ]
+                      : []),
+                  ] as Array<{ key: 'secretary' | 'search' | 'share' | 'paid'; stat: string; title: string; sub: string }>
+                ).map((card) => {
+                  const active = activeMainTab === card.key;
                   return (
                     <button
                       key={card.key}
                       type="button"
-                      onClick={() => {
-                        if (card.key === 'work') {
-                          setB2bFocused(true);
-                          document
-                            .getElementById('work-share')
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                          return;
-                        }
-                        handleSelectWeaponChip(card.tab, true);
-                      }}
-                      className={`p-3.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                      onClick={() => handleSelectMainTab(card.key, true)}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                         active
-                          ? 'bg-teal-600 border-teal-600 text-white shadow-xs'
-                          : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-900'
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                          : 'bg-slate-50 hover:bg-blue-50/70 border-slate-300 hover:border-blue-400 text-slate-900'
                       }`}
                     >
-                      <div className={`text-[11.5px] font-medium mb-0.5 ${active ? 'text-white/90' : 'text-slate-500'}`}>
+                      <div className={`text-[11.5px] font-semibold mb-0.5 ${active ? 'text-blue-300' : 'text-blue-700'}`}>
                         {card.stat}
                       </div>
-                      <div className="text-[14px] font-semibold">{card.title}</div>
-                      <div className={`text-[12px] break-keep leading-snug mt-0.5 ${active ? 'text-white/95' : 'text-slate-600'}`}>
+                      <div className="text-[14.5px] font-bold">{card.title}</div>
+                      <div className={`text-[12px] break-keep leading-snug mt-0.5 ${active ? 'text-slate-200' : 'text-slate-600'}`}>
                         {card.sub}
                       </div>
                     </button>
@@ -919,184 +839,71 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             <div className="lg:col-span-5 flex flex-col items-center">
               <div
-                onClick={() => handleSelectWeaponChip('video', true)}
-                className="w-full max-w-md rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shadow-xs cursor-pointer group"
+                onClick={() => handleSelectMainTab('search', true, 'video')}
+                className="w-full max-w-md rounded-xl overflow-hidden border border-slate-300 bg-slate-50 shadow-sm cursor-pointer group"
               >
                 <img
                   src="/gwisinkachi_hero_banner_neon_after.jpg"
                   alt="귀신같이 대표 이미지"
                   className="w-full h-auto object-cover group-hover:scale-[1.01] transition-transform duration-300"
                 />
-                <div className="px-4 py-2.5 bg-white border-t border-slate-200 flex items-center justify-between gap-2 text-[12.5px]">
-                  <span className="font-semibold text-slate-800">귀신비서 · 귀신검색</span>
-                  <span className="text-slate-500 font-medium whitespace-nowrap">아래에서 샘플 체험 →</span>
+                <div className="px-4 py-2.5 bg-slate-900 text-white flex items-center justify-between gap-2 text-[12.5px]">
+                  <span className="font-semibold">귀신비서 · 귀신검색 · 사진 공유</span>
+                  <span className="text-teal-300 font-semibold whitespace-nowrap">아래에서 바로 체험 →</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* [단추 숨김 & 펼치기 UX] 💡 이런 순간, 귀신같이 달라집니다 (실전 활용 사례 Before vs After) */}
-        <div id="before-after-showcase" className="rounded-2xl bg-white border border-slate-300/90 shadow-sm overflow-hidden">
-          <div
-            onClick={() => {
-              playBabyGhostChime();
-              setBeforeAfterOpen((prev) => !prev);
-            }}
-            className="px-5 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/80 transition-colors"
-          >
-            <div className="flex flex-wrap items-center gap-2.5 min-w-0">
-              <span className="px-2.5 py-1 rounded-md bg-teal-600 text-white text-[11.5px] font-semibold shrink-0">
-                Before vs After
-              </span>
-              <h2 className="font-display text-[15px] sm:text-[17px] font-bold text-slate-900 break-keep">
-                💡 이런 순간, 귀신같이 달라집니다 — 직업별 · 기능별 실전 활용 사례
+        {/* 선택된 기능 1개 완결 스테이지 (상단 메뉴 클릭 시 항상 이 시작점에 칼정렬) */}
+        <div id="main-feature-stage" className="scroll-mt-20 space-y-6">
+          {/* 선택 기능 1줄 직관 풀이 헤더 바 */}
+          <div className="rounded-2xl bg-slate-900 text-white px-5 sm:px-7 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
+            <div className="space-y-0.5 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-blue-600 text-white text-[11.5px] font-semibold">
+                  {MAIN_TAB_META[activeMainTab].badge}
+                </span>
+                <span className="text-[12px] text-slate-300 hidden sm:inline">
+                  체험 · 활용 사례 · 짧은 영상을 한 화면에서 확인
+                </span>
+              </div>
+              <h2 className="font-display text-[17px] sm:text-[20px] font-bold tracking-tight break-keep">
+                {MAIN_TAB_META[activeMainTab].headline}
               </h2>
-              <span className="hidden md:inline text-[12.5px] text-slate-500">
-                (자영업·셀러 · 육아맘·가족 · 직장인 · 외근·부동산 · 모임 총무)
-              </span>
+              <p className="text-[12.5px] sm:text-[13px] text-slate-300 break-keep">
+                {MAIN_TAB_META[activeMainTab].subline}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                playBabyGhostChime();
-                setBeforeAfterOpen((prev) => !prev);
-              }}
-              className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-colors cursor-pointer shrink-0 ${
-                beforeAfterOpen
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-teal-50 hover:bg-teal-100 text-teal-900 border-teal-200'
-              }`}
-            >
-              {beforeAfterOpen ? '사례 접기 ▴' : '실전 사례 펼쳐보기 ▾'}
-            </button>
+            {activeMainTab === 'search' && (
+              <div className="flex items-center gap-1.5 shrink-0 bg-slate-800 p-1 rounded-xl border border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => handleSelectWeaponChip('video')}
+                  className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                    demoTab === 'video' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  동영상 장면 · 글자
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectWeaponChip('doc')}
+                  className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer ${
+                    demoTab === 'doc' ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white'
+                  }`}
+                >
+                  문서 본문 · 영수증
+                </button>
+              </div>
+            )}
           </div>
 
-          {beforeAfterOpen && (
-            <div className="px-5 sm:px-6 pb-6 pt-2 border-t border-slate-200 bg-slate-50/60 space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
-                <p className="text-[13px] text-slate-600 break-keep">
-                  기능 설명만으로는 상상하기 어려운 실제 생활·업무 현장의 <strong>기존 불편함(❌ Before)</strong>과{' '}
-                  <strong>도입 후 변화(⭕ After)</strong>를 한눈에 비교해 보세요.
-                </p>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setBeforeAfterViewMode('jobs')}
-                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-colors cursor-pointer ${
-                      beforeAfterViewMode === 'jobs'
-                        ? 'bg-teal-600 text-white border-teal-600'
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    🎯 직업·상황별 5대 시나리오
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBeforeAfterViewMode('menus')}
-                    className={`px-3 py-1.5 rounded-lg text-[12.5px] font-semibold border transition-colors cursor-pointer ${
-                      beforeAfterViewMode === 'menus'
-                        ? 'bg-teal-600 text-white border-teal-600'
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    📂 핵심 메뉴별 상세 비교
-                  </button>
-                </div>
-              </div>
-
-              {beforeAfterViewMode === 'jobs' ? (
-                <div className="grid grid-cols-1 gap-3.5">
-                  {SHOWROOM_BEFORE_AFTER_JOB_CASES.map((jc) => (
-                    <div
-                      key={jc.persona}
-                      className="rounded-xl bg-white border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-3"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white text-[11.5px] font-bold">
-                            {jc.rank}
-                          </span>
-                          <h3 className="text-[15px] font-bold text-slate-900 break-keep">{jc.persona}</h3>
-                        </div>
-                        <span className="px-2.5 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[11.5px] font-semibold">
-                          핵심 조합: {jc.combo}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="rounded-lg bg-rose-50/60 border border-rose-200/80 p-3.5 space-y-1">
-                          <div className="text-[12px] font-bold text-rose-800">❌ Before (기존 불편함)</div>
-                          <p className="text-[12.5px] text-slate-700 leading-relaxed break-keep">{jc.before}</p>
-                        </div>
-                        <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 p-3.5 space-y-1">
-                          <div className="text-[12px] font-bold text-emerald-800">⭕ After (귀신같이 도입 후)</div>
-                          <p className="text-[12.5px] text-slate-800 font-medium leading-relaxed break-keep">
-                            {jc.after}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] font-semibold text-slate-800 break-keep">
-                        💬 한 줄 요약: {jc.hookLine}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  {SHOWROOM_BEFORE_AFTER_MENU_CASES.filter(
-                    (mc) => !(isStoreAppMode && mc.hideInStoreMode)
-                  ).map((mc) => (
-                    <div
-                      key={mc.id}
-                      className="rounded-xl bg-white border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-3.5"
-                    >
-                      <div className="space-y-1 pb-2.5 border-b border-slate-100">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-md bg-teal-600 text-white text-[11.5px] font-semibold">
-                            {mc.menuTag}
-                          </span>
-                          <h3 className="text-[15.5px] font-bold text-slate-900 break-keep">{mc.title}</h3>
-                        </div>
-                        <p className="text-[12.5px] text-slate-500 break-keep">상황: {mc.targetSituation}</p>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="rounded-lg bg-rose-50/60 border border-rose-200/80 p-3.5 space-y-2">
-                          <div className="text-[12px] font-bold text-rose-800">❌ Before (기존 불편함)</div>
-                          <ul className="space-y-1.5 text-[12.5px] text-slate-700 leading-relaxed break-keep list-disc pl-4">
-                            {mc.beforeItems.map((bi, idx) => (
-                              <li key={idx}>{bi}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 p-3.5 space-y-2">
-                          <div className="text-[12px] font-bold text-emerald-800">⭕ After (귀신같이 도입 후)</div>
-                          <ul className="space-y-1.5 text-[12.5px] text-slate-800 font-medium leading-relaxed break-keep list-disc pl-4">
-                            {mc.afterItems.map((ai, idx) => (
-                              <li key={idx}>{ai}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-
-                      <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] font-semibold text-slate-800 break-keep">
-                        💬 한 줄 요약: {mc.hookLine}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* 2단 체험 영역 */}
-        <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* 좌측 대화 안내 */}
-          <aside className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-300/90 bg-white shadow-sm overflow-hidden">
+          {activeMainTab !== 'paid' && (
+            <div id="interactive-demo" className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+              {/* 좌측 대화 안내 */}
+              <aside className="lg:col-span-5 flex flex-col rounded-2xl border border-slate-300 bg-white shadow-md overflow-hidden">
             <div className="px-4 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 <img
@@ -1180,13 +987,13 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       onClick={() => handleSelectWeaponChip(tabKey)}
                       className={`h-full min-h-[76px] p-2.5 rounded-xl border text-left transition-colors cursor-pointer flex flex-col justify-between gap-1 ${
                         isActive
-                          ? 'bg-teal-600 border-teal-600 text-white'
-                          : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-900'
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                          : 'bg-white hover:bg-blue-50/60 border-slate-300 text-slate-900'
                       }`}
                     >
                       <span
-                        className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                          isActive ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600'
+                        className={`inline-block w-fit px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          isActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-800'
                         }`}
                       >
                         {item.keywordBadge}
@@ -1216,7 +1023,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               />
               <button
                 type="submit"
-                className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[12px] shrink-0 cursor-pointer transition-colors"
+                className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-[12px] shrink-0 cursor-pointer transition-colors"
               >
                 전송
               </button>
@@ -1224,11 +1031,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           </aside>
 
           {/* 우측 체험 스테이지 */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-white border border-slate-300/90 p-5 sm:p-7 shadow-sm space-y-6">
+          <div className="lg:col-span-7 flex flex-col justify-between rounded-2xl bg-white border border-slate-300 p-5 sm:p-7 shadow-md space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200">
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 text-[12px] font-semibold">
+                  <span className="inline-block px-2.5 py-0.5 rounded-md bg-blue-50 border border-blue-200 text-blue-900 text-[12px] font-semibold">
                     샘플 화면 체험
                   </span>
                   <span className="inline-block px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium">
@@ -1313,8 +1120,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-teal-600 text-white border-teal-600'
-                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white hover:bg-blue-50 text-slate-700 border-slate-300'
                             }`}
                           >
                             “{item.query}”
@@ -1432,8 +1239,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               active
-                                ? 'bg-teal-600 text-white border-teal-600'
-                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white hover:bg-blue-50 text-slate-700 border-slate-300'
                             }`}
                           >
                             “{item.query}”
@@ -1512,8 +1319,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                             }}
                             className={`px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                               on
-                                ? 'bg-teal-600 text-white border-teal-600'
-                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white hover:bg-blue-50 text-slate-700 border-slate-300'
                             }`}
                           >
                             {st.label}
@@ -1621,8 +1428,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   !b.enabled
                                     ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
                                     : b.active
-                                    ? 'bg-teal-600 text-white border-teal-600 cursor-pointer'
-                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 cursor-pointer'
+                                    ? 'bg-blue-600 text-white border-blue-600 cursor-pointer shadow-2xs'
+                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 cursor-pointer'
                                 }`}
                               >
                                 {b.label}
@@ -1961,6 +1768,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </div>
           </div>
         </div>
+          )}
+        </div>
 
         {/* 개발자 전용 패널 */}
         {isDevAuthorized && devFullView && (
@@ -2078,18 +1887,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       </section>
 
       <ShowroomLowerSections
+        activeMainTab={activeMainTab}
+        paidEntryType={paidEntryType}
         shortsList={shortsList}
-        selectedCategory={selectedCategory}
-        setSelectedCategory={setSelectedCategory}
-        filteredShorts={filteredShorts}
         activeShortsModal={activeShortsModal}
         setActiveShortsModal={setActiveShortsModal}
         certModalOpen={certModalOpen}
         setCertModalOpen={setCertModalOpen}
         isStoreAppMode={isStoreAppMode}
-        b2bFocused={b2bFocused}
         verifiedUserEmail={verifiedUserEmail}
         scrollToEmailBox={scrollToEmailBox}
+        onSelectFreeTab={(tab) => handleSelectMainTab(tab, true)}
       />
     </div>
   );

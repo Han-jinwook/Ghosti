@@ -416,11 +416,13 @@ export const App: React.FC = () => {
         return 'workspace';
       }
       const params = new URLSearchParams(window.location.search);
-      const isB2bEntry =
-        params.get('from') === 'b2b' ||
-        /[?&]from=b2b\b/i.test(window.location.href) ||
+      const fromParam = (params.get('from') || '').toLowerCase();
+      const isPaidLandingEntry =
+        fromParam === 'b2b' ||
+        fromParam === 'pro' ||
+        /[?&]from=(b2b|pro)\b/i.test(window.location.href) ||
         window.location.hash === '#work-share';
-      if (params.get('view') === 'showroom' || isB2bEntry) {
+      if (params.get('view') === 'showroom' || isPaidLandingEntry) {
         return 'showroom';
       }
       if (
@@ -462,6 +464,7 @@ export const App: React.FC = () => {
       const wantsShowroomExplicitly =
         params.get('view') === 'showroom' ||
         params.get('from') === 'b2b' ||
+        params.get('from') === 'pro' ||
         window.location.hash === '#work-share';
       if (
         !wantsShowroomExplicitly &&
