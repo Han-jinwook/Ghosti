@@ -362,8 +362,8 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </section>
       )}
 
-      {/* 3) 공통 하단 좌·우 2분할 고정 배너: 본문(순백 카드)과 명확히 구분되는 전용 파스텔 틴트 카드 */}
-      <section id="security" className="mt-2 pt-7 pb-10 border-t border-slate-300/90">
+      {/* 3) 공통 하단 좌·우 2분할 고정 배너: 푸터와 동일한 흰색(bg-white) 구역으로 본문 회색 영역과 완전 분리 */}
+      <section id="security" className="mt-2 pt-8 pb-8 border-t border-slate-300 bg-white">
         <div className="px-4 sm:px-6 max-w-6xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
             {/* 좌측: 출시 알림 신청 (은은한 소프트 민트 틴트 카드) */}
@@ -419,7 +419,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
         </div>
       </section>
 
-      <footer className="border-t border-slate-300 bg-white/80 py-7 px-4 sm:px-6 text-[12.5px] text-slate-600">
+      <footer className="border-t border-slate-200 bg-white py-6 px-4 sm:px-6 text-[12.5px] text-slate-600">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
             <GhostiBrandLogo size="mobile" />
