@@ -321,36 +321,26 @@ def update_pc1():
     pyw_exe = os.path.join(os.path.dirname(py_exe), "pythonw.exe")
     runner = pyw_exe if os.path.exists(pyw_exe) else py_exe
 
-    # 1) 자동실행 등록 (구버전 MerlinSeqPaste 제거 + 최신 --onedir Merlin_Z_Core_Setup.exe/_internal 복사 및 Run 레지스트리 등록)
+    # 1) 자동실행 등록 및 정식 --onedir Merlin_Z_Core_Setup.exe 단독 기동 (개발용 pythonw 스크립트 직접 기동 영구 폐지!)
     try:
         local_onedir_src = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup")
         local_exe_src = os.path.join(local_onedir_src, "Merlin_Z_Core_Setup.exe")
         local_int_src = os.path.join(local_onedir_src, "_internal")
         local_install_dir = os.path.expandvars(r"%LOCALAPPDATA%\Programs\MerlinFamily")
+        installed_exe = os.path.join(local_install_dir, "Merlin_Z_Core_Setup.exe")
         if os.path.exists(local_exe_src):
             os.makedirs(local_install_dir, exist_ok=True)
             if os.path.isdir(local_int_src):
                 shutil.copytree(local_int_src, os.path.join(local_install_dir, "_internal"), dirs_exist_ok=True)
-            shutil.copy2(local_exe_src, os.path.join(local_install_dir, "Merlin_Z_Core_Setup.exe"))
+            shutil.copy2(local_exe_src, installed_exe)
         subprocess.run(["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "MerlinSeqPaste", "/f"], capture_output=True, timeout=5)
-        subprocess.run([runner, script, "--enable-autostart"], capture_output=True, timeout=5)
-        log("로컬 PC: 시작프로그램 레지스트리(MerlinZCoreDaemon) 및 영구 실행파일 최신화 완료")
+        if os.path.exists(installed_exe):
+            subprocess.run([installed_exe, "--enable-autostart"], capture_output=True, timeout=5)
+            subprocess.Popen([installed_exe, "--replace"], close_fds=True, creationflags=0x08000000)
+            time.sleep(2.0)
+        log("로컬 PC: 시작프로그램 레지스트리(MerlinZCoreDaemon) 및 정식 Merlin_Z_Core_Setup.exe 단독 기동 완료")
     except Exception as e:
-        log(f"로컬 시작프로그램 등록 경고: {e}")
-
-    # 2) 데몬 교체 기동 (Z-코어 5199 + 귀신창 51988) - WMI Win32_Process.Create로 부모 프로세스 Job Object 종료 영향 원천 차단
-    try:
-        for target_script in (script, spd_src):
-            wmi_cmd = [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                f"Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList '\"{runner}\" \"{target_script}\" --replace' | Out-Null",
-            ]
-            subprocess.run(wmi_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=8)
-        time.sleep(1.5)
-    except Exception as e:
-        log(f"1호기 데몬 기동 오류: {e}")
+        log(f"로컬 정식 exe 기동 경고: {e}")
 
     # 3) 헬스체크 (교체 기동 시 구 프로세스 소켓 종료 직후 바인딩되므로 최대 5회 재시도)
     ok_pc1 = False
